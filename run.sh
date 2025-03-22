@@ -2,9 +2,9 @@
 
 mvn clean package
 
-if [ -f /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext/jmeter-agent-1.0.5-jar-with-dependencies.jar ]; then
-    rm /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext/jmeter-agent-1.0.5-jar-with-dependencies.jar
+if [ -f /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext/jmeter-agent-1.0.6-jar-with-dependencies.jar ]; then
+    rm /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext/jmeter-agent-1.0.6-jar-with-dependencies.jar
 fi
 
-cp target/jmeter-agent-1.0.5-jar-with-dependencies.jar /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext
+cp target/jmeter-agent-1.0.6-jar-with-dependencies.jar /Users/naveenkumar/Tools/apache-jmeter-5.6.3/lib/ext
 

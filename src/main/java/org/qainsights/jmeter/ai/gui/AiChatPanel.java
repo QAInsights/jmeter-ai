@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.jorphan.gui.JMeterUIDefaults;
 
+import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
@@ -27,6 +28,8 @@ import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.Models;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
+import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
+import org.qainsights.jmeter.ai.wrap.WrapUndoRedoHandler;
 
 import com.anthropic.models.ModelInfo;
 
@@ -58,6 +61,14 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     // Component managers
     private final MessageProcessor messageProcessor;
     private final ElementSuggestionManager elementSuggestionManager;
+    
+    // Track the last command type for undo/redo operations
+    private enum LastCommandType {
+        NONE,
+        LINT,
+        WRAP
+    }
+    private LastCommandType lastCommandType = LastCommandType.NONE;
     
     /**
      * Constructs a new AiChatPanel.
@@ -159,20 +170,74 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             redoKeyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK);
         }
         
-        inputMap.put(undoKeyStroke, "undoLintAction");
-        actionMap.put("undoLintAction", new AbstractAction() {
+        inputMap.put(undoKeyStroke, "undoAction");
+        actionMap.put("undoAction", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                undoLastRename();
+                // Perform undo based on the last command type
+                switch (lastCommandType) {
+                    case WRAP:
+                        undoLastWrap();
+                        break;
+                    case LINT:
+                        undoLastRename();
+                        break;
+                    default:
+                        // If no recent command, try to determine based on context
+                        GuiPackage guiPackage = GuiPackage.getInstance();
+                        if (guiPackage != null) {
+                            JMeterTreeNode currentNode = guiPackage.getTreeListener().getCurrentNode();
+                            if (currentNode != null && currentNode.getTestElement() instanceof TransactionController) {
+                                undoLastWrap();
+                            } else {
+                                undoLastRename();
+                            }
+                        }
+                        break;
+                }
             }
         });
         
         // Add keyboard shortcut for redo
-        inputMap.put(redoKeyStroke, "redoLintAction");
-        actionMap.put("redoLintAction", new AbstractAction() {
+        inputMap.put(redoKeyStroke, "redoAction");
+        actionMap.put("redoAction", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                redoLastUndo();
+                // Perform redo based on the last command type
+                switch (lastCommandType) {
+                    case WRAP:
+                        // Wrap operations don't support redo due to complexity of recreating Transaction Controllers
+                        try {
+                            messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                                    "Redo is not supported for wrap operations. Please use the @wrap command again if needed.", 
+                                    Color.BLUE, false);
+                        } catch (BadLocationException ex) {
+                            log.error("Error displaying message", ex);
+                        }
+                        break;
+                    case LINT:
+                        redoLastUndo();
+                        break;
+                    default:
+                        // If no recent command, try to determine based on context
+                        GuiPackage guiPackage = GuiPackage.getInstance();
+                        if (guiPackage != null) {
+                            JMeterTreeNode currentNode = guiPackage.getTreeListener().getCurrentNode();
+                            if (currentNode != null && currentNode.getTestElement() instanceof TransactionController) {
+                                // If a Transaction Controller is selected, inform user that redo is not supported
+                                try {
+                                    messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                                            "Redo is not supported for wrap operations. Please use the @wrap command again if needed.", 
+                                            Color.BLUE, false);
+                                } catch (BadLocationException ex) {
+                                    log.error("Error displaying message", ex);
+                                }
+                            } else {
+                                redoLastUndo();
+                            }
+                        }
+                        break;
+                }
             }
         });
         
@@ -373,7 +438,8 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                 "- Use `@this` to get information about the currently selected element\n" +
                 "- Use `@optimize` to get optimization suggestions for your test plan\n" +
                 "- Use `@code` to improve code in JSR223 elements\n" +
-                "- Use `@lint` to rename elements in your test plan with meaningful names\n\n" +
+                "- Use `@lint` to rename elements in your test plan with meaningful names\n" +
+                "- Use `@wrap` to group HTTP request samplers under Transaction Controllers\n\n" +
                 "How can I assist you today?";
         
         try {
@@ -394,6 +460,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         
         // Clear the conversation history
         conversationHistory.clear();
+        
+        // Reset the last command type
+        lastCommandType = LastCommandType.NONE;
         
         // Display welcome message
         displayWelcomeMessage();
@@ -442,6 +511,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             return;
         } else if (message.trim().startsWith("@lint")) {
             handleLintCommand(message);
+            return;
+        } else if (message.trim().startsWith("@wrap")) {
+            handleWrapCommand();
             return;
         }
         
@@ -529,6 +601,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     private void handleThisCommand() {
         log.info("Processing @this command");
         
+        // Reset the last command type since this is not a lint or wrap command
+        lastCommandType = LastCommandType.NONE;
+        
         // Disable input while processing
         messageField.setText("");
         messageField.setEnabled(false);
@@ -591,6 +666,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     private void handleOptimizeCommand() {
         log.info("Processing @optimize command");
         
+        // Reset the last command type since this is not a lint or wrap command
+        lastCommandType = LastCommandType.NONE;
+        
         // Disable input while processing
         messageField.setText("");
         messageField.setEnabled(false);
@@ -651,6 +729,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
      */
     private void handleCodeCommand(String message) {
         log.info("Processing @code command");
+        
+        // Reset the last command type since this is not a lint or wrap command
+        lastCommandType = LastCommandType.NONE;
         
         try {
             // Add user message to chat
@@ -942,8 +1023,78 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
      * 
      * @param message The message containing the @lint command
      */
+    /**
+     * Handles the @wrap command to group HTTP request samplers under Transaction Controllers.
+     */
+    private void handleWrapCommand() {
+        log.info("Processing @wrap command");
+        
+        // Set the last command type to WRAP
+        lastCommandType = LastCommandType.WRAP;
+        
+        // Disable input while processing
+        messageField.setText("");
+        messageField.setEnabled(false);
+        sendButton.setEnabled(false);
+        
+        // Process the command in a background thread
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                WrapCommandHandler wrapCommandHandler = new WrapCommandHandler();
+                return wrapCommandHandler.processWrapCommand();
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    // Remove the loading indicator
+                    removeLoadingIndicator();
+                    
+                    // Get the wrap result
+                    String result = get();
+                    
+                    // Process the response
+                    processAiResponse(result);
+                    
+                    // Re-enable input
+                    messageField.setEnabled(true);
+                    sendButton.setEnabled(true);
+                    messageField.requestFocusInWindow();
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Error processing @wrap command", e);
+                    
+                    // Remove the loading indicator
+                    removeLoadingIndicator();
+                    
+                    // Display error message
+                    try {
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                                "Sorry, I encountered an error while processing the @wrap command. Please try again.",
+                                Color.RED, false);
+                    } catch (BadLocationException ex) {
+                        log.error("Error displaying error message", ex);
+                    }
+                    
+                    // Re-enable input
+                    messageField.setEnabled(true);
+                    sendButton.setEnabled(true);
+                    messageField.requestFocusInWindow();
+                }
+            }
+        }.execute();
+    }
+    
+    /**
+     * Handles the @lint command to rename elements in the test plan.
+     * 
+     * @param message The message containing the @lint command
+     */
     private void handleLintCommand(String message) {
         log.info("Processing @lint command");
+        
+        // Set the last command type to LINT
+        lastCommandType = LastCommandType.LINT;
         
         try {
             // Add user message to chat
@@ -1097,6 +1248,43 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     try {
                         messageProcessor.appendMessage(chatArea.getStyledDocument(),
                                 "Error redoing rename operation: " + e.getMessage(), Color.RED, false);
+                    } catch (BadLocationException ex) {
+                        log.error("Error displaying error message", ex);
+                    }
+                }
+            }
+        }.execute();
+    }
+    
+    /**
+     * Undoes the last wrap operation performed by the WrapCommandHandler.
+     */
+    private void undoLastWrap() {
+        // Create a SwingWorker to process the undo in the background
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                // Get the WrapUndoRedoHandler instance and process the undo
+                return WrapUndoRedoHandler.getInstance().undoLastWrap();
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    // Get the result and display it
+                    String result = get();
+                    // Display the result in the chat area
+                    try {
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, new Color(0, 51, 102), false);
+                    } catch (BadLocationException ex) {
+                        log.error("Error displaying wrap undo result", ex);
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Error undoing wrap operation", e);
+                    // Display error message
+                    try {
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                                "Error undoing wrap operation: " + e.getMessage(), Color.RED, false);
                     } catch (BadLocationException ex) {
                         log.error("Error displaying error message", ex);
                     }

@@ -15,6 +15,7 @@ This plugin provides a simple way to chat with AI in JMeter. Feather Wand serves
 - Use `@lint` command to automatically rename elements in your test plan for better organization and readability
 - Use `@optimize` command to get optimization recommendations for the currently selected element in your test plan
 - Use `@code` command to extract code blocks from AI responses and insert them directly into JSR223 components
+- Use `@wrap` command to intelligently group HTTP samplers under Transaction Controllers for better organization and reporting
 - Customize AI behavior through configuration properties
 
 ## ⚠️ Disclaimer and Best Practices
@@ -123,6 +124,32 @@ Use the `@lint` command to automatically rename elements in your test plan for b
    - Apply it to imported test plans to make them conform to your naming standards
 
 This feature is particularly valuable for large test plans or when working in teams where consistent naming is essential for collaboration.
+
+### 📦 @wrap Command
+
+Use the `@wrap` command to intelligently group HTTP samplers under Transaction Controllers for better organization and reporting:
+
+1. **How to Use**:
+   - Select a Thread Group in your test plan
+   - Type `@wrap` in the chat
+   - The AI will analyze your HTTP samplers and group similar ones under Transaction Controllers
+   - Use the undo button to revert changes if needed
+
+2. **Benefits**:
+   - Improves test plan organization and readability
+   - Enhances test reports with meaningful transaction metrics
+   - Groups related HTTP requests logically
+   - Preserves the original order and hierarchy of samplers
+   - Maintains all child elements (like assertions and post-processors) with their parent samplers
+
+3. **How It Works**:
+   - Analyzes sampler names and paths to identify logical groupings
+   - Creates appropriately named Transaction Controllers
+   - Moves samplers under their respective Transaction Controllers
+   - Preserves the original order and hierarchy
+   - Uses pattern matching and structural analysis (not AI) for its grouping logic
+
+This feature is especially useful for imported or recorded test plans that contain many individual HTTP samplers without proper organization.
 
 ## 🗝️ How to get an Anthropic API key?
 
