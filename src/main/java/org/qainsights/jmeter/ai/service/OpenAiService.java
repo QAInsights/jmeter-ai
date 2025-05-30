@@ -202,20 +202,11 @@ public class OpenAiService implements AiService {
                     JsonObject jsonResponse = JsonParser.parseString(responseBody).getAsJsonObject();
                     String generatedText = "";
 
-                    if (jsonResponse.has("choices")) {
-                        JsonObject firstChoice = jsonResponse.getAsJsonArray("choices").get(0).getAsJsonObject();
-                        if (firstChoice.has("message") && firstChoice.getAsJsonObject("message").has("content")) {
-                            generatedText = firstChoice.getAsJsonObject("message").get("content").getAsString();
-                        }
-                    } else if (jsonResponse.has("generated_text")) {
-                        generatedText = jsonResponse.get("generated_text").getAsString();
-                    } else if (jsonResponse.has("message") && jsonResponse.getAsJsonObject("message").has("content")) {
-                        generatedText = jsonResponse.getAsJsonObject("message").get("content").getAsString();
+                    if (jsonResponse.has("data") && jsonResponse.getAsJsonObject("data").has("content")) {
+                        generatedText = jsonResponse.getAsJsonObject("data").get("content").getAsString();
                     } else {
-                        log.warn("Could not find standard 'content' or 'generated_text' in Lab45 response. Response body: {}", responseBody);
-                        if (jsonResponse.has("response")) generatedText = jsonResponse.get("response").getAsString();
-                        else if (jsonResponse.has("text")) generatedText = jsonResponse.get("text").getAsString();
-                        else generatedText = "Could not parse AI response: " + responseBody.substring(0, Math.min(responseBody.length(), 200));
+                        log.warn("Could not find 'data.content' in Lab45 response. Response body: {}", responseBody);
+                        generatedText = "Could not parse AI response: " + responseBody.substring(0, Math.min(responseBody.length(), 200));
                     }
                     return generatedText;
                 } else {
