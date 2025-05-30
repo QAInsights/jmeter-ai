@@ -8,11 +8,12 @@ import com.anthropic.models.ModelListPage;
 import com.anthropic.models.ModelListParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.openai.client.OpenAIClient;
-import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.Model;
+// import com.openai.client.OpenAIClient; // OpenAI SDK removed
+// import com.openai.client.okhttp.OpenAIOkHttpClient; // OpenAI SDK removed
+// import com.openai.models.Model; // OpenAI SDK removed
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,12 +21,11 @@ public class Models {
     private static final Logger log = LoggerFactory.getLogger(Models.class);
 
     /**
-     * Get a combined list of model IDs from both Anthropic and OpenAI
+     * Get a combined list of model IDs from Anthropic and a placeholder for custom models.
      * @param anthropicClient Anthropic client
-     * @param openAiClient OpenAI client
      * @return List of model IDs
      */
-    public static List<String> getModelIds(AnthropicClient anthropicClient, OpenAIClient openAiClient) {
+    public static List<String> getModelIds(AnthropicClient anthropicClient /*, OpenAIClient openAiClient - Removed */) {
         List<String> modelIds = new ArrayList<>();
         
         try {
@@ -35,13 +35,15 @@ public class Models {
                 modelIds.addAll(anthropicModels);
             }
             
-            // Get OpenAI models
-            List<String> openAiModels = getOpenAiModelIds(openAiClient);
-            if (openAiModels != null) {
-                modelIds.addAll(openAiModels);
+            // Add placeholder for Custom AI model (if applicable)
+            // If custom AI service has a fixed model or model selection is not relevant,
+            // this can be an empty list or a specific identifier.
+            List<String> customModels = getOpenAiModelIds(); // Changed signature
+            if (customModels != null) {
+                modelIds.addAll(customModels);
             }
             
-            log.info("Combined {} models from Anthropic and OpenAI", modelIds.size());
+            log.info("Combined {} models from Anthropic and Custom AI placeholder", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);
@@ -91,52 +93,32 @@ public class Models {
     }
     
     /**
-     * Get OpenAI models as ModelListPage
-     * @param client OpenAI client
-     * @return OpenAI ModelListPage
+     * Get OpenAI models as ModelListPage - This method is no longer functional
+     * as OpenAI SDK is removed. It will return null.
+     * @param client OpenAI client (unused)
+     * @return null
      */
-    public static com.openai.models.ModelListPage getOpenAiModels(OpenAIClient client) {
-        try {
-            log.info("Fetching available models from OpenAI API");
-            client = OpenAIOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
-                    .build();            
-
-            com.openai.models.ModelListPage models = client.models().list();
-            
-            log.info("Successfully retrieved {} models from OpenAI API", models.data().size());
-            for (Model model : models.data()) {
-                log.debug("Available OpenAI model: {}", model.id());
-            }
-            return models;
-        } catch (Exception e) {
-            log.error("Error fetching models from OpenAI API: {}", e.getMessage(), e);
-            return null;
-        }
+    public static Object getOpenAiModels(/* OpenAIClient client - Removed */) { // Return type changed to Object
+        log.warn("getOpenAiModels called, but OpenAI SDK is removed. This method will return null.");
+        // This method previously fetched models from OpenAI.
+        // Since the OpenAI SDK is removed, this functionality is no longer available.
+        // Returning null or an empty list as appropriate for the calling context.
+        // For now, let's assume null is acceptable if the caller handles it.
+        return null; 
     }
     
     /**
-     * Get OpenAI model IDs as a List of Strings
-     * @param client OpenAI client
-     * @return List of model IDs
+     * Get OpenAI model IDs as a List of Strings.
+     * Since the OpenAI SDK is removed, this now returns a predefined static list for the "custom AI".
+     * @return List of model IDs (e.g., ["custom-model"])
      */
-    public static List<String> getOpenAiModelIds(OpenAIClient client) {
-        com.openai.models.ModelListPage models = getOpenAiModels(client);
-        if (models != null && models.data() != null) {
-            // Return the list of GPT models only, excluding audio and TTS models
-            return models.data().stream()
-                    .filter(model -> model.id().startsWith("gpt")) // Include only GPT models
-                    .filter(model -> !model.id().contains("audio")) // Exclude audio models
-                    .filter(model -> !model.id().contains("tts")) // Exclude text-to-speech models
-                    .filter(model -> !model.id().contains("whisper")) // Exclude whisper models
-                    .filter(model -> !model.id().contains("davinci")) // Exclude Davinci models
-                    .filter(model -> !model.id().contains("search")) // Exclude search models
-                    .filter(model -> !model.id().contains("transcribe")) // Exclude transcribe models
-                    .filter(model -> !model.id().contains("realtime")) // Exclude realtime models
-                    .filter(model -> !model.id().contains("instruct")) // Exclude instruct models
-                    .map(com.openai.models.Model::id)
-                    .collect(Collectors.toList());
-        }
-        return new ArrayList<>();
+    public static List<String> getOpenAiModelIds(/* OpenAIClient client - Removed */) {
+        log.info("getOpenAiModelIds called. OpenAI SDK removed. Returning static list for custom AI.");
+        // Return a static list, e.g., a single model or an empty list
+        // depending on whether the custom API supports model selection or has a fixed model.
+        // For compilation and basic UI functionality, providing a placeholder:
+        return Collections.singletonList("custom-model"); 
+        // Alternatively, if no model selection is relevant for custom API:
+        // return new ArrayList<>(); 
     }
 }

@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 
-import com.openai.models.Model;
+// import com.openai.models.Model; // OpenAI SDK removed
 import org.apache.jorphan.gui.JMeterUIDefaults;
 
 import org.apache.jmeter.control.TransactionController;
@@ -126,9 +126,15 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             String selectedModel = (String) modelSelector.getSelectedItem();
             if (selectedModel != null) {
                 log.info("Model selected from dropdown: {}", selectedModel);
-                // Immediately set the model in the service
-                claudeService.setModel(selectedModel);
-                openAiService.setModel(selectedModel);
+                // Immediately set the model in the appropriate service
+                if (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:")) {
+                    String actualModelId = selectedModel.substring(selectedModel.indexOf(":") + 1);
+                    openAiService.setModel(actualModelId); // openAiService is now CustomAiService
+                    log.info("Set model for CustomAI/OpenAI Service: {}", actualModelId);
+                } else { // Assuming Anthropic otherwise
+                    claudeService.setModel(selectedModel);
+                    log.info("Set model for ClaudeService: {}", selectedModel);
+                }
             }
         });
 
@@ -420,32 +426,23 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     log.error("Error loading Anthropic models: {}", e.getMessage(), e);
                 }
 
-                // Add OpenAI models
+                // Add Custom AI model(s)
                 try {
-                    com.openai.models.ModelListPage openAiModels = Models.getOpenAiModels(openAiService.getClient());
-                    if (openAiModels != null && openAiModels.data() != null) {
-                        // Convert OpenAI models to string IDs
-                        for (Model openAiModel : openAiModels.data()) {
-                            // Only include GPT models and filter out specific model types
-                            if (openAiModel.id().startsWith("gpt") &&
-                                    !openAiModel.id().contains("audio") &&
-                                    !openAiModel.id().contains("tts") &&
-                                    !openAiModel.id().contains("whisper") &&
-                                    !openAiModel.id().contains("davinci") &&
-                                    !openAiModel.id().contains("search") &&
-                                    !openAiModel.id().contains("transcribe") &&
-                                    !openAiModel.id().contains("realtime") &&
-                                    !openAiModel.id().contains("instruct")) {
-
-                                String modelId = "openai:" + openAiModel.id();
-                                allModels.add(modelId);
-                                log.debug("Added OpenAI model to selector: {}", openAiModel.id());
-                            }
+                    // Models.getOpenAiModelIds() now returns a static list (e.g. ["custom-model"])
+                    // and no longer requires a client.
+                    List<String> customAiModelIds = Models.getOpenAiModelIds(); 
+                    if (customAiModelIds != null && !customAiModelIds.isEmpty()) {
+                        for (String modelId : customAiModelIds) {
+                            // Prefix with "custom:" to differentiate in the UI if needed.
+                            allModels.add("custom:" + modelId); 
+                            log.debug("Added Custom AI model to selector: {}", modelId);
                         }
-                        log.info("Added OpenAI models to selector");
+                        log.info("Added {} Custom AI model(s) to selector", customAiModelIds.size());
+                    } else {
+                        log.info("No Custom AI models returned from Models.getOpenAiModelIds()");
                     }
                 } catch (Exception e) {
-                    log.error("Error adding OpenAI models: {}", e.getMessage(), e);
+                    log.error("Error adding Custom AI models: {}", e.getMessage(), e);
                 }
 
                 return allModels;
@@ -763,14 +760,15 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                 String selectedModel = (String) modelSelector.getSelectedItem();
                 AiService serviceToUse;
 
-                if (selectedModel.startsWith("openai:")) {
-                    // Use OpenAI service
-                    serviceToUse = openAiService;
-                    log.info("Using OpenAI service for optimization");
-                } else {
-                    // Use Claude service
+                if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
+                    serviceToUse = openAiService; // This is now CustomAiService
+                    log.info("Using CustomAI (formerly OpenAI) service for optimization with model: {}", selectedModel);
+                } else if (selectedModel != null) { // Assuming Anthropic otherwise
                     serviceToUse = claudeService;
-                    log.info("Using Claude service for optimization");
+                    log.info("Using Claude service for optimization with model: {}", selectedModel);
+                } else {
+                    log.warn("No model selected for optimization. Defaulting to ClaudeService.");
+                    serviceToUse = claudeService; // Fallback, though UI should prevent this
                 }
 
                 return OptimizeRequestHandler.analyzeAndOptimizeSelectedElement(serviceToUse);
@@ -1195,10 +1193,15 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
                 // Determine which service to use based on the model ID
                 AiService serviceToUse;
-                if (selectedModel.startsWith("openai:")) {
-                    serviceToUse = openAiService;
-                } else {
+                if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
+                    serviceToUse = openAiService; // This is now CustomAiService
+                    log.info("Using CustomAI (formerly OpenAI) service for linting with model: {}", selectedModel);
+                } else if (selectedModel != null) { // Assuming Anthropic otherwise
                     serviceToUse = claudeService;
+                    log.info("Using Claude service for linting with model: {}", selectedModel);
+                } else {
+                    log.warn("No model selected for linting. Defaulting to ClaudeService.");
+                    serviceToUse = claudeService; // Fallback
                 }
 
                 // Use the LintCommandHandler to process the lint command
@@ -1266,25 +1269,18 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         // Get the model ID
         log.info("Using model from dropdown for message: {}", selectedModel);
 
-        // Check if this is an OpenAI model (prefixed with "openai:")
-        if (selectedModel.startsWith("openai:")) {
-            // Extract the actual OpenAI model ID
-            String openAiModelId = selectedModel.substring(7); // Remove "openai:" prefix
-            log.info("Using OpenAI model: {}", openAiModelId);
-
-            // Set the model in the OpenAI service
-            openAiService.setModel(openAiModelId);
-
-            // Call OpenAI API with conversation history
+        // Check if this is an CustomAI/OpenAI model
+        if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
+            String customModelId = selectedModel.substring(selectedModel.indexOf(":") + 1); // remove prefix
+            log.info("Using CustomAI (formerly OpenAI) service with model: {}", customModelId);
+            openAiService.setModel(customModelId); // openAiService is now CustomAiService
             return openAiService.generateResponse(new ArrayList<>(conversationHistory));
-        } else {
-            // This is an Anthropic model
+        } else if (selectedModel != null) { // Assuming Anthropic for others
             log.info("Using Anthropic model: {}", selectedModel);
-
-            // Set the model in the Claude service
             claudeService.setModel(selectedModel);
-
-            // Call Claude API with conversation history
+            return claudeService.generateResponse(new ArrayList<>(conversationHistory));
+        } else {
+            log.warn("No model selected, defaulting to ClaudeService with its current model.");
             return claudeService.generateResponse(new ArrayList<>(conversationHistory));
         }
     }
@@ -1305,12 +1301,16 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
                 // Determine which service to use based on the model ID
                 AiService serviceToUse;
-                if (selectedModel.startsWith("openai:")) {
-                    serviceToUse = openAiService;
-                } else {
+                 if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
+                    serviceToUse = openAiService; // This is now CustomAiService
+                    log.info("Using CustomAI (formerly OpenAI) service for undoLastRename with model: {}", selectedModel);
+                } else if (selectedModel != null) { // Assuming Anthropic otherwise
                     serviceToUse = claudeService;
+                    log.info("Using Claude service for undoLastRename with model: {}", selectedModel);
+                } else {
+                    log.warn("No model selected for undoLastRename. Defaulting to ClaudeService.");
+                    serviceToUse = claudeService; // Fallback
                 }
-
                 // Create a LintCommandHandler and process the undo
                 LintCommandHandler lintHandler = new LintCommandHandler(serviceToUse);
                 return lintHandler.undoLastRename();

@@ -1,8 +1,8 @@
 package org.qainsights.jmeter.ai.usage;
 
-import com.openai.models.ChatCompletion;
-import com.openai.models.CompletionUsage;
-import com.openai.client.OpenAIClient;
+// import com.openai.models.ChatCompletion; // OpenAI SDK removed
+// import com.openai.models.CompletionUsage; // OpenAI SDK removed
+// import com.openai.client.OpenAIClient; // OpenAI SDK removed
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -22,37 +22,22 @@ public class OpenAiUsage {
     // Singleton instance
     private static final OpenAiUsage INSTANCE = new OpenAiUsage();
 
-    // OpenAI client for API calls
-    private OpenAIClient client;
+    // OpenAI client for API calls - Removed
+    // private OpenAIClient client;
 
-    // Store usage history
+    // Store usage history - This will no longer be populated with OpenAI specific data
     private final List<UsageRecord> usageHistory = new ArrayList<>();
 
     // Private constructor for singleton
     private OpenAiUsage() {
-        initializeClient();
+        // initializeClient(); // OpenAI-specific client initialization removed
+        log.info("OpenAiUsage instance created. OpenAI-specific client initialization removed.");
     }
 
     /**
-     * Initialize the OpenAI client
+     * Initialize the OpenAI client - Method Removed as OpenAI SDK is removed.
      */
-    private void initializeClient() {
-        try {
-            String apiKey = AiConfig.getProperty("openai.api.key", "");
-            if (apiKey.isEmpty()) {
-                log.warn("OpenAI API key is empty. Token usage information may not be accurate.");
-            }
-
-            // Initialize the client
-            client = new com.openai.client.okhttp.OpenAIOkHttpClient.Builder()
-                    .apiKey(apiKey)
-                    .build();
-
-            log.info("OpenAI client initialized for usage tracking");
-        } catch (Exception e) {
-            log.error("Failed to initialize OpenAI client for usage tracking", e);
-        }
-    }
+    // private void initializeClient() { ... }
 
     /**
      * Get the singleton instance of OpenAiUsage.
@@ -64,56 +49,52 @@ public class OpenAiUsage {
     }
 
     /**
-     * Record usage from a ChatCompletion response.
+     * Record usage. This method is now a no-op as OpenAI SDK has been removed.
+     * It can be adapted for custom API usage if needed in the future.
      *
-     * @param completion The ChatCompletion response from OpenAI
+     * @param completion The completion response (now generic Object)
      * @param model      The model used for the completion
      */
-    public void recordUsage(ChatCompletion completion, String model) {
-        if (completion == null || completion.usage() == null) {
-            log.warn("Unable to record usage - completion or usage data is null");
-            return;
-        }
+    public void recordUsage(Object completion, String model) {
+        log.warn("recordUsage called, but OpenAI SDK is removed. Usage tracking for the custom API is not implemented here. No usage recorded.");
+        // This method previously processed com.openai.models.ChatCompletion.
+        // As the SDK is removed, this is now a no-op or logs a warning.
+        // If custom API provides usage data, this method could be refactored.
+        // For now, it does nothing to avoid compilation errors.
 
-        try {
-            // Get the CompletionUsage from the Optional
-            Optional<CompletionUsage> usageOptional = completion.usage();
-            if (!usageOptional.isPresent()) {
-                log.warn("CompletionUsage is not present in the response");
-                return;
+        // Example of how it might be adapted if custom API provided similar data:
+        /*
+        if (completion instanceof CustomApiResponse) { // Assuming a hypothetical CustomApiResponse
+            CustomApiResponse customResponse = (CustomApiResponse) completion;
+            if (customResponse.getUsage() != null) {
+                long promptTokens = customResponse.getUsage().getPromptTokens();
+                long completionTokens = customResponse.getUsage().getCompletionTokens();
+                long totalTokens = customResponse.getUsage().getTotalTokens();
+                String cleanModelName = model; // Or derive from customResponse
+
+                UsageRecord record = new UsageRecord(
+                        new Date(),
+                        cleanModelName,
+                        promptTokens,
+                        completionTokens,
+                        totalTokens);
+                usageHistory.add(record);
+                log.info("Recorded usage for custom API: {}", record);
             }
-
-            CompletionUsage usage = usageOptional.get();
-            long promptTokens = usage.promptTokens();
-            long completionTokens = usage.completionTokens();
-            long totalTokens = usage.totalTokens();
-
-            // Clean up model name (remove potential "openai:" prefix)
-            String cleanModelName = model.startsWith("openai:") ? model.substring(7) : model;
-
-            // Record usage without cost calculation
-            UsageRecord record = new UsageRecord(
-                    new Date(),
-                    cleanModelName,
-                    promptTokens,
-                    completionTokens,
-                    totalTokens);
-
-            usageHistory.add(record);
-            log.info("Recorded usage: {}", record);
-        } catch (Exception e) {
-            log.error("Error recording usage", e);
+        } else if (completion != null) {
+            log.warn("Unsupported completion object type for usage recording: {}", completion.getClass().getName());
         }
+        */
     }
 
     /**
-     * Set the OpenAI client for usage tracking
+     * Set the client for usage tracking. This method is now a no-op.
      * 
-     * @param client The OpenAI client to use
+     * @param client The client object (now generic Object, formerly OpenAIClient)
      */
-    public void setClient(OpenAIClient client) {
-        this.client = client;
-        log.info("OpenAI client set for usage tracking");
+    public void setClient(Object client) {
+        // this.client = client; // OpenAI client field removed
+        log.warn("setClient called, but OpenAI SDK is removed. Client setting is no longer applicable here.");
     }
 
     /**

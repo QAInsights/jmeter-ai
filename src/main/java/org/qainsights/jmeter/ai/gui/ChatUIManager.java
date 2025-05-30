@@ -200,7 +200,7 @@ public class ChatUIManager {
                 
                 // Variable to store Anthropic models for reference
                 ModelListPage anthropicModels = null;
-                com.openai.models.ModelListPage openAiModels = null;
+                // com.openai.models.ModelListPage openAiModels = null; // OpenAI SDK removed
                 
                 try {
                     // Get Anthropic models
@@ -213,40 +213,36 @@ public class ChatUIManager {
                     log.error("Error loading Anthropic models: {}", e.getMessage(), e);
                 }
                 
-                // Add OpenAI models
+                // Add Custom AI model(s) placeholder
                 try {
-                    openAiModels = Models.getOpenAiModels(openAiService.getClient());
-                    if (openAiModels != null && openAiModels.data() != null) {
-                        // Convert OpenAI models to Anthropic ModelInfo objects
-                        for (com.openai.models.Model openAiModel : openAiModels.data()) {
-                            // Only include GPT models and filter out specific model types
-                            if (openAiModel.id().startsWith("gpt") && 
-                                !openAiModel.id().contains("audio") && 
-                                !openAiModel.id().contains("tts") && 
-                                !openAiModel.id().contains("whisper") && 
-                                !openAiModel.id().contains("davinci") && 
-                                !openAiModel.id().contains("search") && 
-                                !openAiModel.id().contains("transcribe") && 
-                                !openAiModel.id().contains("realtime") && 
-                                !openAiModel.id().contains("instruct")) {
-                                
-                                try {
-                                    // Create a ModelInfo for each OpenAI model
-                                    ModelInfo modelInfo = ModelInfo.builder()
-                                        .id("openai:" + openAiModel.id())
-                                        .build();
-                                    
-                                    models.add(modelInfo);
-                                    log.debug("Added OpenAI model to selector: {}", openAiModel.id());
-                                } catch (Exception e) {
-                                    log.warn("Could not create ModelInfo for {}: {}", openAiModel.id(), e.getMessage());
-                                }
+                    // Models.getOpenAiModelIds() now returns a static list e.g. ["custom-model"]
+                    List<String> customAiModelIds = Models.getOpenAiModelIds(); 
+                    if (customAiModelIds != null && !customAiModelIds.isEmpty()) {
+                        for (String modelId : customAiModelIds) {
+                            try {
+                                // Create a ModelInfo for each custom model.
+                                // Note: ModelInfo is an Anthropic class. This might be semantically
+                                // awkward but allows using the same JComboBox<ModelInfo>.
+                                // The Anthropic ModelInfo.Builder might not have name() or description() methods.
+                                // The ID is the primary identifier used in the renderer.
+                                ModelInfo.Builder builder = ModelInfo.builder().id("custom:" + modelId);
+                                // Attempting to set other fields like name or description might fail if
+                                // the builder doesn't support them or if they are named differently.
+                                // For now, only set the ID, as that's used by the renderer.
+                                // if (modelId != null) builder.name(modelId); // This was causing error
+                                // builder.description("Custom AI Model"); // This might also cause error
+                                models.add(builder.build());
+                                log.debug("Added Custom AI model to selector: {}", modelId);
+                            } catch (Exception e) {
+                                log.warn("Could not create ModelInfo for custom model {}: {}", modelId, e.getMessage());
                             }
                         }
-                        log.info("Added OpenAI models to selector");
+                        log.info("Added {} Custom AI model(s) to selector", customAiModelIds.size());
+                    } else {
+                        log.info("No Custom AI models returned from Models.getOpenAiModelIds()");
                     }
                 } catch (Exception e) {
-                    log.error("Error loading OpenAI models: {}", e.getMessage(), e);
+                    log.error("Error adding Custom AI models: {}", e.getMessage(), e);
                 }
                 return models;
             }

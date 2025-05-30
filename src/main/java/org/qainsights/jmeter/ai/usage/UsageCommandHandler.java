@@ -28,15 +28,12 @@ public class UsageCommandHandler {
 
             // Get the OpenAI client from the service and set it in the OpenAiUsage instance
             OpenAiService openAiService = (OpenAiService) serviceToUse;
-            try {
-                // Set the OpenAI client in the OpenAiUsage instance
-                OpenAiUsage.getInstance().setClient(openAiService.getClient());
-                log.info("Set OpenAI client in OpenAiUsage from OpenAiService");
-            } catch (Exception e) {
-                log.error("Failed to set OpenAI client in OpenAiUsage", e);
-            }
-
-            // Return the usage summary
+            // The getClient() method was removed from OpenAiService, and OpenAiUsage's setClient is a no-op.
+            // Direct client setting is no longer needed here. OpenAiUsage itself is now
+            // mostly a placeholder for OpenAI/Custom AI related usage.
+            log.info("OpenAI/CustomAI usage is requested. OpenAiUsage.getUsageSummary() will be called, but it may not contain detailed token data for custom API.");
+            
+            // Return the usage summary (which will likely indicate no specific data for OpenAI/Custom)
             return OpenAiUsage.getInstance().getUsageSummary();
         } else if (serviceToUse instanceof ClaudeService) {
             log.info("Processing Anthropic usage request");
