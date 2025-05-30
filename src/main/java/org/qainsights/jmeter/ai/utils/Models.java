@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 // import com.openai.models.Model; // OpenAI SDK removed
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -21,36 +22,69 @@ public class Models {
     private static final Logger log = LoggerFactory.getLogger(Models.class);
 
     /**
-     * Get a combined list of model IDs from Anthropic and a placeholder for custom models.
-     * @param anthropicClient Anthropic client
-     * @return List of model IDs
+     * Inner class or Record to store model details.
      */
-    public static List<String> getModelIds(AnthropicClient anthropicClient /*, OpenAIClient openAiClient - Removed */) {
-        List<String> modelIds = new ArrayList<>();
-        
-        try {
-            // Get Anthropic models
-            List<String> anthropicModels = getAnthropicModelIds(anthropicClient);
-            if (anthropicModels != null) {
-                modelIds.addAll(anthropicModels);
-            }
-            
-            // Add placeholder for Custom AI model (if applicable)
-            // If custom AI service has a fixed model or model selection is not relevant,
-            // this can be an empty list or a specific identifier.
-            List<String> customModels = getOpenAiModelIds(); // Changed signature
-            if (customModels != null) {
-                modelIds.addAll(customModels);
-            }
-            
-            log.info("Combined {} models from Anthropic and Custom AI placeholder", modelIds.size());
-            return modelIds;
-        } catch (Exception e) {
-            log.error("Error combining models: {}", e.getMessage(), e);
-            return modelIds; // Return whatever we have, even if empty
+    public static class ModelDetail {
+        public final String displayName; // e.g., "GPT-4o - 4096 tokens"
+        public final String modelId;     // e.g., "gpt-4o"
+        public final int maxTokens;
+
+        public ModelDetail(String displayName, String modelId, int maxTokens) {
+            this.displayName = displayName;
+            this.modelId = modelId;
+            this.maxTokens = maxTokens;
+        }
+
+        @Override
+        public String toString() { // Used by JComboBox by default
+            return displayName;
         }
     }
+
+    private static final List<ModelDetail> AVAILABLE_LAB45_MODELS = Arrays.asList(
+        new ModelDetail("GPT-4o - 4096 tokens", "gpt-4o", 4096), // Default first
+        new ModelDetail("GPT-3.5 Turbo 16k - 4096 tokens", "gpt-3.5-turbo-16k", 4096),
+        new ModelDetail("GPT-4 - 4096 tokens", "gpt-4", 4096),
+        new ModelDetail("Amazon Titan-TG1-Large - 2048 tokens", "amazon.titan-tg1-large", 2048),
+        new ModelDetail("Gemini Pro - 8192 tokens", "gemini-pro", 8192),
+        new ModelDetail("Gemini 1.5 Pro - 8192 tokens", "gemini-1.5-pro", 8192),
+        new ModelDetail("Gemini 1.5 Flash - 8192 tokens", "gemini-1.5-flash", 8192),
+        new ModelDetail("Jais 30B Chat - 2048 tokens", "jais-30b-chat", 2048)
+    );
     
+    /**
+     * Get a combined list of model display names from Anthropic and Lab45 AI.
+     * Used by AiChatPanel for its JComboBox<String>.
+     * @param anthropicClient Anthropic client (can be null if Anthropic is not configured/used)
+     * @return List of model display names
+     */
+    public static List<String> getModelDisplayNames(AnthropicClient anthropicClient) {
+        List<String> displayNames = new ArrayList<>();
+        
+        try {
+            // Get Anthropic model IDs (these are display names already)
+            if (anthropicClient != null) { // Check if client is provided
+                List<String> anthropicModelIds = getAnthropicModelIds(anthropicClient);
+                if (anthropicModelIds != null) {
+                    displayNames.addAll(anthropicModelIds);
+                }
+            }
+            
+            // Get Lab45 model display names
+            for (ModelDetail detail : AVAILABLE_LAB45_MODELS) {
+                // Prefixing to distinguish in UI, consistent with how AiChatPanel processes them
+                displayNames.add("custom:" + detail.displayName); 
+            }
+            
+            log.info("Combined {} model display names.", displayNames.size());
+            return displayNames;
+        } catch (Exception e) {
+            log.error("Error combining model display names: {}", e.getMessage(), e);
+            // Fallback to just Lab45 models if Anthropic fails or isn't configured
+            return AVAILABLE_LAB45_MODELS.stream().map(md -> "custom:" + md.displayName).collect(Collectors.toList());
+        }
+    }
+
     /**
      * Get Anthropic models as ModelListPage
      * @param client Anthropic client
@@ -95,30 +129,64 @@ public class Models {
     /**
      * Get OpenAI models as ModelListPage - This method is no longer functional
      * as OpenAI SDK is removed. It will return null.
-     * @param client OpenAI client (unused)
      * @return null
      */
-    public static Object getOpenAiModels(/* OpenAIClient client - Removed */) { // Return type changed to Object
-        log.warn("getOpenAiModels called, but OpenAI SDK is removed. This method will return null.");
-        // This method previously fetched models from OpenAI.
-        // Since the OpenAI SDK is removed, this functionality is no longer available.
-        // Returning null or an empty list as appropriate for the calling context.
-        // For now, let's assume null is acceptable if the caller handles it.
+    // public static Object getOpenAiModels(/* OpenAIClient client - Removed */) { // Method removed as it's obsolete
+    //     log.warn("getOpenAiModels called, but OpenAI SDK is removed. This method will return null.");
+    //     return null; 
+    // }
+    
+    /**
+     * Get Lab45 model details.
+     * @return List of ModelDetail objects for Lab45 models.
+     */
+    public static List<ModelDetail> getLab45ModelDetails() {
+        log.info("Returning static list of Lab45 model details.");
+        return AVAILABLE_LAB45_MODELS;
+    }
+
+    /**
+     * Finds a Lab45 ModelDetail object by its display name.
+     * @param displayName The display name of the model.
+     * @return The ModelDetail object, or null if not found.
+     */
+    public static ModelDetail findModelDetailByDisplayName(String displayName) {
+        for (ModelDetail detail : AVAILABLE_LAB45_MODELS) {
+            if (detail.displayName.equals(displayName)) {
+                return detail;
+            }
+        }
+        log.warn("No ModelDetail found for displayName: {}", displayName);
         return null; 
     }
     
     /**
-     * Get OpenAI model IDs as a List of Strings.
-     * Since the OpenAI SDK is removed, this now returns a predefined static list for the "custom AI".
-     * @return List of model IDs (e.g., ["custom-model"])
+     * Finds a Lab45 ModelDetail object by its model ID.
+     * @param modelId The model ID (e.g., "gpt-4o").
+     * @return The ModelDetail object, or null if not found.
      */
-    public static List<String> getOpenAiModelIds(/* OpenAIClient client - Removed */) {
-        log.info("getOpenAiModelIds called. OpenAI SDK removed. Returning static list for custom AI.");
-        // Return a static list, e.g., a single model or an empty list
-        // depending on whether the custom API supports model selection or has a fixed model.
-        // For compilation and basic UI functionality, providing a placeholder:
-        return Collections.singletonList("custom-model"); 
-        // Alternatively, if no model selection is relevant for custom API:
-        // return new ArrayList<>(); 
+    public static ModelDetail findModelDetailById(String modelId) {
+        for (ModelDetail detail : AVAILABLE_LAB45_MODELS) {
+            if (detail.modelId.equals(modelId)) {
+                return detail;
+            }
+        }
+        log.warn("No ModelDetail found for modelId: {}", modelId);
+        return null;
+    }
+
+    /**
+     * Gets the default Lab45 ModelDetail.
+     * @return The default ModelDetail object.
+     */
+    public static ModelDetail getDefaultLab45ModelDetail() {
+        // Assuming "gpt-4o" is the default, as specified
+        for (ModelDetail detail : AVAILABLE_LAB45_MODELS) {
+            if ("gpt-4o".equals(detail.modelId)) {
+                return detail;
+            }
+        }
+        // Fallback if gpt-4o is somehow not in the list (should not happen with static list)
+        return AVAILABLE_LAB45_MODELS.isEmpty() ? null : AVAILABLE_LAB45_MODELS.get(0);
     }
 }

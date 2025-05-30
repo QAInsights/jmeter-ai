@@ -215,34 +215,30 @@ public class ChatUIManager {
                 
                 // Add Custom AI model(s) placeholder
                 try {
-                    // Models.getOpenAiModelIds() now returns a static list e.g. ["custom-model"]
-                    List<String> customAiModelIds = Models.getOpenAiModelIds(); 
-                    if (customAiModelIds != null && !customAiModelIds.isEmpty()) {
-                        for (String modelId : customAiModelIds) {
+                    // Call the new method that returns List<Models.ModelDetail>
+                    List<Models.ModelDetail> customAiModelDetails = Models.getLab45ModelDetails(); 
+                    if (customAiModelDetails != null && !customAiModelDetails.isEmpty()) {
+                        for (Models.ModelDetail detail : customAiModelDetails) {
                             try {
-                                // Create a ModelInfo for each custom model.
-                                // Note: ModelInfo is an Anthropic class. This might be semantically
-                                // awkward but allows using the same JComboBox<ModelInfo>.
-                                // The Anthropic ModelInfo.Builder might not have name() or description() methods.
-                                // The ID is the primary identifier used in the renderer.
-                                ModelInfo.Builder builder = ModelInfo.builder().id("custom:" + modelId);
-                                // Attempting to set other fields like name or description might fail if
-                                // the builder doesn't support them or if they are named differently.
-                                // For now, only set the ID, as that's used by the renderer.
-                                // if (modelId != null) builder.name(modelId); // This was causing error
-                                // builder.description("Custom AI Model"); // This might also cause error
-                                models.add(builder.build());
-                                log.debug("Added Custom AI model to selector: {}", modelId);
+                                // Create an Anthropic ModelInfo object for each Lab45 ModelDetail.
+                                // The JComboBox is JComboBox<ModelInfo>, and its renderer uses model.id().
+                                // So, we put the displayName into ModelInfo's id field for display.
+                                ModelInfo modelInfoForDropdown = ModelInfo.builder()
+                                    .id(detail.displayName) // Use displayName for display in JComboBox
+                                    // Other ModelInfo fields like 'name' or 'description' are not standard for its builder.
+                                    .build();
+                                models.add(modelInfoForDropdown);
+                                log.debug("Added Lab45 model to selector (as ModelInfo): {}", detail.displayName);
                             } catch (Exception e) {
-                                log.warn("Could not create ModelInfo for custom model {}: {}", modelId, e.getMessage());
+                                log.warn("Could not create ModelInfo for Lab45 model {}: {}", detail.displayName, e.getMessage());
                             }
                         }
-                        log.info("Added {} Custom AI model(s) to selector", customAiModelIds.size());
+                        log.info("Added {} Lab45 model(s) to selector", customAiModelDetails.size());
                     } else {
-                        log.info("No Custom AI models returned from Models.getOpenAiModelIds()");
+                        log.info("No Lab45 models returned from Models.getLab45ModelDetails()");
                     }
                 } catch (Exception e) {
-                    log.error("Error adding Custom AI models: {}", e.getMessage(), e);
+                    log.error("Error adding Lab45 models: {}", e.getMessage(), e);
                 }
                 return models;
             }

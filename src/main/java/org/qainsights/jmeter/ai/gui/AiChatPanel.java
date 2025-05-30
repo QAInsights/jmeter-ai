@@ -54,9 +54,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     private JTextPane chatArea;
     private JTextArea messageField;
     private JButton sendButton;
-    private JComboBox<String> modelSelector;
+    private JComboBox<Models.ModelDetail> modelSelector; // Changed to use ModelDetail
     private List<String> conversationHistory;
-    private ClaudeService claudeService;
+    private ClaudeService claudeService; // Retained if panel needs to support both services
     private OpenAiService openAiService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
@@ -104,38 +104,24 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
 
         // Initialize model selector with loading state
-        modelSelector = new JComboBox<>();
-        modelSelector.addItem(null); // Add empty item while loading
-        modelSelector.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
-                    boolean cellHasFocus) {
-                if (value == null) {
-                    return super.getListCellRendererComponent(list, "Loading models...", index, isSelected,
-                            cellHasFocus);
-                }
-                return super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            }
-        });
+        // Initialize model selector for Lab45 AI models
+        modelSelector = new JComboBox<>(); 
+        // DefaultListCellRenderer will use ModelDetail.toString() (displayName)
+        // No custom renderer needed if ModelDetail.toString() is sufficient for display.
 
-        // Load models in background
-        loadModelsInBackground();
+        loadLab45ModelsInBackground(); // Changed from loadModelsInBackground
 
-        // Add a listener to log model changes
+        // Add a listener to set model and tokens on the openAiService (Lab45 service)
         modelSelector.addActionListener(e -> {
-            String selectedModel = (String) modelSelector.getSelectedItem();
-            if (selectedModel != null) {
-                log.info("Model selected from dropdown: {}", selectedModel);
-                // Immediately set the model in the appropriate service
-                if (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:")) {
-                    String actualModelId = selectedModel.substring(selectedModel.indexOf(":") + 1);
-                    openAiService.setModel(actualModelId); // openAiService is now CustomAiService
-                    log.info("Set model for CustomAI/OpenAI Service: {}", actualModelId);
-                } else { // Assuming Anthropic otherwise
-                    claudeService.setModel(selectedModel);
-                    log.info("Set model for ClaudeService: {}", selectedModel);
-                }
+            Object selectedItem = modelSelector.getSelectedItem();
+            if (selectedItem instanceof Models.ModelDetail) {
+                Models.ModelDetail selectedModelDetail = (Models.ModelDetail) selectedItem;
+                log.info("Lab45 Model selected: DisplayName='{}', ID='{}', MaxTokens={}", 
+                         selectedModelDetail.displayName, selectedModelDetail.modelId, selectedModelDetail.maxTokens);
+                openAiService.setCurrentModelAndTokens(selectedModelDetail.modelId, selectedModelDetail.maxTokens);
             }
+            // Note: ClaudeService model selection would need a separate mechanism if still supported by this panel.
+            // For this refactoring, modelSelector is now dedicated to Lab45 models via openAiService.
         });
 
         // Create a panel for the chat area with header
@@ -403,87 +389,84 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     }
 
     /**
-     * Loads the available models in the background.
+     * Loads the available Lab45 models in the background and populates the modelSelector.
      */
-    private void loadModelsInBackground() {
-        new SwingWorker<List<String>, Void>() {
+    private void loadLab45ModelsInBackground() {
+        modelSelector.setEnabled(false); // Disable while loading
+        // Set a temporary message for loading
+        ComboBoxModel<Models.ModelDetail> tempModel = new DefaultComboBoxModel<>();
+        // tempModel.addElement(null); // Cannot add null to DefaultComboBoxModel directly
+        modelSelector.setModel(tempModel); // Set an empty model first
+         modelSelector.setRenderer(new DefaultListCellRenderer() {
             @Override
-            protected List<String> doInBackground() {
-                // Get models from both services
-                List<String> allModels = new ArrayList<>();
-
-                // Get Anthropic models
-                try {
-                    ModelListPage anthropicModels = Models.getAnthropicModels(claudeService.getClient());
-                    if (anthropicModels != null && anthropicModels.data() != null) {
-                        for (ModelInfo model : anthropicModels.data()) {
-                            allModels.add(model.id());
-                            log.debug("Added Anthropic model: {}", model.id());
-                        }
-                        log.info("Added {} Anthropic models", anthropicModels.data().size());
-                    }
-                } catch (Exception e) {
-                    log.error("Error loading Anthropic models: {}", e.getMessage(), e);
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                if (list.getModel().getSize() == 0) { // Check if the model is empty (during loading)
+                    return super.getListCellRendererComponent(list, "Loading models...", index, isSelected, cellHasFocus);
                 }
+                // Once items are loaded, ModelDetail.toString() will be used.
+                return super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            }
+        });
 
-                // Add Custom AI model(s)
-                try {
-                    // Models.getOpenAiModelIds() now returns a static list (e.g. ["custom-model"])
-                    // and no longer requires a client.
-                    List<String> customAiModelIds = Models.getOpenAiModelIds(); 
-                    if (customAiModelIds != null && !customAiModelIds.isEmpty()) {
-                        for (String modelId : customAiModelIds) {
-                            // Prefix with "custom:" to differentiate in the UI if needed.
-                            allModels.add("custom:" + modelId); 
-                            log.debug("Added Custom AI model to selector: {}", modelId);
-                        }
-                        log.info("Added {} Custom AI model(s) to selector", customAiModelIds.size());
-                    } else {
-                        log.info("No Custom AI models returned from Models.getOpenAiModelIds()");
-                    }
-                } catch (Exception e) {
-                    log.error("Error adding Custom AI models: {}", e.getMessage(), e);
-                }
 
-                return allModels;
+        new SwingWorker<List<Models.ModelDetail>, Void>() {
+            @Override
+            protected List<Models.ModelDetail> doInBackground() {
+                log.info("Loading Lab45 models...");
+                return Models.getLab45ModelDetails();
             }
 
             @Override
             protected void done() {
                 try {
-                    List<String> models = get();
-                    modelSelector.removeAllItems();
-
-                    // Get the default model ID
-                    String defaultModelId = claudeService.getCurrentModel();
-                    log.info("Default model ID: {}", defaultModelId);
-
-                    String defaultModel = null;
-
-                    for (String model : models) {
-                        modelSelector.addItem(model);
-                        if (model.equals(defaultModelId)) {
-                            defaultModel = model;
+                    List<Models.ModelDetail> modelDetails = get();
+                    DefaultComboBoxModel<Models.ModelDetail> comboBoxModel = new DefaultComboBoxModel<>();
+                    if (modelDetails != null && !modelDetails.isEmpty()) {
+                        for (Models.ModelDetail detail : modelDetails) {
+                            comboBoxModel.addElement(detail);
                         }
+                        modelSelector.setModel(comboBoxModel);
+                        
+                        Models.ModelDetail defaultModel = Models.getDefaultLab45ModelDetail();
+                        if (defaultModel != null) {
+                            modelSelector.setSelectedItem(defaultModel);
+                            // Set model and tokens in the service when default is selected
+                            openAiService.setCurrentModelAndTokens(defaultModel.modelId, defaultModel.maxTokens);
+                            log.info("Default Lab45 model set: {}", defaultModel.displayName);
+                        } else if (comboBoxModel.getSize() > 0) { // Fallback to first if default not found
+                            modelSelector.setSelectedIndex(0);
+                            Models.ModelDetail selected = (Models.ModelDetail) modelSelector.getSelectedItem();
+                            if (selected != null) {
+                                openAiService.setCurrentModelAndTokens(selected.modelId, selected.maxTokens);
+                            }
+                        }
+                        log.info("Lab45 models loaded. Count: {}", modelDetails.size());
+                    } else {
+                        log.warn("No Lab45 models were loaded.");
+                         modelSelector.setModel(new DefaultComboBoxModel<>()); // Empty model
+                         modelSelector.setRenderer(new DefaultListCellRenderer() {
+                             @Override
+                             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                                 return super.getListCellRendererComponent(list, "No models available", index, isSelected, cellHasFocus);
+                             }
+                         });
                     }
-
-                    // Select the default model if found
-                    if (defaultModel != null) {
-                        modelSelector.setSelectedItem(defaultModel);
-                        log.info("Selected default model: {}", defaultModel);
-                    } else if (modelSelector.getItemCount() > 0) {
-                        // If default model not found, select the first one
-                        modelSelector.setSelectedIndex(0);
-                        String selectedModel = (String) modelSelector.getSelectedItem();
-                        claudeService.setModel(selectedModel);
-                        log.info("Default model not found, selected first available: {}", selectedModel);
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to load models", e);
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Failed to load Lab45 models into JComboBox", e);
+                     modelSelector.setModel(new DefaultComboBoxModel<>()); // Empty model
+                     modelSelector.setRenderer(new DefaultListCellRenderer() {
+                         @Override
+                         public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                             return super.getListCellRendererComponent(list, "Error loading models", index, isSelected, cellHasFocus);
+                         }
+                     });
+                } finally {
+                    modelSelector.setEnabled(true);
                 }
             }
         }.execute();
     }
+
 
     /**
      * Displays a welcome message in the chat area.
@@ -757,20 +740,34 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             protected String doInBackground() throws Exception {
                 // Get optimization suggestions from OptimizeRequestHandler
                 // Use the appropriate AI service based on the selected model
-                String selectedModel = (String) modelSelector.getSelectedItem();
+                Object selectedItem = modelSelector.getSelectedItem();
                 AiService serviceToUse;
+                String modelIdentifierForLog = "N/A";
 
-                if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
-                    serviceToUse = openAiService; // This is now CustomAiService
-                    log.info("Using CustomAI (formerly OpenAI) service for optimization with model: {}", selectedModel);
-                } else if (selectedModel != null) { // Assuming Anthropic otherwise
-                    serviceToUse = claudeService;
-                    log.info("Using Claude service for optimization with model: {}", selectedModel);
+                // Assuming this command primarily uses the Lab45 service (openAiService)
+                if (selectedItem instanceof Models.ModelDetail) {
+                    Models.ModelDetail selectedModelDetail = (Models.ModelDetail) selectedItem;
+                    serviceToUse = openAiService; // Lab45 service
+                    // Ensure model and tokens are set before use
+                    openAiService.setCurrentModelAndTokens(selectedModelDetail.modelId, selectedModelDetail.maxTokens);
+                    modelIdentifierForLog = selectedModelDetail.displayName;
+                    log.info("Using Lab45 service for optimization with model: {}", modelIdentifierForLog);
                 } else {
-                    log.warn("No model selected for optimization. Defaulting to ClaudeService.");
-                    serviceToUse = claudeService; // Fallback, though UI should prevent this
+                    // Fallback or error if no valid Lab45 model selected
+                    log.warn("No Lab45 model selected for optimization. Using default Lab45 model.");
+                    Models.ModelDetail defaultModel = Models.getDefaultLab45ModelDetail();
+                    if (defaultModel != null) {
+                        openAiService.setCurrentModelAndTokens(defaultModel.modelId, defaultModel.maxTokens);
+                        modelIdentifierForLog = defaultModel.displayName;
+                    } else {
+                         log.error("Default Lab45 model is null. Cannot proceed with optimization.");
+                         return "Error: Default model not configured for Lab45 service.";
+                    }
+                    serviceToUse = openAiService;
                 }
-
+                // If ClaudeService were to be used, similar logic for its model selection would be needed.
+                // For now, this command seems to target the service associated with modelSelector.
+                
                 return OptimizeRequestHandler.analyzeAndOptimizeSelectedElement(serviceToUse);
             }
 
@@ -1186,25 +1183,30 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             @Override
             protected String doInBackground() throws Exception {
                 // Get the currently selected model
-                String selectedModel = (String) modelSelector.getSelectedItem();
-                if (selectedModel == null) {
-                    return "Please select a model first.";
-                }
-
-                // Determine which service to use based on the model ID
+                Object selectedItem = modelSelector.getSelectedItem();
                 AiService serviceToUse;
-                if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
-                    serviceToUse = openAiService; // This is now CustomAiService
-                    log.info("Using CustomAI (formerly OpenAI) service for linting with model: {}", selectedModel);
-                } else if (selectedModel != null) { // Assuming Anthropic otherwise
-                    serviceToUse = claudeService;
-                    log.info("Using Claude service for linting with model: {}", selectedModel);
+                String modelIdentifierForLog = "N/A";
+                
+                if (selectedItem instanceof Models.ModelDetail) {
+                    Models.ModelDetail selectedModelDetail = (Models.ModelDetail) selectedItem;
+                    serviceToUse = openAiService; // Lab45 service
+                    openAiService.setCurrentModelAndTokens(selectedModelDetail.modelId, selectedModelDetail.maxTokens);
+                    modelIdentifierForLog = selectedModelDetail.displayName;
+                    log.info("Using Lab45 service for linting with model: {}", modelIdentifierForLog);
                 } else {
-                    log.warn("No model selected for linting. Defaulting to ClaudeService.");
-                    serviceToUse = claudeService; // Fallback
+                     log.warn("No Lab45 model selected for linting. Using default Lab45 model.");
+                    Models.ModelDetail defaultModel = Models.getDefaultLab45ModelDetail();
+                    if (defaultModel != null) {
+                        openAiService.setCurrentModelAndTokens(defaultModel.modelId, defaultModel.maxTokens);
+                        modelIdentifierForLog = defaultModel.displayName;
+                    } else {
+                         log.error("Default Lab45 model is null. Cannot proceed with linting.");
+                         return "Error: Default model not configured for Lab45 service.";
+                    }
+                    serviceToUse = openAiService; // Fallback to Lab45 service
                 }
+                // If ClaudeService were an option here, logic to choose it would be needed.
 
-                // Use the LintCommandHandler to process the lint command
                 LintCommandHandler lintCommandHandler = new LintCommandHandler(serviceToUse);
                 return lintCommandHandler.processLintCommand(message);
             }
@@ -1258,31 +1260,30 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     private String getAiResponse(String message) {
         log.info("Getting AI response for message: {}", message);
 
-        // Get the currently selected model from the dropdown
-        String selectedModel = (String) modelSelector.getSelectedItem();
-        if (selectedModel == null) {
-            log.warn("No model selected in dropdown, using default Anthropic model: {}",
-                    claudeService.getCurrentModel());
-            return claudeService.generateResponse(new ArrayList<>(conversationHistory));
-        }
+        Object selectedItem = modelSelector.getSelectedItem();
+        Models.ModelDetail selectedModelDetail = null;
 
-        // Get the model ID
-        log.info("Using model from dropdown for message: {}", selectedModel);
-
-        // Check if this is an CustomAI/OpenAI model
-        if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
-            String customModelId = selectedModel.substring(selectedModel.indexOf(":") + 1); // remove prefix
-            log.info("Using CustomAI (formerly OpenAI) service with model: {}", customModelId);
-            openAiService.setModel(customModelId); // openAiService is now CustomAiService
-            return openAiService.generateResponse(new ArrayList<>(conversationHistory));
-        } else if (selectedModel != null) { // Assuming Anthropic for others
-            log.info("Using Anthropic model: {}", selectedModel);
-            claudeService.setModel(selectedModel);
-            return claudeService.generateResponse(new ArrayList<>(conversationHistory));
-        } else {
-            log.warn("No model selected, defaulting to ClaudeService with its current model.");
-            return claudeService.generateResponse(new ArrayList<>(conversationHistory));
+        if (selectedItem instanceof Models.ModelDetail) {
+            selectedModelDetail = (Models.ModelDetail) selectedItem;
+        } else { // Fallback if not a ModelDetail (e.g. if loading or error)
+            log.warn("Selected item in JComboBox is not a ModelDetail instance: {}. Using default Lab45 model.", selectedItem);
+            selectedModelDetail = Models.getDefaultLab45ModelDetail();
+            if (selectedModelDetail == null) { // Should not happen if list is not empty
+                 log.error("Default Lab45 model is null. Cannot get AI response.");
+                 return "Error: No model configured for AI service.";
+            }
+            // Update the UI to reflect that the default is being used.
+            final Models.ModelDetail finalSelectedModelDetail = selectedModelDetail;
+            SwingUtilities.invokeLater(() -> modelSelector.setSelectedItem(finalSelectedModelDetail));
         }
+        
+        // Now, openAiService is assumed to be the Lab45 service.
+        // Model and tokens are set via the modelSelector's ActionListener or when default is loaded.
+        // So, just call generateResponse.
+        log.info("Using Lab45 service (via openAiService) with current model: {}, tokens: {}", 
+                 openAiService.getCurrentModel(), openAiService.getMaxTokens()); // Using deprecated getters for logging new field values
+                                                                              // Actual values are set by setCurrentModelAndTokens
+        return openAiService.generateResponse(new ArrayList<>(conversationHistory));
     }
 
     /**
@@ -1293,25 +1294,30 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
-                // Get the currently selected model
-                String selectedModel = (String) modelSelector.getSelectedItem();
-                if (selectedModel == null) {
-                    return "Please select a model first.";
-                }
-
-                // Determine which service to use based on the model ID
+                // Get the currently selected model detail for Lab45 service
+                Object selectedItem = modelSelector.getSelectedItem();
                 AiService serviceToUse;
-                 if (selectedModel != null && (selectedModel.startsWith("custom:") || selectedModel.startsWith("openai:"))) {
-                    serviceToUse = openAiService; // This is now CustomAiService
-                    log.info("Using CustomAI (formerly OpenAI) service for undoLastRename with model: {}", selectedModel);
-                } else if (selectedModel != null) { // Assuming Anthropic otherwise
-                    serviceToUse = claudeService;
-                    log.info("Using Claude service for undoLastRename with model: {}", selectedModel);
-                } else {
-                    log.warn("No model selected for undoLastRename. Defaulting to ClaudeService.");
-                    serviceToUse = claudeService; // Fallback
+                String modelIdentifierForLog = "N/A";
+
+                if (selectedItem instanceof Models.ModelDetail) {
+                    Models.ModelDetail selectedModelDetail = (Models.ModelDetail) selectedItem;
+                    serviceToUse = openAiService; // Lab45 service
+                    openAiService.setCurrentModelAndTokens(selectedModelDetail.modelId, selectedModelDetail.maxTokens);
+                    modelIdentifierForLog = selectedModelDetail.displayName;
+                    log.info("Using Lab45 service for undoLastRename with model: {}", modelIdentifierForLog);
+                } else { 
+                     log.warn("No Lab45 model selected for undoLastRename. Using default Lab45 model.");
+                    Models.ModelDetail defaultModel = Models.getDefaultLab45ModelDetail();
+                    if (defaultModel != null) {
+                         openAiService.setCurrentModelAndTokens(defaultModel.modelId, defaultModel.maxTokens);
+                         modelIdentifierForLog = defaultModel.displayName;
+                    } else {
+                         log.error("Default Lab45 model is null. Cannot proceed with undoLastRename.");
+                         return "Error: Default model not configured for Lab45 service.";
+                    }
+                    serviceToUse = openAiService; // Fallback to Lab45
                 }
-                // Create a LintCommandHandler and process the undo
+               
                 LintCommandHandler lintHandler = new LintCommandHandler(serviceToUse);
                 return lintHandler.undoLastRename();
             }
