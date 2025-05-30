@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.intellisense;
 
 import org.junit.jupiter.api.Test;
+import org.nfe.jmeter.ai.intellisense.IntellisensePopup;
 import org.junit.jupiter.api.BeforeEach;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;

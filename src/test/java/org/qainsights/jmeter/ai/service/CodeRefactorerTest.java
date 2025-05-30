@@ -13,7 +13,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.nfe.jmeter.ai.service.AiService;
+import org.nfe.jmeter.ai.service.CodeRefactorer;
+import org.nfe.jmeter.ai.utils.AiConfig;
 
 import javax.swing.*;
 import java.util.List;

@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.intellisense;
 
 import org.junit.jupiter.api.Test;
+import org.nfe.jmeter.ai.intellisense.CommandIntellisenseProvider;
+
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 

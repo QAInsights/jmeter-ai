@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.utils;
 
 import org.junit.jupiter.api.Test;
+import org.nfe.jmeter.ai.utils.VersionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.*;
