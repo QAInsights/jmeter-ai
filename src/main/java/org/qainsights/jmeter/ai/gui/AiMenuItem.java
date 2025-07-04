@@ -6,6 +6,7 @@ import org.apache.jmeter.gui.util.JMeterToolBar;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.BedrockService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,16 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
                         && model != null && !model.isEmpty()) {
                     return new ClaudeService();
+                }
+            } else if ("bedrock".equalsIgnoreCase(serviceType)) {
+                // Check if AWS Bedrock credentials are configured
+                String accessKey = AiConfig.getProperty("bedrock.access.key", "");
+                String secretKey = AiConfig.getProperty("bedrock.secret.key", "");
+                String model = AiConfig.getProperty("bedrock.model", "");
+                if (accessKey != null && !accessKey.isEmpty() && !accessKey.equals("YOUR_AWS_ACCESS_KEY_ID")
+                        && secretKey != null && !secretKey.isEmpty() && !secretKey.equals("YOUR_AWS_SECRET_ACCESS_KEY")
+                        && model != null && !model.isEmpty()) {
+                    return new BedrockService();
                 }
             }
         } catch (Exception e) {

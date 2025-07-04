@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.usage;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.BedrockService;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -54,6 +55,12 @@ public class UsageCommandHandler {
 
             // Return the usage summary
             return AnthropicUsage.getInstance().getUsageSummary();
+        } else if (serviceToUse instanceof BedrockService) {
+            log.info("Processing AWS Bedrock usage request");
+
+            // AWS Bedrock usage is tracked independently through BedrockUsage
+            // No client needs to be set as it's handled directly in BedrockService
+            return BedrockUsage.getInstance().getUsageSummary();
         } else {
             // For unknown services
             log.warn("Unknown service type: {}", serviceToUse.getClass().getSimpleName());
