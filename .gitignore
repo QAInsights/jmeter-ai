@@ -132,3 +132,5 @@ replay_pid*
 /.nb-gradle/
 .vscode/settings.json
 .DS_Store
+PPA.md
+claude-help.txt
