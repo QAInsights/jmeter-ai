@@ -343,6 +343,19 @@ public class ClaudeCodePanel extends JPanel {
 
             log.info("Silently reloading test plan from: {}", filePath);
 
+            // Pre-flight check: if a test is currently running, FileServer will have open
+            // files.
+            // clearTestPlan() will crash if files are open, wiping the UI without
+            // reloading.
+            // We safely test this by attempting to set the base dir to its current value.
+            try {
+                String currentBase = org.apache.jmeter.services.FileServer.getFileServer().getBaseDir();
+                org.apache.jmeter.services.FileServer.getFileServer().setBasedir(currentBase);
+            } catch (IllegalStateException ex) {
+                log.info("Skipping auto-reload because a test is actively running (FileServer has open files).");
+                return;
+            }
+
             // Load the tree from the file
             HashTree tree = SaveService.loadTree(file);
 
