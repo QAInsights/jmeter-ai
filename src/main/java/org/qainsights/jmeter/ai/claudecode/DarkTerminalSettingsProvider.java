@@ -46,6 +46,25 @@ public class DarkTerminalSettingsProvider extends DefaultSettingsProvider {
 
     @Override
     public float getTerminalFontSize() {
-        return 14.0f;
+        return 16.0f;
+    }
+
+    @Override
+    public java.awt.Font getTerminalFont() {
+        String osName = System.getProperty("os.name").toLowerCase();
+        String fontName = "Monospaced";
+        if (osName.contains("win")) {
+            // Use JetBrains Mono if available, or a good monospace that supports emojis
+            fontName = "JetBrains Mono";
+            java.awt.Font font = new java.awt.Font(fontName, java.awt.Font.PLAIN, (int) getTerminalFontSize());
+            if (!font.getFamily().equals(fontName)) {
+                fontName = "Consolas";
+            }
+        } else if (osName.contains("mac")) {
+            fontName = "Menlo";
+        } else {
+            fontName = "DejaVu Sans Mono";
+        }
+        return new java.awt.Font(fontName, java.awt.Font.PLAIN, (int) getTerminalFontSize());
     }
 }

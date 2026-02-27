@@ -140,6 +140,8 @@ public class ClaudeCodePanel extends JPanel {
         button.setBackground(BUTTON_BG);
         button.setForeground(BUTTON_FG);
         button.setFocusPainted(false);
+        button.setContentAreaFilled(false);
+        button.setOpaque(true);
         button.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(70, 70, 70), 1, true),
                 BorderFactory.createEmptyBorder(3, 8, 3, 8)));
@@ -211,6 +213,9 @@ public class ClaudeCodePanel extends JPanel {
                     // Set up environment
                     Map<String, String> env = new HashMap<>(System.getenv());
                     env.put("TERM", "xterm-256color");
+                    env.put("LANG", "en_US.UTF-8");
+                    env.put("LC_ALL", "en_US.UTF-8");
+                    env.put("PYTHONIOENCODING", "utf-8"); // Just in case
 
                     // Pass JMETER_HOME so Claude Code can run JMeter CLI for non-GUI mode
                     String jmeterHome = org.apache.jmeter.util.JMeterUtils.getJMeterHome();
@@ -362,9 +367,13 @@ public class ClaudeCodePanel extends JPanel {
         sb.append("### Non-GUI / CLI Mode (use when user explicitly says \"non-gui\", \"CLI mode\", \"headless\"):\n");
         sb.append("Run JMeter from the command line:\n");
         if (jmeterHome != null && !jmeterHome.isEmpty()) {
-            sb.append("  ").append(jmeterHome).append("/bin/jmeter -n -t ").append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>").append(" -l results.jtl -e -o report/\n");
+            sb.append("  ").append(jmeterHome).append("/bin/jmeter -n -t ")
+                    .append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>")
+                    .append(" -l results.jtl -e -o report/\n");
         } else {
-            sb.append("  $JMETER_HOME/bin/jmeter -n -t ").append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>").append(" -l results.jtl -e -o report/\n");
+            sb.append("  $JMETER_HOME/bin/jmeter -n -t ")
+                    .append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>")
+                    .append(" -l results.jtl -e -o report/\n");
         }
         sb.append("\n");
 
