@@ -251,6 +251,7 @@ public class ClaudeCodePanel extends JPanel {
                     // Start action bridge so Claude Code can trigger JMeter actions
                     if (testPlanDir != null) {
                         actionBridge = new JMeterActionBridge(new File(testPlanDir));
+                        actionBridge.setReloadCallback(() -> reloadTestPlan());
                         actionBridge.startWatching();
                     }
 
@@ -346,6 +347,11 @@ public class ClaudeCodePanel extends JPanel {
         sb.append("  echo \"stop\" > ").append(testPlanDir).append("/.jmeter-claude-action\n");
         sb.append("To gracefully shut down a running test:\n");
         sb.append("  echo \"shutdown\" > ").append(testPlanDir).append("/.jmeter-claude-action\n\n");
+
+        sb.append("### Refreshing the JMeter GUI after editing the .jmx file:\n");
+        sb.append("IMPORTANT: After ANY modification to the .jmx file (adding, editing, or deleting elements), ");
+        sb.append("you MUST trigger a reload so changes appear in the JMeter GUI:\n");
+        sb.append("  echo \"reload\" > ").append(testPlanDir).append("/.jmeter-claude-action\n\n");
 
         String jmeterHome = null;
         try {

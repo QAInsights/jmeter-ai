@@ -24,6 +24,7 @@ import java.nio.file.Files;
  *   <li>{@code start} - Start the test (ActionNames.ACTION_START)</li>
  *   <li>{@code stop} - Stop the test (ActionNames.ACTION_STOP)</li>
  *   <li>{@code shutdown} - Graceful shutdown (ActionNames.ACTION_SHUTDOWN)</li>
+ *   <li>{@code reload} - Reload the test plan from disk into the GUI</li>
  * </ul>
  */
 public class JMeterActionBridge {
@@ -32,14 +33,23 @@ public class JMeterActionBridge {
     static final String ACTION_FILE_NAME = ".jmeter-claude-action";
     private static final String ALT_ACTION_FILE_NAME = ".jmeter_cmd";
     private static final int POLL_INTERVAL_MS = 2000;
-    private static final long RELOAD_SUPPRESS_MS = 60_000; // 60 seconds
+    private static final long RELOAD_SUPPRESS_MS = 10_000; // 10 seconds
 
     private final File watchDir;
     private Timer pollTimer;
     private volatile long lastStartTriggeredAt;
+    private Runnable reloadCallback;
 
     public JMeterActionBridge(File watchDir) {
         this.watchDir = watchDir;
+    }
+
+    /**
+     * Sets a callback that is invoked when a "reload" command is received.
+     * This allows Claude Code to explicitly trigger a test plan reload after editing the .jmx file.
+     */
+    public void setReloadCallback(Runnable callback) {
+        this.reloadCallback = callback;
     }
 
     /**
@@ -123,6 +133,12 @@ public class JMeterActionBridge {
             case "shutdown":
                 actionName = ActionNames.ACTION_SHUTDOWN;
                 break;
+            case "reload":
+                if (reloadCallback != null) {
+                    log.info("Reload command received, triggering test plan reload");
+                    SwingUtilities.invokeLater(reloadCallback::run);
+                }
+                return;
             default:
                 log.warn("Unknown action command: {}", command);
                 return;
