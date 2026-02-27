@@ -17,6 +17,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,6 +51,8 @@ public class ClaudeCodePanel extends JPanel {
     private volatile String testPlanFilePath;
     private Timer fileWatchTimer;
     private long lastKnownModified;
+    private JMeterActionBridge actionBridge;
+    private File claudeMdFile;
 
     public ClaudeCodePanel() {
         setLayout(new BorderLayout());
@@ -180,11 +183,24 @@ public class ClaudeCodePanel extends JPanel {
                     String testPlanContext = TestPlanSerializer.serializeTestPlan();
                     String systemPrompt = buildSystemPrompt(testPlanContext, testPlanFilePath);
 
+                    // Write system prompt as CLAUDE.md to avoid command-line argument
+                    // parsing issues on Windows (long args with special chars get mangled
+                    // by PtyProcessBuilder, causing stray text to be sent as user input)
+                    if (testPlanDir != null) {
+                        try {
+                            claudeMdFile = new File(testPlanDir, "CLAUDE.md");
+                            Files.write(claudeMdFile.toPath(),
+                                    systemPrompt.getBytes(StandardCharsets.UTF_8));
+                            log.info("Wrote CLAUDE.md to: {}", claudeMdFile.getAbsolutePath());
+                        } catch (Exception e) {
+                            log.warn("Could not write CLAUDE.md", e);
+                            claudeMdFile = null;
+                        }
+                    }
+
                     // Build command with arguments
                     List<String> command = new ArrayList<>();
                     command.add(claudeBinary);
-                    command.add("--system-prompt");
-                    command.add(systemPrompt);
 
                     // Add the test plan directory so Claude can access the .jmx file
                     if (testPlanDir != null) {
@@ -195,6 +211,12 @@ public class ClaudeCodePanel extends JPanel {
                     // Set up environment
                     Map<String, String> env = new HashMap<>(System.getenv());
                     env.put("TERM", "xterm-256color");
+
+                    // Pass JMETER_HOME so Claude Code can run JMeter CLI for non-GUI mode
+                    String jmeterHome = org.apache.jmeter.util.JMeterUtils.getJMeterHome();
+                    if (jmeterHome != null && !jmeterHome.isEmpty()) {
+                        env.put("JMETER_HOME", jmeterHome);
+                    }
 
                     // Create PTY process
                     PtyProcessBuilder processBuilder = new PtyProcessBuilder(command.toArray(new String[0]))
@@ -225,6 +247,12 @@ public class ClaudeCodePanel extends JPanel {
 
                     // Start file watcher to detect .jmx modifications
                     startFileWatcher();
+
+                    // Start action bridge so Claude Code can trigger JMeter actions
+                    if (testPlanDir != null) {
+                        actionBridge = new JMeterActionBridge(new File(testPlanDir));
+                        actionBridge.startWatching();
+                    }
 
                     // Monitor process exit
                     int exitCode = ptyProcess.waitFor();
@@ -303,6 +331,37 @@ public class ClaudeCodePanel extends JPanel {
             sb.append("You already have access to this file and its directory. Do NOT search for it.\n\n");
         }
 
+        // Running JMeter tests instructions
+        String testPlanDir = "";
+        if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
+            File f = new File(testPlanFilePath);
+            testPlanDir = f.getParent();
+        }
+
+        sb.append("## Running JMeter Tests\n\n");
+        sb.append("### GUI Mode (default - use when user says \"run\", \"start\", \"execute the test\"):\n");
+        sb.append("To start the test in GUI mode, create a file with the content \"start\":\n");
+        sb.append("  echo \"start\" > ").append(testPlanDir).append("/.jmeter-claude-action\n");
+        sb.append("To stop a running test:\n");
+        sb.append("  echo \"stop\" > ").append(testPlanDir).append("/.jmeter-claude-action\n");
+        sb.append("To gracefully shut down a running test:\n");
+        sb.append("  echo \"shutdown\" > ").append(testPlanDir).append("/.jmeter-claude-action\n\n");
+
+        String jmeterHome = null;
+        try {
+            jmeterHome = org.apache.jmeter.util.JMeterUtils.getJMeterHome();
+        } catch (Exception ignored) {
+        }
+
+        sb.append("### Non-GUI / CLI Mode (use when user explicitly says \"non-gui\", \"CLI mode\", \"headless\"):\n");
+        sb.append("Run JMeter from the command line:\n");
+        if (jmeterHome != null && !jmeterHome.isEmpty()) {
+            sb.append("  ").append(jmeterHome).append("/bin/jmeter -n -t ").append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>").append(" -l results.jtl -e -o report/\n");
+        } else {
+            sb.append("  $JMETER_HOME/bin/jmeter -n -t ").append(testPlanFilePath != null ? testPlanFilePath : "<testplan.jmx>").append(" -l results.jtl -e -o report/\n");
+        }
+        sb.append("\n");
+
         sb.append("Current Test Plan Structure:\n\n");
         sb.append(testPlanContext);
         return sb.toString();
@@ -313,12 +372,30 @@ public class ClaudeCodePanel extends JPanel {
      */
     public void stopClaudeCode() {
         stopFileWatcher();
+        cleanupClaudeMd();
+        if (actionBridge != null) {
+            actionBridge.stopWatching();
+            actionBridge = null;
+        }
         if (ptyProcess != null && ptyProcess.isAlive()) {
             ptyProcess.destroyForcibly();
             SwingUtilities.invokeLater(() -> {
                 statusLabel.setText("\u25CF Stopped");
                 statusLabel.setForeground(STATUS_STOPPED);
             });
+        }
+    }
+
+    /**
+     * Deletes the CLAUDE.md file created for this session.
+     */
+    private void cleanupClaudeMd() {
+        if (claudeMdFile != null) {
+            if (claudeMdFile.exists()) {
+                claudeMdFile.delete();
+                log.info("Cleaned up CLAUDE.md: {}", claudeMdFile.getAbsolutePath());
+            }
+            claudeMdFile = null;
         }
     }
 
@@ -518,6 +595,16 @@ public class ClaudeCodePanel extends JPanel {
                 long currentModified = f.lastModified();
                 if (currentModified > lastKnownModified) {
                     lastKnownModified = currentModified;
+
+                    // Suppress auto-reload when a test was recently started via the
+                    // action bridge. JMeter may save the .jmx on test start, and
+                    // reloading after the test ends would clear View Results Tree.
+                    if (actionBridge != null && actionBridge.isRecentlyStarted()) {
+                        log.info("Auto-reload suppressed: test recently triggered via action bridge ({})",
+                                testPlanFilePath);
+                        return;
+                    }
+
                     log.info("Test plan file modified, auto-reloading: {}", testPlanFilePath);
                     reloadTestPlan();
                 }
