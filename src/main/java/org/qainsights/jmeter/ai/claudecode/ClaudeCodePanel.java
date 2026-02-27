@@ -1,123 +1,83 @@
 package org.qainsights.jmeter.ai.claudecode;
 
+import com.jediterm.pty.PtyProcessTtyConnector;
+import com.jediterm.terminal.TtyConnector;
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.pty4j.PtyProcess;
+import com.pty4j.PtyProcessBuilder;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.tree.JMeterTreeModel;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.save.SaveService;
+import org.apache.jorphan.collections.HashTree;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-import javax.swing.text.*;
 import java.awt.*;
-import java.io.*;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
- * A JPanel that provides an embedded terminal-like interface for Claude Code.
+ * A JPanel that embeds a full terminal emulator (JediTerm) running Claude Code.
  * <p>
- * Uses Claude Code's {@code -p} (print) mode for each user message, with
- * {@code --resume} to maintain conversation continuity across invocations.
- * <p>
- * Features:
+ * Uses JediTerm + pty4j for a rich terminal experience with:
  * <ul>
- * <li>Dark-themed terminal output area</li>
- * <li>Input field for sending messages</li>
- * <li>Conversation persistence via session IDs</li>
- * <li>Test plan context passed as system prompt</li>
- * <li>Streaming output display</li>
+ * <li>Full ANSI/xterm color support</li>
+ * <li>Interactive permission prompts</li>
+ * <li>Cursor control, scrollback, and copy/paste</li>
+ * <li>Native PTY on Windows, macOS, and Linux</li>
  * </ul>
  */
 public class ClaudeCodePanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(ClaudeCodePanel.class);
 
-    // Terminal colors
-    private static final Color BACKGROUND_COLOR = new Color(30, 30, 30);
-    private static final Color FOREGROUND_COLOR = new Color(204, 204, 204);
-    private static final Color INPUT_BG_COLOR = new Color(45, 45, 45);
-    private static final Color PROMPT_COLOR = new Color(86, 182, 194);
-    private static final Color ERROR_COLOR = new Color(224, 108, 117);
     private static final Color HEADER_BG_COLOR = new Color(40, 40, 40);
     private static final Color HEADER_FG_COLOR = new Color(220, 220, 220);
     private static final Color BUTTON_BG = new Color(55, 55, 55);
     private static final Color BUTTON_FG = new Color(200, 200, 200);
     private static final Color STATUS_RUNNING = new Color(152, 195, 121);
-    private static final Color STATUS_STOPPED = ERROR_COLOR;
-    private static final Color DIM_COLOR = new Color(128, 128, 128);
-
-    // Font
-    private static final Font TERMINAL_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 13);
+    private static final Color STATUS_STOPPED = new Color(224, 108, 117);
     private static final Font HEADER_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 13);
 
-    // Components
-    private JTextPane outputArea;
-    private JTextField inputField;
+    private JediTermWidget terminalWidget;
     private JLabel statusLabel;
-    private JButton stopButton;
-    private JButton newSessionButton;
-    private JButton refreshContextButton;
-    private JButton sendButton;
-
-    // Process management
-    private volatile Process currentProcess;
-    private volatile boolean isProcessing = false;
-
-    // Session management
-    private String sessionId;
-    private boolean isFirstMessage;
-    private String claudeBinaryPath;
-    private String systemPrompt;
+    private PtyProcess ptyProcess;
+    private volatile String testPlanFilePath;
+    private Timer fileWatchTimer;
+    private long lastKnownModified;
 
     public ClaudeCodePanel() {
         setLayout(new BorderLayout());
-        setPreferredSize(new Dimension(550, 600));
+        setPreferredSize(new Dimension(600, 600));
         setMinimumSize(new Dimension(400, 300));
-        setBackground(BACKGROUND_COLOR);
 
-        // Initialize session
-        startNewSession();
-
-        // Locate Claude Code binary
-        claudeBinaryPath = ClaudeCodeLocator.findClaudeCodeBinary();
-
-        // Create header
+        // Header panel
         add(createHeaderPanel(), BorderLayout.NORTH);
 
-        // Create terminal output area
-        outputArea = createOutputArea();
-        JScrollPane scrollPane = new JScrollPane(outputArea);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.setBackground(BACKGROUND_COLOR);
-        scrollPane.getViewport().setBackground(BACKGROUND_COLOR);
-        add(scrollPane, BorderLayout.CENTER);
+        // Terminal widget
+        terminalWidget = createTerminalWidget();
+        add(terminalWidget.getComponent(), BorderLayout.CENTER);
 
-        // Create input panel
-        add(createInputPanel(), BorderLayout.SOUTH);
-
-        // Show welcome message
-        showWelcomeMessage();
+        // Start Claude Code in the terminal
+        startClaudeCode();
     }
 
     /**
-     * Starts a new session with a fresh session ID.
+     * Creates the JediTerm terminal widget with a dark-themed settings provider.
      */
-    private void startNewSession() {
-        sessionId = UUID.randomUUID().toString();
-        isFirstMessage = true;
-        systemPrompt = buildSystemPrompt(TestPlanSerializer.serializeTestPlan());
-        log.info("New Claude Code session: {}", sessionId);
+    private JediTermWidget createTerminalWidget() {
+        DarkTerminalSettingsProvider settings = new DarkTerminalSettingsProvider();
+        JediTermWidget widget = new JediTermWidget(settings);
+        return widget;
     }
 
     /**
-     * Shows a welcome message in the terminal.
-     */
-    private void showWelcomeMessage() {
-        appendText("Claude Code Terminal\n", PROMPT_COLOR);
-        appendText("Binary: " + claudeBinaryPath + "\n", DIM_COLOR);
-        appendText("Session: " + sessionId.substring(0, 8) + "...\n\n", DIM_COLOR);
-        appendText("Type a message and press Enter to interact with Claude Code.\n", FOREGROUND_COLOR);
-        appendText("Claude has access to your current JMeter test plan context.\n\n", DIM_COLOR);
-    }
-
-    /**
-     * Creates the header panel with title, status, and control buttons.
+     * Creates the header panel with title and control buttons.
      */
     private JPanel createHeaderPanel() {
         JPanel header = new JPanel(new BorderLayout());
@@ -126,7 +86,7 @@ public class ClaudeCodePanel extends JPanel {
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(60, 60, 60)),
                 BorderFactory.createEmptyBorder(8, 12, 8, 12)));
 
-        // Left side: title + status
+        // Left: title + status
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftPanel.setOpaque(false);
 
@@ -135,29 +95,32 @@ public class ClaudeCodePanel extends JPanel {
         titleLabel.setForeground(HEADER_FG_COLOR);
         leftPanel.add(titleLabel);
 
-        statusLabel = new JLabel("● Ready");
+        statusLabel = new JLabel("\u25CF Starting...");
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        statusLabel.setForeground(STATUS_RUNNING);
+        statusLabel.setForeground(new Color(200, 180, 50));
         leftPanel.add(statusLabel);
 
         header.add(leftPanel, BorderLayout.WEST);
 
-        // Right side: control buttons
+        // Right: control buttons
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         buttonPanel.setOpaque(false);
 
-        refreshContextButton = createHeaderButton("\u21BB Ctx", "Refresh test plan context");
-        refreshContextButton.addActionListener(e -> refreshContext());
-        buttonPanel.add(refreshContextButton);
+        JButton reloadBtn = createHeaderButton("\u21BB Reload", "Reload test plan from disk");
+        reloadBtn.addActionListener(e -> reloadTestPlan());
+        buttonPanel.add(reloadBtn);
 
-        newSessionButton = createHeaderButton("+ New", "Start a new conversation");
-        newSessionButton.addActionListener(e -> resetSession());
-        buttonPanel.add(newSessionButton);
+        JButton refreshBtn = createHeaderButton("\u21BB Ctx", "Send test plan context to Claude Code");
+        refreshBtn.addActionListener(e -> sendTestPlanContext());
+        buttonPanel.add(refreshBtn);
 
-        stopButton = createHeaderButton("\u25A0 Stop", "Stop current request");
-        stopButton.addActionListener(e -> stopCurrentProcess());
-        stopButton.setEnabled(false);
-        buttonPanel.add(stopButton);
+        JButton restartBtn = createHeaderButton("\u25B6 Restart", "Restart Claude Code");
+        restartBtn.addActionListener(e -> restartClaudeCode());
+        buttonPanel.add(restartBtn);
+
+        JButton stopBtn = createHeaderButton("\u25A0 Stop", "Stop Claude Code");
+        stopBtn.addActionListener(e -> stopClaudeCode());
+        buttonPanel.add(stopBtn);
 
         header.add(buttonPanel, BorderLayout.EAST);
 
@@ -182,234 +145,149 @@ public class ClaudeCodePanel extends JPanel {
     }
 
     /**
-     * Creates the terminal output area.
+     * Starts Claude Code in the JediTerm terminal via a PTY process.
      */
-    private JTextPane createOutputArea() {
-        JTextPane pane = new JTextPane();
-        pane.setEditable(false);
-        pane.setBackground(BACKGROUND_COLOR);
-        pane.setForeground(FOREGROUND_COLOR);
-        pane.setFont(TERMINAL_FONT);
-        pane.setCaretColor(FOREGROUND_COLOR);
-        pane.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-
-        StyledDocument doc = pane.getStyledDocument();
-        SimpleAttributeSet leftAlign = new SimpleAttributeSet();
-        StyleConstants.setAlignment(leftAlign, StyleConstants.ALIGN_LEFT);
-        doc.setParagraphAttributes(0, doc.getLength(), leftAlign, false);
-
-        return pane;
-    }
-
-    /**
-     * Creates the input panel with prompt and text field.
-     */
-    private JPanel createInputPanel() {
-        JPanel inputPanel = new JPanel(new BorderLayout(4, 0));
-        inputPanel.setBackground(INPUT_BG_COLOR);
-        inputPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(60, 60, 60)),
-                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
-
-        // Prompt label
-        JLabel promptLabel = new JLabel("> ");
-        promptLabel.setFont(TERMINAL_FONT);
-        promptLabel.setForeground(PROMPT_COLOR);
-        inputPanel.add(promptLabel, BorderLayout.WEST);
-
-        // Input field
-        inputField = new JTextField();
-        inputField.setFont(TERMINAL_FONT);
-        inputField.setBackground(INPUT_BG_COLOR);
-        inputField.setForeground(FOREGROUND_COLOR);
-        inputField.setCaretColor(FOREGROUND_COLOR);
-        inputField.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        inputField.addActionListener(e -> sendMessage());
-        inputPanel.add(inputField, BorderLayout.CENTER);
-
-        // Send button
-        sendButton = new JButton("\u23CE");
-        sendButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        sendButton.setBackground(BUTTON_BG);
-        sendButton.setForeground(PROMPT_COLOR);
-        sendButton.setFocusPainted(false);
-        sendButton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(70, 70, 70), 1, true),
-                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
-        sendButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        sendButton.addActionListener(e -> sendMessage());
-        inputPanel.add(sendButton, BorderLayout.EAST);
-
-        return inputPanel;
-    }
-
-    /**
-     * Sends a message to Claude Code using -p mode.
-     * Uses --resume for subsequent messages to maintain conversation context.
-     */
-    private void sendMessage() {
-        String message = inputField.getText().trim();
-        if (message.isEmpty() || isProcessing) {
-            return;
-        }
-
-        inputField.setText("");
-
-        // Echo user message
-        appendText("> " + message + "\n", PROMPT_COLOR);
-
-        // Set processing state
-        setProcessingState(true);
-
-        // Run Claude Code in background
-        new SwingWorker<Void, String>() {
+    private void startClaudeCode() {
+        new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() {
                 try {
-                    ProcessBuilder pb = new ProcessBuilder();
+                    String claudeBinary = ClaudeCodeLocator.findClaudeCodeBinary();
+                    log.info("Starting Claude Code via PTY from: {}", claudeBinary);
 
-                    if (isFirstMessage) {
-                        // First message: use --session-id and --system-prompt
-                        pb.command(
-                                claudeBinaryPath,
-                                "-p",
-                                "--output-format", "text",
-                                "--session-id", sessionId,
-                                "--system-prompt", systemPrompt,
-                                "--verbose",
-                                message);
-                        isFirstMessage = false;
-                    } else {
-                        // Subsequent messages: use --resume to continue the session
-                        pb.command(
-                                claudeBinaryPath,
-                                "-p",
-                                "--output-format", "text",
-                                "--resume", sessionId,
-                                "--verbose",
-                                message);
-                    }
-
-                    pb.redirectErrorStream(false);
-                    pb.environment().put("NO_COLOR", "1");
-                    pb.environment().put("TERM", "dumb");
-
-                    currentProcess = pb.start();
-
-                    // Close stdin immediately since we pass the prompt as argument
-                    currentProcess.getOutputStream().close();
-
-                    // Read stdout in real-time
-                    Thread stderrThread = new Thread(() -> {
-                        try (BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(currentProcess.getErrorStream(), StandardCharsets.UTF_8))) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                final String errLine = line;
-                                log.debug("Claude stderr: {}", errLine);
+                    // Get test plan file path from JMeter
+                    testPlanFilePath = null;
+                    String testPlanDir = null;
+                    try {
+                        GuiPackage guiPackage = GuiPackage.getInstance();
+                        if (guiPackage != null) {
+                            String filePath = guiPackage.getTestPlanFile();
+                            testPlanFilePath = filePath;
+                            if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
+                                File testPlanFile = new File(testPlanFilePath);
+                                if (testPlanFile.exists()) {
+                                    testPlanDir = testPlanFile.getParent();
+                                    log.info("Test plan file: {}", testPlanFilePath);
+                                    log.info("Working directory: {}", testPlanDir);
+                                }
                             }
-                        } catch (IOException e) {
-                            log.debug("Stderr read ended: {}", e.getMessage());
                         }
-                    }, "claude-stderr");
-                    stderrThread.setDaemon(true);
-                    stderrThread.start();
-
-                    // Read stdout character by character for streaming display
-                    try (InputStream stdout = currentProcess.getInputStream()) {
-                        byte[] buffer = new byte[1024];
-                        int bytesRead;
-                        while ((bytesRead = stdout.read(buffer)) != -1) {
-                            String text = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                            appendText(text, FOREGROUND_COLOR);
-                        }
+                    } catch (Exception e) {
+                        log.warn("Could not get test plan file path from JMeter", e);
                     }
 
-                    int exitCode = currentProcess.waitFor();
-                    if (exitCode != 0) {
-                        appendText("\n[Process exited with code " + exitCode + "]\n", ERROR_COLOR);
+                    // Build the system prompt with test plan context
+                    String testPlanContext = TestPlanSerializer.serializeTestPlan();
+                    String systemPrompt = buildSystemPrompt(testPlanContext, testPlanFilePath);
+
+                    // Build command with arguments
+                    List<String> command = new ArrayList<>();
+                    command.add(claudeBinary);
+                    command.add("--system-prompt");
+                    command.add(systemPrompt);
+
+                    // Add the test plan directory so Claude can access the .jmx file
+                    if (testPlanDir != null) {
+                        command.add("--add-dir");
+                        command.add(testPlanDir);
                     }
 
-                    // Ensure newline after response
-                    appendText("\n", FOREGROUND_COLOR);
+                    // Set up environment
+                    Map<String, String> env = new HashMap<>(System.getenv());
+                    env.put("TERM", "xterm-256color");
+
+                    // Create PTY process
+                    PtyProcessBuilder processBuilder = new PtyProcessBuilder(command.toArray(new String[0]))
+                            .setEnvironment(env)
+                            .setConsole(false)
+                            .setInitialColumns(120)
+                            .setInitialRows(40);
+
+                    // Set working directory to the test plan's directory
+                    if (testPlanDir != null) {
+                        processBuilder.setDirectory(testPlanDir);
+                    }
+
+                    ptyProcess = processBuilder.start();
+
+                    // Create TTY connector
+                    TtyConnector connector = new PtyProcessTtyConnector(
+                            ptyProcess, StandardCharsets.UTF_8);
+
+                    // Connect to the terminal widget
+                    SwingUtilities.invokeLater(() -> {
+                        terminalWidget.setTtyConnector(connector);
+                        terminalWidget.start();
+
+                        statusLabel.setText("\u25CF Running");
+                        statusLabel.setForeground(STATUS_RUNNING);
+                    });
+
+                    // Start file watcher to detect .jmx modifications
+                    startFileWatcher();
+
+                    // Monitor process exit
+                    int exitCode = ptyProcess.waitFor();
+                    log.info("Claude Code exited with code: {}", exitCode);
+
+                    SwingUtilities.invokeLater(() -> {
+                        statusLabel.setText("\u25CF Exited (" + exitCode + ")");
+                        statusLabel.setForeground(STATUS_STOPPED);
+                    });
 
                 } catch (Exception e) {
-                    log.error("Error running Claude Code", e);
-                    appendText("\n\u274C Error: " + e.getMessage() + "\n", ERROR_COLOR);
-
-                    if (e.getMessage() != null && e.getMessage().contains("Cannot run program")) {
-                        appendText("\nPlease ensure Claude Code is installed:\n", FOREGROUND_COLOR);
-                        appendText("  npm install -g @anthropic-ai/claude-code\n\n", PROMPT_COLOR);
-                    }
-                } finally {
-                    currentProcess = null;
+                    log.error("Failed to start Claude Code via PTY", e);
+                    SwingUtilities.invokeLater(() -> {
+                        statusLabel.setText("\u25CF Error");
+                        statusLabel.setForeground(STATUS_STOPPED);
+                    });
                 }
                 return null;
-            }
-
-            @Override
-            protected void done() {
-                setProcessingState(false);
             }
         }.execute();
     }
 
     /**
-     * Sets the UI to processing or idle state.
+     * Sends the current test plan context to Claude Code by typing it into the
+     * terminal.
      */
-    private void setProcessingState(boolean processing) {
-        isProcessing = processing;
-        SwingUtilities.invokeLater(() -> {
-            inputField.setEnabled(!processing);
-            sendButton.setEnabled(!processing);
-            stopButton.setEnabled(processing);
-            statusLabel.setText(processing ? "\u25CF Processing..." : "\u25CF Ready");
-            statusLabel.setForeground(processing ? new Color(200, 180, 50) : STATUS_RUNNING);
-            if (!processing) {
-                inputField.requestFocusInWindow();
-            }
-        });
-    }
-
-    /**
-     * Refreshes the test plan context for the next message.
-     */
-    private void refreshContext() {
-        systemPrompt = buildSystemPrompt(TestPlanSerializer.serializeTestPlan());
-        appendText("[Test plan context refreshed]\n", DIM_COLOR);
-        // Reset session so the next message uses the new system prompt
-        sessionId = UUID.randomUUID().toString();
-        isFirstMessage = true;
-        appendText("[New session started with updated context: " + sessionId.substring(0, 8) + "...]\n\n", DIM_COLOR);
-    }
-
-    /**
-     * Resets the session, clearing output and starting fresh.
-     */
-    private void resetSession() {
-        stopCurrentProcess();
-        startNewSession();
-        SwingUtilities.invokeLater(() -> {
-            outputArea.setText("");
-            showWelcomeMessage();
-        });
-    }
-
-    /**
-     * Stops the currently running Claude Code process.
-     */
-    public void stopCurrentProcess() {
-        Process proc = currentProcess;
-        if (proc != null && proc.isAlive()) {
-            proc.destroyForcibly();
-            appendText("\n[Stopped]\n", new Color(200, 180, 50));
+    private void sendTestPlanContext() {
+        if (ptyProcess == null || !ptyProcess.isAlive()) {
+            return;
         }
+        try {
+            String context = TestPlanSerializer.serializeTestPlan();
+            String message = "Here is the updated JMeter test plan context:\n" + context + "\n";
+            ptyProcess.getOutputStream().write(message.getBytes(StandardCharsets.UTF_8));
+            ptyProcess.getOutputStream().flush();
+        } catch (Exception e) {
+            log.error("Failed to send context to Claude Code", e);
+        }
+    }
+
+    /**
+     * Restarts Claude Code.
+     */
+    private void restartClaudeCode() {
+        stopClaudeCode();
+        // Small delay to let the old process die
+        Timer timer = new Timer(500, e -> {
+            // Recreate the terminal widget
+            remove(terminalWidget.getComponent());
+            terminalWidget = createTerminalWidget();
+            add(terminalWidget.getComponent(), BorderLayout.CENTER);
+            revalidate();
+            repaint();
+            startClaudeCode();
+        });
+        timer.setRepeats(false);
+        timer.start();
     }
 
     /**
      * Builds the system prompt with test plan context.
      */
-    private String buildSystemPrompt(String testPlanContext) {
+    private String buildSystemPrompt(String testPlanContext, String testPlanFilePath) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are an AI assistant integrated into Apache JMeter via the FeatherWand plugin. ");
         sb.append("You have access to the current JMeter test plan structure. ");
@@ -419,41 +297,240 @@ public class ClaudeCodePanel extends JPanel {
         sb.append("- Debugging test plan issues\n");
         sb.append("- Performance testing best practices\n");
         sb.append("- JMeter scripting and configuration\n\n");
-        sb.append("Current Test Plan:\n\n");
+
+        if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
+            sb.append("IMPORTANT: The JMeter test plan file is located at: ").append(testPlanFilePath).append("\n");
+            sb.append("You already have access to this file and its directory. Do NOT search for it.\n\n");
+        }
+
+        sb.append("Current Test Plan Structure:\n\n");
         sb.append(testPlanContext);
         return sb.toString();
     }
 
     /**
-     * Appends text to the terminal output area with the specified color.
-     */
-    private void appendText(String text, Color color) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                StyledDocument doc = outputArea.getStyledDocument();
-                SimpleAttributeSet attrs = new SimpleAttributeSet();
-                StyleConstants.setForeground(attrs, color);
-                StyleConstants.setFontFamily(attrs, Font.MONOSPACED);
-                StyleConstants.setFontSize(attrs, 13);
-                doc.insertString(doc.getLength(), text, attrs);
-                outputArea.setCaretPosition(doc.getLength());
-            } catch (BadLocationException e) {
-                log.debug("Error appending text to terminal", e);
-            }
-        });
-    }
-
-    /**
-     * Cleans up resources when the panel is removed.
-     */
-    public void dispose() {
-        stopCurrentProcess();
-    }
-
-    /**
-     * Stops Claude Code — called by ClaudeCodeMenuItem when hiding the panel.
+     * Stops the Claude Code process.
      */
     public void stopClaudeCode() {
-        stopCurrentProcess();
+        stopFileWatcher();
+        if (ptyProcess != null && ptyProcess.isAlive()) {
+            ptyProcess.destroyForcibly();
+            SwingUtilities.invokeLater(() -> {
+                statusLabel.setText("\u25CF Stopped");
+                statusLabel.setForeground(STATUS_STOPPED);
+            });
+        }
+    }
+
+    /**
+     * Reloads the current test plan from disk silently without any dialogs.
+     * Preserves the expanded/collapsed state of the tree view.
+     */
+    private void reloadTestPlan() {
+        try {
+            GuiPackage guiPackage = GuiPackage.getInstance();
+            if (guiPackage == null) {
+                return;
+            }
+            String filePath = guiPackage.getTestPlanFile();
+            if (filePath == null || filePath.isEmpty()) {
+                return;
+            }
+            File file = new File(filePath);
+            if (!file.exists()) {
+                return;
+            }
+
+            log.info("Silently reloading test plan from: {}", filePath);
+
+            // Load the tree from the file
+            HashTree tree = SaveService.loadTree(file);
+
+            // Replace the tree in JMeter's GUI
+            SwingUtilities.invokeLater(() -> {
+                try {
+
+                    javax.swing.JTree jTree = guiPackage.getTreeListener().getJTree();
+
+                    // Save expanded paths before reload
+                    List<javax.swing.tree.TreePath> expandedPaths = new ArrayList<>();
+                    int rowCount = jTree.getRowCount();
+                    for (int i = 0; i < rowCount; i++) {
+                        javax.swing.tree.TreePath path = jTree.getPathForRow(i);
+                        if (jTree.isExpanded(path)) {
+                            expandedPaths.add(path);
+                        }
+                    }
+
+                    // Save the selected path
+                    javax.swing.tree.TreePath selectedPath = jTree.getSelectionPath();
+                    String selectedNodeName = null;
+                    if (selectedPath != null) {
+                        Object lastComponent = selectedPath.getLastPathComponent();
+                        if (lastComponent instanceof JMeterTreeNode) {
+                            selectedNodeName = ((JMeterTreeNode) lastComponent).getName();
+                        }
+                    }
+
+                    // Save expanded node names (path of names from root to node)
+                    List<List<String>> expandedNodePaths = new ArrayList<>();
+                    for (javax.swing.tree.TreePath path : expandedPaths) {
+                        List<String> nodeNames = new ArrayList<>();
+                        for (Object component : path.getPath()) {
+                            if (component instanceof JMeterTreeNode) {
+                                nodeNames.add(((JMeterTreeNode) component).getName());
+                            }
+                        }
+                        expandedNodePaths.add(nodeNames);
+                    }
+
+                    // Clear the existing test plan from the model to prevent appending duplicates
+                    guiPackage.clearTestPlan();
+
+                    // Add the reloaded tree to the cleared model
+                    guiPackage.addSubTree(tree);
+
+                    // Restore the file path, as clearTestPlan() sets it to null
+                    guiPackage.setTestPlanFile(filePath);
+
+                    JMeterTreeModel newTreeModel = guiPackage.getTreeModel();
+                    JMeterTreeNode root = (JMeterTreeNode) newTreeModel.getRoot();
+                    newTreeModel.nodeStructureChanged(root);
+
+                    // Restore expanded paths by matching node names
+                    for (List<String> nodeNames : expandedNodePaths) {
+                        restoreExpandedPath(jTree, newTreeModel, nodeNames);
+                    }
+
+                    // Restore selection
+                    if (selectedNodeName != null) {
+                        restoreSelection(jTree, newTreeModel, selectedNodeName);
+                    }
+
+                    guiPackage.getMainFrame().repaint();
+                    log.info("Test plan silently reloaded with tree state preserved");
+                } catch (Exception e) {
+                    log.error("Failed to update tree after reload", e);
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("Failed to reload test plan", e);
+        }
+    }
+
+    /**
+     * Restores an expanded path by matching node names from root to leaf.
+     */
+    private void restoreExpandedPath(javax.swing.JTree jTree,
+            JMeterTreeModel treeModel,
+            List<String> nodeNames) {
+        JMeterTreeNode current = (JMeterTreeNode) treeModel.getRoot();
+        List<Object> pathComponents = new ArrayList<>();
+        pathComponents.add(current);
+
+        for (int i = 1; i < nodeNames.size(); i++) {
+            String targetName = nodeNames.get(i);
+            boolean found = false;
+            for (int j = 0; j < current.getChildCount(); j++) {
+                JMeterTreeNode child = (JMeterTreeNode) current.getChildAt(j);
+                if (child.getName().equals(targetName)) {
+                    pathComponents.add(child);
+                    current = child;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                break;
+            }
+        }
+
+        if (pathComponents.size() > 1) {
+            javax.swing.tree.TreePath treePath = new javax.swing.tree.TreePath(pathComponents.toArray());
+            jTree.expandPath(treePath);
+        }
+    }
+
+    /**
+     * Restores the selected node by name.
+     */
+    private void restoreSelection(javax.swing.JTree jTree,
+            JMeterTreeModel treeModel,
+            String nodeName) {
+        JMeterTreeNode root = (JMeterTreeNode) treeModel.getRoot();
+        JMeterTreeNode target = findNodeByName(root, nodeName);
+        if (target != null) {
+            javax.swing.tree.TreePath path = new javax.swing.tree.TreePath(target.getPath());
+            jTree.setSelectionPath(path);
+            jTree.scrollPathToVisible(path);
+        }
+    }
+
+    /**
+     * Finds a node by name in the tree (depth-first).
+     */
+    private JMeterTreeNode findNodeByName(JMeterTreeNode parent, String name) {
+        if (parent.getName().equals(name)) {
+            return parent;
+        }
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(i);
+            JMeterTreeNode result = findNodeByName(child, name);
+            if (result != null) {
+                return result;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Starts a timer that watches the .jmx file for modifications.
+     * When Claude Code edits the file, it automatically reloads it in JMeter.
+     */
+    private void startFileWatcher() {
+        if (testPlanFilePath == null || testPlanFilePath.isEmpty()) {
+            return;
+        }
+        File file = new File(testPlanFilePath);
+        if (!file.exists()) {
+            return;
+        }
+        lastKnownModified = file.lastModified();
+
+        // Poll every 2 seconds
+        fileWatchTimer = new Timer(2000, e -> {
+            File f = new File(testPlanFilePath);
+            if (f.exists()) {
+                long currentModified = f.lastModified();
+                if (currentModified > lastKnownModified) {
+                    lastKnownModified = currentModified;
+                    log.info("Test plan file modified, auto-reloading: {}", testPlanFilePath);
+                    reloadTestPlan();
+                }
+            }
+        });
+        fileWatchTimer.start();
+        log.info("File watcher started for: {}", testPlanFilePath);
+    }
+
+    /**
+     * Stops the file watcher timer.
+     */
+    private void stopFileWatcher() {
+        if (fileWatchTimer != null) {
+            fileWatchTimer.stop();
+            fileWatchTimer = null;
+        }
+    }
+
+    /**
+     * Cleans up resources.
+     */
+    public void dispose() {
+        stopClaudeCode();
+        if (terminalWidget != null) {
+            terminalWidget.close();
+        }
     }
 }
