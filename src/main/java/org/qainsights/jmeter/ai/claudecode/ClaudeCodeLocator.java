@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.claudecode;
 
+import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,40 +33,65 @@ public class ClaudeCodeLocator {
      *         (falling back to PATH resolution at process start time)
      */
     public static String findClaudeCodeBinary() {
-        String osName = System.getProperty("os.name", "").toLowerCase();
 
-        List<String> candidates = new ArrayList<>();
+        // Check whether ClaudeCode is enabled or not
+        String isClaudeCodeEnabled = AiConfig.getProperty("jmeter.ai.terminal.claudecode.enabled",  "false");
 
-        if (osName.contains("win")) {
-            candidates.addAll(getWindowsCandidates());
-        } else if (osName.contains("mac")) {
-            candidates.addAll(getMacCandidates());
-        } else {
-            candidates.addAll(getLinuxCandidates());
-        }
+        if(isClaudeCodeEnabled.equals("true")) {
 
-        // Check each candidate path
-        for (String candidate : candidates) {
-            String expanded = expandEnvVars(candidate);
-            File file = new File(expanded);
-            if (file.exists() && file.canExecute()) {
-                log.info("Found Claude Code binary at: {}", file.getAbsolutePath());
-                return file.getAbsolutePath();
+            // Getting it from property file
+            String claudeCodePathFromProperty = AiConfig.getProperty("jmeter.ai.terminal.claudecode.path", "");
+
+            if(!claudeCodePathFromProperty.isEmpty()) {
+                File fileFromProperty = new File(claudeCodePathFromProperty);
+                if(fileFromProperty.exists() && fileFromProperty.canExecute()) {
+                    log.info("Found Claude Code binary from property: {}", fileFromProperty.getAbsolutePath());
+                    return claudeCodePathFromProperty;
+                }
             }
-        }
 
-        // Try "which" / "where" as last resort
-        String fromPath = findOnPath(osName.contains("win"));
-        if (fromPath != null) {
-            log.info("Found Claude Code on PATH: {}", fromPath);
-            return fromPath;
-        }
 
-        log.warn("Claude Code binary not found in common locations. Falling back to 'claude' (PATH lookup).");
-        return osName.contains("win") ? "claude.cmd" : "claude";
+            String osName = System.getProperty("os.name", "").toLowerCase();
+
+            List<String> candidates = new ArrayList<>();
+
+            if (osName.contains("win")) {
+                candidates.addAll(getWindowsCandidates());
+            } else if (osName.contains("mac")) {
+                candidates.addAll(getMacCandidates());
+            } else {
+                candidates.addAll(getLinuxCandidates());
+            }
+
+            // Check each candidate path
+            for (String candidate : candidates) {
+                File file = new File(candidate);
+                if (file.exists() && file.canExecute()) {
+                    log.info("Found Claude Code binary at: {}", file.getAbsolutePath());
+                    return file.getAbsolutePath();
+                }
+            }
+
+            // Try "which" / "where" as last resort
+            String fromPath = findOnPath(osName.contains("win"));
+            if (fromPath != null) {
+                log.info("Found Claude Code on PATH: {}", fromPath);
+                return fromPath;
+            }
+
+
+
+            log.warn("Claude Code binary not found in common locations. Falling back to 'claude' (PATH lookup).");
+            return osName.contains("win") ? "claude.cmd" : "claude";
+        }
+        else {
+            return null;
+        }
     }
 
     private static List<String> getWindowsCandidates() {
+
+
         List<String> paths = new ArrayList<>();
         String appData = System.getenv("APPDATA");
         String localAppData = System.getenv("LOCALAPPDATA");
@@ -151,30 +177,4 @@ public class ClaudeCodeLocator {
         return null;
     }
 
-    /**
-     * Expands environment variable references in a path string.
-     * Handles %VAR% (Windows) style references.
-     */
-    private static String expandEnvVars(String path) {
-        if (path == null)
-            return null;
-        String result = path;
-        // The paths we build already use System.getenv() values directly,
-        // so no further expansion is typically needed.
-        return result;
-    }
-
-    /**
-     * Checks whether Claude Code is available on this system.
-     *
-     * @return true if the binary is found and executable
-     */
-    public static boolean isClaudeCodeAvailable() {
-        String binary = findClaudeCodeBinary();
-        if (binary.equals("claude") || binary.equals("claude.cmd")) {
-            // Couldn't find it in known locations, but it might still be on PATH
-            return findOnPath(System.getProperty("os.name", "").toLowerCase().contains("win")) != null;
-        }
-        return new File(binary).canExecute();
-    }
 }

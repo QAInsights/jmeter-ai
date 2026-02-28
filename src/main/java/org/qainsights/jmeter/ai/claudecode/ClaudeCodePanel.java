@@ -10,6 +10,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jorphan.collections.HashTree;
+import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,118 +159,125 @@ public class ClaudeCodePanel extends JPanel {
             protected Void doInBackground() {
                 try {
                     String claudeBinary = ClaudeCodeLocator.findClaudeCodeBinary();
-                    log.info("Starting Claude Code via PTY from: {}", claudeBinary);
+                    if(claudeBinary != null && !claudeBinary.isEmpty()) {
 
-                    // Get test plan file path from JMeter
-                    testPlanFilePath = null;
-                    String testPlanDir = null;
-                    try {
-                        GuiPackage guiPackage = GuiPackage.getInstance();
-                        if (guiPackage != null) {
-                            String filePath = guiPackage.getTestPlanFile();
-                            testPlanFilePath = filePath;
-                            if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
-                                File testPlanFile = new File(testPlanFilePath);
-                                if (testPlanFile.exists()) {
-                                    testPlanDir = testPlanFile.getParent();
-                                    log.info("Test plan file: {}", testPlanFilePath);
-                                    log.info("Working directory: {}", testPlanDir);
+                        log.info("Starting Claude Code via PTY from: {}", claudeBinary);
+
+                        // Get test plan file path from JMeter
+                        testPlanFilePath = null;
+                        String testPlanDir = null;
+                        try {
+                            GuiPackage guiPackage = GuiPackage.getInstance();
+                            if (guiPackage != null) {
+                                String filePath = guiPackage.getTestPlanFile();
+                                testPlanFilePath = filePath;
+                                if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
+                                    File testPlanFile = new File(testPlanFilePath);
+                                    if (testPlanFile.exists()) {
+                                        testPlanDir = testPlanFile.getParent();
+                                        log.info("Test plan file: {}", testPlanFilePath);
+                                        log.info("Working directory: {}", testPlanDir);
+                                    }
                                 }
                             }
-                        }
-                    } catch (Exception e) {
-                        log.warn("Could not get test plan file path from JMeter", e);
-                    }
-
-                    // Build the system prompt with test plan context
-                    String testPlanContext = TestPlanSerializer.serializeTestPlan();
-                    String systemPrompt = buildSystemPrompt(testPlanContext, testPlanFilePath);
-
-                    // Write system prompt as CLAUDE.md to avoid command-line argument
-                    // parsing issues on Windows (long args with special chars get mangled
-                    // by PtyProcessBuilder, causing stray text to be sent as user input)
-                    if (testPlanDir != null) {
-                        try {
-                            claudeMdFile = new File(testPlanDir, "CLAUDE.md");
-                            Files.write(claudeMdFile.toPath(),
-                                    systemPrompt.getBytes(StandardCharsets.UTF_8));
-                            log.info("Wrote CLAUDE.md to: {}", claudeMdFile.getAbsolutePath());
                         } catch (Exception e) {
-                            log.warn("Could not write CLAUDE.md", e);
-                            claudeMdFile = null;
+                            log.warn("Could not get test plan file path from JMeter", e);
                         }
+
+                        // Build the system prompt with test plan context
+                        String testPlanContext = TestPlanSerializer.serializeTestPlan();
+                        String systemPrompt = buildSystemPrompt(testPlanContext, testPlanFilePath);
+
+                        // Write system prompt as CLAUDE.md to avoid command-line argument
+                        // parsing issues on Windows (long args with special chars get mangled
+                        // by PtyProcessBuilder, causing stray text to be sent as user input)
+                        if (testPlanDir != null) {
+                            try {
+                                claudeMdFile = new File(testPlanDir, "CLAUDE.md");
+                                Files.write(claudeMdFile.toPath(),
+                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
+                                log.info("Wrote CLAUDE.md to: {}", claudeMdFile.getAbsolutePath());
+                            } catch (Exception e) {
+                                log.warn("Could not write CLAUDE.md", e);
+                                claudeMdFile = null;
+                            }
+                        }
+
+                        // Build command with arguments
+                        List<String> command = new ArrayList<>();
+                        command.add(claudeBinary);
+
+                        // Add the test plan directory so Claude can access the .jmx file
+                        if (testPlanDir != null) {
+                            command.add("--add-dir");
+                            command.add(testPlanDir);
+                        }
+
+                        // Set up environment
+                        Map<String, String> env = new HashMap<>(System.getenv());
+                        env.put("TERM", "xterm-256color");
+                        env.put("LANG", "en_US.UTF-8");
+                        env.put("LC_ALL", "en_US.UTF-8");
+                        env.put("PYTHONIOENCODING", "utf-8"); // Just in case
+
+                        // Pass JMETER_HOME so Claude Code can run JMeter CLI for non-GUI mode
+                        String jmeterHome = org.apache.jmeter.util.JMeterUtils.getJMeterHome();
+                        if (jmeterHome != null && !jmeterHome.isEmpty()) {
+                            env.put("JMETER_HOME", jmeterHome);
+                        }
+
+                        // Create PTY process
+                        PtyProcessBuilder processBuilder = new PtyProcessBuilder(command.toArray(new String[0]))
+                                .setEnvironment(env)
+                                .setConsole(false)
+                                .setInitialColumns(120)
+                                .setInitialRows(40);
+
+                        // Set working directory to the test plan's directory
+                        if (testPlanDir != null) {
+                            processBuilder.setDirectory(testPlanDir);
+                        }
+
+                        ptyProcess = processBuilder.start();
+
+                        // Create TTY connector
+                        TtyConnector connector = new PtyProcessTtyConnector(
+                                ptyProcess, StandardCharsets.UTF_8);
+
+                        // Connect to the terminal widget
+                        SwingUtilities.invokeLater(() -> {
+                            terminalWidget.setTtyConnector(connector);
+                            terminalWidget.start();
+
+                            statusLabel.setText("\u25CF Running");
+                            statusLabel.setForeground(STATUS_RUNNING);
+                        });
+
+                        // Start file watcher to detect .jmx modifications
+                        startFileWatcher();
+
+                        // Start action bridge so Claude Code can trigger JMeter actions
+                        if (testPlanDir != null) {
+                            actionBridge = new JMeterActionBridge(new File(testPlanDir));
+                            actionBridge.setReloadCallback(() -> reloadTestPlan());
+                            actionBridge.startWatching();
+                        }
+
+                        // Monitor process exit
+                        int exitCode = ptyProcess.waitFor();
+                        log.info("Claude Code exited with code: {}", exitCode);
+
+                        SwingUtilities.invokeLater(() -> {
+                            statusLabel.setText("\u25CF Exited (" + exitCode + ")");
+                            statusLabel.setForeground(STATUS_STOPPED);
+                        });
+                    }
+                    else {
+                        log.error("Please enable this feature in properties file.");
                     }
 
-                    // Build command with arguments
-                    List<String> command = new ArrayList<>();
-                    command.add(claudeBinary);
-
-                    // Add the test plan directory so Claude can access the .jmx file
-                    if (testPlanDir != null) {
-                        command.add("--add-dir");
-                        command.add(testPlanDir);
-                    }
-
-                    // Set up environment
-                    Map<String, String> env = new HashMap<>(System.getenv());
-                    env.put("TERM", "xterm-256color");
-                    env.put("LANG", "en_US.UTF-8");
-                    env.put("LC_ALL", "en_US.UTF-8");
-                    env.put("PYTHONIOENCODING", "utf-8"); // Just in case
-
-                    // Pass JMETER_HOME so Claude Code can run JMeter CLI for non-GUI mode
-                    String jmeterHome = org.apache.jmeter.util.JMeterUtils.getJMeterHome();
-                    if (jmeterHome != null && !jmeterHome.isEmpty()) {
-                        env.put("JMETER_HOME", jmeterHome);
-                    }
-
-                    // Create PTY process
-                    PtyProcessBuilder processBuilder = new PtyProcessBuilder(command.toArray(new String[0]))
-                            .setEnvironment(env)
-                            .setConsole(false)
-                            .setInitialColumns(120)
-                            .setInitialRows(40);
-
-                    // Set working directory to the test plan's directory
-                    if (testPlanDir != null) {
-                        processBuilder.setDirectory(testPlanDir);
-                    }
-
-                    ptyProcess = processBuilder.start();
-
-                    // Create TTY connector
-                    TtyConnector connector = new PtyProcessTtyConnector(
-                            ptyProcess, StandardCharsets.UTF_8);
-
-                    // Connect to the terminal widget
-                    SwingUtilities.invokeLater(() -> {
-                        terminalWidget.setTtyConnector(connector);
-                        terminalWidget.start();
-
-                        statusLabel.setText("\u25CF Running");
-                        statusLabel.setForeground(STATUS_RUNNING);
-                    });
-
-                    // Start file watcher to detect .jmx modifications
-                    startFileWatcher();
-
-                    // Start action bridge so Claude Code can trigger JMeter actions
-                    if (testPlanDir != null) {
-                        actionBridge = new JMeterActionBridge(new File(testPlanDir));
-                        actionBridge.setReloadCallback(() -> reloadTestPlan());
-                        actionBridge.startWatching();
-                    }
-
-                    // Monitor process exit
-                    int exitCode = ptyProcess.waitFor();
-                    log.info("Claude Code exited with code: {}", exitCode);
-
-                    SwingUtilities.invokeLater(() -> {
-                        statusLabel.setText("\u25CF Exited (" + exitCode + ")");
-                        statusLabel.setForeground(STATUS_STOPPED);
-                    });
-
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     log.error("Failed to start Claude Code via PTY", e);
                     SwingUtilities.invokeLater(() -> {
                         statusLabel.setText("\u25CF Error");
@@ -323,18 +331,11 @@ public class ClaudeCodePanel extends JPanel {
      */
     private String buildSystemPrompt(String testPlanContext, String testPlanFilePath) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are an AI assistant integrated into Apache JMeter via the FeatherWand plugin. ");
-        sb.append("You have access to the current JMeter test plan structure. ");
-        sb.append("Help the user with performance testing tasks including:\n");
-        sb.append("- Analyzing and optimizing JMeter test plans\n");
-        sb.append("- Creating new test elements (Thread Groups, Samplers, Assertions, etc.)\n");
-        sb.append("- Debugging test plan issues\n");
-        sb.append("- Performance testing best practices\n");
-        sb.append("- JMeter scripting and configuration\n\n");
+
+        sb.append(getDefaultPromptFromProperties()).append("\n");
 
         if (testPlanFilePath != null && !testPlanFilePath.isEmpty()) {
             sb.append("IMPORTANT: The JMeter test plan file is located at: ").append(testPlanFilePath).append("\n");
-            sb.append("You already have access to this file and its directory. Do NOT search for it.\n\n");
         }
 
         // Running JMeter tests instructions
@@ -380,6 +381,27 @@ public class ClaudeCodePanel extends JPanel {
         sb.append("Current Test Plan Structure:\n\n");
         sb.append(testPlanContext);
         return sb.toString();
+    }
+
+    private String getDefaultPromptFromProperties() {
+        String getPromptFromProperty = AiConfig.getProperty("jmeter.ai.terminal.claudecode.prompt", "");
+        if(getPromptFromProperty != null && !getPromptFromProperty.isEmpty()) {
+            log.info("The (stripped for brevity) prompt is {}", getPromptFromProperty.substring(0, Math.min(25, getPromptFromProperty.length())));
+            return getPromptFromProperty;
+        }
+
+        return """
+                You are an AI assistant integrated into Apache JMeter via the FeatherWand plugin.
+                You have access to the current JMeter test plan structure.
+                Help the user with performance testing tasks including:
+                Analyzing and optimizing JMeter test plans
+                - Creating new test elements (Thread Groups, Samplers, Assertions, etc.)
+                - Debugging test plan issues
+                - Performance testing best practices
+                - JMeter scripting and configuration
+                - Write, debug, and test Java code
+                - Write, debug, and test Groovy script
+                """;
     }
 
     /**
