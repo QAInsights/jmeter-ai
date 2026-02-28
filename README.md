@@ -22,6 +22,7 @@ This plugin provides a simple way to chat with AI in JMeter. Feather Wand serves
 - Use right click context menu to refactor code, format code, and add functions in JSR223 script editor
 - Customize AI behavior through configuration properties
 - Switch between Claude and OpenAI models based on your preference or specific needs
+- **New!** Embedded **Claude Code** terminal: run Claude Code interactively within JMeter, with full awareness of your current test plan structure.
 
 ## 📥 Installation
 
@@ -78,6 +79,14 @@ The Feather Wand plugin can be configured through JMeter properties. Copy the `j
 | ------------------------- | ------------------------------------------------------------ | -------------------------- |
 | `jmeter.ai.refactoring.enabled` | Enable code refactoring for JSR223 script editor            | true                       |
 | `jmeter.ai.service.type` | The AI service to use for code refactoring ("openai" or "anthropic") | "openai"                   |
+
+#### Claude Code Terminal Configuration
+
+| Property                                     | Description                                                                                           | Default Value              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------- |
+| `jmeter.ai.terminal.claudecode.enabled`      | Enable the embedded Claude Code terminal feature                                                      | true                       |
+| `jmeter.ai.terminal.claudecode.path`         | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`)                      | Empty (auto-detect)        |
+| `jmeter.ai.terminal.claudecode.prompt`       | Custom system prompt passed to the Claude Code CLI (not recommended to change)                        | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 
@@ -211,6 +220,20 @@ Use the `@wrap` command to intelligently group HTTP samplers under Transaction C
    - Uses pattern matching and structural analysis (not AI) for its grouping logic
 
 This feature is especially useful for imported or recorded test plans that contain many individual HTTP samplers without proper organization.
+
+## 💻 Claude Code Integration
+
+Feather Wand features a fully embedded interactive **Claude Code Terminal** using JediTerm. This allows you to interact directly with the [Claude Code CLI](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) from within JMeter, bringing agentic AI workflows into your performance testing environment.
+
+1. **Prerequisites**: You must have `claude-code` installed globally via npm (`npm install -g @anthropic-ai/claude-code`).
+2. **Setup**: Make sure to set `jmeter.ai.terminal.claudecode.enabled=true` in your properties file. You can also specify the executable path (`jmeter.ai.terminal.claudecode.path`) if it's not detected automatically in your system's PATH.
+3. **Capabilities**: 
+   - Start, reload, and interact with the JMeter test plan using natural language.
+   - Claude Code automatically receives the full structure/context of the currently open `.jmx` file.
+   - You can ask Claude Code to run the test plan, parse JTL files, and more.
+4. **Disabling**: If you do not want to use this feature, set `jmeter.ai.terminal.claudecode.enabled=false`. The terminal widget will gracefully start a dummy process with an instructional message.
+
+**⚠️ Disclaimer**: Claude Code is a powerful AI agent that can execute commands, modify files, and consume API tokens significantly faster than standard chat interfaces. Users are strongly encouraged to thoroughly review the [official Claude Code documentation](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) to fully understand its capabilities, security considerations, and potential costs before enabling and using this feature.
 
 ## 🗝️ API Configuration
 
