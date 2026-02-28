@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.jmeter.gui.plugin.MenuCreator;
+import org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem;
 
 import javax.swing.*;
 
@@ -15,7 +16,10 @@ public class AiMenuCreator implements MenuCreator {
             try {
                 // Create a temporary parent component to pass to AiMenuItem
                 JMenu parentMenu = new JMenu("AI");
-                return new JMenuItem[] { new AiMenuItem(parentMenu) };
+                return new JMenuItem[] {
+                        new AiMenuItem(parentMenu),
+                        new ClaudeCodeMenuItem(parentMenu)
+                };
             } catch (Throwable e) {
                 log.error("Failed to load validate thread group plugin", e);
                 return new JMenuItem[0];
