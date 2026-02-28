@@ -10,6 +10,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jorphan.collections.HashTree;
+import org.qainsights.jmeter.ai.terminal.DisabledTtyConnector;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,7 +160,7 @@ public class ClaudeCodePanel extends JPanel {
             protected Void doInBackground() {
                 try {
                     String claudeBinary = ClaudeCodeLocator.findClaudeCodeBinary();
-                    if(claudeBinary != null && !claudeBinary.isEmpty()) {
+                    if (claudeBinary != null && !claudeBinary.isEmpty()) {
 
                         log.info("Starting Claude Code via PTY from: {}", claudeBinary);
 
@@ -271,13 +272,17 @@ public class ClaudeCodePanel extends JPanel {
                             statusLabel.setText("\u25CF Exited (" + exitCode + ")");
                             statusLabel.setForeground(STATUS_STOPPED);
                         });
-                    }
-                    else {
-                        log.error("Please enable this feature in properties file.");
+                    } else {
+                        log.info("Please enable this feature in properties file.");
+                        SwingUtilities.invokeLater(() -> {
+                            terminalWidget.setTtyConnector(new DisabledTtyConnector());
+                            terminalWidget.start();
+                            statusLabel.setText("\u25CF Disabled");
+                            statusLabel.setForeground(STATUS_STOPPED);
+                        });
                     }
 
-                }
-                catch (Exception e) {
+                } catch (Exception e) {
                     log.error("Failed to start Claude Code via PTY", e);
                     SwingUtilities.invokeLater(() -> {
                         statusLabel.setText("\u25CF Error");
@@ -385,8 +390,9 @@ public class ClaudeCodePanel extends JPanel {
 
     private String getDefaultPromptFromProperties() {
         String getPromptFromProperty = AiConfig.getProperty("jmeter.ai.terminal.claudecode.prompt", "");
-        if(getPromptFromProperty != null && !getPromptFromProperty.isEmpty()) {
-            log.info("The (stripped for brevity) prompt is {}", getPromptFromProperty.substring(0, Math.min(25, getPromptFromProperty.length())));
+        if (getPromptFromProperty != null && !getPromptFromProperty.isEmpty()) {
+            log.info("The (stripped for brevity) prompt is {}",
+                    getPromptFromProperty.substring(0, Math.min(25, getPromptFromProperty.length())));
             return getPromptFromProperty;
         }
 
