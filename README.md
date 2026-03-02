@@ -82,6 +82,8 @@ The Feather Wand plugin can be configured through JMeter properties. Copy the `j
 
 #### Claude Code Terminal Configuration
 
+Install Claude Code from https://code.claude.com/docs/en/quickstart
+
 | Property                                     | Description                                                                                           | Default Value              |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------- |
 | `jmeter.ai.terminal.claudecode.enabled`      | Enable the embedded Claude Code terminal feature                                                      | true                       |
