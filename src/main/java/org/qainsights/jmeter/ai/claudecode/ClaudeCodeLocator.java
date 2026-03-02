@@ -79,8 +79,6 @@ public class ClaudeCodeLocator {
                 return fromPath;
             }
 
-
-
             log.warn("Claude Code binary not found in common locations. Falling back to 'claude' (PATH lookup).");
             return osName.contains("win") ? "claude.cmd" : "claude";
         }
@@ -106,6 +104,7 @@ public class ClaudeCodeLocator {
         if (userProfile != null) {
             paths.add(userProfile + "\\.npm-global\\claude.cmd");
             paths.add(userProfile + "\\AppData\\Roaming\\npm\\claude.cmd");
+            paths.add(userProfile + "\\.local\\bin\\claude.exe");
         }
         // Common nvm-windows paths
         String nvmHome = System.getenv("NVM_HOME");
@@ -124,13 +123,16 @@ public class ClaudeCodeLocator {
         List<String> paths = new ArrayList<>();
         String home = System.getProperty("user.home");
 
+        paths.add("~/.local/bin/claude");
         paths.add("/usr/local/bin/claude");
         paths.add("/opt/homebrew/bin/claude");
         if (home != null) {
             paths.add(home + "/.npm-global/bin/claude");
             paths.add(home + "/.nvm/versions/node/default/bin/claude");
+            paths.add(home + "/.local/bin/claude");
         }
         paths.add("/usr/bin/claude");
+        log.info("Claude Code binary candidates: {}", paths);
         return paths;
     }
 
