@@ -6,6 +6,7 @@ import org.apache.jmeter.gui.util.JMeterToolBar;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,11 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
                         && model != null && !model.isEmpty()) {
                     return new ClaudeService();
+                }
+            } else if ("ollama".equalsIgnoreCase(serviceType)) {
+                String model = AiConfig.getProperty("ollama.default.model", "llama3.1");
+                if (model != null && !model.isEmpty()) {
+                    return new OllamaAiService();
                 }
             }
         } catch (Exception e) {

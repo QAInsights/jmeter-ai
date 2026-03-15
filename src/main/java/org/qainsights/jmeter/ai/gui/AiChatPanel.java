@@ -34,6 +34,7 @@ import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.qainsights.jmeter.ai.wrap.WrapUndoRedoHandler;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
 
 import com.anthropic.models.ModelInfo;
 import com.anthropic.models.ModelListPage;
@@ -58,6 +59,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
     private List<String> conversationHistory;
     private ClaudeService claudeService;
     private OpenAiService openAiService;
+    private OllamaAiService ollamaService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
 
@@ -85,6 +87,8 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         // Initialize services and utilities
         claudeService = new ClaudeService();
         openAiService = new OpenAiService();
+        ollamaService = new OllamaAiService();
+        
         messageProcessor = new MessageProcessor();
 
         // Initialize tree navigation buttons with action listeners
@@ -129,6 +133,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                 // Immediately set the model in the service
                 claudeService.setModel(selectedModel);
                 openAiService.setModel(selectedModel);
+                ollamaService.setModel(selectedModel);
             }
         });
 
@@ -446,6 +451,21 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     }
                 } catch (Exception e) {
                     log.error("Error adding OpenAI models: {}", e.getMessage(), e);
+                }
+
+                // Add Ollama models
+                try {
+                    List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
+                    if (ollamaModels != null) {
+                        for (io.github.ollama4j.models.response.Model ollamaModel : ollamaModels) {
+                            String modelId = "ollama:" + ollamaModel.getName();
+                            allModels.add(modelId);
+                            log.debug("Added Ollama model to selector: {}", ollamaModel.getName());
+                        }
+                        log.info("Added {} Ollama models to selector", ollamaModels.size());
+                    }
+                } catch (Exception e) {
+                    log.error("Error adding Ollama models: {}", e.getMessage(), e);
                 }
 
                 return allModels;
@@ -1266,25 +1286,23 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         // Get the model ID
         log.info("Using model from dropdown for message: {}", selectedModel);
 
-        // Check if this is an OpenAI model (prefixed with "openai:")
         if (selectedModel.startsWith("openai:")) {
             // Extract the actual OpenAI model ID
             String openAiModelId = selectedModel.substring(7); // Remove "openai:" prefix
             log.info("Using OpenAI model: {}", openAiModelId);
 
-            // Set the model in the OpenAI service
             openAiService.setModel(openAiModelId);
-
-            // Call OpenAI API with conversation history
             return openAiService.generateResponse(new ArrayList<>(conversationHistory));
+        } else if (selectedModel.startsWith("ollama:")) {
+            String ollamaModelId = selectedModel.substring(7); // Remove "ollama:" prefix
+            log.info("Using Ollama model: {}", ollamaModelId);
+
+            ollamaService.setModel(ollamaModelId);
+            return ollamaService.generateResponse(new ArrayList<>(conversationHistory));
         } else {
-            // This is an Anthropic model
             log.info("Using Anthropic model: {}", selectedModel);
 
-            // Set the model in the Claude service
             claudeService.setModel(selectedModel);
-
-            // Call Claude API with conversation history
             return claudeService.generateResponse(new ArrayList<>(conversationHistory));
         }
     }
@@ -1319,9 +1337,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             @Override
             protected void done() {
                 try {
-                    // Get the result and display it
                     String result = get();
-                    // Display the result in the chat area
                     try {
                         messageProcessor.appendMessage(chatArea.getStyledDocument(), result, new Color(0, 51, 102),
                                 false);
@@ -1330,7 +1346,6 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     }
                 } catch (InterruptedException | ExecutionException e) {
                     log.error("Error undoing rename operation", e);
-                    // Display error message
                     try {
                         messageProcessor.appendMessage(chatArea.getStyledDocument(),
                                 "Error undoing rename operation: " + e.getMessage(), Color.RED, false);
@@ -1350,7 +1365,6 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception {
-                // Create a LintCommandHandler and process the redo
                 LintCommandHandler lintHandler = new LintCommandHandler(claudeService);
                 return lintHandler.redoLastUndo();
             }

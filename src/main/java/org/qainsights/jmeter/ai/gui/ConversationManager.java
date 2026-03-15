@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import com.anthropic.models.ModelInfo;
@@ -29,6 +30,7 @@ public class ConversationManager {
     private final List<String> conversationHistory;
     private final ClaudeService claudeService;
     private final OpenAiService openAiService;
+    private final OllamaAiService ollamaService;
     private AiService currentAiService;
     private final MessageProcessor messageProcessor;
     private final JTextPane chatArea;
@@ -50,6 +52,7 @@ public class ConversationManager {
      */
     public ConversationManager(JTextPane chatArea, JTextArea messageField, JButton sendButton,
             JComboBox<ModelInfo> modelSelector, ClaudeService claudeService, OpenAiService openAiService,
+            OllamaAiService ollamaService,
             MessageProcessor messageProcessor, ElementSuggestionManager elementSuggestionManager) {
         this.chatArea = chatArea;
         this.messageField = messageField;
@@ -57,6 +60,7 @@ public class ConversationManager {
         this.modelSelector = modelSelector;
         this.claudeService = claudeService;
         this.openAiService = openAiService;
+        this.ollamaService = ollamaService;
         this.currentAiService = claudeService; // Default to Claude
         this.messageProcessor = messageProcessor;
         this.elementSuggestionManager = elementSuggestionManager;
@@ -499,6 +503,12 @@ public class ConversationManager {
                 log.info("Using OpenAI model for message: {}", modelId);
                 openAiService.setModel(modelId);
                 currentAiService = openAiService;
+            } else if (selectedModelStr.startsWith("ollama:")) {
+                // For Ollama models, remove the prefix
+                String modelId = selectedModelStr.substring(7); // Remove "ollama:" prefix
+                log.info("Using Ollama model for message: {}", modelId);
+                ollamaService.setModel(modelId);
+                currentAiService = ollamaService;
             } else {
                 // For Claude models
                 log.info("Using Claude model for message: {}", selectedModelStr);
