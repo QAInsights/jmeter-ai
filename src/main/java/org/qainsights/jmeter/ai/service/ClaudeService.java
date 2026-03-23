@@ -4,8 +4,8 @@ import java.util.List;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.models.Message;
-import com.anthropic.models.MessageCreateParams;
+import com.anthropic.models.messages.Message;
+import com.anthropic.models.messages.MessageCreateParams;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,7 +122,7 @@ public class ClaudeService implements AiService {
                 .build();
 
         // Get default model from properties or use SONNET if not specified
-        this.currentModelId = AiConfig.getProperty("claude.default.model", "claude-3-sonnet-20240229");
+        this.currentModelId = AiConfig.getProperty("claude.default.model", "claude-sonnet-4-6");
         this.temperature = Float.parseFloat(AiConfig.getProperty("claude.temperature", "0.5"));
         this.maxTokens = Long.parseLong(AiConfig.getProperty("claude.max.tokens", "1024"));
 

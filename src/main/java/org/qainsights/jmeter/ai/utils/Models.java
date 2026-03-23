@@ -3,14 +3,16 @@ package org.qainsights.jmeter.ai.utils;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 
-import com.anthropic.models.ModelInfo;
-import com.anthropic.models.ModelListPage;
-import com.anthropic.models.ModelListParams;
+import com.anthropic.models.models.ModelInfo;
+import com.anthropic.models.models.ModelListPage;
+import com.anthropic.models.models.ModelListParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.Model;
+
+import org.qainsights.jmeter.ai.service.OllamaAiService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,9 +25,12 @@ public class Models {
      * Get a combined list of model IDs from both Anthropic and OpenAI
      * @param anthropicClient Anthropic client
      * @param openAiClient OpenAI client
+     * @param ollamaService OllamaAiService
      * @return List of model IDs
      */
-    public static List<String> getModelIds(AnthropicClient anthropicClient, OpenAIClient openAiClient) {
+    public static List<String> getModelIds(AnthropicClient anthropicClient, 
+        OpenAIClient openAiClient,
+        OllamaAiService ollamaService) {
         List<String> modelIds = new ArrayList<>();
         
         try {
@@ -40,6 +45,12 @@ public class Models {
             if (openAiModels != null) {
                 modelIds.addAll(openAiModels);
             }
+
+            // Get Ollama models
+            List<String> ollamaModels = getOllamaModelIds(ollamaService);
+            if (ollamaModels != null) {
+                modelIds.addAll(ollamaModels);
+            }
             
             log.info("Combined {} models from Anthropic and OpenAI", modelIds.size());
             return modelIds;
@@ -49,6 +60,19 @@ public class Models {
         }
     }
     
+    private static List<String> getOllamaModelIds(OllamaAiService ollamaService) {
+        try {
+            List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
+            log.info("Successfully retrieved {} models from Ollama API", ollamaModels.size());
+            return ollamaModels.stream()
+                    .map(io.github.ollama4j.models.response.Model::getName)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error fetching models from Ollama API: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     /**
      * Get Anthropic models as ModelListPage
      * @param client Anthropic client

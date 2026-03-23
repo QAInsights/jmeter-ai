@@ -14,10 +14,11 @@ import org.slf4j.LoggerFactory;
 
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.utils.Models;
 import org.qainsights.jmeter.ai.utils.VersionUtils;
-import com.anthropic.models.ModelInfo;
-import com.anthropic.models.ModelListPage;
+import com.anthropic.models.models.ModelInfo;
+import com.anthropic.models.models.ModelListPage;
 
 /**
  * Manages the UI components of the chat interface.
@@ -37,6 +38,8 @@ public class ChatUIManager {
     private final JPanel mainPanel;
     private final JPanel bottomPanel;
     private final JPanel navigationPanel;
+
+    private OllamaAiService ollamaService;
     
     /**
      * Constructs a new ChatUIManager with all necessary UI components.
@@ -247,6 +250,24 @@ public class ChatUIManager {
                     }
                 } catch (Exception e) {
                     log.error("Error loading OpenAI models: {}", e.getMessage(), e);
+                }
+
+                // Add Ollama models
+                try {
+                    List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
+                    if (ollamaModels != null) {
+                        for (io.github.ollama4j.models.response.Model ollamaModel : ollamaModels) {
+                            String modelId = "ollama:" + ollamaModel.getName();
+                            ModelInfo modelInfo = ModelInfo.builder()
+                                .id(modelId)
+                                .build();
+                            models.add(modelInfo);
+                            log.debug("Added Ollama model to selector: {}", ollamaModel.getName());
+                        }
+                        log.info("Added {} Ollama models to selector", ollamaModels.size());
+                    }
+                } catch (Exception e) {
+                    log.error("Error adding Ollama models: {}", e.getMessage(), e);
                 }
                 return models;
             }

@@ -133,4 +133,7 @@ replay_pid*
 .vscode/settings.json
 .DS_Store
 PPA.md
-claude-help.txt
+
+ollama-src
+*.txt
+settings.local.json

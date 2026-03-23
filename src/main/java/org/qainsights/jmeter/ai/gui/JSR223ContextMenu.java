@@ -106,6 +106,11 @@ public class JSR223ContextMenu {
             String model = AiConfig.getProperty("anthropic.model", "");
             return apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
                     && model != null && !model.isEmpty();
+        } else if ("ollama".equalsIgnoreCase(aiServiceType)) {
+            String host = AiConfig.getProperty("ollama.host", "");
+            String model = AiConfig.getProperty("ollama.model", "");
+            return host != null && !host.isEmpty() && !host.equals("YOUR_HOST")
+                    && model != null && !model.isEmpty();
         }
 
         // If no valid AI service is configured, refactoring is not available
