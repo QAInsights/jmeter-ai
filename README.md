@@ -9,7 +9,7 @@ This plugin provides a simple way to chat with AI in JMeter. Feather Wand serves
 
 ## ✨ Features
 
-- Chat with AI directly within JMeter using either Claude or OpenAI models
+- Chat with AI directly within JMeter using Claude, OpenAI, or Ollama models
 - Get suggestions for JMeter elements based on your needs
 - Ask questions about JMeter functionality and best practices
 - Command intellisense with auto-completion for special commands in the chat input box
@@ -21,7 +21,7 @@ This plugin provides a simple way to chat with AI in JMeter. Feather Wand serves
 - Use `@wrap` command to intelligently group HTTP samplers under Transaction Controllers for better organization and reporting
 - Use right click context menu to refactor code, format code, and add functions in JSR223 script editor
 - Customize AI behavior through configuration properties
-- Switch between Claude and OpenAI models based on your preference or specific needs
+- Switch between Claude, OpenAI, and Ollama models based on your preference or specific needs
 - **New!** Embedded **Claude Code** terminal: run Claude Code interactively within JMeter, with full awareness of your current test plan structure.
 
 ## 📥 Installation
@@ -73,6 +73,22 @@ The Feather Wand plugin can be configured through JMeter properties. Copy the `j
 | `openai.system.prompt`    | System prompt that guides OpenAI's responses              | See sample properties file |
 | `openai.log.level`        | Logging level for OpenAI API requests ("INFO" or "DEBUG") | Empty (disabled)           |
 
+#### Ollama Configuration
+
+| Property | Description | Default Value |
+| ---------------------------------------- | -------------------------------------------------------------- | -------------------------- |
+| `ollama.host` | Ollama server host | `http://localhost` |
+| `ollama.port` | Ollama server port | `11434` |
+| `ollama.default.model` | Default Ollama model to use | `deepseek-r1:1.5b` |
+| `ollama.temperature` | Temperature setting (0.0-1.0) | `0.5` |
+| `ollama.max.history.size` | Maximum conversation history size | `10` |
+| `ollama.thinking.mode` | Enable extended thinking (`ENABLED` or `DISABLED`) | `DISABLED` |
+| `ollama.thinking.level` | Thinking depth (`LOW`, `MEDIUM`, or `HIGH`) | `MEDIUM` |
+| `ollama.request.timeout.seconds` | HTTP request timeout in seconds (increase for thinking models) | `120` |
+| `ollama.system.prompt` | System prompt that guides Ollama's responses | See sample properties file |
+
+> ⚠️ When `ollama.thinking.mode=ENABLED`, increase `ollama.request.timeout.seconds` to at least `300` to avoid timeout errors during long inference.
+
 #### Code Refactoring Configuration
 
 | Property                  | Description                                                  | Default Value              |
@@ -94,7 +110,7 @@ Install Claude Code from https://code.claude.com/docs/en/quickstart
 
 The system prompt defines how the AI (Claude or OpenAI) responds to your queries. You can customize this in the properties file to focus on specific aspects of JMeter or add your own guidelines.
 
-Both `claude.system.prompt` and `openai.system.prompt` can be configured separately in the properties file. The default prompts are designed to provide helpful, JMeter-specific responses tailored to each AI model's capabilities.
+`claude.system.prompt`, `openai.system.prompt`, and `ollama.system.prompt` can be configured separately in the properties file. The default prompts are designed to provide helpful, JMeter-specific responses tailored to each AI model's capabilities.
 
 ## 🔍 Special Commands
 
@@ -117,7 +133,7 @@ Use the `@usage` command to view detailed token usage information for your AI in
 
 3. **Example Output**:
 
-   ```
+   ``
    # Usage Summary
 
    ## Overall Summary
@@ -130,7 +146,7 @@ Use the `@usage` command to view detailed token usage information for your AI in
    - Conversation 1: 300 input, 400 output tokens
    - Conversation 2: 250 input, 350 output tokens
    ...
-   ```
+   ``
 
 4. **Benefits**:
    - Track your API usage and costs
@@ -239,7 +255,7 @@ Feather Wand features a fully embedded interactive **Claude Code Terminal** usin
 
 ## 🗝️ API Configuration
 
-Feather Wand supports both Anthropic (Claude) and OpenAI APIs. You can configure either or both in your properties file.
+Feather Wand supports Anthropic (Claude), OpenAI, and Ollama APIs. You can configure any combination in your properties file.
 
 ### Anthropic API (Claude)
 
@@ -257,12 +273,21 @@ Feather Wand supports both Anthropic (Claude) and OpenAI APIs. You can configure
 4. Copy the API key and paste it into the `openai.api.key` property in your `jmeter.properties` file
 5. For more information about the API key, visit the [API Key documentation](https://platform.openai.com/docs/api-reference)
 
+### Ollama (Local)
+
+1. Install Ollama from [ollama.com](https://ollama.com/)
+2. Pull a model, e.g. `ollama pull llama3.1` or `ollama pull deepseek-r1:1.5b`
+3. Set `jmeter.ai.service.type=ollama` in your `jmeter.properties` file
+4. Configure `ollama.host`, `ollama.port`, and `ollama.default.model` as needed
+5. No API key required - Ollama runs fully locally
+
 ### Model Selection
 
 Feather Wand automatically filters available models to show only chat-compatible models. By default, it excludes audio, TTS, transcription, and other non-chat models. You can select your preferred model from the dropdown in the UI, or set default models in the properties file:
 
-- For Claude: `claude.default.model` (e.g., `claude-3-7-sonnet-20250219`)
+- For Claude: `claude.default.model` (e.g., `claude-sonnet-4-6`)
 - For OpenAI: `openai.default.model` (e.g., `gpt-4o`)
+- For Ollama: `ollama.default.model` (e.g., `llama3.1`, `deepseek-r1:1.5b`)
 
 ### Model Filtering
 
