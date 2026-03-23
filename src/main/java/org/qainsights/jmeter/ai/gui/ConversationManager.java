@@ -17,7 +17,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
-import com.anthropic.models.ModelInfo;
+import com.anthropic.models.models.ModelInfo;
 
 /**
  * Manages the conversation history and AI interactions.

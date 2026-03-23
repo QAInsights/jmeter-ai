@@ -2,8 +2,8 @@ package org.qainsights.jmeter.ai.usage;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.models.Message;
-import com.anthropic.models.ModelInfo;
+import com.anthropic.models.messages.Message;
+import com.anthropic.models.models.ModelInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.utils.AiConfig;

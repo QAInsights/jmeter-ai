@@ -36,8 +36,8 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 
-import com.anthropic.models.ModelInfo;
-import com.anthropic.models.ModelListPage;
+import com.anthropic.models.models.ModelInfo;
+import com.anthropic.models.models.ModelListPage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

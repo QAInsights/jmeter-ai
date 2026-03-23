@@ -3,9 +3,9 @@ package org.qainsights.jmeter.ai.utils;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 
-import com.anthropic.models.ModelInfo;
-import com.anthropic.models.ModelListPage;
-import com.anthropic.models.ModelListParams;
+import com.anthropic.models.models.ModelInfo;
+import com.anthropic.models.models.ModelListPage;
+import com.anthropic.models.models.ModelListParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.openai.client.OpenAIClient;
