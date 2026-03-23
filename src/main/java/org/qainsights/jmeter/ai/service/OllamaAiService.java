@@ -27,6 +27,8 @@ public class OllamaAiService implements AiService {
     private final int maxHistorySize;
     private final boolean isThinkingModeEnabled;
     private final ThinkMode thinkingMode;
+    private final long requestTimeoutSeconds;
+    private final String systemPrompt;
 
     private static final String DEFAULT_JMETER_SYSTEM_PROMPT = "You are a JMeter expert. Your task is to analyze the user's request and generate the appropriate JMeter test plan. Please provide the response in the correct format.";
 
@@ -38,12 +40,17 @@ public class OllamaAiService implements AiService {
         this.model = AiConfig.getProperty("ollama.default.model", "deepseek-r1:1.5b");
         this.temperature = parseTemperature(AiConfig.getProperty("ollama.temperature", "0.5"));
         this.maxHistorySize = Integer.parseInt(AiConfig.getProperty("ollama.max.history.size", "10"));
-        this.ollamaClient = new Ollama(this.host);
         this.isThinkingModeEnabled = AiConfig.getProperty("ollama.thinking.mode", "DISABLED").equalsIgnoreCase("enabled");
         this.thinkingMode = parseThinkingMode(AiConfig.getProperty("ollama.thinking.level", "MEDIUM"));
+        this.requestTimeoutSeconds = parseTimeout(AiConfig.getProperty("ollama.request.timeout.seconds", "120"));
+        this.ollamaClient = new Ollama(this.host);
+        this.ollamaClient.setRequestTimeoutSeconds(this.requestTimeoutSeconds);
+        String configuredPrompt = AiConfig.getProperty("ollama.system.prompt", "");
+        this.systemPrompt = (configuredPrompt != null && !configuredPrompt.isEmpty())
+                ? configuredPrompt : DEFAULT_JMETER_SYSTEM_PROMPT;
 
-        logger.info("Initialized Ollama service with host: {}, model: {}, thinking mode: {}",
-                this.host, this.model, this.isThinkingModeEnabled ? this.thinkingMode : "DISABLED");
+        logger.info("Initialized Ollama service with host: {}, model: {}, thinking mode: {}, timeout: {}s",
+                this.host, this.model, this.isThinkingModeEnabled ? this.thinkingMode : "DISABLED", this.requestTimeoutSeconds);
     }
 
     private static String buildHost(String hostValue, String portValue) {
@@ -77,6 +84,20 @@ public class OllamaAiService implements AiService {
         } catch (IllegalArgumentException e) {
             logger.warn("Invalid thinking level: '{}'. Setting to default MEDIUM", value);
             return ThinkMode.MEDIUM;
+        }
+    }
+
+    private static long parseTimeout(String value) {
+        try {
+            long timeout = Long.parseLong(value);
+            if (timeout <= 0) {
+                logger.warn("Request timeout must be positive. Provided value: {}. Setting to default 120s", timeout);
+                return 120L;
+            }
+            return timeout;
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid request timeout value: '{}'. Setting to default 120s", value);
+            return 120L;
         }
     }
 
@@ -123,7 +144,7 @@ public class OllamaAiService implements AiService {
 
     @Override
     public String generateResponse(List<String> messages) {
-        return generateResponse(messages, DEFAULT_JMETER_SYSTEM_PROMPT);
+        return generateResponse(messages, this.systemPrompt);
     }
 
     public void setModel(String modelId) {
