@@ -139,7 +139,8 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
         // Create a panel for the chat area with header
         JPanel chatPanel = new JPanel(new BorderLayout());
-        chatPanel.setBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, Color.LIGHT_GRAY));
+        Color borderColor = getThemeColor("Component.borderColor", UIManager.getColor("Separator.foreground"));
+        chatPanel.setBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor));
 
         // Create a header panel for the title and new chat button
         JPanel headerPanel = createHeaderPanel();
@@ -284,7 +285,6 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         navigationPanel = new JPanel();
         navigationPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5));
         navigationPanel.setBorder(BorderFactory.createTitledBorder("Element Suggestions"));
-        navigationPanel.setBackground(new Color(245, 245, 250)); // Light background to make it stand out
 
         // Add navigation buttons to the panel
         navigationPanel.add(treeNavigationButtons.getUpButton());
@@ -318,8 +318,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
         // Store the base font size for scaling
         baseMessageFontSize = largerFont.getSize2D();
+        Color inputBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
         messageField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY),
+                BorderFactory.createLineBorder(inputBorderColor),
                 BorderFactory.createEmptyBorder(5, 5, 5, 5)));
 
         // Setup intellisense for command suggestions
@@ -372,10 +373,11 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
      */
     private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel(new BorderLayout());
+        Color headerBorderColor = getThemeColor("Separator.foreground", Color.LIGHT_GRAY);
         headerPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 1, 0, Color.LIGHT_GRAY),
+                BorderFactory.createMatteBorder(1, 0, 1, 0, headerBorderColor),
                 BorderFactory.createEmptyBorder(10, 12, 10, 12)));
-        headerPanel.setBackground(new Color(240, 240, 240));
+        headerPanel.setBackground(UIManager.getColor("Panel.background"));
 
         // Add a title to the left side of the header panel
         JLabel titleLabel = new JLabel("Feather Wand - JMeter Agent v" + VersionUtils.getVersion());
@@ -388,8 +390,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         newChatButton.setFont(new Font(newChatButton.getFont().getName(), Font.BOLD, 16));
         newChatButton.setFocusPainted(false);
         newChatButton.setMargin(new Insets(0, 8, 0, 8));
+        Color buttonBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
         newChatButton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true),
+                BorderFactory.createLineBorder(buttonBorderColor, 1, true),
                 BorderFactory.createEmptyBorder(2, 8, 2, 8)));
 
         // Add action listener to reset the conversation
@@ -526,7 +529,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                 "How can I assist you today?";
 
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), welcomeMessage, new Color(0, 51, 102), true);
+            messageProcessor.appendMessage(chatArea.getStyledDocument(), welcomeMessage, getThemeColor("TextPane.foreground", Color.BLACK), true);
         } catch (BadLocationException e) {
             log.error("Error displaying welcome message", e);
         }
@@ -564,7 +567,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
         // Add the user message to the chat
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), "You: " + message, Color.BLACK, false);
+            messageProcessor.appendMessage(chatArea.getStyledDocument(), "You: " + message, getThemeColor("TextPane.foreground", Color.BLACK), false);
         } catch (BadLocationException e) {
             log.error("Error appending user message to chat", e);
         }
@@ -577,7 +580,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
         // Add "AI is thinking..." indicator
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), "AI is thinking...", Color.GRAY, false);
+            messageProcessor.appendMessage(chatArea.getStyledDocument(), "AI is thinking...", getThemeColor("Label.disabledForeground", Color.GRAY), false);
         } catch (BadLocationException e) {
             log.error("Error adding loading indicator", e);
         }
@@ -1028,7 +1031,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
         // Add the AI response to the chat
         log.info("Appending AI response to chat");
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), response, new Color(0, 51, 102), true);
+            messageProcessor.appendMessage(chatArea.getStyledDocument(), response, getThemeColor("TextPane.foreground", Color.BLACK), true);
         } catch (BadLocationException e) {
             log.error("Error appending AI response to chat", e);
         }
@@ -1193,7 +1196,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
 
         try {
             // Add user message to chat
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), message, Color.BLACK, true);
+            messageProcessor.appendMessage(chatArea.getStyledDocument(), message, getThemeColor("TextPane.foreground", Color.BLACK), true);
         } catch (BadLocationException e) {
             log.error("Error adding message to chat", e);
         }
@@ -1339,7 +1342,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                 try {
                     String result = get();
                     try {
-                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, new Color(0, 51, 102),
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, getThemeColor("TextPane.foreground", Color.BLACK),
                                 false);
                     } catch (BadLocationException ex) {
                         log.error("Error displaying undo result", ex);
@@ -1376,7 +1379,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     String result = get();
                     // Display the result in the chat area
                     try {
-                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, new Color(0, 51, 102),
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, getThemeColor("TextPane.foreground", Color.BLACK),
                                 false);
                     } catch (BadLocationException ex) {
                         log.error("Error displaying redo result", ex);
@@ -1414,7 +1417,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
                     String result = get();
                     // Display the result in the chat area
                     try {
-                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, new Color(0, 51, 102),
+                        messageProcessor.appendMessage(chatArea.getStyledDocument(), result, getThemeColor("TextPane.foreground", Color.BLACK),
                                 false);
                     } catch (BadLocationException ex) {
                         log.error("Error displaying wrap undo result", ex);
@@ -1472,5 +1475,17 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener {
             // Update font sizes based on the current scale
             updateFontSizes();
         }
+    }
+
+    /**
+     * Gets a color from the current UIManager theme, falling back to a default if not available.
+     *
+     * @param key The UIManager color key
+     * @param fallback The fallback color if the key is not found
+     * @return The theme color or the fallback
+     */
+    private static Color getThemeColor(String key, Color fallback) {
+        Color color = UIManager.getColor(key);
+        return color != null ? color : fallback;
     }
 }

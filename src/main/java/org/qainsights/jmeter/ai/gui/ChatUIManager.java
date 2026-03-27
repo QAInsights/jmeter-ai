@@ -131,14 +131,16 @@ public class ChatUIManager {
      */
     private JPanel createChatPanel(JTextPane chatArea, Runnable newChatAction) {
         JPanel chatPanel = new JPanel(new BorderLayout());
-        chatPanel.setBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, Color.LIGHT_GRAY));
+        Color borderColor = getThemeColor("Component.borderColor", UIManager.getColor("Separator.foreground"));
+        chatPanel.setBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor));
         
         // Create a header panel for the title and new chat button
         JPanel headerPanel = new JPanel(new BorderLayout());
+        Color headerBorderColor = getThemeColor("Separator.foreground", Color.LIGHT_GRAY);
         headerPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 1, 0, Color.LIGHT_GRAY),
+                BorderFactory.createMatteBorder(1, 0, 1, 0, headerBorderColor),
                 BorderFactory.createEmptyBorder(10, 12, 10, 12)));
-        headerPanel.setBackground(new Color(240, 240, 240));
+        headerPanel.setBackground(UIManager.getColor("Panel.background"));
         
         // Add a title to the left side of the header panel
         JLabel titleLabel = new JLabel("Feather Wand - JMeter Agent v" + VersionUtils.getVersion());
@@ -151,8 +153,9 @@ public class ChatUIManager {
         newChatButton.setFont(new Font(newChatButton.getFont().getName(), Font.BOLD, 16));
         newChatButton.setFocusPainted(false);
         newChatButton.setMargin(new Insets(0, 8, 0, 8));
+        Color buttonBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
         newChatButton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true),
+                BorderFactory.createLineBorder(buttonBorderColor, 1, true),
                 BorderFactory.createEmptyBorder(2, 8, 2, 8)));
         
         // Add action listener to reset the conversation
@@ -357,8 +360,9 @@ public class ChatUIManager {
         JTextArea field = new JTextArea(3, 20); // 3 rows tall
         field.setLineWrap(true);
         field.setWrapStyleWord(true);
+        Color inputBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
         field.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY),
+                BorderFactory.createLineBorder(inputBorderColor),
                 BorderFactory.createEmptyBorder(5, 5, 5, 5)));
         
         // Add key listener to handle Enter key for sending messages
@@ -383,12 +387,13 @@ public class ChatUIManager {
      */
     private JButton createSendButton(Runnable sendMessageAction) {
         JButton button = new JButton("Send");
-        button.setBackground(new Color(240, 240, 240)); // Light gray background
-        button.setForeground(new Color(0, 0, 0)); // Black text
+        button.setBackground(UIManager.getColor("Button.background"));
+        button.setForeground(UIManager.getColor("Button.foreground"));
         button.setFocusPainted(false);
         button.setFont(new Font(button.getFont().getName(), Font.BOLD, 12));
+        Color sendBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
         button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1, true),
+                BorderFactory.createLineBorder(sendBorderColor, 1, true),
                 BorderFactory.createEmptyBorder(8, 12, 8, 12)));
         
         button.addActionListener(e -> sendMessageAction.run());
@@ -483,5 +488,17 @@ public class ChatUIManager {
         } catch (BadLocationException e) {
             log.error("Error removing loading indicator", e);
         }
+    }
+
+    /**
+     * Gets a color from the current UIManager theme, falling back to a default if not available.
+     *
+     * @param key The UIManager color key
+     * @param fallback The fallback color if the key is not found
+     * @return The theme color or the fallback
+     */
+    private static Color getThemeColor(String key, Color fallback) {
+        Color color = UIManager.getColor(key);
+        return color != null ? color : fallback;
     }
 }

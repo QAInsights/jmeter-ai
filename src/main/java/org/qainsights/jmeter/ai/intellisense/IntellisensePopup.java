@@ -20,7 +20,8 @@ public class IntellisensePopup {
         suggestionList.setFocusable(false);
         scrollPane = new JScrollPane(suggestionList);
         scrollPane.setBorder(null);
-        popupMenu.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        Color borderColor = UIManager.getColor("Component.borderColor");
+        popupMenu.setBorder(BorderFactory.createLineBorder(borderColor != null ? borderColor : Color.LIGHT_GRAY));
         popupMenu.add(scrollPane);
     }
 

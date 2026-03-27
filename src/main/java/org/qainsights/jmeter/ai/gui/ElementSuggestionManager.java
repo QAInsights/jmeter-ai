@@ -126,7 +126,8 @@ public class ElementSuggestionManager {
         JButton addButton = new JButton("Add " + displayName);
 
         // Set button appearance
-        addButton.setForeground(Color.BLACK); // Black text
+        Color fgColor = UIManager.getColor("Button.foreground");
+        addButton.setForeground(fgColor != null ? fgColor : Color.BLACK);
         addButton.setFocusPainted(false);
         addButton.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(34, 139, 34), 1, true), // Forest green border

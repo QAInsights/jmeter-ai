@@ -92,7 +92,7 @@ public class MessageProcessor {
         
         SimpleAttributeSet codeStyle = new SimpleAttributeSet();
         StyleConstants.setFontFamily(codeStyle, "Monospaced");
-        StyleConstants.setBackground(codeStyle, new Color(240, 240, 240));
+        StyleConstants.setBackground(codeStyle, getCodeBlockBackground());
         
         // Process each line
         for (String line : lines) {
@@ -200,12 +200,12 @@ public class MessageProcessor {
     private void renderCodeBlock(StyledDocument doc, String code, String language, SimpleAttributeSet codeStyle) throws BadLocationException {
         // Create a panel for the code block with a border layout
         JPanel codePanel = new JPanel(new BorderLayout());
-        codePanel.setBackground(new Color(245, 245, 245));
+        codePanel.setBackground(getCodeBlockBackground());
         codePanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
         
         // Create a header panel for language and copy button
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(245, 245, 245));
+        headerPanel.setBackground(getCodeBlockBackground());
         headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
         
         // Add language label if present
@@ -243,7 +243,7 @@ public class MessageProcessor {
         JTextArea codeArea = new JTextArea(code.trim()); // Trim to remove extra lines
         codeArea.setFont(UIManager.getFont("TextField.font")); // Use default font
         codeArea.setEditable(false);
-        codeArea.setBackground(new Color(245, 245, 245));
+        codeArea.setBackground(getCodeBlockBackground());
         codeArea.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         
         // Add the code area to the panel
@@ -304,5 +304,31 @@ public class MessageProcessor {
         
         // Scroll to the bottom of the document
         // This is handled by the caller
+    }
+
+    /**
+     * Gets a code block background color that is slightly different from the
+     * panel background, providing visual distinction in both light and dark themes.
+     *
+     * @return A color suitable for code block backgrounds
+     */
+    private static Color getCodeBlockBackground() {
+        Color panelBg = UIManager.getColor("Panel.background");
+        if (panelBg == null) {
+            return new Color(240, 240, 240);
+        }
+        // Slightly shift the panel background for visual distinction
+        int r = panelBg.getRed();
+        int g = panelBg.getGreen();
+        int b = panelBg.getBlue();
+        // Detect dark vs light theme by luminance
+        double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+        if (luminance < 0.5) {
+            // Dark theme: lighten slightly
+            return new Color(Math.min(r + 20, 255), Math.min(g + 20, 255), Math.min(b + 20, 255));
+        } else {
+            // Light theme: darken slightly
+            return new Color(Math.max(r - 15, 0), Math.max(g - 15, 0), Math.max(b - 15, 0));
+        }
     }
 }
