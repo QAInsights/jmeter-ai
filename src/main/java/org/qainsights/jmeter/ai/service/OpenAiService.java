@@ -232,11 +232,23 @@ public class OpenAiService implements AiService {
                 log.info("Limiting conversation to last {} messages", limitedConversation.size());
             }
 
+            // Some newer OpenAI models (o1, o3, gpt-5, etc.) only support temperature=1.
+            // Detect these by model ID prefix and skip setting temperature for them.
+            boolean supportsCustomTemperature = !currentModelId.startsWith("o1")
+                    && !currentModelId.startsWith("o3")
+                    && !currentModelId.startsWith("o4")
+                    && !currentModelId.contains("-chat-latest");
+
             // Create a fresh builder for parameters following the working example
             ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                     .maxCompletionTokens(maxTokens)
-                    .temperature(temperature)
                     .model(currentModelId);
+
+            if (supportsCustomTemperature) {
+                paramsBuilder.temperature(temperature);
+            } else {
+                log.info("Skipping temperature setting for model {} (uses default only)", currentModelId);
+            }
 
             // Always include the system prompt
             paramsBuilder.addSystemMessage(systemPrompt);
@@ -260,15 +272,25 @@ public class OpenAiService implements AiService {
                 log.info("Message[{}]: {}", i, limitedHistory.get(i));
             }
 
-            if (limitedHistory.isEmpty()) {
-                log.warn("Conversation is empty, using default message");
+            // Filter out error responses that were stored in history to avoid poisoning requests
+            List<String> cleanHistory = new java.util.ArrayList<>();
+            for (String msg : limitedHistory) {
+                if (msg != null && !msg.startsWith("Error:")) {
+                    cleanHistory.add(msg);
+                } else if (msg != null) {
+                    log.warn("Skipping error message from conversation history: {}", msg.substring(0, Math.min(80, msg.length())));
+                }
+            }
+
+            if (cleanHistory.isEmpty()) {
+                log.warn("Conversation is empty after filtering, using default message");
                 paramsBuilder.addUserMessage("Hello, how can you help me with JMeter?");
             } else {
                 // Process the conversation history
                 // We'll assume the conversation alternates between user and assistant messages
                 // with the first message being from the user
-                for (int i = 0; i < limitedHistory.size(); i++) {
-                    String msg = limitedHistory.get(i);
+                for (int i = 0; i < cleanHistory.size(); i++) {
+                    String msg = cleanHistory.get(i);
                     if (msg == null || msg.isEmpty()) {
                         log.warn("Skipping empty message at position {}", i);
                         continue;
