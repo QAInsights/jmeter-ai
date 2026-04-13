@@ -130,7 +130,7 @@ public class OllamaAiService implements AiService {
         try {
             return this.ollamaClient.listModels();
         } catch (Exception e) {
-            logger.error("Error listing models", e);
+            logger.warn("Ollama is not available ({}). Skipping Ollama model discovery.", e.getMessage());
             return new ArrayList<>();
         }
     }
