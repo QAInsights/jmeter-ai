@@ -1,20 +1,19 @@
 package org.qainsights.jmeter.ai.service;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import io.github.ollama4j.Ollama;
+import io.github.ollama4j.models.chat.OllamaChatMessageRole;
+import io.github.ollama4j.models.chat.OllamaChatRequest;
+import io.github.ollama4j.models.chat.OllamaChatResult;
 import io.github.ollama4j.models.request.ThinkMode;
-import io.github.ollama4j.utils.Options;
+import io.github.ollama4j.models.response.Model;
 import io.github.ollama4j.utils.OptionsBuilder;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.github.ollama4j.Ollama;
-import io.github.ollama4j.models.response.Model;
-import io.github.ollama4j.models.chat.OllamaChatRequest;
-import io.github.ollama4j.models.chat.OllamaChatMessageRole;
-import io.github.ollama4j.models.chat.OllamaChatResult;
+import java.util.ArrayList;
+import java.util.List;
 
 // Ollama Help https://ollama4j.github.io/ollama4j/intro
 public class OllamaAiService implements AiService {
@@ -30,7 +29,6 @@ public class OllamaAiService implements AiService {
     private final long requestTimeoutSeconds;
     private final String systemPrompt;
 
-    private static final String DEFAULT_JMETER_SYSTEM_PROMPT = "You are a JMeter expert. Your task is to analyze the user's request and generate the appropriate JMeter test plan. Please provide the response in the correct format.";
 
     public OllamaAiService() {
         this.host = buildHost(
@@ -47,7 +45,7 @@ public class OllamaAiService implements AiService {
         this.ollamaClient.setRequestTimeoutSeconds(this.requestTimeoutSeconds);
         String configuredPrompt = AiConfig.getProperty("ollama.system.prompt", "");
         this.systemPrompt = (configuredPrompt != null && !configuredPrompt.isEmpty())
-                ? configuredPrompt : DEFAULT_JMETER_SYSTEM_PROMPT;
+                ? configuredPrompt : Constants.DEFAULT_JMETER_SYSTEM_PROMPT;
 
         logger.info("Initialized Ollama service with host: {}, model: {}, thinking mode: {}, timeout: {}s",
                 this.host, this.model, this.isThinkingModeEnabled ? this.thinkingMode : "DISABLED", this.requestTimeoutSeconds);
@@ -153,9 +151,9 @@ public class OllamaAiService implements AiService {
     }
 
 
-   public boolean isThinkingModeValid() {
-       return this.thinkingMode == ThinkMode.LOW || this.thinkingMode == ThinkMode.MEDIUM || this.thinkingMode == ThinkMode.HIGH;
-   }
+    public boolean isThinkingModeValid() {
+        return this.thinkingMode == ThinkMode.LOW || this.thinkingMode == ThinkMode.MEDIUM || this.thinkingMode == ThinkMode.HIGH;
+    }
 
     @Override
     public String generateResponse(List<String> messages, String systemPrompt) {
@@ -177,7 +175,7 @@ public class OllamaAiService implements AiService {
             if (systemPrompt != null && !systemPrompt.isEmpty()) {
                 request.withMessage(OllamaChatMessageRole.SYSTEM, systemPrompt);
             } else {
-                request.withMessage(OllamaChatMessageRole.SYSTEM, DEFAULT_JMETER_SYSTEM_PROMPT);
+                request.withMessage(OllamaChatMessageRole.SYSTEM, Constants.DEFAULT_JMETER_SYSTEM_PROMPT);
             }
 
             List<String> limitedHistory;
@@ -208,12 +206,11 @@ public class OllamaAiService implements AiService {
 
     private OllamaChatRequest buildOllamaChatRequest(OllamaChatRequest request) {
 
-        if(isThinkingModeEnabled && isThinkingModeValid()) {
+        if (isThinkingModeEnabled && isThinkingModeValid()) {
             return request.withThinking(this.thinkingMode)
                     .withOptions(new OptionsBuilder().setTemperature(this.temperature).build())
                     .withModel(this.model).build();
-        }
-        else {
+        } else {
             return request.withThinking(ThinkMode.DISABLED)
                     .withOptions(new OptionsBuilder().setTemperature(this.temperature).build())
                     .withModel(this.model).build();
