@@ -1,5 +1,12 @@
 package org.qainsights.jmeter.ai.gui;
 
+import com.anthropic.models.models.ModelInfo;
+import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
+import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,14 +17,6 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-
-import org.qainsights.jmeter.ai.service.AiService;
-import org.qainsights.jmeter.ai.service.ClaudeService;
-import org.qainsights.jmeter.ai.service.OpenAiService;
-import org.qainsights.jmeter.ai.service.OllamaAiService;
-import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
-import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
-import com.anthropic.models.models.ModelInfo;
 
 /**
  * Manages the conversation history and AI interactions.
@@ -37,23 +36,21 @@ public class ConversationManager {
     private final JTextArea messageField;
     private final JButton sendButton;
     private final JComboBox<ModelInfo> modelSelector;
-    private final ElementSuggestionManager elementSuggestionManager;
 
     /**
      * Constructs a new ConversationManager.
-     * 
-     * @param chatArea                 The chat area to display messages
-     * @param messageField             The message field for user input
-     * @param sendButton               The send button
-     * @param modelSelector            The model selector
-     * @param claudeService            The Claude service for AI interactions
-     * @param messageProcessor         The message processor for formatting
-     * @param elementSuggestionManager The element suggestion manager
+     *
+     * @param chatArea         The chat area to display messages
+     * @param messageField     The message field for user input
+     * @param sendButton       The send button
+     * @param modelSelector    The model selector
+     * @param claudeService    The Claude service for AI interactions
+     * @param messageProcessor The message processor for formatting
      */
     public ConversationManager(JTextPane chatArea, JTextArea messageField, JButton sendButton,
-            JComboBox<ModelInfo> modelSelector, ClaudeService claudeService, OpenAiService openAiService,
-            OllamaAiService ollamaService,
-            MessageProcessor messageProcessor, ElementSuggestionManager elementSuggestionManager) {
+                               JComboBox<ModelInfo> modelSelector, ClaudeService claudeService, OpenAiService openAiService,
+                               OllamaAiService ollamaService,
+                               MessageProcessor messageProcessor) {
         this.chatArea = chatArea;
         this.messageField = messageField;
         this.sendButton = sendButton;
@@ -63,7 +60,6 @@ public class ConversationManager {
         this.ollamaService = ollamaService;
         this.currentAiService = claudeService; // Default to Claude
         this.messageProcessor = messageProcessor;
-        this.elementSuggestionManager = elementSuggestionManager;
         this.conversationHistory = new ArrayList<>();
     }
 
@@ -121,7 +117,7 @@ public class ConversationManager {
 
     /**
      * Sends a user message to the AI and processes the response.
-     * 
+     *
      * @param message The message to send
      */
     public void sendUserMessage(String message) {
@@ -396,9 +392,9 @@ public class ConversationManager {
 
     /**
      * Gets information about the currently selected element.
-     * 
+     *
      * @return Information about the currently selected element, or null if no
-     *         element is selected
+     * element is selected
      */
     private String getCurrentElementInfo() {
         // This method would be implemented to get information about the currently
@@ -449,7 +445,7 @@ public class ConversationManager {
 
     /**
      * Processes an AI response and displays it in the chat area.
-     * 
+     *
      * @param response The AI response to process
      */
     private void processAiResponse(String response) {
@@ -473,17 +469,11 @@ public class ConversationManager {
         } catch (BadLocationException e) {
             log.error("Error appending AI response to chat", e);
         }
-
-        // Create element buttons for context-aware suggestions after the AI response
-        SwingUtilities.invokeLater(() -> {
-            log.info("Creating element buttons for context-aware suggestions");
-            elementSuggestionManager.createElementButtons(response);
-        });
     }
 
     /**
      * Gets an AI response for a message.
-     * 
+     *
      * @param message The message to get a response for
      * @return The AI response
      */
@@ -527,7 +517,7 @@ public class ConversationManager {
 
     /**
      * Gets the conversation history.
-     * 
+     *
      * @return The conversation history
      */
     public List<String> getConversationHistory() {
