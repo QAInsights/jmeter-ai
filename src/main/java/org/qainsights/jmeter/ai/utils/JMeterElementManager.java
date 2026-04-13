@@ -1,15 +1,15 @@
 package org.qainsights.jmeter.ai.utils;
 
 import org.apache.jmeter.gui.GuiPackage;
-import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.gui.JMeterGUIComponent;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.tree.TreePath;
 import java.util.HashMap;
 import java.util.Map;
-import javax.swing.tree.TreePath;
 
 /**
  * Utility class for managing JMeter elements (add/delete) in the test plan
@@ -37,11 +37,11 @@ public class JMeterElementManager {
         ELEMENT_CLASS_MAP.put("httpsampler",
                 new ElementClassInfo("org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy",
                         "org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui"));
-        
+
         ELEMENT_CLASS_MAP.put("httptestsample",
                 new ElementClassInfo("org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy",
                         "org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui"));
-        
+
         ELEMENT_CLASS_MAP.put("httprequest",
                 new ElementClassInfo("org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy",
                         "org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui"));
@@ -385,13 +385,13 @@ public class JMeterElementManager {
 
     /**
      * A generic method to create a test element using its class and GUI class
-     * 
+     *
      * @param elementClass The class of the test element
      * @param guiClass     The GUI class of the test element
      * @return The created test element
      */
     private static <T extends TestElement> T createTestElement(Class<T> elementClass,
-            Class<? extends JMeterGUIComponent> guiClass) {
+                                                               Class<? extends JMeterGUIComponent> guiClass) {
         try {
             log.info("Creating test element of class: {} with GUI class: {}", elementClass.getName(),
                     guiClass.getName());
@@ -422,7 +422,7 @@ public class JMeterElementManager {
 
     /**
      * Adds a JMeter element to the currently selected node in the test plan.
-     * 
+     *
      * @param elementType The type of element to add (case-insensitive, spaces
      *                    ignored)
      * @param elementName The name to give the new element (optional, will use
@@ -525,9 +525,9 @@ public class JMeterElementManager {
 
     /**
      * Checks if the test plan is ready for operations.
-     * 
+     *
      * @return A TestPlanStatus object indicating if the test plan is ready and any
-     *         error message
+     * error message
      */
     public static TestPlanStatus isTestPlanReady() {
         GuiPackage guiPackage = GuiPackage.getInstance();
@@ -545,9 +545,9 @@ public class JMeterElementManager {
 
     /**
      * Ensures that a test plan exists, creating one if necessary.
-     * 
+     *
      * @return true if a test plan exists or was created successfully, false
-     *         otherwise
+     * otherwise
      */
     public static boolean ensureTestPlanExists() {
         GuiPackage guiPackage = GuiPackage.getInstance();
@@ -568,13 +568,13 @@ public class JMeterElementManager {
             testPlan.setName("Test Plan");
             testPlan.setProperty(TestElement.TEST_CLASS, org.apache.jmeter.testelement.TestPlan.class.getName());
             testPlan.setProperty(TestElement.GUI_CLASS, org.apache.jmeter.control.gui.TestPlanGui.class.getName());
-            
+
             // Create a root node with the test plan
             JMeterTreeNode root = new JMeterTreeNode(testPlan, null);
-            
+
             // Add the root node to the tree model
             guiPackage.getTreeModel().setRoot(root);
-            
+
             log.info("Created a new test plan");
             return true;
         } catch (Exception e) {
@@ -585,7 +585,7 @@ public class JMeterElementManager {
 
     /**
      * Selects the test plan node in the tree.
-     * 
+     *
      * @return true if the test plan node was selected successfully, false otherwise
      */
     public static boolean selectTestPlanNode() {
@@ -615,7 +615,7 @@ public class JMeterElementManager {
 
     /**
      * Normalizes the element type by removing spaces and converting to lowercase.
-     * 
+     *
      * @param elementType The element type to normalize
      * @return The normalized element type
      */
@@ -628,7 +628,7 @@ public class JMeterElementManager {
 
     /**
      * Gets a default name for an element based on its type.
-     * 
+     *
      * @param elementType The normalized element type
      * @return A default name for the element
      */
@@ -707,7 +707,7 @@ public class JMeterElementManager {
 
     /**
      * Gets the map of element types to class names.
-     * 
+     *
      * @return The element class map
      */
     public static Map<String, ElementClassInfo> getElementClassMap() {
@@ -716,7 +716,7 @@ public class JMeterElementManager {
 
     /**
      * Checks if the given element type is supported.
-     * 
+     *
      * @param elementType The element type to check
      * @return true if the element type is supported, false otherwise
      */
@@ -727,7 +727,7 @@ public class JMeterElementManager {
 
     /**
      * Gets a list of all supported element types.
-     * 
+     *
      * @return A string containing all supported element types
      */
     public static String getSupportedElementTypes() {
@@ -787,7 +787,7 @@ public class JMeterElementManager {
 
     /**
      * Gets the JMeter GUI class for an element type.
-     * 
+     *
      * @param elementType The element type
      * @return The JMeter GUI class for the element type, or null if not found
      */
@@ -810,7 +810,7 @@ public class JMeterElementManager {
     /**
      * Checks if a node is compatible with the given element type based on JMeter's
      * hierarchy rules.
-     * 
+     *
      * @param currentNode The current JMeter tree node
      * @param elementType The type of element to add
      * @return true if the node is compatible, false otherwise
@@ -824,7 +824,6 @@ public class JMeterElementManager {
 
         // Normalize element type for validation
         String normalizedType = normalizeElementType(elementType);
-        log.info("Normalized element type: {}", normalizedType);
 
         // Determine the category of the current node
         boolean isTestPlan = nodeType.equals("TestPlan") || nodeGuiClass.contains("TestPlanGui");
@@ -904,7 +903,7 @@ public class JMeterElementManager {
 
     /**
      * Gets a user-friendly description for a JMeter element type.
-     * 
+     *
      * @param elementType The element type (class name)
      * @return A user-friendly description of the element
      */
@@ -912,7 +911,7 @@ public class JMeterElementManager {
         if (elementType == null) {
             return "Unknown element type";
         }
-        
+
         // Map common element types to descriptions
         switch (elementType.toLowerCase()) {
             case "httpsamplerproxy":
@@ -992,7 +991,7 @@ public class JMeterElementManager {
 
     /**
      * Main method for testing the functionality.
-     * 
+     *
      * @param args Command line arguments
      */
     public static void main(String[] args) {

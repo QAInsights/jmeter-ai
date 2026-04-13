@@ -22,6 +22,77 @@ public class Models {
     private static final Logger log = LoggerFactory.getLogger(Models.class);
 
     /**
+     * Load all available models with provider prefixes for use in the model selector.
+     * Anthropic models are returned as-is; OpenAI models are prefixed with "openai:";
+     * Ollama models are prefixed with "ollama:".
+     * @param anthropicClient Anthropic client
+     * @param openAiClient OpenAI client
+     * @param ollamaService OllamaAiService
+     * @return List of prefixed model IDs
+     */
+    public static List<String> loadAllModels(AnthropicClient anthropicClient,
+        OpenAIClient openAiClient,
+        OllamaAiService ollamaService) {
+        List<String> allModels = new ArrayList<>();
+
+        // Get Anthropic models
+        try {
+            ModelListPage anthropicModels = getAnthropicModels(anthropicClient);
+            if (anthropicModels != null && anthropicModels.data() != null) {
+                for (ModelInfo model : anthropicModels.data()) {
+                    allModels.add(model.id());
+                    log.debug("Added Anthropic model: {}", model.id());
+                }
+                log.info("Added {} Anthropic models", anthropicModels.data().size());
+            }
+        } catch (Exception e) {
+            log.error("Error loading Anthropic models: {}", e.getMessage(), e);
+        }
+
+        // Add OpenAI models
+        try {
+            com.openai.models.ModelListPage openAiModels = getOpenAiModels(openAiClient);
+            if (openAiModels != null && openAiModels.data() != null) {
+                for (Model openAiModel : openAiModels.data()) {
+                    if (openAiModel.id().startsWith("gpt") &&
+                            !openAiModel.id().contains("audio") &&
+                            !openAiModel.id().contains("tts") &&
+                            !openAiModel.id().contains("whisper") &&
+                            !openAiModel.id().contains("davinci") &&
+                            !openAiModel.id().contains("search") &&
+                            !openAiModel.id().contains("transcribe") &&
+                            !openAiModel.id().contains("realtime") &&
+                            !openAiModel.id().contains("instruct")) {
+                        String modelId = "openai:" + openAiModel.id();
+                        allModels.add(modelId);
+                        log.debug("Added OpenAI model to selector: {}", openAiModel.id());
+                    }
+                }
+                log.info("Added OpenAI models to selector");
+            }
+        } catch (Exception e) {
+            log.error("Error adding OpenAI models: {}", e.getMessage(), e);
+        }
+
+        // Add Ollama models
+        try {
+            List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
+            if (ollamaModels != null) {
+                for (io.github.ollama4j.models.response.Model ollamaModel : ollamaModels) {
+                    String modelId = "ollama:" + ollamaModel.getName();
+                    allModels.add(modelId);
+                    log.debug("Added Ollama model to selector: {}", ollamaModel.getName());
+                }
+                log.info("Added {} Ollama models to selector", ollamaModels.size());
+            }
+        } catch (Exception e) {
+            log.error("Error adding Ollama models: {}", e.getMessage(), e);
+        }
+
+        return allModels;
+    }
+
+    /**
      * Get a combined list of model IDs from both Anthropic and OpenAI
      * @param anthropicClient Anthropic client
      * @param openAiClient OpenAI client
