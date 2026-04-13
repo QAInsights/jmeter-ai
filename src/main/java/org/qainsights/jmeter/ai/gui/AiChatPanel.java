@@ -26,6 +26,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -306,9 +307,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         messageScrollPane.setBorder(BorderFactory.createEmptyBorder());
         inputPanel.add(messageScrollPane, BorderLayout.CENTER);
 
-        sendButton = new JButton("Send");
-        sendButton.setFont(new Font(sendButton.getFont().getName(), Font.BOLD, 12));
-        sendButton.setFocusPainted(false);
+        sendButton = createStyledButton("Send", 12);
         sendButton.addActionListener(e -> sendMessage());
         inputPanel.add(sendButton, BorderLayout.EAST);
 
@@ -329,28 +328,64 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         headerPanel.setBackground(UIManager.getColor("Panel.background"));
 
         // Add a title to the left side of the header panel
-        JLabel titleLabel = new JLabel("Feather Wand - JMeter Agent v" + VersionUtils.getVersion());
+        JLabel titleLabel = new JLabel(Constants.APP_NAME + " v" + VersionUtils.getVersion());
         titleLabel.setFont(new Font(titleLabel.getFont().getName(), Font.BOLD, 14));
         headerPanel.add(titleLabel, BorderLayout.WEST);
 
-        // Create the "New Chat" button with a plus icon
-        JButton newChatButton = new JButton("+");
+        headerPanel.add(createDonateButtonPanel(), BorderLayout.CENTER);
+
+        JButton newChatButton = createStyledButton("+", 16);
         newChatButton.setToolTipText("Start a new conversation");
-        newChatButton.setFont(new Font(newChatButton.getFont().getName(), Font.BOLD, 16));
-        newChatButton.setFocusPainted(false);
         newChatButton.setMargin(new Insets(0, 8, 0, 8));
-        Color buttonBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
-        newChatButton.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(buttonBorderColor, 1, true),
-                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
-
-        // Add action listener to reset the conversation
         newChatButton.addActionListener(e -> startNewConversation());
-
-        // Add the button to the right side of the header panel
         headerPanel.add(newChatButton, BorderLayout.EAST);
 
         return headerPanel;
+    }
+
+    private void openDonateLink() {
+        try {
+            Desktop.getDesktop().browse(new URI(Constants.DONATE_LINK));
+        } catch (Exception e) {
+            log.error("Failed to open donate link", e);
+        }
+    }
+
+    /**
+     * Creates the donate button wrapped in a centred panel.
+     *
+     * @return a panel containing the styled donate button
+     */
+    private JPanel createDonateButtonPanel() {
+        JButton donateButton = createStyledButton("☕💰", 12);
+        donateButton.setToolTipText("Support this project as it takes time, tokens and resources to build and maintain");
+        donateButton.setMargin(new Insets(2, 10, 2, 10));
+        donateButton.setBackground(new Color(255, 149, 0));
+        donateButton.setForeground(Color.WHITE);
+        donateButton.setOpaque(true);
+        donateButton.addActionListener(e -> openDonateLink());
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        panel.setOpaque(false);
+        panel.add(donateButton);
+        return panel;
+    }
+
+    /**
+     * Creates a styled button with bold font and a rounded compound border.
+     *
+     * @param text     the button label
+     * @param fontSize the bold font size
+     * @return the configured JButton
+     */
+    private JButton createStyledButton(String text, int fontSize) {
+        JButton button = new JButton(text);
+        button.setFont(new Font(button.getFont().getName(), Font.BOLD, fontSize));
+        button.setFocusPainted(false);
+        Color borderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(borderColor, 1, true),
+                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
+        return button;
     }
 
     /**
