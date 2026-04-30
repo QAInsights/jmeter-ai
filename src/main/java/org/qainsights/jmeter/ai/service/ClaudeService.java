@@ -1,16 +1,24 @@
 package org.qainsights.jmeter.ai.service;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.RawMessageStreamEvent;
+import com.anthropic.models.messages.TextDelta;
+import com.anthropic.core.http.StreamResponse;
+import com.anthropic.models.messages.RawMessageStreamEvent;
+import com.anthropic.models.messages.TextDelta;
+import com.anthropic.core.http.StreamResponse;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.usage.AnthropicUsage;
+import java.util.function.Consumer;
 
 /**
  * ClaudeService class.
@@ -239,6 +247,101 @@ public class ClaudeService implements AiService {
      * @param text The text to estimate tokens for
      * @return Estimated token count
      */
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        log.info("Generating streaming response with specified model: {}", model);
+
+        String modelToUse = (model != null && !model.isEmpty()) ? model : currentModelId;
+        if (modelToUse == null || modelToUse.isEmpty()) {
+            modelToUse = "claude-3-sonnet-20240229";
+        }
+
+        if (temperature < 0 || temperature > 1) {
+            temperature = 0.7f;
+        }
+
+        boolean isFirstMessage = !systemPromptInitialized;
+        if (isFirstMessage) {
+            systemPromptInitialized = true;
+        }
+
+        List<String> limitedConversation = conversation;
+        if (conversation.size() > maxHistorySize) {
+            limitedConversation = conversation.subList(conversation.size() - maxHistorySize, conversation.size());
+        }
+
+        MessageCreateParams.Builder paramsBuilder = MessageCreateParams.builder()
+                .maxTokens(maxTokens)
+                .temperature(temperature)
+                .model(modelToUse);
+
+        if (isFirstMessage) {
+            paramsBuilder.system(systemPrompt);
+        }
+
+        for (int i = 0; i < limitedConversation.size(); i++) {
+            String msg = limitedConversation.get(i);
+            if (i % 2 == 0) {
+                paramsBuilder.addUserMessage(msg);
+            } else {
+                paramsBuilder.addAssistantMessage(msg);
+            }
+        }
+
+        MessageCreateParams params = paramsBuilder.build();
+
+        long estimatedPromptTokens = 0;
+        for (String msg : limitedConversation) {
+            estimatedPromptTokens += estimateTokens(msg);
+        }
+        if (isFirstMessage && systemPrompt != null && !systemPrompt.isEmpty()) {
+            estimatedPromptTokens += estimateTokens(systemPrompt);
+        }
+
+        final long finalPromptTokens = estimatedPromptTokens;
+        final String finalModel = modelToUse;
+
+        Thread streamThread = new Thread(() -> {
+            try (StreamResponse<RawMessageStreamEvent> stream = client.messages().createStreaming(params)) {
+                StringBuilder fullResponse = new StringBuilder();
+                stream.stream()
+                        .flatMap(event -> event.contentBlockDelta().stream())
+                        .flatMap(delta -> delta.delta().text().stream())
+                        .map(TextDelta::text)
+                        .forEach(text -> {
+                            fullResponse.append(text);
+                            javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
+                        });
+
+                long estimatedCompletionTokens = estimateTokens(fullResponse.toString());
+                try {
+                    AnthropicUsage.getInstance().recordUsage(
+                            null,
+                            finalModel,
+                            finalPromptTokens,
+                            estimatedCompletionTokens);
+                } catch (Exception e) {
+                    log.error("Failed to record token usage", e);
+                }
+
+                javax.swing.SwingUtilities.invokeLater(onComplete);
+            } catch (Exception e) {
+                log.error("Error in streaming response", e);
+                String errorMessage = extractUserFriendlyErrorMessage(e);
+                javax.swing.SwingUtilities.invokeLater(() -> onError.accept(new Exception(errorMessage, e)));
+            }
+        });
+
+        streamThread.setDaemon(true);
+        streamThread.start();
+
+        return () -> {
+            log.info("Cancelling Claude stream");
+            if (streamThread.isAlive()) {
+                streamThread.interrupt();
+            }
+        };
+    }
     private long estimateTokens(String text) {
         if (text == null || text.isEmpty()) {
             return 0;

@@ -5,6 +5,7 @@ import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
+import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,25 +81,48 @@ public class CommandDispatcher {
             return;
         }
 
-        log.info("Processing as regular AI request");
-        new SwingWorker<String, Void>() {
-            @Override
-            protected String doInBackground() throws Exception {
-                return cb.getAiResponse(message);
-            }
+        if (AiConfig.isStreamingEnabled()) {
+            log.info("Processing as streaming AI request");
+            cb.showStopButton();
 
-            @Override
-            protected void done() {
-                try {
-                    String response = get();
-                    cb.onWorkerSuccess(response);
+            StringBuilder fullResponse = new StringBuilder();
+
+            Runnable cancelHandle = cb.getAiStreamResponse(message,
+                token -> {
+                    fullResponse.append(token);
+                    cb.appendStreamToken(token);
+                },
+                () -> {
+                    String response = fullResponse.toString();
+                    cb.onStreamComplete(response);
                     cb.addToConversationHistory(response);
-                } catch (InterruptedException | ExecutionException e) {
-                    cb.onWorkerError("Error getting AI response", e,
-                            "Sorry, I encountered an error while processing your request. Please try again.");
+                },
+                e -> {
+                    cb.onStreamError("Error getting AI stream response", e,
+                        "Sorry, I encountered an error while processing your request. Please try again.");
                 }
-            }
-        }.execute();
+            );
+        } else {
+            log.info("Processing as regular AI request");
+            new SwingWorker<String, Void>() {
+                @Override
+                protected String doInBackground() throws Exception {
+                    return cb.getAiResponse(message);
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        String response = get();
+                        cb.onWorkerSuccess(response);
+                        cb.addToConversationHistory(response);
+                    } catch (InterruptedException | ExecutionException e) {
+                        cb.onWorkerError("Error getting AI response", e,
+                                "Sorry, I encountered an error while processing your request. Please try again.");
+                    }
+                }
+            }.execute();
+        }
     }
 
     private void handleThisCommand() {

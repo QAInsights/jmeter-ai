@@ -44,6 +44,8 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     private JTextPane chatArea;
     private JTextArea messageField;
     private JButton sendButton;
+    private JButton stopButton;
+    private Runnable currentCancelHandle;
     private JComboBox<String> modelSelector;
     private List<String> conversationHistory;
     private ClaudeService claudeService;
@@ -309,7 +311,24 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
 
         sendButton = createStyledButton("Send", 12);
         sendButton.addActionListener(e -> sendMessage());
-        inputPanel.add(sendButton, BorderLayout.EAST);
+
+        stopButton = createStyledButton("Stop", 12);
+        stopButton.setVisible(false);
+        stopButton.addActionListener(e -> {
+            if (currentCancelHandle != null) {
+                currentCancelHandle.run();
+                appendMessageToChat("\n[Stream cancelled]");
+                hideStopButton();
+                setInputEnabled(true);
+                removeLoadingIndicator();
+            }
+        });
+
+        JPanel buttonPanel = new JPanel(new BorderLayout());
+        buttonPanel.add(sendButton, BorderLayout.CENTER);
+        buttonPanel.add(stopButton, BorderLayout.EAST);
+
+        inputPanel.add(buttonPanel, BorderLayout.EAST);
 
         return inputPanel;
     }
@@ -579,6 +598,74 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         }
     }
 
+
+    @Override
+    public void showStopButton() {
+        SwingUtilities.invokeLater(() -> {
+            stopButton.setVisible(true);
+            sendButton.setEnabled(false);
+        });
+    }
+
+    @Override
+    public void hideStopButton() {
+        SwingUtilities.invokeLater(() -> {
+            stopButton.setVisible(false);
+            sendButton.setEnabled(true);
+            currentCancelHandle = null;
+        });
+    }
+
+    private boolean firstTokenReceived = false;
+
+    @Override
+    public void appendStreamToken(String token) {
+        SwingUtilities.invokeLater(() -> {
+            if (!firstTokenReceived) {
+                removeLoadingIndicator();
+                firstTokenReceived = true;
+            }
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(), token,
+                        getThemeColor("TextPane.foreground", Color.BLACK), false);
+
+                JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, chatArea);
+                if (scrollPane != null) {
+                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
+                    vertical.setValue(vertical.getMaximum());
+                }
+            } catch (BadLocationException e) {
+                log.error("Error appending stream token", e);
+            }
+        });
+    }
+
+    @Override
+    public void onStreamComplete(String fullResponse) {
+        SwingUtilities.invokeLater(() -> {
+            firstTokenReceived = false;
+            hideStopButton();
+            setInputEnabled(true);
+        });
+    }
+
+    @Override
+    public void onStreamError(String logMessage, Exception e, String userMessage) {
+        SwingUtilities.invokeLater(() -> {
+            firstTokenReceived = false;
+            hideStopButton();
+            onWorkerError(logMessage, e, userMessage);
+        });
+    }
+
+    @Override
+    public Runnable getAiStreamResponse(String message, java.util.function.Consumer<String> tokenConsumer, Runnable onComplete, java.util.function.Consumer<Exception> onError) {
+        firstTokenReceived = false;
+        Runnable cancelHandle = aiResponseRouter.generateStreamResponse((String) modelSelector.getSelectedItem(), new ArrayList<>(conversationHistory), tokenConsumer, onComplete, onError);
+        currentCancelHandle = cancelHandle;
+        return cancelHandle;
+    }
+
     @Override
     public void clearMessageField() {
         messageField.setText("");
@@ -586,31 +673,37 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
 
     @Override
     public void appendUserMessage(String message) {
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), message,
-                    getThemeColor("TextPane.foreground", Color.BLACK), false);
-        } catch (BadLocationException e) {
-            log.error("Error appending user message to chat", e);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(), message,
+                        getThemeColor("TextPane.foreground", Color.BLACK), false);
+            } catch (BadLocationException e) {
+                log.error("Error appending user message to chat", e);
+            }
+        });
     }
 
     @Override
     public void appendLoadingIndicator() {
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), "AI is thinking...",
-                    getThemeColor("Label.disabledForeground", Color.GRAY), false);
-        } catch (BadLocationException e) {
-            log.error("Error adding loading indicator", e);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(), "AI is thinking...",
+                        getThemeColor("Label.disabledForeground", Color.GRAY), false);
+            } catch (BadLocationException e) {
+                log.error("Error adding loading indicator", e);
+            }
+        });
     }
 
     @Override
     public void appendRedMessage(String message) {
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), message, Color.RED, false);
-        } catch (BadLocationException e) {
-            log.error("Error displaying message", e);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(), message, Color.RED, false);
+            } catch (BadLocationException e) {
+                log.error("Error displaying message", e);
+            }
+        });
     }
 
     @Override
@@ -715,12 +808,14 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      */
     @Override
     public void appendMessageToChat(String message) {
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), message,
-                    getThemeColor("TextPane.foreground", Color.BLACK), false);
-        } catch (BadLocationException ex) {
-            log.error("Error displaying message", ex);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(), message,
+                        getThemeColor("TextPane.foreground", Color.BLACK), false);
+            } catch (BadLocationException ex) {
+                log.error("Error displaying message", ex);
+            }
+        });
     }
 
     /**
@@ -732,12 +827,14 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     @Override
     public void appendErrorMessageToChat(String context, Exception e) {
         log.error(context, e);
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(),
-                    context + ": " + e.getMessage(), Color.RED, false);
-        } catch (BadLocationException ex) {
-            log.error("Error displaying error message", ex);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                        context + ": " + e.getMessage(), Color.RED, false);
+            } catch (BadLocationException ex) {
+                log.error("Error displaying error message", ex);
+            }
+        });
     }
 
     /**
@@ -755,13 +852,15 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      * Displays a message indicating that redo is not supported for wrap operations.
      */
     private void showWrapRedoNotSupported() {
-        try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(),
-                    "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
-                    Color.BLUE, false);
-        } catch (BadLocationException ex) {
-            log.error("Error displaying message", ex);
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                messageProcessor.appendMessage(chatArea.getStyledDocument(),
+                        "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
+                        Color.BLUE, false);
+            } catch (BadLocationException ex) {
+                log.error("Error displaying message", ex);
+            }
+        });
     }
 
     /**

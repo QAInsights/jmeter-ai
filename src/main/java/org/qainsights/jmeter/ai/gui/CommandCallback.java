@@ -27,6 +27,20 @@ public interface CommandCallback {
 
     void appendRedMessage(String message);
 
+    // --- Streaming UI control ---
+
+    void showStopButton();
+
+    void hideStopButton();
+
+    void appendStreamToken(String token);
+
+    void onStreamComplete(String fullResponse);
+
+    void onStreamError(String logMessage, Exception e, String userMessage);
+
+    Runnable getAiStreamResponse(String message, java.util.function.Consumer<String> tokenConsumer, Runnable onComplete, java.util.function.Consumer<Exception> onError);
+
     // --- Shared data ---
 
     String getSelectedModel();
