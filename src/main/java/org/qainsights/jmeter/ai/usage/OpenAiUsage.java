@@ -1,7 +1,7 @@
 package org.qainsights.jmeter.ai.usage;
 
-import com.openai.models.ChatCompletion;
-import com.openai.models.CompletionUsage;
+import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.completions.CompletionUsage;
 import com.openai.client.OpenAIClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

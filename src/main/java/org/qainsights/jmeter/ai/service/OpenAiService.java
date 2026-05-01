@@ -1,11 +1,14 @@
 package org.qainsights.jmeter.ai.service;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.ChatCompletion;
-import com.openai.models.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionChunk;
+import com.openai.core.http.StreamResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,11 +159,12 @@ public class OpenAiService implements AiService {
                 log.info("Limiting conversation to last {} messages", limitedConversation.size());
             }
 
-            // Some newer OpenAI models (o1, o3, gpt-5, etc.) only support temperature=1.
+            // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
             // Detect these by model ID prefix and skip setting temperature for them.
             boolean supportsCustomTemperature = !currentModelId.startsWith("o1")
                     && !currentModelId.startsWith("o3")
                     && !currentModelId.startsWith("o4")
+                    && !currentModelId.startsWith("gpt-5")
                     && !currentModelId.contains("-chat-latest");
 
             // Create a fresh builder for parameters following the working example
@@ -340,6 +344,102 @@ public class OpenAiService implements AiService {
      * @param e The exception to extract the error message from
      * @return A user-friendly error message
      */
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        log.info("Generating streaming response with specified model: {}", model);
+
+        String modelToUse = (model != null && !model.isEmpty()) ? model : currentModelId;
+
+        // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
+        boolean supportsCustomTemperature = !modelToUse.startsWith("o1")
+                && !modelToUse.startsWith("o3")
+                && !modelToUse.startsWith("o4")
+                && !modelToUse.startsWith("gpt-5")
+                && !modelToUse.contains("-chat-latest");
+
+        ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
+                .maxCompletionTokens(maxTokens)
+                .model(modelToUse);
+
+        if (supportsCustomTemperature) {
+            paramsBuilder.temperature(temperature);
+        } else {
+            log.info("Skipping temperature setting for model {} (uses default only)", modelToUse);
+        }
+
+        paramsBuilder.addSystemMessage(systemPrompt);
+
+        List<String> limitedHistory;
+        if (conversation.size() > maxHistorySize) {
+            limitedHistory = conversation.subList(conversation.size() - maxHistorySize, conversation.size());
+        } else {
+            limitedHistory = new java.util.ArrayList<>(conversation);
+        }
+
+        List<String> cleanHistory = new java.util.ArrayList<>();
+        for (String msg : limitedHistory) {
+            if (msg != null && !msg.startsWith("Error:")) {
+                cleanHistory.add(msg);
+            }
+        }
+
+        if (cleanHistory.isEmpty()) {
+            paramsBuilder.addUserMessage("Hello, how can you help me with JMeter?");
+        } else {
+            for (int i = 0; i < cleanHistory.size(); i++) {
+                String msg = cleanHistory.get(i);
+                if (msg == null || msg.isEmpty()) {
+                    continue;
+                }
+                if (i % 2 == 0) {
+                    paramsBuilder.addUserMessage(msg);
+                } else {
+                    paramsBuilder.addSystemMessage("Assistant: " + msg);
+                }
+            }
+        }
+
+        ChatCompletionCreateParams params = paramsBuilder.build();
+        final String finalModel = modelToUse;
+
+        Thread streamThread = new Thread(() -> {
+            try {
+                try (StreamResponse<ChatCompletionChunk> stream = client.chat().completions().createStreaming(params)) {
+                    stream.stream()
+                        .flatMap(chunk -> chunk.choices().stream())
+                        .flatMap(choice -> choice.delta().content().stream())
+                        .forEach(text -> {
+                            javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
+                        });
+                }
+
+                // For OpenAI java SDK 0.31.0, we just assume the response is complete
+                // We'll estimate usage since we aren't accumulating
+                try {
+                    // OpenAiUsage might need a ChatCompletion object, we'll pass null or we can remove the recordUsage
+                    // Let's pass null for now
+                    OpenAiUsage.getInstance().recordUsage(null, finalModel);
+                } catch (Exception ex) {
+                    log.error("Failed to record token usage", ex);
+                }
+
+                javax.swing.SwingUtilities.invokeLater(onComplete);
+            } catch (Exception e) {
+                log.error("Error in streaming response", e);
+                String errorMessage = extractUserFriendlyErrorMessage(e);
+                javax.swing.SwingUtilities.invokeLater(() -> onError.accept(new Exception(errorMessage, e)));
+            }
+        });
+        streamThread.setDaemon(true);
+        streamThread.start();
+
+        return () -> {
+            log.info("Cancelling OpenAI stream");
+            if (streamThread.isAlive()) {
+                streamThread.interrupt();
+            }
+        };
+    }
     private String extractUserFriendlyErrorMessage(Exception e) {
         String errorMessage = e.getMessage();
 

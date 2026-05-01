@@ -278,8 +278,10 @@ public class MessageProcessor {
      */
     public void appendMessage(StyledDocument doc, String message, Color color, boolean parseMarkdown) throws BadLocationException {
         // Create a style for the message
-        SimpleAttributeSet messageStyle = new SimpleAttributeSet();        
-        StyleConstants.setForeground(messageStyle, color);
+        SimpleAttributeSet messageStyle = new SimpleAttributeSet();
+        if (color != null) {
+            StyleConstants.setForeground(messageStyle, color);
+        }
         
         if (parseMarkdown) {
             // Process markdown formatting

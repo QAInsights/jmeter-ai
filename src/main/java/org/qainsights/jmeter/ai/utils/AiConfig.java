@@ -6,4 +6,8 @@ public class AiConfig {
     public static String getProperty(String key, String defaultValue) {
         return JMeterUtils.getPropDefault(key, defaultValue);
     }
+
+    public static boolean isStreamingEnabled() {
+        return Boolean.parseBoolean(getProperty("jmeter.ai.streaming.enabled", "true"));
+    }
 }

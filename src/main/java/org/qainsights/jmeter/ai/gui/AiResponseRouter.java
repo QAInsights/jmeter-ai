@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Routes AI generation requests to the appropriate service based on the
@@ -56,6 +57,36 @@ public class AiResponseRouter {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
             return claudeService.generateResponse(conversationHistory);
+        }
+    }
+
+    /**
+     * Generates a streaming AI response using the service corresponding to the selected model ID.
+     *
+     * @param selectedModel       the model ID from the selector
+     * @param conversationHistory the current conversation history
+     * @param tokenConsumer       callback for each token chunk
+     * @param onComplete          callback for stream completion
+     * @param onError             callback for stream error
+     * @return a cancel handle as a Runnable
+     */
+    public Runnable generateStreamResponse(String selectedModel, List<String> conversationHistory, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        if (selectedModel == null) {
+            log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
+            return claudeService.generateStreamResponse(conversationHistory, claudeService.getCurrentModel(), tokenConsumer, onComplete, onError);
+        }
+
+        log.info("Using model from dropdown for stream: {}", selectedModel);
+        if (selectedModel.startsWith("openai:")) {
+            String openAiModelId = selectedModel.substring(7);
+            return openAiService.generateStreamResponse(conversationHistory, openAiModelId, tokenConsumer, onComplete, onError);
+        } else if (selectedModel.startsWith("ollama:")) {
+            // Fallback for Ollama if streaming not implemented
+            String ollamaModelId = selectedModel.substring(7);
+            return ollamaService.generateStreamResponse(conversationHistory, ollamaModelId, tokenConsumer, onComplete, onError);
+        } else {
+            // Anthropic
+            return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
         }
     }
 

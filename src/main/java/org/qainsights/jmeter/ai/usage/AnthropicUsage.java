@@ -72,11 +72,6 @@ public class AnthropicUsage {
      * @param completionTokens The number of completion tokens (output)
      */
     public void recordUsage(Message message, String model, long promptTokens, long completionTokens) {
-        if (message == null) {
-            log.warn("Unable to record usage - message is null");
-            return;
-        }
-
         try {
             long totalTokens = promptTokens + completionTokens;
 
