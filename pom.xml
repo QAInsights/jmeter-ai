@@ -1,14 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xmlns="http://maven.apache.org/POM/4.0.0"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8" ?>
+<project
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="http://maven.apache.org/POM/4.0.0"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+>
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
     <version>2.0.5</version>
     <name>jmeter-agent</name>
-    <description>Feather Wand - JMeter Agent for performance engineers</description>
+    <description
+    >Feather Wand - JMeter Agent for performance engineers</description>
     <licenses>
         <license>
             <name>The Apache Software License, Version 2.0</name>
@@ -27,11 +30,17 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <jmeter.home>C:/Users/Navee/tools/apache-jmeter-5.6.3</jmeter.home>
+        <!-- Ensure all source files are read/written as UTF-8 on every platform,
+             including Windows where the default code page may be GBK/CP936. -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding
+        >UTF-8</project.reporting.outputEncoding>
     </properties>
     <repositories>
         <repository>
             <id>jetbrains-intellij-deps</id>
-            <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/</url>
+            <url
+            >https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/</url>
         </repository>
     </repositories>
     <dependencies>
@@ -181,7 +190,8 @@
                     </descriptorRefs>
                     <archive>
                         <manifestEntries>
-                            <Class-Path>../lib/ext/ApacheJMeter_core.jar</Class-Path>
+                            <Class-Path
+                            >../lib/ext/ApacheJMeter_core.jar</Class-Path>
                         </manifestEntries>
                     </archive>
                 </configuration>
@@ -206,7 +216,8 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <createDependencyReducedPom
+                            >false</createDependencyReducedPom>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -248,8 +259,10 @@
                         </goals>
                         <configuration>
                             <target>
-                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                      todir="${jmeter.home}/lib/ext"/>
+                                <copy
+                                    file="${project.build.directory}/${project.build.finalName}.jar"
+                                    todir="${jmeter.home}/lib/ext"
+                                />
                             </target>
                         </configuration>
                     </execution>
