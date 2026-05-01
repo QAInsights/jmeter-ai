@@ -4,6 +4,7 @@ import io.github.ollama4j.Ollama;
 import io.github.ollama4j.models.chat.OllamaChatMessageRole;
 import io.github.ollama4j.models.chat.OllamaChatRequest;
 import io.github.ollama4j.models.chat.OllamaChatResult;
+import io.github.ollama4j.models.chat.OllamaChatStreamObserver;
 import io.github.ollama4j.models.request.ThinkMode;
 import io.github.ollama4j.models.response.Model;
 import io.github.ollama4j.utils.OptionsBuilder;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 // Ollama Help https://ollama4j.github.io/ollama4j/intro
 public class OllamaAiService implements AiService {
@@ -202,6 +204,64 @@ public class OllamaAiService implements AiService {
             logger.error("Error generating response from Ollama", e);
             return "Error generating response: " + e.getMessage();
         }
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        if (model != null && !model.isEmpty()) {
+            this.model = model;
+        }
+
+        Thread streamThread = new Thread(() -> {
+            try {
+                OllamaChatRequest request = OllamaChatRequest.builder();
+                request = buildOllamaChatRequest(request);
+
+                if (systemPrompt != null && !systemPrompt.isEmpty()) {
+                    request.withMessage(OllamaChatMessageRole.SYSTEM, systemPrompt);
+                } else {
+                    request.withMessage(OllamaChatMessageRole.SYSTEM, Constants.DEFAULT_JMETER_SYSTEM_PROMPT);
+                }
+
+                List<String> limitedHistory = conversation.size() > maxHistorySize
+                        ? conversation.subList(conversation.size() - maxHistorySize, conversation.size())
+                        : new ArrayList<>(conversation);
+
+                for (int i = 0; i < limitedHistory.size(); i++) {
+                    String msg = limitedHistory.get(i);
+                    if (msg == null || msg.isEmpty()) continue;
+                    if (i % 2 == 0) {
+                        request.withMessage(OllamaChatMessageRole.USER, msg);
+                    } else {
+                        request.withMessage(OllamaChatMessageRole.ASSISTANT, msg);
+                    }
+                }
+
+                OllamaChatStreamObserver observer = new OllamaChatStreamObserver();
+                observer.setResponseStreamHandler(token -> {
+                    if (!Thread.currentThread().isInterrupted()) {
+                        tokenConsumer.accept(token);
+                    }
+                });
+
+                ollamaClient.chat(request, observer);
+
+                if (!Thread.currentThread().isInterrupted()) {
+                    onComplete.run();
+                }
+            } catch (Exception e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    logger.info("Ollama streaming cancelled");
+                } else {
+                    logger.error("Error generating streaming response from Ollama", e);
+                    onError.accept(e);
+                }
+            }
+        });
+
+        streamThread.setDaemon(true);
+        streamThread.start();
+        return streamThread::interrupt;
     }
 
     private OllamaChatRequest buildOllamaChatRequest(OllamaChatRequest request) {

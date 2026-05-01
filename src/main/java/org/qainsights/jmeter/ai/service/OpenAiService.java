@@ -5,9 +5,9 @@ import java.util.function.Consumer;
 
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.ChatCompletion;
-import com.openai.models.ChatCompletionCreateParams;
-import com.openai.models.ChatCompletionChunk;
+import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.core.http.StreamResponse;
 
 import org.slf4j.Logger;
@@ -159,11 +159,12 @@ public class OpenAiService implements AiService {
                 log.info("Limiting conversation to last {} messages", limitedConversation.size());
             }
 
-            // Some newer OpenAI models (o1, o3, gpt-5, etc.) only support temperature=1.
+            // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
             // Detect these by model ID prefix and skip setting temperature for them.
             boolean supportsCustomTemperature = !currentModelId.startsWith("o1")
                     && !currentModelId.startsWith("o3")
                     && !currentModelId.startsWith("o4")
+                    && !currentModelId.startsWith("gpt-5")
                     && !currentModelId.contains("-chat-latest");
 
             // Create a fresh builder for parameters following the working example
@@ -171,7 +172,7 @@ public class OpenAiService implements AiService {
                     .maxCompletionTokens(maxTokens)
                     .model(currentModelId);
 
-            if (true) {
+            if (supportsCustomTemperature) {
                 paramsBuilder.temperature(temperature);
             } else {
                 log.info("Skipping temperature setting for model {} (uses default only)", currentModelId);
@@ -349,12 +350,21 @@ public class OpenAiService implements AiService {
 
         String modelToUse = (model != null && !model.isEmpty()) ? model : currentModelId;
 
+        // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
+        boolean supportsCustomTemperature = !modelToUse.startsWith("o1")
+                && !modelToUse.startsWith("o3")
+                && !modelToUse.startsWith("o4")
+                && !modelToUse.startsWith("gpt-5")
+                && !modelToUse.contains("-chat-latest");
+
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
                 .model(modelToUse);
 
-        if (true) {
+        if (supportsCustomTemperature) {
             paramsBuilder.temperature(temperature);
+        } else {
+            log.info("Skipping temperature setting for model {} (uses default only)", modelToUse);
         }
 
         paramsBuilder.addSystemMessage(systemPrompt);
