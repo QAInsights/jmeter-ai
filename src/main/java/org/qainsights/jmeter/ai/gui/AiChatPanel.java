@@ -817,12 +817,17 @@ public class AiChatPanel
     }
 
     private boolean firstTokenReceived = false;
+    /** Document offset where streaming output begins; used to remove raw text and re-render with markdown on completion. */
+    private int streamStartPosition = -1;
 
     @Override
     public void appendStreamToken(String token) {
         SwingUtilities.invokeLater(() -> {
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
+                // Record where streaming output begins so onStreamComplete can
+                // strip the raw text and re-render it with full markdown processing.
+                streamStartPosition = chatArea.getStyledDocument().getLength();
                 firstTokenReceived = true;
             }
             try {
@@ -849,14 +854,50 @@ public class AiChatPanel
         SwingUtilities.invokeLater(() -> {
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
-                doc.insertString(
-                    doc.getLength(),
-                    "\n",
-                    new SimpleAttributeSet()
-                );
+
+                // Remove the raw streamed text (plain markdown inserted token-by-token)
+                // and replace it with fully-processed markdown so that code blocks
+                // get their styled panel with the Copy button.
+                if (
+                    streamStartPosition >= 0 &&
+                    streamStartPosition <= doc.getLength()
+                ) {
+                    int rawLength = doc.getLength() - streamStartPosition;
+                    if (rawLength > 0) {
+                        doc.remove(streamStartPosition, rawLength);
+                    }
+                    messageProcessor.appendMessage(
+                        doc,
+                        fullResponse,
+                        getThemeColor("TextPane.foreground", Color.BLACK),
+                        true
+                    );
+                } else {
+                    // Fallback: no position was recorded, just add a newline
+                    doc.insertString(
+                        doc.getLength(),
+                        "\n",
+                        new SimpleAttributeSet()
+                    );
+                }
+
+                // Scroll to bottom
+                JScrollPane scrollPane =
+                    (JScrollPane) SwingUtilities.getAncestorOfClass(
+                        JScrollPane.class,
+                        chatArea
+                    );
+                if (scrollPane != null) {
+                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
+                    vertical.setValue(vertical.getMaximum());
+                }
             } catch (BadLocationException e) {
-                log.error("Error appending newline after stream", e);
+                log.error(
+                    "Error re-rendering stream response with markdown",
+                    e
+                );
             }
+            streamStartPosition = -1;
             firstTokenReceived = false;
             hideStopButton();
             setInputEnabled(true);
@@ -870,6 +911,7 @@ public class AiChatPanel
         String userMessage
     ) {
         SwingUtilities.invokeLater(() -> {
+            streamStartPosition = -1;
             firstTokenReceived = false;
             hideStopButton();
             onWorkerError(logMessage, e, userMessage);
