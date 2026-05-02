@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.JComboBox;
 import java.awt.*;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -56,20 +57,61 @@ public class ClaudeCodePanel extends JPanel {
     private JMeterActionBridge actionBridge;
     private File claudeMdFile;
 
+
+
+    private JComboBox<AiCliAdapter> cliComboBox;
+    private List<AiCliAdapter> availableClis;
+    private AiCliAdapter selectedCli;
+
+    private List<AiCliAdapter> detectAvailableClis() {
+        List<AiCliAdapter> available = new ArrayList<>();
+
+        AiCliAdapter claude = new ClaudeCodeCliAdapter();
+        if (claude.detect()) available.add(claude);
+
+        AiCliAdapter codex = new OpenAiCodexCliAdapter();
+        if (codex.detect()) available.add(codex);
+
+        AiCliAdapter gemini = new GeminiCliAdapter();
+        if (gemini.detect()) available.add(gemini);
+
+        AiCliAdapter opencode = new OpenCodeCliAdapter();
+        if (opencode.detect()) available.add(opencode);
+
+        return available;
+    }
+
     public ClaudeCodePanel() {
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(600, 600));
         setMinimumSize(new Dimension(400, 300));
 
+        availableClis = detectAvailableClis();
+        if (!availableClis.isEmpty()) {
+            selectedCli = availableClis.get(0);
+        }
+
         // Header panel
         add(createHeaderPanel(), BorderLayout.NORTH);
 
-        // Terminal widget
-        terminalWidget = createTerminalWidget();
-        add(terminalWidget.getComponent(), BorderLayout.CENTER);
+        if (availableClis.isEmpty()) {
+            JLabel noCliLabel = new JLabel("No AI CLIs (Claude Code, OpenAI Codex CLI, Gemini CLI, OpenCode) were detected on your PATH.", SwingConstants.CENTER);
+            noCliLabel.setForeground(HEADER_FG_COLOR);
+            noCliLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+            add(noCliLabel, BorderLayout.CENTER);
 
-        // Start Claude Code in the terminal
-        startClaudeCode();
+            if (statusLabel != null) {
+                statusLabel.setText("● Not Found");
+                statusLabel.setForeground(STATUS_STOPPED);
+            }
+        } else {
+            // Terminal widget
+            terminalWidget = createTerminalWidget();
+            add(terminalWidget.getComponent(), BorderLayout.CENTER);
+
+            // Start Claude Code in the terminal
+            startClaudeCode();
+        }
     }
 
     /**
@@ -95,10 +137,27 @@ public class ClaudeCodePanel extends JPanel {
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftPanel.setOpaque(false);
 
-        JLabel titleLabel = new JLabel("Claude Code");
-        titleLabel.setFont(HEADER_FONT);
-        titleLabel.setForeground(HEADER_FG_COLOR);
-        leftPanel.add(titleLabel);
+        if (availableClis == null || availableClis.isEmpty()) {
+            JLabel titleLabel = new JLabel("AI CLI Terminal");
+            titleLabel.setFont(HEADER_FONT);
+            titleLabel.setForeground(HEADER_FG_COLOR);
+            leftPanel.add(titleLabel);
+        } else {
+            cliComboBox = new JComboBox<>(availableClis.toArray(new AiCliAdapter[0]));
+            if (selectedCli != null) {
+                cliComboBox.setSelectedItem(selectedCli);
+            }
+            cliComboBox.setFont(HEADER_FONT);
+            cliComboBox.setFocusable(false);
+            cliComboBox.addActionListener(e -> {
+                AiCliAdapter newSelected = (AiCliAdapter) cliComboBox.getSelectedItem();
+                if (newSelected != null && !newSelected.equals(selectedCli)) {
+                    selectedCli = newSelected;
+                    restartClaudeCode();
+                }
+            });
+            leftPanel.add(cliComboBox);
+        }
 
         statusLabel = new JLabel("\u25CF Starting...");
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
@@ -159,10 +218,10 @@ public class ClaudeCodePanel extends JPanel {
             @Override
             protected Void doInBackground() {
                 try {
-                    String claudeBinary = ClaudeCodeLocator.findClaudeCodeBinary();
+                    String claudeBinary = selectedCli != null ? selectedCli.getBinaryPath() : ClaudeCodeLocator.findClaudeCodeBinary();
                     if (claudeBinary != null && !claudeBinary.isEmpty()) {
 
-                        log.info("Starting Claude Code via PTY from: {}", claudeBinary);
+                        log.info("Starting CLI via PTY from: {}", claudeBinary);
 
                         // Get test plan file path from JMeter
                         testPlanFilePath = null;
