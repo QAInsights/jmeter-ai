@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.claudecode;
 
 import java.io.File;
+import java.util.List;
 
 public class ClaudeCodeCliAdapter extends BaseCliAdapter {
 
@@ -32,5 +33,15 @@ public class ClaudeCodeCliAdapter extends BaseCliAdapter {
             }
         }
         return false;
+    }
+
+    @Override
+    public List<String> buildCommand(String workingDirectory) {
+        List<String> command = super.buildCommand(workingDirectory);
+        if (workingDirectory != null) {
+            command.add("--add-dir");
+            command.add(workingDirectory);
+        }
+        return command;
     }
 }

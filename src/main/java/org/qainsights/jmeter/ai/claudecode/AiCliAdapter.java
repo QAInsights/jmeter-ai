@@ -20,4 +20,11 @@ public interface AiCliAdapter {
      * @return true if detected, false otherwise
      */
     boolean detect();
+
+    /**
+     * Builds the full command array to launch this CLI.
+     * @param workingDirectory the test plan directory (may be null)
+     * @return list of command tokens starting with the binary path
+     */
+    java.util.List<String> buildCommand(String workingDirectory);
 }

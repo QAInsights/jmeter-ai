@@ -22,6 +22,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -263,15 +264,10 @@ public class ClaudeCodePanel extends JPanel {
                             }
                         }
 
-                        // Build command with arguments
-                        List<String> command = new ArrayList<>();
-                        command.add(claudeBinary);
-
-                        // Add the test plan directory so Claude can access the .jmx file
-                        if (testPlanDir != null) {
-                            command.add("--add-dir");
-                            command.add(testPlanDir);
-                        }
+                        // Build command with arguments (each adapter provides its own flags)
+                        List<String> command = selectedCli != null
+                                ? selectedCli.buildCommand(testPlanDir)
+                                : new ArrayList<>(Arrays.asList(claudeBinary));
 
                         // Set up environment
                         Map<String, String> env = new HashMap<>(System.getenv());

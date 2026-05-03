@@ -104,7 +104,6 @@ public class ClaudeCodeLocator {
         if (userProfile != null) {
             paths.add(userProfile + "\\.npm-global\\claude.cmd");
             paths.add(userProfile + "\\AppData\\Roaming\\npm\\claude.cmd");
-            paths.add(userProfile + "\\.local\\bin\\claude.exe");
         }
         // Common nvm-windows paths
         String nvmHome = System.getenv("NVM_HOME");
