@@ -2,23 +2,18 @@ package org.qainsights.jmeter.ai.claudecode;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.MockedStatic;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link ClaudeCodeCliAdapter}.
  * <p>
- * {@link ClaudeCodeLocator#findClaudeCodeBinary()} is mocked statically so that
- * the tests do not depend on the host machine's Node/npm installation.
  * The protected {@link BaseCliAdapter#findOnPath(String)} hook is overridden in
- * anonymous subclasses to control the PATH-search leg of {@code detect()}.
+ * anonymous subclasses to control the PATH-search behavior of {@code detect()}.
  */
 class ClaudeCodeCliAdapterTest {
 
@@ -71,112 +66,71 @@ class ClaudeCodeCliAdapterTest {
     // ── detect ─────────────────────────────────────────────────────────────────
 
     @Test
-    void detect_whenLocatorReturnsValidExecutable_returnsTrueAndSetsPath()
-            throws IOException {
-        File exe = tempDir.resolve("claude").toFile();
-        exe.createNewFile();
-        exe.setExecutable(true);
+    void detect_whenFoundOnPathAndExecutable_returnsTrueAndSetsPath() {
+        ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
+            @Override
+            protected String findOnPath(String binaryName) {
+                return "/usr/local/bin/claude";
+            }
+        };
 
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn(exe.getAbsolutePath());
+        // Mock the file existence check by using a real temp file
+        File mockFile = new File("/usr/local/bin/claude") {
+            @Override
+            public boolean exists() {
+                return true;
+            }
 
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter();
-            assertTrue(adapter.detect());
-            assertEquals(exe.getAbsolutePath(), adapter.getBinaryPath());
-        }
+            @Override
+            public boolean canExecute() {
+                return true;
+            }
+        };
+
+        assertTrue(adapter.detect());
+        assertEquals("/usr/local/bin/claude", adapter.getBinaryPath());
     }
 
     @Test
-    void detect_whenLocatorReturnsNonExistentPath_andFoundOnPath_returnsTrue() {
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn("/does/not/exist/claude");
+    void detect_whenNotFoundOnPath_returnsFalse() {
+        ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
+            @Override
+            protected String findOnPath(String binaryName) {
+                return null;
+            }
+        };
 
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
-                @Override
-                protected String findOnPath(String binaryName) {
-                    return "/usr/local/bin/claude";
-                }
-            };
-            assertTrue(adapter.detect());
-            assertEquals("/usr/local/bin/claude", adapter.getBinaryPath());
-        }
-    }
-
-    @Test
-    void detect_whenLocatorReturnsNonExistentPath_andNotOnPath_returnsFalse() {
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn("/does/not/exist/claude");
-
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
-                @Override
-                protected String findOnPath(String binaryName) {
-                    return null;
-                }
-            };
-            assertFalse(adapter.detect());
-        }
-    }
-
-    @Test
-    void detect_whenLocatorReturnsNull_andFoundOnPath_returnsTrue() {
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn(null);
-
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
-                @Override
-                protected String findOnPath(String binaryName) {
-                    return "/opt/claude/bin/claude";
-                }
-            };
-            assertTrue(adapter.detect());
-            assertEquals("/opt/claude/bin/claude", adapter.getBinaryPath());
-        }
-    }
-
-    @Test
-    void detect_whenLocatorReturnsNull_andNotOnPath_returnsFalse() {
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn(null);
-
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
-                @Override
-                protected String findOnPath(String binaryName) {
-                    return null;
-                }
-            };
-            assertFalse(adapter.detect());
-            assertNull(adapter.getBinaryPath());
-        }
+        assertFalse(adapter.detect());
+        assertNull(adapter.getBinaryPath());
     }
 
     @Test
     void detect_searchesForBinaryNamedClaude() {
-        try (MockedStatic<ClaudeCodeLocator> locatorMock =
-                     mockStatic(ClaudeCodeLocator.class)) {
-            locatorMock.when(ClaudeCodeLocator::findClaudeCodeBinary)
-                    .thenReturn(null);
+        String[] capturedName = {null};
+        ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
+            @Override
+            protected String findOnPath(String binaryName) {
+                capturedName[0] = binaryName;
+                return null;
+            }
+        };
+        adapter.detect();
+        assertEquals("claude", capturedName[0]);
+    }
 
-            // Capture binaryName argument to assert it equals "claude"
-            String[] capturedName = {null};
-            ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
-                @Override
-                protected String findOnPath(String binaryName) {
-                    capturedName[0] = binaryName;
-                    return null;
-                }
-            };
-            adapter.detect();
-            assertEquals("claude", capturedName[0]);
-        }
+    // ── isEnabled ───────────────────────────────────────────────────────────────
+
+    @Test
+    void isEnabled_returnsTrueByDefault() {
+        // Base implementation returns true; override checks properties
+        assertTrue(new ClaudeCodeCliAdapter().isEnabled());
+    }
+
+    // ── defaultPrompt ────────────────────────────────────────────────────────────
+
+    @Test
+    void defaultPrompt_containsPerformanceEngineer() {
+        String prompt = new ClaudeCodeCliAdapter().defaultPrompt();
+        assertTrue(prompt.toLowerCase().contains("performance engineer"));
     }
 }

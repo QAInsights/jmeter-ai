@@ -31,9 +31,6 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 if (isWindows) {
-                    // 'where' may return multiple lines (e.g. extensionless shim + .cmd wrapper).
-                    // WinPTY cannot launch extensionless Node scripts (Error 193 = BAD_EXE_FORMAT).
-                    // Collect all candidates and prefer .cmd/.exe over extensionless entries.
                     java.util.List<String> candidates = new java.util.ArrayList<>();
                     String line;
                     while ((line = reader.readLine()) != null) {
@@ -74,6 +71,17 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
     @Override
     public String toString() {
         return getName();
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+
+    @Override
+    public String defaultPrompt() {
+        return "You are a performance engineer and testing expert in JMeter. " +
+                "Help the user to optimize the JMeter test plan, scripting, and performance related issues.";
     }
 
 }

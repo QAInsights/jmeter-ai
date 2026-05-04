@@ -16,16 +16,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-import javax.swing.JComboBox;
+import javax.swing.Timer;
 import java.awt.*;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A JPanel that embeds a full terminal emulator (JediTerm) running Claude Code.
@@ -59,28 +56,9 @@ public class ClaudeCodePanel extends JPanel {
     private File claudeMdFile;
 
 
-
     private JComboBox<AiCliAdapter> cliComboBox;
     private List<AiCliAdapter> availableClis;
     private AiCliAdapter selectedCli;
-
-    private List<AiCliAdapter> detectAvailableClis() {
-        List<AiCliAdapter> available = new ArrayList<>();
-
-        AiCliAdapter claude = new ClaudeCodeCliAdapter();
-        if (claude.detect()) available.add(claude);
-
-        AiCliAdapter codex = new OpenAiCodexCliAdapter();
-        if (codex.detect()) available.add(codex);
-
-        AiCliAdapter gemini = new GeminiCliAdapter();
-        if (gemini.detect()) available.add(gemini);
-
-        AiCliAdapter opencode = new OpenCodeCliAdapter();
-        if (opencode.detect()) available.add(opencode);
-
-        return available;
-    }
 
     public ClaudeCodePanel() {
         setLayout(new BorderLayout());
@@ -113,6 +91,28 @@ public class ClaudeCodePanel extends JPanel {
             // Start Claude Code in the terminal
             startClaudeCode();
         }
+    }
+
+    private List<AiCliAdapter> detectAvailableClis() {
+        List<AiCliAdapter> available = new ArrayList<>();
+
+        AiCliAdapter claude = new ClaudeCodeCliAdapter();
+        if (claude.isEnabled() && claude.detect())
+            available.add(claude);
+
+        AiCliAdapter codex = new OpenAiCodexCliAdapter();
+        if (codex.isEnabled() && codex.detect())
+            available.add(codex);
+
+        AiCliAdapter gemini = new GeminiCliAdapter();
+        if (gemini.isEnabled() && gemini.detect())
+            available.add(gemini);
+
+        AiCliAdapter opencode = new OpenCodeCliAdapter();
+        if (opencode.isEnabled() && opencode.detect())
+            available.add(opencode);
+
+        return available;
     }
 
     /**
@@ -219,7 +219,7 @@ public class ClaudeCodePanel extends JPanel {
             @Override
             protected Void doInBackground() {
                 try {
-                    String claudeBinary = selectedCli != null ? selectedCli.getBinaryPath() : ClaudeCodeLocator.findClaudeCodeBinary();
+                    String claudeBinary = selectedCli != null ? selectedCli.getBinaryPath() : null;
                     if (claudeBinary != null && !claudeBinary.isEmpty()) {
 
                         log.info("Starting CLI via PTY from: {}", claudeBinary);
@@ -611,8 +611,8 @@ public class ClaudeCodePanel extends JPanel {
      * Restores an expanded path by matching node names from root to leaf.
      */
     private void restoreExpandedPath(javax.swing.JTree jTree,
-            JMeterTreeModel treeModel,
-            List<String> nodeNames) {
+                                     JMeterTreeModel treeModel,
+                                     List<String> nodeNames) {
         JMeterTreeNode current = (JMeterTreeNode) treeModel.getRoot();
         List<Object> pathComponents = new ArrayList<>();
         pathComponents.add(current);
@@ -644,8 +644,8 @@ public class ClaudeCodePanel extends JPanel {
      * Restores the selected node by name.
      */
     private void restoreSelection(javax.swing.JTree jTree,
-            JMeterTreeModel treeModel,
-            String nodeName) {
+                                  JMeterTreeModel treeModel,
+                                  String nodeName) {
         JMeterTreeNode root = (JMeterTreeNode) treeModel.getRoot();
         JMeterTreeNode target = findNodeByName(root, nodeName);
         if (target != null) {
