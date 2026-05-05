@@ -4,6 +4,7 @@ import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jorphan.gui.JMeterUIDefaults;
+import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
@@ -15,6 +16,9 @@ import org.qainsights.jmeter.ai.utils.VersionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.SimpleAttributeSet;
@@ -28,6 +32,7 @@ import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.net.URI;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -599,6 +604,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
                     JScrollBar vertical = scrollPane.getVerticalScrollBar();
                     vertical.setValue(vertical.getMaximum());
                 }
+                playResponseChime();
             });
         });
     }
@@ -661,6 +667,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     @Override
     public void onStreamComplete(String fullResponse) {
         SwingUtilities.invokeLater(() -> {
+            playResponseChime();
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
                 doc.insertString(doc.getLength(), "\n", new SimpleAttributeSet());
@@ -895,6 +902,7 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void onWorkerSuccess(String response) {
         removeLoadingIndicator();
         processAiResponse(response);
+        playResponseChime();
         messageField.setEnabled(true);
         sendButton.setEnabled(true);
         messageField.requestFocusInWindow();
@@ -929,6 +937,29 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      * @param fallback The fallback color if the key is not found
      * @return The theme color or the fallback
      */
+
+    private static final URL CHIME_RESOURCE = AiChatPanel.class.getResource(
+            "/org/qainsights/jmeter/ai/sound/jmeter-chime.wav");
+
+    private void playResponseChime() {
+        if (!AiConfig.isResponseChimeEnabled()) {
+            return;
+        }
+        try {
+            if (CHIME_RESOURCE != null) {
+                AudioInputStream audioIn = AudioSystem.getAudioInputStream(CHIME_RESOURCE);
+                Clip clip = AudioSystem.getClip();
+                clip.open(audioIn);
+                clip.start();
+            } else {
+                log.debug("Chime WAV not found, falling back to system beep");
+                Toolkit.getDefaultToolkit().beep();
+            }
+        } catch (Exception e) {
+            log.debug("Could not play response chime", e);
+        }
+    }
+
     private static Color getThemeColor(String key, Color fallback) {
         Color color = UIManager.getColor(key);
         return color != null ? color : fallback;

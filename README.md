@@ -20,6 +20,7 @@ JMeter test plan development, optimization, and troubleshooting.
 - **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI, and
   Ollama)
 - **New!** **Stop button**: Cancel an ongoing AI response at any time with the Stop button
+- **New!** **Response chime**: Audio notification when AI responses complete (configurable)
 - Get suggestions for JMeter elements based on your needs
 - Ask questions about JMeter functionality and best practices
 - Command intellisense with auto-completion for special commands in the chat input box
@@ -67,6 +68,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | Property                      | Description                                                         | Default Value |
 |-------------------------------|---------------------------------------------------------------------|---------------|
 | `jmeter.ai.streaming.enabled` | Enable real-time streaming of AI responses (token-by-token display) | `true`        |
+| `jmeter.ai.response.chime`    | Play an audio chime when AI responses complete                     | `false`       |
 
 > When streaming is enabled (default), AI responses appear progressively in the chat as they are generated. You can
 > cancel the response at any time using the **Stop** button that appears next to the Send button. This feature is
@@ -317,6 +319,34 @@ When disabled, AI responses will appear all at once after the entire response ha
   complete
 - **Early feedback**: If the response isn't what you expected, you can stop it early without waiting for it to finish
 - **Improved UX**: Provides a more interactive and responsive chat experience
+
+## 🔔 Response Chime
+
+Feather Wand can play an audio chime when AI responses complete, giving you an audible cue so you can work in other
+windows and know exactly when the AI has finished responding.
+
+### How It Works
+
+1. When an AI response (streaming or non-streaming) completes, a WAV chime sound plays.
+2. The chime plays after the full response is displayed in the chat area.
+3. If the sound resource cannot be loaded, it falls back to the system beep.
+
+### Configuration
+
+The response chime is **disabled by default**. To enable it, add the following to your properties file:
+
+```properties
+jmeter.ai.response.chime=true
+```
+
+| Property                   | Description                                  | Default Value |
+|----------------------------|----------------------------------------------|---------------|
+| `jmeter.ai.response.chime` | Play an audio chime when AI responses finish | `false`       |
+
+### Sound File
+
+The chime uses the WAV file bundled at `src/main/resources/org/qainsights/jmeter/ai/sound/jmeter-chime.wav`.
+An MP3 fallback is also included at the same location.
 
 ## 💻 Multi-AI CLI Terminal
 

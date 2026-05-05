@@ -10,4 +10,8 @@ public class AiConfig {
     public static boolean isStreamingEnabled() {
         return Boolean.parseBoolean(getProperty("jmeter.ai.streaming.enabled", "true"));
     }
+
+    public static boolean isResponseChimeEnabled() {
+        return Boolean.parseBoolean(getProperty("jmeter.ai.response.chime", "false"));
+    }
 }
