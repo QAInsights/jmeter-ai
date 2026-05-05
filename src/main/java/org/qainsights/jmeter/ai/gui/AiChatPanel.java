@@ -1,5 +1,24 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputMethodEvent;
+import java.awt.event.InputMethodListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.net.URI;
+import java.text.AttributedCharacterIterator;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -43,8 +62,14 @@ import java.util.Objects;
  * reusability
  * by delegating responsibilities to specialized component classes.
  */
-public class AiChatPanel extends JPanel implements PropertyChangeListener, CommandCallback {
-    private static final Logger log = LoggerFactory.getLogger(AiChatPanel.class);
+public class AiChatPanel
+    extends JPanel
+    implements PropertyChangeListener, CommandCallback
+{
+
+    private static final Logger log = LoggerFactory.getLogger(
+        AiChatPanel.class
+    );
 
     // UI components (kept for backward compatibility)
     private JTextPane chatArea;
@@ -75,10 +100,17 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     private enum LastCommandType {
         NONE,
         LINT,
-        WRAP
+        WRAP,
     }
 
     private LastCommandType lastCommandType = LastCommandType.NONE;
+
+    /**
+     * Tracks whether the system IME (Input Method Editor) is currently composing
+     * a character sequence. Used to avoid intercepting ENTER key presses that
+     * are meant to confirm an IME candidate (e.g. Chinese Pinyin on Windows).
+     */
+    private volatile boolean imeComposing = false;
 
     /**
      * Constructs a new AiChatPanel.
@@ -91,7 +123,11 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
 
         messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
-        aiResponseRouter = new AiResponseRouter(claudeService, openAiService, ollamaService);
+        aiResponseRouter = new AiResponseRouter(
+            claudeService,
+            openAiService,
+            ollamaService
+        );
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
 
@@ -111,9 +147,17 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         setMinimumSize(new Dimension(350, 400));
         setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
 
-        // Compute shared font once - used by both chat area and message field
+        // Compute shared font once - used by both chat area and message field.
+        // Use deriveFont() instead of new Font(family, ...) so that the JVM's
+        // composite-font (CJK fallback) chain is preserved. Creating a brand-new
+        // Font object from a physical family name (e.g. "Segoe UI") produces a
+        // non-composite font that cannot render Chinese / Japanese / Korean glyphs
+        // and instead shows empty boxes on Windows.
         Font defaultFont = UIManager.getFont("TextField.font");
-        Font largerFont = new Font(defaultFont.getFamily(), defaultFont.getStyle(), defaultFont.getSize() + 2);
+        if (defaultFont == null) {
+            defaultFont = new Font(Font.DIALOG, Font.PLAIN, 12);
+        }
+        Font largerFont = defaultFont.deriveFont(defaultFont.getSize2D() + 2f);
 
         initModelSelector();
         add(createChatPanel(largerFont), BorderLayout.CENTER);
@@ -130,13 +174,26 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     private void initModelSelector() {
         modelSelector = new JComboBox<>();
         modelSelector.addItem(null); // Add empty item while loading
-        modelSelector.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
-                                                          boolean cellHasFocus) {
-                return super.getListCellRendererComponent(list, Objects.requireNonNullElse(value, "Loading models..."), index, isSelected, cellHasFocus);
+        modelSelector.setRenderer(
+            new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+                ) {
+                    return super.getListCellRendererComponent(
+                        list,
+                        Objects.requireNonNullElse(value, "Loading models..."),
+                        index,
+                        isSelected,
+                        cellHasFocus
+                    );
+                }
             }
-        });
+        );
         loadModelsInBackground();
         modelSelector.addActionListener(e -> {
             String selectedModel = (String) modelSelector.getSelectedItem();
@@ -157,19 +214,31 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      */
     private JPanel createChatPanel(Font font) {
         JPanel chatPanel = new JPanel(new BorderLayout());
-        Color borderColor = getThemeColor("Component.borderColor", UIManager.getColor("Separator.foreground"));
-        chatPanel.setBorder(BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor));
+        Color borderColor = getThemeColor(
+            "Component.borderColor",
+            UIManager.getColor("Separator.foreground")
+        );
+        chatPanel.setBorder(
+            BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)
+        );
         chatPanel.add(createHeaderPanel(), BorderLayout.NORTH);
 
         chatArea = new JTextPane();
         chatArea.setEditable(false);
         chatArea.setFont(font);
         baseChatFontSize = font.getSize2D();
-        chatArea.setBackground(getThemeColor("TextPane.background", Color.WHITE));
-        chatArea.setForeground(getThemeColor("TextPane.foreground", Color.BLACK));
+        chatArea.setBackground(
+            getThemeColor("TextPane.background", Color.WHITE)
+        );
+        chatArea.setForeground(
+            getThemeColor("TextPane.foreground", Color.BLACK)
+        );
         Style defaultStyle = chatArea.getStyledDocument().getStyle("default");
         if (defaultStyle != null) {
-            StyleConstants.setForeground(defaultStyle, getThemeColor("TextPane.foreground", Color.BLACK));
+            StyleConstants.setForeground(
+                defaultStyle,
+                getThemeColor("TextPane.foreground", Color.BLACK)
+            );
         }
 
         StyledDocument doc = chatArea.getStyledDocument();
@@ -189,60 +258,80 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      * Registers undo and redo keyboard shortcuts on the chat area.
      */
     private void registerUndoRedoKeyBindings() {
-        InputMap inputMap = chatArea.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        InputMap inputMap = chatArea.getInputMap(
+            JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
         ActionMap actionMap = chatArea.getActionMap();
 
         inputMap.put(Constants.UNDO_KEY_STROKE, "undoAction");
-        actionMap.put("undoAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                switch (lastCommandType) {
-                    case WRAP:
-                        undoLastWrap();
-                        break;
-                    case LINT:
-                        undoLastRename();
-                        break;
-                    default:
-                        GuiPackage guiPackage = GuiPackage.getInstance();
-                        if (guiPackage != null) {
-                            JMeterTreeNode currentNode = guiPackage.getTreeListener().getCurrentNode();
-                            if (currentNode != null && currentNode.getTestElement() instanceof TransactionController) {
-                                undoLastWrap();
-                            } else {
-                                undoLastRename();
+        actionMap.put(
+            "undoAction",
+            new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    switch (lastCommandType) {
+                        case WRAP:
+                            undoLastWrap();
+                            break;
+                        case LINT:
+                            undoLastRename();
+                            break;
+                        default:
+                            GuiPackage guiPackage = GuiPackage.getInstance();
+                            if (guiPackage != null) {
+                                JMeterTreeNode currentNode = guiPackage
+                                    .getTreeListener()
+                                    .getCurrentNode();
+                                if (
+                                    currentNode != null &&
+                                    currentNode.getTestElement() instanceof
+                                        TransactionController
+                                ) {
+                                    undoLastWrap();
+                                } else {
+                                    undoLastRename();
+                                }
                             }
-                        }
-                        break;
+                            break;
+                    }
                 }
             }
-        });
+        );
 
         inputMap.put(Constants.REDO_KEY_STROKE, "redoAction");
-        actionMap.put("redoAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                switch (lastCommandType) {
-                    case WRAP:
-                        showWrapRedoNotSupported();
-                        break;
-                    case LINT:
-                        redoLastUndo();
-                        break;
-                    default:
-                        GuiPackage guiPackage = GuiPackage.getInstance();
-                        if (guiPackage != null) {
-                            JMeterTreeNode currentNode = guiPackage.getTreeListener().getCurrentNode();
-                            if (currentNode != null && currentNode.getTestElement() instanceof TransactionController) {
-                                showWrapRedoNotSupported();
-                            } else {
-                                redoLastUndo();
+        actionMap.put(
+            "redoAction",
+            new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    switch (lastCommandType) {
+                        case WRAP:
+                            showWrapRedoNotSupported();
+                            break;
+                        case LINT:
+                            redoLastUndo();
+                            break;
+                        default:
+                            GuiPackage guiPackage = GuiPackage.getInstance();
+                            if (guiPackage != null) {
+                                JMeterTreeNode currentNode = guiPackage
+                                    .getTreeListener()
+                                    .getCurrentNode();
+                                if (
+                                    currentNode != null &&
+                                    currentNode.getTestElement() instanceof
+                                        TransactionController
+                                ) {
+                                    showWrapRedoNotSupported();
+                                } else {
+                                    redoLastUndo();
+                                }
                             }
-                        }
-                        break;
+                            break;
+                    }
                 }
             }
-        });
+        );
     }
 
     /**
@@ -274,7 +363,9 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      */
     private JPanel createNavigationPanel() {
         navigationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
-        navigationPanel.setBorder(BorderFactory.createTitledBorder("Element Suggestions"));
+        navigationPanel.setBorder(
+            BorderFactory.createTitledBorder("Element Suggestions")
+        );
         navigationPanel.add(treeNavigationButtons.getUpButton());
         navigationPanel.add(treeNavigationButtons.getDownButton());
 
@@ -302,20 +393,71 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         messageField.setWrapStyleWord(true);
         messageField.setFont(font);
         baseMessageFontSize = font.getSize2D();
-        Color inputBorderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
-        messageField.setBorder(BorderFactory.createCompoundBorder(
+        Color inputBorderColor = getThemeColor(
+            "Component.borderColor",
+            Color.LIGHT_GRAY
+        );
+        messageField.setBorder(
+            BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(inputBorderColor),
-                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)
+            )
+        );
         new InputBoxIntellisense(messageField);
-        messageField.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER && !e.isShiftDown()) {
-                    e.consume();
-                    sendMessage();
+
+        // -----------------------------------------------------------------------
+        // IME (Input Method Editor) awareness – fixes Chinese / Japanese / Korean
+        // input on Windows 11.
+        //
+        // When the user types with an IME (e.g. Pinyin for Simplified Chinese)
+        // the keyPressed ENTER event fires twice:
+        //   1. While the candidate popup is open  → should confirm the character
+        //   2. After the character is committed    → should send the message
+        //
+        // Without tracking composition state, the first ENTER is swallowed by
+        // the KeyAdapter below and sendMessage() is called prematurely, breaking
+        // Chinese input entirely.
+        // -----------------------------------------------------------------------
+        messageField.addInputMethodListener(
+            new InputMethodListener() {
+                @Override
+                public void inputMethodTextChanged(InputMethodEvent event) {
+                    AttributedCharacterIterator text = event.getText();
+                    if (text != null) {
+                        int composingChars =
+                            (text.getEndIndex() - text.getBeginIndex()) -
+                            event.getCommittedCharacterCount();
+                        imeComposing = composingChars > 0;
+                    } else {
+                        imeComposing = false;
+                    }
+                }
+
+                @Override
+                public void caretPositionChanged(InputMethodEvent event) {
+                    // no-op – only composition changes matter
                 }
             }
-        });
+        );
+
+        messageField.addKeyListener(
+            new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    // Only send on ENTER when:
+                    //  - Shift is NOT held (plain Enter, not Shift+Enter newline)
+                    //  - IME is NOT composing (avoid swallowing IME confirm key)
+                    if (
+                        e.getKeyCode() == KeyEvent.VK_ENTER &&
+                        !e.isShiftDown() &&
+                        !imeComposing
+                    ) {
+                        e.consume();
+                        sendMessage();
+                    }
+                }
+            }
+        );
 
         JScrollPane messageScrollPane = new JScrollPane(messageField);
         messageScrollPane.setBorder(BorderFactory.createEmptyBorder());
@@ -353,16 +495,28 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.X_AXIS));
-        Color headerBorderColor = getThemeColor("Separator.foreground", Color.LIGHT_GRAY);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
+        Color headerBorderColor = getThemeColor(
+            "Separator.foreground",
+            Color.LIGHT_GRAY
+        );
+        headerPanel.setBorder(
+            BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 1, 0, headerBorderColor),
-                BorderFactory.createEmptyBorder(10, 12, 10, 12)));
+                BorderFactory.createEmptyBorder(10, 12, 10, 12)
+            )
+        );
         headerPanel.setBackground(UIManager.getColor("Panel.background"));
 
-        JLabel titleLabel = new JLabel(Constants.APP_NAME + " v" + VersionUtils.getVersion());
-        titleLabel.setFont(new Font(titleLabel.getFont().getName(), Font.BOLD, 14));
+        JLabel titleLabel = new JLabel(
+            Constants.APP_NAME + " v" + VersionUtils.getVersion()
+        );
+        titleLabel.setFont(
+            new Font(titleLabel.getFont().getName(), Font.BOLD, 14)
+        );
         titleLabel.setAlignmentY(Component.CENTER_ALIGNMENT);
-        titleLabel.setMinimumSize(new Dimension(0, titleLabel.getPreferredSize().height));
+        titleLabel.setMinimumSize(
+            new Dimension(0, titleLabel.getPreferredSize().height)
+        );
         headerPanel.add(titleLabel);
 
         headerPanel.add(Box.createHorizontalGlue());
@@ -398,13 +552,18 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      */
     private JPanel createDonateButtonPanel() {
         JButton donateButton = createStyledButton("☕ Donate ♥", 13);
-        donateButton.setToolTipText("Support this project as it takes time, tokens and resources to build and maintain");
+        donateButton.setToolTipText(
+            "Support this project as it takes time, tokens and resources to build and maintain"
+        );
         donateButton.setBackground(new Color(255, 149, 0));
         donateButton.setForeground(Color.BLACK);
         donateButton.setOpaque(true);
-        donateButton.setBorder(BorderFactory.createCompoundBorder(
+        donateButton.setBorder(
+            BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(210, 105, 0), 2, true),
-                BorderFactory.createEmptyBorder(5, 16, 5, 16)));
+                BorderFactory.createEmptyBorder(5, 16, 5, 16)
+            )
+        );
         donateButton.addActionListener(e -> openDonateLink());
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         panel.setOpaque(false);
@@ -421,12 +580,20 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      */
     private JButton createStyledButton(String text, int fontSize) {
         JButton button = new JButton(text);
-        button.setFont(new Font(button.getFont().getName(), Font.BOLD, fontSize));
+        button.setFont(
+            new Font(button.getFont().getName(), Font.BOLD, fontSize)
+        );
         button.setFocusPainted(false);
-        Color borderColor = getThemeColor("Component.borderColor", Color.LIGHT_GRAY);
-        button.setBorder(BorderFactory.createCompoundBorder(
+        Color borderColor = getThemeColor(
+            "Component.borderColor",
+            Color.LIGHT_GRAY
+        );
+        button.setBorder(
+            BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(borderColor, 1, true),
-                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
+                BorderFactory.createEmptyBorder(2, 8, 2, 8)
+            )
+        );
         return button;
     }
 
@@ -437,7 +604,11 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() {
-                return Models.loadAllModels(claudeService.getClient(), openAiService.getClient(), ollamaService);
+                return Models.loadAllModels(
+                    claudeService.getClient(),
+                    openAiService.getClient(),
+                    ollamaService
+                );
             }
 
             @Override
@@ -466,15 +637,20 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
                     } else if (modelSelector.getItemCount() > 0) {
                         // If default model not found, select the first one
                         modelSelector.setSelectedIndex(0);
-                        String selectedModel = (String) modelSelector.getSelectedItem();
+                        String selectedModel =
+                            (String) modelSelector.getSelectedItem();
                         claudeService.setModel(selectedModel);
-                        log.info("Default model not found, selected first available: {}", selectedModel);
+                        log.info(
+                            "Default model not found, selected first available: {}",
+                            selectedModel
+                        );
                     }
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
                 }
             }
-        }.execute();
+        }
+            .execute();
     }
 
     /**
@@ -486,7 +662,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         String welcomeMessage = Constants.WELCOME_MESSAGE;
 
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), welcomeMessage, getThemeColor("TextPane.foreground", Color.BLACK), true);
+            messageProcessor.appendMessage(
+                chatArea.getStyledDocument(),
+                welcomeMessage,
+                getThemeColor("TextPane.foreground", Color.BLACK),
+                true
+            );
         } catch (BadLocationException e) {
             log.error("Error displaying welcome message", e);
         }
@@ -564,8 +745,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void processAiResponse(String response) {
         if (response == null || response.isEmpty()) {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(),
-                        "No response from AI. Please try again.", Color.RED, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    "No response from AI. Please try again.",
+                    Color.RED,
+                    false
+                );
             } catch (BadLocationException e) {
                 log.error("Error displaying error message", e);
             }
@@ -573,12 +758,20 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
             return;
         }
 
-        log.info("Processing AI response: {}", response.substring(0, Math.min(100, response.length())));
+        log.info(
+            "Processing AI response: {}",
+            response.substring(0, Math.min(100, response.length()))
+        );
 
         // Add the AI response to the chat
         log.info("Appending AI response to chat");
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), response, getThemeColor("TextPane.foreground", Color.BLACK), true);
+            messageProcessor.appendMessage(
+                chatArea.getStyledDocument(),
+                response,
+                getThemeColor("TextPane.foreground", Color.BLACK),
+                true
+            );
         } catch (BadLocationException e) {
             log.error("Error appending AI response to chat", e);
         }
@@ -595,11 +788,18 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
             navigationPanel.repaint();
 
             // Log the number of components in the navigation panel
-            log.info("Navigation panel now has {} components", navigationPanel.getComponentCount());
+            log.info(
+                "Navigation panel now has {} components",
+                navigationPanel.getComponentCount()
+            );
 
             // Scroll to the bottom of the chat area to show the latest message
             SwingUtilities.invokeLater(() -> {
-                JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, chatArea);
+                JScrollPane scrollPane =
+                    (JScrollPane) SwingUtilities.getAncestorOfClass(
+                        JScrollPane.class,
+                        chatArea
+                    );
                 if (scrollPane != null) {
                     JScrollBar vertical = scrollPane.getVerticalScrollBar();
                     vertical.setValue(vertical.getMaximum());
@@ -622,7 +822,6 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         }
     }
 
-
     @Override
     public void showStopButton() {
         SwingUtilities.invokeLater(() -> {
@@ -641,19 +840,28 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     }
 
     private boolean firstTokenReceived = false;
+    /** Document offset where streaming output begins; used to remove raw text and re-render with markdown on completion. */
+    private int streamStartPosition = -1;
 
     @Override
     public void appendStreamToken(String token) {
         SwingUtilities.invokeLater(() -> {
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
+                // Record where streaming output begins so onStreamComplete can
+                // strip the raw text and re-render it with full markdown processing.
+                streamStartPosition = chatArea.getStyledDocument().getLength();
                 firstTokenReceived = true;
             }
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
                 doc.insertString(doc.getLength(), token, null);
 
-                JScrollPane scrollPane = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, chatArea);
+                JScrollPane scrollPane =
+                    (JScrollPane) SwingUtilities.getAncestorOfClass(
+                        JScrollPane.class,
+                        chatArea
+                    );
                 if (scrollPane != null) {
                     JScrollBar vertical = scrollPane.getVerticalScrollBar();
                     vertical.setValue(vertical.getMaximum());
@@ -670,10 +878,50 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
             playResponseChime();
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
-                doc.insertString(doc.getLength(), "\n", new SimpleAttributeSet());
+
+                // Remove the raw streamed text (plain markdown inserted token-by-token)
+                // and replace it with fully-processed markdown so that code blocks
+                // get their styled panel with the Copy button.
+                if (
+                    streamStartPosition >= 0 &&
+                    streamStartPosition <= doc.getLength()
+                ) {
+                    int rawLength = doc.getLength() - streamStartPosition;
+                    if (rawLength > 0) {
+                        doc.remove(streamStartPosition, rawLength);
+                    }
+                    messageProcessor.appendMessage(
+                        doc,
+                        fullResponse,
+                        getThemeColor("TextPane.foreground", Color.BLACK),
+                        true
+                    );
+                } else {
+                    // Fallback: no position was recorded, just add a newline
+                    doc.insertString(
+                        doc.getLength(),
+                        "\n",
+                        new SimpleAttributeSet()
+                    );
+                }
+
+                // Scroll to bottom
+                JScrollPane scrollPane =
+                    (JScrollPane) SwingUtilities.getAncestorOfClass(
+                        JScrollPane.class,
+                        chatArea
+                    );
+                if (scrollPane != null) {
+                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
+                    vertical.setValue(vertical.getMaximum());
+                }
             } catch (BadLocationException e) {
-                log.error("Error appending newline after stream", e);
+                log.error(
+                    "Error re-rendering stream response with markdown",
+                    e
+                );
             }
+            streamStartPosition = -1;
             firstTokenReceived = false;
             hideStopButton();
             setInputEnabled(true);
@@ -681,8 +929,13 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     }
 
     @Override
-    public void onStreamError(String logMessage, Exception e, String userMessage) {
+    public void onStreamError(
+        String logMessage,
+        Exception e,
+        String userMessage
+    ) {
         SwingUtilities.invokeLater(() -> {
+            streamStartPosition = -1;
             firstTokenReceived = false;
             hideStopButton();
             onWorkerError(logMessage, e, userMessage);
@@ -690,9 +943,20 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     }
 
     @Override
-    public Runnable getAiStreamResponse(String message, java.util.function.Consumer<String> tokenConsumer, Runnable onComplete, java.util.function.Consumer<Exception> onError) {
+    public Runnable getAiStreamResponse(
+        String message,
+        java.util.function.Consumer<String> tokenConsumer,
+        Runnable onComplete,
+        java.util.function.Consumer<Exception> onError
+    ) {
         firstTokenReceived = false;
-        Runnable cancelHandle = aiResponseRouter.generateStreamResponse((String) modelSelector.getSelectedItem(), new ArrayList<>(conversationHistory), tokenConsumer, onComplete, onError);
+        Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
+            (String) modelSelector.getSelectedItem(),
+            new ArrayList<>(conversationHistory),
+            tokenConsumer,
+            onComplete,
+            onError
+        );
         currentCancelHandle = cancelHandle;
         return cancelHandle;
     }
@@ -706,7 +970,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void appendUserMessage(String message) {
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(), message, null, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    message,
+                    null,
+                    false
+                );
             } catch (BadLocationException e) {
                 log.error("Error appending user message to chat", e);
             }
@@ -717,8 +986,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void appendLoadingIndicator() {
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(), "AI is thinking...",
-                        getThemeColor("Label.disabledForeground", Color.GRAY), false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    "AI is thinking...",
+                    getThemeColor("Label.disabledForeground", Color.GRAY),
+                    false
+                );
             } catch (BadLocationException e) {
                 log.error("Error adding loading indicator", e);
             }
@@ -729,7 +1002,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void appendRedMessage(String message) {
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(), message, Color.RED, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    message,
+                    Color.RED,
+                    false
+                );
             } catch (BadLocationException e) {
                 log.error("Error displaying message", e);
             }
@@ -775,7 +1053,10 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     @Override
     public String getAiResponse(String message) {
         log.info("Getting AI response for message: {}", message);
-        return aiResponseRouter.getAiResponse((String) modelSelector.getSelectedItem(), new ArrayList<>(conversationHistory));
+        return aiResponseRouter.getAiResponse(
+            (String) modelSelector.getSelectedItem(),
+            new ArrayList<>(conversationHistory)
+        );
     }
 
     private void undoLastRename() {
@@ -840,7 +1121,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     public void appendMessageToChat(String message) {
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(), message, null, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    message,
+                    null,
+                    false
+                );
             } catch (BadLocationException ex) {
                 log.error("Error displaying message", ex);
             }
@@ -858,8 +1144,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
         log.error(context, e);
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(),
-                        context + ": " + e.getMessage(), Color.RED, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    context + ": " + e.getMessage(),
+                    Color.RED,
+                    false
+                );
             } catch (BadLocationException ex) {
                 log.error("Error displaying error message", ex);
             }
@@ -883,9 +1173,12 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
     private void showWrapRedoNotSupported() {
         SwingUtilities.invokeLater(() -> {
             try {
-                messageProcessor.appendMessage(chatArea.getStyledDocument(),
-                        "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
-                        Color.BLUE, false);
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
+                    Color.BLUE,
+                    false
+                );
             } catch (BadLocationException ex) {
                 log.error("Error displaying message", ex);
             }
@@ -917,11 +1210,20 @@ public class AiChatPanel extends JPanel implements PropertyChangeListener, Comma
      * @param userMessage the human-readable message to display in the chat
      */
     @Override
-    public void onWorkerError(String logMessage, Exception e, String userMessage) {
+    public void onWorkerError(
+        String logMessage,
+        Exception e,
+        String userMessage
+    ) {
         log.error(logMessage, e);
         removeLoadingIndicator();
         try {
-            messageProcessor.appendMessage(chatArea.getStyledDocument(), userMessage, Color.RED, false);
+            messageProcessor.appendMessage(
+                chatArea.getStyledDocument(),
+                userMessage,
+                Color.RED,
+                false
+            );
         } catch (BadLocationException ex) {
             log.error("Error displaying error message", ex);
         }

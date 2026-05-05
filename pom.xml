@@ -30,6 +30,11 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <jmeter.home>C:/Users/Navee/tools/apache-jmeter-5.6.3</jmeter.home>
+        <!-- Ensure all source files are read/written as UTF-8 on every platform,
+             including Windows where the default code page may be GBK/CP936. -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding
+        >UTF-8</project.reporting.outputEncoding>
     </properties>
     <repositories>
         <repository>
