@@ -125,7 +125,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 #### AI CLI Terminal Configuration
 
-The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, and **OpenCode**. The plugin
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **GitHub Copilot CLI**, and **OpenCode**. The plugin
 automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
 **Prerequisites:**
@@ -135,6 +135,7 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)  |
 | **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
 | **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
+| **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/installing-the-github-copilot-cli-extension-in-your-terminal) |
 | **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
 
 | Property                                | Description                                                                                | Default Value              |
@@ -142,6 +143,9 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | `jmeter.ai.terminal.claudecode.enabled` | Enable the embedded AI CLI Terminal feature (applies to all supported CLIs)                | true                       |
 | `jmeter.ai.terminal.claudecode.path`    | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`)            | Empty (auto-detect)        |
 | `jmeter.ai.terminal.claudecode.prompt`  | Custom system prompt passed to the CLI (not recommended to change)                         | See sample properties file |
+| `jmeter.ai.terminal.copilot.enabled`    | Enable GitHub Copilot CLI in the AI CLI Terminal                                           | false                      |
+| `jmeter.ai.terminal.copilot.path`       | Full path to the `copilot` executable                                                       | Empty (auto-detect)        |
+| `jmeter.ai.terminal.copilot.prompt`     | Custom system prompt for GitHub Copilot CLI                                                 | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 

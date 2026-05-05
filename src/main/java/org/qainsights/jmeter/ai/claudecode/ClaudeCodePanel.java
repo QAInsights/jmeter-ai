@@ -74,7 +74,7 @@ public class ClaudeCodePanel extends JPanel {
         add(createHeaderPanel(), BorderLayout.NORTH);
 
         if (availableClis.isEmpty()) {
-            JLabel noCliLabel = new JLabel("No AI CLIs (Claude Code, OpenAI Codex CLI, Gemini CLI, OpenCode) were detected on your PATH.", SwingConstants.CENTER);
+            JLabel noCliLabel = new JLabel("No AI CLIs (Claude Code, OpenAI Codex CLI, Gemini CLI, OpenCode, GitHub Copilot CLI) were detected on your PATH.", SwingConstants.CENTER);
             noCliLabel.setForeground(HEADER_FG_COLOR);
             noCliLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
             add(noCliLabel, BorderLayout.CENTER);
@@ -111,6 +111,10 @@ public class ClaudeCodePanel extends JPanel {
         AiCliAdapter opencode = new OpenCodeCliAdapter();
         if (opencode.isEnabled() && opencode.detect())
             available.add(opencode);
+
+        AiCliAdapter copilot = new CopilotCliAdapter();
+        if (copilot.isEnabled() && copilot.detect())
+            available.add(copilot);
 
         return available;
     }
