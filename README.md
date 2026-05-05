@@ -14,11 +14,13 @@ JMeter test plan development, optimization, and troubleshooting.
 ## ✨ Features
 
 - Chat with AI directly within JMeter using Claude, OpenAI, or Ollama models
-- **New!** Embedded **Claude Code** terminal: run Claude Code interactively within JMeter, with full awareness of your
+- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, or **OpenCode**
+  interactively within JMeter — switch between available CLIs via a dropdown selector, with full awareness of your
   current test plan structure.
 - **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI, and
   Ollama)
 - **New!** **Stop button**: Cancel an ongoing AI response at any time with the Stop button
+- **New!** **Response chime**: Audio notification when AI responses complete (configurable)
 - Get suggestions for JMeter elements based on your needs
 - Ask questions about JMeter functionality and best practices
 - Command intellisense with auto-completion for special commands in the chat input box
@@ -66,6 +68,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | Property                      | Description                                                         | Default Value |
 |-------------------------------|---------------------------------------------------------------------|---------------|
 | `jmeter.ai.streaming.enabled` | Enable real-time streaming of AI responses (token-by-token display) | `true`        |
+| `jmeter.ai.response.chime`    | Play an audio chime when AI responses complete                     | `false`       |
 
 > When streaming is enabled (default), AI responses appear progressively in the chat as they are generated. You can
 > cancel the response at any time using the **Stop** button that appears next to the Send button. This feature is
@@ -120,15 +123,25 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | `jmeter.ai.refactoring.enabled` | Enable code refactoring for JSR223 script editor                     | true          |
 | `jmeter.ai.service.type`        | The AI service to use for code refactoring ("openai" or "anthropic") | "openai"      |
 
-#### Claude Code Terminal Configuration
+#### AI CLI Terminal Configuration
 
-Install Claude Code from https://code.claude.com/docs/en/quickstart
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, and **OpenCode**. The plugin
+automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
-| Property                                | Description                                                                      | Default Value              |
-|-----------------------------------------|----------------------------------------------------------------------------------|----------------------------|
-| `jmeter.ai.terminal.claudecode.enabled` | Enable the embedded Claude Code terminal feature                                 | true                       |
-| `jmeter.ai.terminal.claudecode.path`    | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`) | Empty (auto-detect)        |
-| `jmeter.ai.terminal.claudecode.prompt`  | Custom system prompt passed to the Claude Code CLI (not recommended to change)   | See sample properties file |
+**Prerequisites:**
+
+| CLI                    | Binary Name | Installation Guide                                                        |
+|------------------------|-------------|---------------------------------------------------------------------------|
+| **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)  |
+| **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
+| **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
+| **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
+
+| Property                                | Description                                                                                | Default Value              |
+|-----------------------------------------|--------------------------------------------------------------------------------------------|----------------------------|
+| `jmeter.ai.terminal.claudecode.enabled` | Enable the embedded AI CLI Terminal feature (applies to all supported CLIs)                | true                       |
+| `jmeter.ai.terminal.claudecode.path`    | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`)            | Empty (auto-detect)        |
+| `jmeter.ai.terminal.claudecode.prompt`  | Custom system prompt passed to the CLI (not recommended to change)                         | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 
@@ -307,28 +320,86 @@ When disabled, AI responses will appear all at once after the entire response ha
 - **Early feedback**: If the response isn't what you expected, you can stop it early without waiting for it to finish
 - **Improved UX**: Provides a more interactive and responsive chat experience
 
-## 💻 Claude Code Integration
+## 🔔 Response Chime
 
-Feather Wand features a fully embedded interactive **Claude Code Terminal** using JediTerm. This allows you to interact
-directly with the [Claude Code CLI](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) from
-within JMeter, bringing agentic AI workflows into your performance testing environment.
+Feather Wand can play an audio chime when AI responses complete, giving you an audible cue so you can work in other
+windows and know exactly when the AI has finished responding.
 
-1. **Prerequisites**: You must have `claude-code` installed globally via npm (
-   `npm install -g @anthropic-ai/claude-code`).
-2. **Setup**: Make sure to set `jmeter.ai.terminal.claudecode.enabled=true` in your properties file. You can also
-   specify the executable path (`jmeter.ai.terminal.claudecode.path`) if it's not detected automatically in your system'
-   s PATH.
-3. **Capabilities**:
+### How It Works
+
+1. When an AI response (streaming or non-streaming) completes, a WAV chime sound plays.
+2. The chime plays after the full response is displayed in the chat area.
+3. If the sound resource cannot be loaded, it falls back to the system beep.
+
+### Configuration
+
+The response chime is **disabled by default**. To enable it, add the following to your properties file:
+
+```properties
+jmeter.ai.response.chime=true
+```
+
+| Property                   | Description                                  | Default Value |
+|----------------------------|----------------------------------------------|---------------|
+| `jmeter.ai.response.chime` | Play an audio chime when AI responses finish | `false`       |
+
+### Sound File
+
+The chime uses the WAV file bundled at `src/main/resources/org/qainsights/jmeter/ai/sound/jmeter-chime.wav`.
+An MP3 fallback is also included at the same location.
+
+## 💻 Multi-AI CLI Terminal
+
+Feather Wand features a fully embedded interactive **AI CLI Terminal** using JediTerm. This allows you to interact
+with multiple AI command-line tools directly from within JMeter, bringing agentic AI workflows into your performance
+testing environment.
+
+### Supported CLIs
+
+| CLI                    | Description                                                                  |
+|------------------------|------------------------------------------------------------------------------|
+| **Claude Code**        | Anthropic's agentic coding tool for natural language test plan interaction   |
+| **OpenAI Codex CLI**   | OpenAI's lightweight coding agent for terminal-based development workflows   |
+| **Google Gemini CLI**  | Google's AI-powered CLI for cloud development and analysis                   |
+| **OpenCode**           | An open-source AI coding agent designed for terminal-based workflows         |
+
+The plugin **automatically detects** which of these CLIs are available on your system's `PATH` and presents them
+in a dropdown selector within the terminal header. Simply select the CLI you'd like to use and start interacting.
+
+### How It Works
+
+1. **Prerequisites**: Install one or more supported CLIs on your system (see the [Configuration](#-configuration)
+   section for installation links).
+2. **Auto-detection**: Feather Wand scans your system's `PATH` on startup and populates the dropdown with
+detected CLIs.
+3. **CLI Selector**: Use the dropdown in the terminal header to switch between available CLIs at any time.
+   Switching will automatically restart the terminal with the newly selected CLI.
+4. **Setup**: Make sure to set `jmeter.ai.terminal.claudecode.enabled=true` in your properties file.
+5. **Capabilities**:
     - Start, reload, and interact with the JMeter test plan using natural language.
-    - Claude Code automatically receives the full structure/context of the currently open `.jmx` file.
-    - You can ask Claude Code to run the test plan, parse JTL files, and more.
-4. **Disabling**: If you do not want to use this feature, set `jmeter.ai.terminal.claudecode.enabled=false`. The
+    - The selected CLI automatically receives the full structure/context of the currently open `.jmx` file via a
+      `CLAUDE.md` file written to the test plan directory.
+    - You can ask the CLI to run the test plan, parse JTL files, and more.
+    - Use the **Reload** button to refresh the test plan from disk.
+    - Use the **Ctx** button to send the test plan context again.
+6. **Disabling**: If you do not want to use this feature, set `jmeter.ai.terminal.claudecode.enabled=false`. The
    terminal widget will gracefully start a dummy process with an instructional message.
 
-**⚠️ Disclaimer**: Claude Code is a powerful AI agent that can execute commands, modify files, and consume API tokens
-significantly faster than standard chat interfaces. Users are strongly encouraged to thoroughly review
-the [official Claude Code documentation](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) to
-fully understand its capabilities, security considerations, and potential costs before enabling and using this feature.
+### Extensibility (Adapter Pattern)
+
+The AI CLI Terminal is built using a clean **Adapter Pattern**:
+
+- `AiCliAdapter` interface — defines the contract for any AI CLI integration
+- `BaseCliAdapter` abstract class — provides common logic (e.g., PATH detection via `findOnPath`)
+- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `GeminiCliAdapter`, `OpenCodeCliAdapter`
+
+To add a new CLI, simply implement the `AiCliAdapter` interface (or extend `BaseCliAdapter`) and register it in
+the `detectAvailableClis()` method.
+
+**⚠️ Disclaimer**: AI CLIs are powerful tools that can execute commands, modify files, and consume API tokens
+significantly faster than standard chat interfaces. Users are strongly encouraged to thoroughly review the official
+documentation of each CLI to fully understand their capabilities, security considerations, and potential costs
+before enabling and using this feature.
 
 ## 🗝️ API Configuration
 

@@ -137,3 +137,5 @@ PPA.md
 ollama-src
 *.txt
 settings.local.json
+.vscode/provenance/audit-trail.json
+.gitattributes

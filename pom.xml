@@ -8,7 +8,7 @@
 
     <groupId>org.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
-    <version>2.0.5</version>
+    <version>2.0.6</version>
     <name>jmeter-agent</name>
     <description
     >Feather Wand - JMeter Agent for performance engineers</description>
