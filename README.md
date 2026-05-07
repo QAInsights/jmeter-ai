@@ -135,7 +135,7 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)  |
 | **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
 | **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
-| **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/installing-the-github-copilot-cli-extension-in-your-terminal) |
+| **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) |
 | **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
 
 | Property                                | Description                                                                                | Default Value              |
