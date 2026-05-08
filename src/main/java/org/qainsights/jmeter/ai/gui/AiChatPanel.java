@@ -28,6 +28,7 @@ import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -82,6 +83,7 @@ public class AiChatPanel
     private ClaudeService claudeService;
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;
+    private DeepseekAiService deepseekService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
 
@@ -120,13 +122,15 @@ public class AiChatPanel
         claudeService = new ClaudeService();
         openAiService = new OpenAiService();
         ollamaService = new OllamaAiService();
+        deepseekService = new DeepseekAiService();
 
         messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(
             claudeService,
             openAiService,
-            ollamaService
+            ollamaService,
+            deepseekService
         );
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
@@ -202,6 +206,7 @@ public class AiChatPanel
                 claudeService.setModel(selectedModel);
                 openAiService.setModel(selectedModel);
                 ollamaService.setModel(selectedModel);
+                deepseekService.setModel(selectedModel);
             }
         });
     }
@@ -607,7 +612,8 @@ public class AiChatPanel
                 return Models.loadAllModels(
                     claudeService.getClient(),
                     openAiService.getClient(),
-                    ollamaService
+                    ollamaService,
+                    deepseekService
                 );
             }
 

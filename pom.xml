@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <project
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns="http://maven.apache.org/POM/4.0.0"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="http://maven.apache.org/POM/4.0.0"
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
 >
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
-    <version>2.0.6</version>
+    <version>2.0.7</version>
     <name>jmeter-agent</name>
     <description
-    >Feather Wand - JMeter Agent for performance engineers</description>
+    >Feather Wand - JMeter Agent for performance engineers
+    </description>
     <licenses>
         <license>
             <name>The Apache Software License, Version 2.0</name>
@@ -34,13 +35,15 @@
              including Windows where the default code page may be GBK/CP936. -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding
-        >UTF-8</project.reporting.outputEncoding>
+        >UTF-8
+        </project.reporting.outputEncoding>
     </properties>
     <repositories>
         <repository>
             <id>jetbrains-intellij-deps</id>
             <url
-            >https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/</url>
+            >https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/
+            </url>
         </repository>
     </repositories>
     <dependencies>
@@ -53,6 +56,11 @@
             <groupId>com.openai</groupId>
             <artifactId>openai-java</artifactId>
             <version>4.33.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.20.1</version>
         </dependency>
         <dependency>
             <groupId>io.github.ollama4j</groupId>
@@ -191,7 +199,8 @@
                     <archive>
                         <manifestEntries>
                             <Class-Path
-                            >../lib/ext/ApacheJMeter_core.jar</Class-Path>
+                            >../lib/ext/ApacheJMeter_core.jar
+                            </Class-Path>
                         </manifestEntries>
                     </archive>
                 </configuration>
@@ -217,7 +226,8 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom
-                            >false</createDependencyReducedPom>
+                            >false
+                            </createDependencyReducedPom>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -260,8 +270,8 @@
                         <configuration>
                             <target>
                                 <copy
-                                    file="${project.build.directory}/${project.build.finalName}.jar"
-                                    todir="${jmeter.home}/lib/ext"
+                                        file="${project.build.directory}/${project.build.finalName}.jar"
+                                        todir="${jmeter.home}/lib/ext"
                                 />
                             </target>
                         </configuration>

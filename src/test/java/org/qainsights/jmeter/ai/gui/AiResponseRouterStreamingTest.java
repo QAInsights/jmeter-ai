@@ -12,6 +12,7 @@ import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,6 +40,9 @@ class AiResponseRouterStreamingTest {
 
     @Mock
     private OllamaAiService ollamaService;
+
+    @Mock
+    private DeepseekAiService deepseekService;
 
     private AiResponseRouter router;
 
@@ -74,6 +78,14 @@ class AiResponseRouterStreamingTest {
             if (key.equals("ollama.thinking.level")) return "MEDIUM";
             if (key.equals("ollama.request.timeout.seconds")) return "120";
             if (key.equals("ollama.system.prompt")) return "prompt";
+            if (key.equals("deepseek.api.key")) return "test-key";
+            if (key.equals("deepseek.api.format")) return "openai";
+            if (key.equals("deepseek.base.url")) return "https://api.deepseek.com";
+            if (key.equals("deepseek.default.model")) return "deepseek-chat";
+            if (key.equals("deepseek.temperature")) return "0.7";
+            if (key.equals("deepseek.max.tokens")) return "4096";
+            if (key.equals("deepseek.max.history.size")) return "10";
+            if (key.equals("deepseek.system.prompt")) return "prompt";
             return defaultValue;
         });
     }
@@ -88,7 +100,7 @@ class AiResponseRouterStreamingTest {
     @BeforeEach
     void setUp() {
         // Use constructor injection manually with mock services
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService);
+        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService);
     }
 
     // ==================== Routing to Anthropic ====================

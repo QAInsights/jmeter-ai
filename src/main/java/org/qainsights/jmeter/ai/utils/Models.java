@@ -13,6 +13,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
 
 import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +33,8 @@ public class Models {
      */
     public static List<String> loadAllModels(AnthropicClient anthropicClient,
         OpenAIClient openAiClient,
-        OllamaAiService ollamaService) {
+        OllamaAiService ollamaService,
+        DeepseekAiService deepseekService) {
         List<String> allModels = new ArrayList<>();
 
         // Get Anthropic models
@@ -89,6 +91,20 @@ public class Models {
             log.error("Error adding Ollama models: {}", e.getMessage(), e);
         }
 
+        // Add DeepSeek models
+        try {
+            List<String> deepseekModels = getDeepSeekModelIds(deepseekService);
+            if (deepseekModels != null) {
+                for (String modelId : deepseekModels) {
+                    allModels.add("deepseek:" + modelId);
+                    log.debug("Added DeepSeek model to selector: {}", modelId);
+                }
+                log.info("Added {} DeepSeek models to selector", deepseekModels.size());
+            }
+        } catch (Exception e) {
+            log.error("Error adding DeepSeek models: {}", e.getMessage(), e);
+        }
+
         return allModels;
     }
 
@@ -101,7 +117,8 @@ public class Models {
      */
     public static List<String> getModelIds(AnthropicClient anthropicClient, 
         OpenAIClient openAiClient,
-        OllamaAiService ollamaService) {
+        OllamaAiService ollamaService,
+        DeepseekAiService deepseekService) {
         List<String> modelIds = new ArrayList<>();
         
         try {
@@ -122,8 +139,14 @@ public class Models {
             if (ollamaModels != null) {
                 modelIds.addAll(ollamaModels);
             }
+
+            // Get DeepSeek models
+            List<String> deepseekModels = getDeepSeekModelIds(deepseekService);
+            if (deepseekModels != null) {
+                modelIds.addAll(deepseekModels);
+            }
             
-            log.info("Combined {} models from Anthropic and OpenAI", modelIds.size());
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, and DeepSeek", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);
@@ -231,6 +254,38 @@ public class Models {
                     .filter(model -> !model.id().contains("instruct")) // Exclude instruct models
                     .map(Model::id)
                     .collect(Collectors.toList());
+        }
+        return new ArrayList<>();
+    }
+
+    private static List<String> getDeepSeekModelIds(DeepseekAiService deepseekService) {
+        try {
+            if (deepseekService.isAnthropicFormat()) {
+                com.anthropic.models.models.ModelListPage models = deepseekService.getAnthropicClient().models().list(
+                    com.anthropic.models.models.ModelListParams.builder().build());
+                if (models != null && models.data() != null) {
+                    List<String> modelIds = new ArrayList<>();
+                    for (com.anthropic.models.models.ModelInfo model : models.data()) {
+                        modelIds.add(model.id());
+                        log.debug("Available DeepSeek model (Anthropic format): {}", model.id());
+                    }
+                    log.info("Successfully retrieved {} models from DeepSeek API (Anthropic format)", modelIds.size());
+                    return modelIds;
+                }
+            } else {
+                com.openai.models.models.ModelListPage models = deepseekService.getClient().models().list();
+                if (models != null && models.data() != null) {
+                    List<String> modelIds = new ArrayList<>();
+                    for (com.openai.models.models.Model model : models.data()) {
+                        modelIds.add(model.id());
+                        log.debug("Available DeepSeek model (OpenAI format): {}", model.id());
+                    }
+                    log.info("Successfully retrieved {} models from DeepSeek API (OpenAI format)", modelIds.size());
+                    return modelIds;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error fetching models from DeepSeek API: {}", e.getMessage(), e);
         }
         return new ArrayList<>();
     }
