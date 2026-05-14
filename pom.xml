@@ -6,10 +6,11 @@
 >
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.qainsights</groupId>
+    <groupId>com.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
     <version>2.0.7</version>
     <name>jmeter-agent</name>
+    <url>https://github.com/QAInsights/jmeter-ai</url>
     <description
     >Feather Wand - JMeter Agent for performance engineers
     </description>
@@ -29,7 +30,7 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/QAInsights/jmeter-readme-config.git</connection>
+        <connection>scm:git:https://github.com/QAInsights/jmeter-ai.git</connection>
         <url>https://github.com/QAInsights/jmeter-ai</url>
     </scm>
 
@@ -275,6 +276,51 @@
                 </executions>
             </plugin>
 
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <source>17</source>
+                    <failOnError>false</failOnError>
+                    <doclint>none</doclint>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Configure Surefire for JUnit 5 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
