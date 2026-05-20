@@ -2,18 +2,17 @@ package org.qainsights.jmeter.ai.utils;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-
 import com.anthropic.models.models.ModelInfo;
 import com.anthropic.models.models.ModelListPage;
 import com.anthropic.models.models.ModelListParams;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
-
-import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,15 +25,17 @@ public class Models {
      * Load all available models with provider prefixes for use in the model selector.
      * Anthropic models are returned as-is; OpenAI models are prefixed with "openai:";
      * Ollama models are prefixed with "ollama:".
+     *
      * @param anthropicClient Anthropic client
-     * @param openAiClient OpenAI client
-     * @param ollamaService OllamaAiService
+     * @param openAiClient    OpenAI client
+     * @param ollamaService   OllamaAiService
      * @return List of prefixed model IDs
      */
     public static List<String> loadAllModels(AnthropicClient anthropicClient,
-        OpenAIClient openAiClient,
-        OllamaAiService ollamaService,
-        DeepseekAiService deepseekService) {
+                                             OpenAIClient openAiClient,
+                                             OllamaAiService ollamaService,
+                                             DeepseekAiService deepseekService,
+                                             GoogleAiService googleService) {
         List<String> allModels = new ArrayList<>();
 
         // Get Anthropic models
@@ -105,29 +106,49 @@ public class Models {
             log.error("Error adding DeepSeek models: {}", e.getMessage(), e);
         }
 
+        // Add Google models
+        try {
+            List<String> googleModels = getGoogleModelIds(googleService);
+            if (googleModels != null) {
+                for (String modelId : googleModels) {
+                    allModels.add("google:" + modelId);
+                    log.debug("Added Google model to selector: {}", modelId);
+                }
+                log.info("Added {} Google models to selector", googleModels.size());
+            }
+        } catch (Exception e) {
+            log.error("Error adding Google models: {}", e.getMessage(), e);
+        }
+
         return allModels;
+    }
+
+    private static List<String> getGoogleModelIds(GoogleAiService googleService) {
+        return googleService.listModels();
     }
 
     /**
      * Get a combined list of model IDs from both Anthropic and OpenAI
+     *
      * @param anthropicClient Anthropic client
-     * @param openAiClient OpenAI client
-     * @param ollamaService OllamaAiService
+     * @param openAiClient    OpenAI client
+     * @param ollamaService   OllamaAiService
      * @return List of model IDs
      */
-    public static List<String> getModelIds(AnthropicClient anthropicClient, 
-        OpenAIClient openAiClient,
-        OllamaAiService ollamaService,
-        DeepseekAiService deepseekService) {
+    public static List<String> getModelIds(AnthropicClient anthropicClient,
+                                           OpenAIClient openAiClient,
+                                           OllamaAiService ollamaService,
+                                           DeepseekAiService deepseekService,
+                                           GoogleAiService googleService) {
         List<String> modelIds = new ArrayList<>();
-        
+
         try {
             // Get Anthropic models
             List<String> anthropicModels = getAnthropicModelIds(anthropicClient);
             if (anthropicModels != null) {
                 modelIds.addAll(anthropicModels);
             }
-            
+
             // Get OpenAI models
             List<String> openAiModels = getOpenAiModelIds(openAiClient);
             if (openAiModels != null) {
@@ -145,15 +166,21 @@ public class Models {
             if (deepseekModels != null) {
                 modelIds.addAll(deepseekModels);
             }
-            
-            log.info("Combined {} models from Anthropic, OpenAI, Ollama, and DeepSeek", modelIds.size());
+
+            // Get Google models
+            List<String> googleModels = getGoogleModelIds(googleService);
+            if (googleModels != null) {
+                modelIds.addAll(googleModels);
+            }
+
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, and Google", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);
             return modelIds; // Return whatever we have, even if empty
         }
     }
-    
+
     private static List<String> getOllamaModelIds(OllamaAiService ollamaService) {
         try {
             List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
@@ -169,6 +196,7 @@ public class Models {
 
     /**
      * Get Anthropic models as ModelListPage
+     *
      * @param client Anthropic client
      * @return ModelListPage containing Anthropic models
      */
@@ -181,7 +209,7 @@ public class Models {
 
             ModelListParams modelListParams = ModelListParams.builder().build();
             ModelListPage models = client.models().list(modelListParams);
-            
+
             log.info("Successfully retrieved {} models from Anthropic API", models.data().size());
             for (ModelInfo model : models.data()) {
                 log.debug("Available Anthropic model: {}", model.id());
@@ -192,9 +220,10 @@ public class Models {
             return null;
         }
     }
-    
+
     /**
      * Get Anthropic model IDs as a List of Strings
+     *
      * @param client Anthropic client
      * @return List of model IDs
      */
@@ -207,9 +236,10 @@ public class Models {
         }
         return new ArrayList<>();
     }
-    
+
     /**
      * Get OpenAI models as ModelListPage
+     *
      * @param client OpenAI client
      * @return OpenAI ModelListPage
      */
@@ -218,10 +248,10 @@ public class Models {
             log.info("Fetching available models from OpenAI API");
             client = OpenAIOkHttpClient.builder()
                     .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
-                    .build();            
+                    .build();
 
             com.openai.models.models.ModelListPage models = client.models().list();
-            
+
             log.info("Successfully retrieved {} models from OpenAI API", models.data().size());
             for (Model model : models.data()) {
                 log.debug("Available OpenAI model: {}", model.id());
@@ -232,9 +262,10 @@ public class Models {
             return null;
         }
     }
-    
+
     /**
      * Get OpenAI model IDs as a List of Strings
+     *
      * @param client OpenAI client
      * @return List of model IDs
      */
@@ -262,7 +293,7 @@ public class Models {
         try {
             if (deepseekService.isAnthropicFormat()) {
                 com.anthropic.models.models.ModelListPage models = deepseekService.getAnthropicClient().models().list(
-                    com.anthropic.models.models.ModelListParams.builder().build());
+                        com.anthropic.models.models.ModelListParams.builder().build());
                 if (models != null && models.data() != null) {
                     List<String> modelIds = new ArrayList<>();
                     for (com.anthropic.models.models.ModelInfo model : models.data()) {
@@ -289,4 +320,6 @@ public class Models {
         }
         return new ArrayList<>();
     }
+
+
 }

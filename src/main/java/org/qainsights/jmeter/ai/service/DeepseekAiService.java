@@ -14,6 +14,7 @@ import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
+import org.qainsights.jmeter.ai.utils.ModelUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,11 +30,11 @@ public class DeepseekAiService implements AiService {
     private final AnthropicClient anthropicClient;
     private final boolean isAnthropicFormat;
     private final String baseUrl;
+    private final int maxHistorySize;
+    private final String systemPrompt;
     private String model;
     private float temperature;
-    private final int maxHistorySize;
     private long maxTokens;
-    private final String systemPrompt;
 
     public DeepseekAiService() {
         String apiKey = AiConfig.getProperty("deepseek.api.key", "");
@@ -69,8 +70,8 @@ public class DeepseekAiService implements AiService {
     }
 
     DeepseekAiService(OpenAIClient openAiClient, AnthropicClient anthropicClient,
-            boolean isAnthropicFormat, String baseUrl, String model, float temperature,
-            int maxHistorySize, long maxTokens, String systemPrompt) {
+                      boolean isAnthropicFormat, String baseUrl, String model, float temperature,
+                      int maxHistorySize, long maxTokens, String systemPrompt) {
         this.openAiClient = openAiClient;
         this.anthropicClient = anthropicClient;
         this.isAnthropicFormat = isAnthropicFormat;
@@ -83,17 +84,7 @@ public class DeepseekAiService implements AiService {
     }
 
     private static float parseTemperature(String value) {
-        try {
-            float temp = Float.parseFloat(value);
-            if (temp < 0 || temp > 2) {
-                log.warn("Temperature must be between 0 and 2. Provided value: {}. Setting to default 0.7", temp);
-                return 0.7f;
-            }
-            return temp;
-        } catch (NumberFormatException e) {
-            log.warn("Invalid temperature value: '{}'. Setting to default 0.7", value);
-            return 0.7f;
-        }
+        return ModelUtils.parseTemperature(value);
     }
 
     public boolean isAnthropicFormat() {
@@ -246,7 +237,8 @@ public class DeepseekAiService implements AiService {
 
     private Runnable generateOpenAiStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (openAiClient == null) {
-            return () -> {};
+            return () -> {
+            };
         }
         String modelToUse = (model != null && !model.isEmpty()) ? model : this.model;
 
@@ -308,7 +300,8 @@ public class DeepseekAiService implements AiService {
 
     private Runnable generateAnthropicStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (anthropicClient == null) {
-            return () -> {};
+            return () -> {
+            };
         }
         String modelToUse = (model != null && !model.isEmpty()) ? model : this.model;
 

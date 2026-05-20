@@ -13,6 +13,7 @@ import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,6 +44,9 @@ class AiResponseRouterStreamingTest {
 
     @Mock
     private DeepseekAiService deepseekService;
+
+    @Mock
+    private GoogleAiService googleService;
 
     private AiResponseRouter router;
 
@@ -100,7 +104,7 @@ class AiResponseRouterStreamingTest {
     @BeforeEach
     void setUp() {
         // Use constructor injection manually with mock services
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService);
+        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService);
     }
 
     // ==================== Routing to Anthropic ====================

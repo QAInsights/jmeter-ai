@@ -26,9 +26,11 @@ import org.apache.jorphan.gui.JMeterUIDefaults;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
+import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -84,6 +86,7 @@ public class AiChatPanel
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;
     private DeepseekAiService deepseekService;
+    private GoogleAiService googleService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
 
@@ -124,13 +127,20 @@ public class AiChatPanel
         ollamaService = new OllamaAiService();
         deepseekService = new DeepseekAiService();
 
+        String googleApiKey = AiConfig.getProperty("google.api.key", "");
+        if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
+            Client googleClient = Client.builder().apiKey(googleApiKey).build();
+            googleService = new GoogleAiService(googleClient);
+        }
+
         messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(
             claudeService,
             openAiService,
             ollamaService,
-            deepseekService
+            deepseekService,
+            googleService
         );
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
@@ -613,7 +623,8 @@ public class AiChatPanel
                     claudeService.getClient(),
                     openAiService.getClient(),
                     ollamaService,
-                    deepseekService
+                    deepseekService,
+                    googleService
                 );
             }
 
