@@ -54,14 +54,34 @@ public class VersionUtilsTest {
     
     /**
      * Test that getVersion returns a valid version string
-     * In the test environment, it should find the version from pom.properties
-     * or fall back to the default version
+     * In the test environment, it should find the version from pom.properties,
+     * pom.xml, or fall back to the default version
      */
     @Test
     public void testGetVersionReturnsValidVersion() {
         String version = VersionUtils.getVersion();
-        // The version should be 1.0.10 (either from pom.properties or default)
-        assertEquals("1.0.10", version, "Version should be 1.0.10");
+        String expectedVersion = getExpectedVersionFromPom();
+        assertEquals(expectedVersion, version, "Version should match the pom.xml version");
+    }
+
+    private String getExpectedVersionFromPom() {
+        try {
+            java.io.File pomFile = new java.io.File("pom.xml");
+            if (pomFile.exists()) {
+                javax.xml.parsers.DocumentBuilderFactory dbFactory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+                dbFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                javax.xml.parsers.DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+                org.w3c.dom.Document doc = dBuilder.parse(pomFile);
+                doc.getDocumentElement().normalize();
+                org.w3c.dom.NodeList list = doc.getElementsByTagName("version");
+                if (list.getLength() > 0) {
+                    return list.item(0).getTextContent();
+                }
+            }
+        } catch (Exception e) {
+            // fallback
+        }
+        return "2.0.8";
     }
     
     /**

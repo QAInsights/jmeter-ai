@@ -14,8 +14,8 @@ import org.slf4j.LoggerFactory;
 public class VersionUtils {
     private static final Logger log = LoggerFactory.getLogger(VersionUtils.class);
     // Hardcoded fallback version that matches pom.xml
-    private static final String DEFAULT_VERSION = "1.0.10";
-    private static final String POM_PROPERTIES_PATH = "/META-INF/maven/org.qainsights/jmeter-agent/pom.properties";
+    private static final String DEFAULT_VERSION = "2.0.8";
+    private static final String POM_PROPERTIES_PATH = "/META-INF/maven/com.qainsights/jmeter-agent/pom.properties";
     
     private static String version = null;
     
@@ -23,7 +23,8 @@ public class VersionUtils {
      * Gets the application version from multiple sources in order of preference:
      * 1. Manifest file (when running from JAR)
      * 2. Maven pom.properties file (when running from JAR or development environment)
-     * 3. Default hardcoded version (fallback)
+     * 3. Maven pom.xml file (for local development/IDE environment)
+     * 4. Default hardcoded version (fallback)
      * 
      * @return The application version string
      */
@@ -66,6 +67,28 @@ public class VersionUtils {
                 }
             } catch (Exception e) {
                 log.warn("Could not read version from pom.properties: {}", e.getMessage());
+            }
+
+            // Next try to get from pom.xml if running in development environment
+            try {
+                java.io.File pomFile = new java.io.File("pom.xml");
+                if (pomFile.exists()) {
+                    javax.xml.parsers.DocumentBuilderFactory dbFactory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+                    dbFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                    javax.xml.parsers.DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+                    org.w3c.dom.Document doc = dBuilder.parse(pomFile);
+                    doc.getDocumentElement().normalize();
+                    org.w3c.dom.NodeList list = doc.getElementsByTagName("version");
+                    if (list.getLength() > 0) {
+                        version = list.item(0).getTextContent();
+                        if (version != null) {
+                            log.info("Found version in pom.xml: {}", version);
+                            return version;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not read version from pom.xml: {}", e.getMessage());
             }
             
             // If we get here, use the default version
