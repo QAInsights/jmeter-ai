@@ -379,14 +379,10 @@ public class AiChatPanel
     private JPanel createNavigationPanel() {
         navigationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
         navigationPanel.setBorder(
-            BorderFactory.createTitledBorder("Element Suggestions")
+            BorderFactory.createTitledBorder("Navigation")
         );
         navigationPanel.add(treeNavigationButtons.getUpButton());
         navigationPanel.add(treeNavigationButtons.getDownButton());
-
-        JSeparator separator = new JSeparator(SwingConstants.VERTICAL);
-        separator.setPreferredSize(new Dimension(1, 30));
-        navigationPanel.add(separator);
 
         navigationPanel.setMinimumSize(new Dimension(100, 70));
         navigationPanel.setPreferredSize(new Dimension(500, 70));
