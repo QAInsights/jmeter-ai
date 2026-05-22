@@ -407,7 +407,7 @@ The AI CLI Terminal is built using a clean **Adapter Pattern**:
 
 - `AiCliAdapter` interface — defines the contract for any AI CLI integration
 - `BaseCliAdapter` abstract class — provides common logic (e.g., PATH detection via `findOnPath`)
-- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `GeminiCliAdapter`, `OpenCodeCliAdapter`, `AntigravityCliAdapter`
+- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `OpenCodeCliAdapter`, `AntigravityCliAdapter`
 
 To add a new CLI, simply implement the `AiCliAdapter` interface (or extend `BaseCliAdapter`) and register it in
 the `detectAvailableClis()` method.
