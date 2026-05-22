@@ -112,6 +112,10 @@ public class ClaudeCodePanel extends JPanel {
         if (opencode.isEnabled() && opencode.detect())
             available.add(opencode);
 
+        AiCliAdapter antigravity = new AntigravityCliAdapter();
+        if (antigravity.isEnabled() && antigravity.detect())
+            available.add(antigravity);
+
         return available;
     }
 

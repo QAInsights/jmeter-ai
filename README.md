@@ -14,7 +14,7 @@ JMeter test plan development, optimization, and troubleshooting.
 ## ✨ Features
 
 - Chat with AI directly within JMeter using Claude, OpenAI, Google Gemini, DeepSeek, or Ollama models
-- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, or **OpenCode**
+- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, or **Antigravity CLI**
   interactively within JMeter — switch between available CLIs via a dropdown selector, with full awareness of your
   current test plan structure.
 - **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI,
@@ -137,7 +137,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 #### AI CLI Terminal Configuration
 
-The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, and **OpenCode**. The plugin
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, and **Antigravity CLI**. The plugin
 automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
 **Prerequisites:**
@@ -148,12 +148,15 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
 | **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
 | **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
+| **Antigravity CLI**    | `agy`       | [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli)  |
 
 | Property                                | Description                                                                                | Default Value              |
 |-----------------------------------------|--------------------------------------------------------------------------------------------|----------------------------|
 | `jmeter.ai.terminal.claudecode.enabled` | Enable the embedded AI CLI Terminal feature (applies to all supported CLIs)                | true                       |
 | `jmeter.ai.terminal.claudecode.path`    | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`)            | Empty (auto-detect)        |
 | `jmeter.ai.terminal.claudecode.prompt`  | Custom system prompt passed to the CLI (not recommended to change)                         | See sample properties file |
+| `jmeter.ai.terminal.antigravity.enabled`| Enable Antigravity CLI detection in the terminal (requires `agy` on PATH)                   | `false`                    |
+| `jmeter.ai.terminal.antigravity.prompt` | Custom system prompt passed to Antigravity CLI                                              | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 
@@ -374,6 +377,7 @@ testing environment.
 | **OpenAI Codex CLI**   | OpenAI's lightweight coding agent for terminal-based development workflows   |
 | **Google Gemini CLI**  | Google's AI-powered CLI for cloud development and analysis                   |
 | **OpenCode**           | An open-source AI coding agent designed for terminal-based workflows         |
+| **Antigravity CLI**    | Google's agent-first terminal tool, successor to Gemini CLI                  |
 
 The plugin **automatically detects** which of these CLIs are available on your system's `PATH` and presents them
 in a dropdown selector within the terminal header. Simply select the CLI you'd like to use and start interacting.
@@ -403,7 +407,7 @@ The AI CLI Terminal is built using a clean **Adapter Pattern**:
 
 - `AiCliAdapter` interface — defines the contract for any AI CLI integration
 - `BaseCliAdapter` abstract class — provides common logic (e.g., PATH detection via `findOnPath`)
-- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `GeminiCliAdapter`, `OpenCodeCliAdapter`
+- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `GeminiCliAdapter`, `OpenCodeCliAdapter`, `AntigravityCliAdapter`
 
 To add a new CLI, simply implement the `AiCliAdapter` interface (or extend `BaseCliAdapter`) and register it in
 the `detectAvailableClis()` method.
