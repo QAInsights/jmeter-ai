@@ -3,14 +3,21 @@ package org.qainsights.jmeter.ai.correlation;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.tree.TreeNode;
 import java.lang.reflect.Method;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 public class CorrelationExtractorInjector {
     private static final Logger log = LoggerFactory.getLogger(CorrelationExtractorInjector.class);
@@ -45,9 +52,119 @@ public class CorrelationExtractorInjector {
                 log.error("Failed to add extractor to sampler: {}", sourceNode.get().getName(), e);
                 throw new PluginException("Failed to add extractor to sampler: " + sourceNode.get().getName(), e);
             }
+            try {
+                replaceInTargetRequest((JMeterTreeNode) root, candidate);
+            } catch (Exception e) {
+                log.warn("Failed to replace value in target sampler: {}", candidate.getTargetRequest().getLabel(), e);
+            }
         }
         guiPackage.getMainFrame().repaint();
         return applied;
+    }
+
+    private static void replaceInTargetRequest(JMeterTreeNode root, CorrelationCandidate candidate) {
+        Optional<JMeterTreeNode> targetNode = findNodeByName(root, candidate.getTargetRequest().getLabel());
+        if (targetNode.isEmpty()) {
+            log.warn("Unable to find target sampler for correlation candidate: {}", candidate.getTargetRequest().getLabel());
+            return;
+        }
+
+        TestElement element = targetNode.get().getTestElement();
+        String variableRef = "${" + candidate.getVariableName() + "}";
+        String value = candidate.getValue();
+
+        Set<String> variants = encodedVariants(value);
+        for (String variant : variants) {
+            replaceInElement(element, variant, variableRef);
+        }
+
+        for (int i = 0; i < targetNode.get().getChildCount(); i++) {
+            TreeNode child = targetNode.get().getChildAt(i);
+            if (child instanceof JMeterTreeNode) {
+                TestElement childElement = ((JMeterTreeNode) child).getTestElement();
+                for (String variant : variants) {
+                    replaceInElement(childElement, variant, variableRef);
+                }
+            }
+        }
+
+        try {
+            GuiPackage guiPackage = GuiPackage.getInstance();
+            if (guiPackage != null && guiPackage.getTreeModel() != null) {
+                guiPackage.getTreeModel().nodeChanged(targetNode.get());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to notify tree model of target node change", e);
+        }
+    }
+
+    private static void replaceInElement(TestElement element, String search, String replacement) {
+        if (element == null || search == null || search.isEmpty()) {
+            return;
+        }
+        try {
+            java.util.Iterator<JMeterProperty> it = element.propertyIterator();
+            while (it.hasNext()) {
+                JMeterProperty prop = it.next();
+                if (prop instanceof StringProperty) {
+                    String str = prop.getStringValue();
+                    if (str != null && str.contains(search)) {
+                        prop.setObjectValue(str.replace(search, replacement));
+                    }
+                } else if (prop instanceof CollectionProperty) {
+                    CollectionProperty coll = (CollectionProperty) prop;
+                    java.util.Iterator<JMeterProperty> collIt = coll.iterator();
+                    while (collIt.hasNext()) {
+                        JMeterProperty item = collIt.next();
+                        Object itemValue = item.getObjectValue();
+                        if (itemValue instanceof String) {
+                            String str = (String) itemValue;
+                            if (str.contains(search)) {
+                                item.setObjectValue(str.replace(search, replacement));
+                            }
+                        } else if (itemValue instanceof TestElement) {
+                            replaceInElement((TestElement) itemValue, search, replacement);
+                        }
+                    }
+                } else {
+                    Object obj = prop.getObjectValue();
+                    if (obj instanceof TestElement) {
+                        replaceInElement((TestElement) obj, search, replacement);
+                    } else if (obj instanceof CollectionProperty) {
+                        CollectionProperty coll = (CollectionProperty) obj;
+                        java.util.Iterator<JMeterProperty> collIt = coll.iterator();
+                        while (collIt.hasNext()) {
+                            JMeterProperty item = collIt.next();
+                            Object itemValue = item.getObjectValue();
+                            if (itemValue instanceof String) {
+                                String str = (String) itemValue;
+                                if (str.contains(search)) {
+                                    item.setObjectValue(str.replace(search, replacement));
+                                }
+                            } else if (itemValue instanceof TestElement) {
+                                replaceInElement((TestElement) itemValue, search, replacement);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error replacing value in element {}: {}", element.getName(), e.getMessage());
+        }
+    }
+
+    private static Set<String> encodedVariants(String value) {
+        Set<String> variants = new HashSet<>();
+        String safeValue = value == null ? "" : value;
+        variants.add(safeValue);
+        try {
+            String encoded = URLEncoder.encode(safeValue, StandardCharsets.UTF_8.name());
+            variants.add(encoded);
+            variants.add(encoded.replace("+", "%20"));
+        } catch (Exception e) {
+            variants.add(safeValue.replace(" ", "+"));
+        }
+        return variants;
     }
 
     private static Optional<JMeterTreeNode> findNodeByName(JMeterTreeNode node, String name) {

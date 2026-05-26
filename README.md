@@ -14,7 +14,7 @@ JMeter test plan development, optimization, and troubleshooting.
 ## ✨ Features
 
 - Chat with AI directly within JMeter using Claude, OpenAI, Google Gemini, DeepSeek, or Ollama models
-- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, or **Antigravity CLI**
+- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **OpenCode**, or **Antigravity CLI**
   interactively within JMeter — switch between available CLIs via a dropdown selector, with full awareness of your
   current test plan structure.
 - **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI,
@@ -137,8 +137,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 #### AI CLI Terminal Configuration
 
-The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **GitHub Copilot CLI**, and **OpenCode**. The plugin
-The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, and **Antigravity CLI**. The plugin
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **GitHub Copilot CLI**, **OpenCode**, and **Antigravity CLI**. The plugin
 automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
 **Prerequisites:**
@@ -147,7 +146,6 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 |------------------------|-------------|---------------------------------------------------------------------------|
 | **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)  |
 | **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
-| **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
 | **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) |
 | **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
 | **Antigravity CLI**    | `agy`       | [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli)  |
@@ -380,9 +378,8 @@ testing environment.
 |------------------------|------------------------------------------------------------------------------|
 | **Claude Code**        | Anthropic's agentic coding tool for natural language test plan interaction   |
 | **OpenAI Codex CLI**   | OpenAI's lightweight coding agent for terminal-based development workflows   |
-| **Google Gemini CLI**  | Google's AI-powered CLI for cloud development and analysis                   |
 | **OpenCode**           | An open-source AI coding agent designed for terminal-based workflows         |
-| **Antigravity CLI**    | Google's agent-first terminal tool, successor to Gemini CLI                  |
+| **Antigravity CLI**    | Google's agent-first terminal tool                                       |
 
 The plugin **automatically detects** which of these CLIs are available on your system's `PATH` and presents them
 in a dropdown selector within the terminal header. Simply select the CLI you'd like to use and start interacting.
@@ -514,3 +511,4 @@ While the Feather Wand plugin aims to provide helpful assistance, please keep th
 
 This plugin is provided as a tool to assist JMeter users, but the ultimate responsibility for test plan design,
 implementation, and execution remains with the user.
+
