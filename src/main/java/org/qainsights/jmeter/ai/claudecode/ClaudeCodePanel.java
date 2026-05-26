@@ -108,6 +108,10 @@ public class ClaudeCodePanel extends JPanel {
         if (opencode.isEnabled() && opencode.detect())
             available.add(opencode);
 
+        AiCliAdapter copilot = new CopilotCliAdapter();
+        if (copilot.isEnabled() && copilot.detect())
+            available.add(copilot);
+        
         AiCliAdapter antigravity = new AntigravityCliAdapter();
         if (antigravity.isEnabled() && antigravity.detect())
             available.add(antigravity);
