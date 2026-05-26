@@ -85,17 +85,6 @@ public class ElementInfoProvider {
                 info.append("- No children\n");
             }
 
-            info.append("\n## Suggested Elements\n\n");
-            String[][] suggestions = getContextAwareSuggestions(currentNode.getStaticLabel());
-            if (suggestions.length > 0) {
-                info.append("You can add the following elements to this node:\n\n");
-                for (String[] suggestion : suggestions) {
-                    info.append("- ").append(suggestion[0]).append("\n");
-                }
-            } else {
-                info.append("No specific suggestions for this element type.\n");
-            }
-
             return info.toString();
         } catch (Exception e) {
             log.error("Error getting current element info", e);

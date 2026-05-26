@@ -4,6 +4,8 @@ import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,11 +22,15 @@ public class AiResponseRouter {
     private final ClaudeService claudeService;
     private final OpenAiService openAiService;
     private final OllamaAiService ollamaService;
+    private final DeepseekAiService deepseekService;
+    private final GoogleAiService googleService;
 
-    public AiResponseRouter(ClaudeService claudeService, OpenAiService openAiService, OllamaAiService ollamaService) {
+    public AiResponseRouter(ClaudeService claudeService, OpenAiService openAiService, OllamaAiService ollamaService, DeepseekAiService deepseekService, GoogleAiService googleService) {
         this.claudeService = claudeService;
         this.openAiService = openAiService;
         this.ollamaService = ollamaService;
+        this.deepseekService = deepseekService;
+        this.googleService = googleService;
     }
 
     /**
@@ -53,6 +59,19 @@ public class AiResponseRouter {
             log.info("Using Ollama model: {}", ollamaModelId);
             ollamaService.setModel(ollamaModelId);
             return ollamaService.generateResponse(conversationHistory);
+        } else if (selectedModel.startsWith("deepseek:")) {
+            String deepseekModelId = selectedModel.substring(9);
+            log.info("Using DeepSeek model: {}", deepseekModelId);
+            deepseekService.setModel(deepseekModelId);
+            return deepseekService.generateResponse(conversationHistory);
+        } else if (selectedModel.startsWith("google:")) {
+            String googleModelId = selectedModel.substring(7);
+            log.info("Using Google Gemini model: {}", googleModelId);
+            if (googleService != null) {
+                googleService.setModel(googleModelId);
+                return googleService.generateResponse(conversationHistory);
+            }
+            return "Error: Google Gemini service not configured. Set google.api.key in jmeter.properties.";
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -81,9 +100,17 @@ public class AiResponseRouter {
             String openAiModelId = selectedModel.substring(7);
             return openAiService.generateStreamResponse(conversationHistory, openAiModelId, tokenConsumer, onComplete, onError);
         } else if (selectedModel.startsWith("ollama:")) {
-            // Fallback for Ollama if streaming not implemented
             String ollamaModelId = selectedModel.substring(7);
             return ollamaService.generateStreamResponse(conversationHistory, ollamaModelId, tokenConsumer, onComplete, onError);
+        } else if (selectedModel.startsWith("deepseek:")) {
+            String deepseekModelId = selectedModel.substring(9);
+            return deepseekService.generateStreamResponse(conversationHistory, deepseekModelId, tokenConsumer, onComplete, onError);
+        } else if (selectedModel.startsWith("google:")) {
+            String googleModelId = selectedModel.substring(7);
+            if (googleService != null) {
+                return googleService.generateStreamResponse(conversationHistory, googleModelId, tokenConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
@@ -101,6 +128,10 @@ public class AiResponseRouter {
             return openAiService;
         } else if (selectedModel.startsWith("ollama:")) {
             return ollamaService;
+        } else if (selectedModel.startsWith("deepseek:")) {
+            return deepseekService;
+        } else if (selectedModel.startsWith("google:")) {
+            return googleService;
         } else {
             return claudeService;
         }

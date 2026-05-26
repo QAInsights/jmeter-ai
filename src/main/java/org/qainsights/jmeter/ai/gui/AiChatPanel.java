@@ -26,8 +26,11 @@ import org.apache.jorphan.gui.JMeterUIDefaults;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
+import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -82,6 +85,8 @@ public class AiChatPanel
     private ClaudeService claudeService;
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;
+    private DeepseekAiService deepseekService;
+    private GoogleAiService googleService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
 
@@ -120,13 +125,22 @@ public class AiChatPanel
         claudeService = new ClaudeService();
         openAiService = new OpenAiService();
         ollamaService = new OllamaAiService();
+        deepseekService = new DeepseekAiService();
+
+        String googleApiKey = AiConfig.getProperty("google.api.key", "");
+        if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
+            Client googleClient = Client.builder().apiKey(googleApiKey).build();
+            googleService = new GoogleAiService(googleClient);
+        }
 
         messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(
             claudeService,
             openAiService,
-            ollamaService
+            ollamaService,
+            deepseekService,
+            googleService
         );
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
@@ -202,6 +216,7 @@ public class AiChatPanel
                 claudeService.setModel(selectedModel);
                 openAiService.setModel(selectedModel);
                 ollamaService.setModel(selectedModel);
+                deepseekService.setModel(selectedModel);
             }
         });
     }
@@ -364,14 +379,10 @@ public class AiChatPanel
     private JPanel createNavigationPanel() {
         navigationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
         navigationPanel.setBorder(
-            BorderFactory.createTitledBorder("Element Suggestions")
+            BorderFactory.createTitledBorder("Navigation")
         );
         navigationPanel.add(treeNavigationButtons.getUpButton());
         navigationPanel.add(treeNavigationButtons.getDownButton());
-
-        JSeparator separator = new JSeparator(SwingConstants.VERTICAL);
-        separator.setPreferredSize(new Dimension(1, 30));
-        navigationPanel.add(separator);
 
         navigationPanel.setMinimumSize(new Dimension(100, 70));
         navigationPanel.setPreferredSize(new Dimension(500, 70));
@@ -607,7 +618,9 @@ public class AiChatPanel
                 return Models.loadAllModels(
                     claudeService.getClient(),
                     openAiService.getClient(),
-                    ollamaService
+                    ollamaService,
+                    deepseekService,
+                    googleService
                 );
             }
 

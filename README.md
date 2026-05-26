@@ -13,12 +13,12 @@ JMeter test plan development, optimization, and troubleshooting.
 
 ## ✨ Features
 
-- Chat with AI directly within JMeter using Claude, OpenAI, or Ollama models
-- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, or **OpenCode**
+- Chat with AI directly within JMeter using Claude, OpenAI, Google Gemini, DeepSeek, or Ollama models
+- **New!** **Multi-AI CLI Terminal**: run **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, or **Antigravity CLI**
   interactively within JMeter — switch between available CLIs via a dropdown selector, with full awareness of your
   current test plan structure.
-- **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI, and
-  Ollama)
+- **New!** **Streaming AI responses**: AI responses appear token-by-token in real-time (supports Claude, OpenAI,
+  Google Gemini, DeepSeek, and Ollama)
 - **New!** **Stop button**: Cancel an ongoing AI response at any time with the Stop button
 - **New!** **Response chime**: Audio notification when AI responses complete (configurable)
 - Get suggestions for JMeter elements based on your needs
@@ -33,7 +33,7 @@ JMeter test plan development, optimization, and troubleshooting.
   reporting
 - Use right click context menu to refactor code, format code, and add functions in JSR223 script editor
 - Customize AI behavior through configuration properties
-- Switch between Claude, OpenAI, and Ollama models based on your preference or specific needs
+- Switch between Claude, OpenAI, Google Gemini, DeepSeek, and Ollama models based on your preference or specific needs
 
 ## 📥 Installation
 
@@ -72,8 +72,8 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 > When streaming is enabled (default), AI responses appear progressively in the chat as they are generated. You can
 > cancel the response at any time using the **Stop** button that appears next to the Send button. This feature is
-> supported by **all three** AI services: Claude, OpenAI, and Ollama. If you prefer to receive the complete response at
-> once (non-streaming), set `jmeter.ai.streaming.enabled=false`.
+> supported by **all five** AI services: Claude, OpenAI, Google Gemini, DeepSeek, and Ollama. If you prefer to receive
+> the complete response at once (non-streaming), set `jmeter.ai.streaming.enabled=false`.
 
 #### Anthropic (Claude) Configuration
 
@@ -99,6 +99,18 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | `openai.system.prompt`    | System prompt that guides OpenAI's responses              | See sample properties file |
 | `openai.log.level`        | Logging level for OpenAI API requests ("INFO" or "DEBUG") | Empty (disabled)           |
 
+#### Google Gemini Configuration
+
+| Property                   | Description                                         | Default Value              |
+|----------------------------|-----------------------------------------------------|----------------------------|
+| `google.api.key`           | Your Google AI API key                              | Required                   |
+| `google.streaming.enabled` | Enable real-time streaming for Google Gemini        | `true`                     |
+| `google.default.model`     | Default Google Gemini model to use                  | `gemini-2.5-flash`         |
+| `google.temperature`       | Temperature setting (0.0-1.0)                       | `0.7`                      |
+| `google.max.tokens`        | Maximum tokens for AI responses                     | `4096`                     |
+| `google.max.history.size`  | Maximum conversation history size                   | `10`                       |
+| `google.system.prompt`     | System prompt that guides Gemini's responses        | See sample properties file |
+
 #### Ollama Configuration
 
 | Property                         | Description                                                    | Default Value              |
@@ -121,11 +133,12 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | Property                        | Description                                                          | Default Value |
 |---------------------------------|----------------------------------------------------------------------|---------------|
 | `jmeter.ai.refactoring.enabled` | Enable code refactoring for JSR223 script editor                     | true          |
-| `jmeter.ai.service.type`        | The AI service to use for code refactoring ("openai" or "anthropic") | "openai"      |
+| `jmeter.ai.service.type`        | The AI service to use for code refactoring ("anthropic", "openai", "ollama", "deepseek", or "google") | "anthropic"   |
 
 #### AI CLI Terminal Configuration
 
 The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **GitHub Copilot CLI**, and **OpenCode**. The plugin
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **Gemini CLI**, **OpenCode**, and **Antigravity CLI**. The plugin
 automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
 **Prerequisites:**
@@ -137,6 +150,7 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | **Google Gemini CLI**  | `gemini`    | [Google Gemini CLI](https://cloud.google.com/vertex-ai/generative-ai/docs/command-line) |
 | **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) |
 | **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
+| **Antigravity CLI**    | `agy`       | [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli)  |
 
 | Property                                | Description                                                                                | Default Value              |
 |-----------------------------------------|--------------------------------------------------------------------------------------------|----------------------------|
@@ -146,15 +160,17 @@ automatically detects which CLIs are available on your system's `PATH` and prese
 | `jmeter.ai.terminal.copilot.enabled`    | Enable GitHub Copilot CLI in the AI CLI Terminal                                           | false                      |
 | `jmeter.ai.terminal.copilot.path`       | Full path to the `copilot` executable                                                       | Empty (auto-detect)        |
 | `jmeter.ai.terminal.copilot.prompt`     | Custom system prompt for GitHub Copilot CLI                                                 | See sample properties file |
+| `jmeter.ai.terminal.antigravity.enabled`| Enable Antigravity CLI detection in the terminal (requires `agy` on PATH)                   | `false`                    |
+| `jmeter.ai.terminal.antigravity.prompt` | Custom system prompt passed to Antigravity CLI                                              | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 
 The system prompt defines how the AI (Claude or OpenAI) responds to your queries. You can customize this in the
 properties file to focus on specific aspects of JMeter or add your own guidelines.
 
-`claude.system.prompt`, `openai.system.prompt`, and `ollama.system.prompt` can be configured separately in the
-properties file. The default prompts are designed to provide helpful, JMeter-specific responses tailored to each AI
-model's capabilities.
+`claude.system.prompt`, `openai.system.prompt`, `google.system.prompt`, `deepseek.system.prompt`, and
+`ollama.system.prompt` can be configured separately in the properties file. The default prompts are designed to provide
+helpful, JMeter-specific responses tailored to each AI model's capabilities.
 
 ## 🔍 Special Commands
 
@@ -165,7 +181,7 @@ Use the `@usage` command to view detailed token usage information for your AI in
 1. **How to Use**:
 
     - Simply type `@usage` in the chat
-    - The command will show usage statistics for either OpenAI or Anthropic depending on which service you're using
+    - The command will show usage statistics for OpenAI, Anthropic, Google, DeepSeek, or Ollama depending on which service you're using
 
 2. **Information Provided**:
 
@@ -291,8 +307,8 @@ proper organization.
 
 ## 💨 Streaming AI Responses
 
-Feather Wand supports **real-time streaming** of AI responses across all three supported AI services (Claude, OpenAI,
-and Ollama). This feature is enabled by default and provides a more responsive chat experience.
+Feather Wand supports **real-time streaming** of AI responses across all five supported AI services (Claude, OpenAI,
+Google Gemini, DeepSeek, and Ollama). This feature is enabled by default and provides a more responsive chat experience.
 
 ### How It Works
 
@@ -366,6 +382,7 @@ testing environment.
 | **OpenAI Codex CLI**   | OpenAI's lightweight coding agent for terminal-based development workflows   |
 | **Google Gemini CLI**  | Google's AI-powered CLI for cloud development and analysis                   |
 | **OpenCode**           | An open-source AI coding agent designed for terminal-based workflows         |
+| **Antigravity CLI**    | Google's agent-first terminal tool, successor to Gemini CLI                  |
 
 The plugin **automatically detects** which of these CLIs are available on your system's `PATH` and presents them
 in a dropdown selector within the terminal header. Simply select the CLI you'd like to use and start interacting.
@@ -395,7 +412,7 @@ The AI CLI Terminal is built using a clean **Adapter Pattern**:
 
 - `AiCliAdapter` interface — defines the contract for any AI CLI integration
 - `BaseCliAdapter` abstract class — provides common logic (e.g., PATH detection via `findOnPath`)
-- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `GeminiCliAdapter`, `OpenCodeCliAdapter`
+- Concrete adapters — `ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, `OpenCodeCliAdapter`, `AntigravityCliAdapter`
 
 To add a new CLI, simply implement the `AiCliAdapter` interface (or extend `BaseCliAdapter`) and register it in
 the `detectAvailableClis()` method.
@@ -407,8 +424,8 @@ before enabling and using this feature.
 
 ## 🗝️ API Configuration
 
-Feather Wand supports Anthropic (Claude), OpenAI, and Ollama APIs. You can configure any combination in your properties
-file.
+Feather Wand supports Anthropic (Claude), OpenAI, Google Gemini, DeepSeek, and Ollama APIs. You can configure any
+combination in your properties file.
 
 ### Anthropic API (Claude)
 
@@ -427,6 +444,14 @@ file.
 5. For more information about the API key, visit
    the [API Key documentation](https://platform.openai.com/docs/api-reference)
 
+### Google Gemini API
+
+1. Go to [Google AI Studio](https://aistudio.google.com/) website
+2. Sign in with your Google account
+3. Click on "Get API Key" to create a new API key
+4. Copy the API key and paste it into the `google.api.key` property in your `jmeter.properties` file
+5. For more information, visit the [Google AI Gemini API documentation](https://ai.google.dev/gemini-api/docs)
+
 ### Ollama (Local)
 
 1. Install Ollama from [ollama.com](https://ollama.com/)
@@ -443,6 +468,8 @@ default models in the properties file:
 
 - For Claude: `claude.default.model` (e.g., `claude-sonnet-4-6`)
 - For OpenAI: `openai.default.model` (e.g., `gpt-4o`)
+- For Google Gemini: `google.default.model` (e.g., `gemini-2.5-flash`)
+- For DeepSeek: `deepseek.default.model` (e.g., `deepseek-chat`)
 - For Ollama: `ollama.default.model` (e.g., `llama3.1`, `deepseek-r1:1.5b`)
 
 ### Model Filtering
@@ -453,6 +480,8 @@ dropdown:
 - **OpenAI Models**: Filters out audio, TTS, whisper, davinci, search, transcribe, realtime, and instruct models to show
   only GPT chat models.
 - **Claude Models**: Shows only the latest available Claude models.
+- **Google Gemini Models**: Shows only `gemini-` and `gemma-` models, filtering out TTS, embedding, image, live,
+  native-audio, computer-use, and robotics variants.
 
 This filtering ensures that you only see models that are compatible with the chat interface and appropriate for
 JMeter-related tasks.
@@ -480,8 +509,8 @@ While the Feather Wand plugin aims to provide helpful assistance, please keep th
   implementing new configurations.
 - **Security Considerations**: Do not share sensitive information (credentials, proprietary code, etc.) in your
   conversations with the AI.
-- **API Costs**: Be aware that using the Claude API or OpenAI API incurs costs based on token usage. The plugin is
-  designed to minimize token usage, but excessive use may result in higher costs.
+- **API Costs**: Be aware that using the Claude API, OpenAI API, Google Gemini API, or DeepSeek API incurs costs based
+  on token usage. The plugin is designed to minimize token usage, but excessive use may result in higher costs.
 
 This plugin is provided as a tool to assist JMeter users, but the ultimate responsibility for test plan design,
 implementation, and execution remains with the user.

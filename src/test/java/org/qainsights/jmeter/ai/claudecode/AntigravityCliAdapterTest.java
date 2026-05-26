@@ -7,51 +7,51 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link GeminiCliAdapter}.
+ * Unit tests for {@link AntigravityCliAdapter}.
  * <p>
  * The protected {@link BaseCliAdapter#findOnPath(String)} is overridden in
  * anonymous subclasses so tests never invoke a real system process.
  */
-class GeminiCliAdapterTest {
+class AntigravityCliAdapterTest {
 
     // ── getName ────────────────────────────────────────────────────────────────
 
     @Test
-    void getName_returnsGeminiCli() {
-        assertEquals("Gemini CLI", new GeminiCliAdapter().getName());
+    void getName_returnsAntigravityCli() {
+        assertEquals("Antigravity CLI", new AntigravityCliAdapter().getName());
     }
 
     // ── toString ──────────────────────────────────────────────────────────────
 
     @Test
-    void toString_returnsGeminiCli() {
-        assertEquals("Gemini CLI", new GeminiCliAdapter().toString());
+    void toString_returnsAntigravityCli() {
+        assertEquals("Antigravity CLI", new AntigravityCliAdapter().toString());
     }
 
     // ── getBinaryPath before detect ────────────────────────────────────────────
 
     @Test
     void getBinaryPath_returnsNullBeforeDetect() {
-        assertNull(new GeminiCliAdapter().getBinaryPath());
+        assertNull(new AntigravityCliAdapter().getBinaryPath());
     }
 
     // ── detect ─────────────────────────────────────────────────────────────────
 
     @Test
-    void detect_whenGeminiOnPath_returnsTrueAndSetsPath() {
-        GeminiCliAdapter adapter = new GeminiCliAdapter() {
+    void detect_whenAgyOnPath_returnsTrueAndSetsPath() {
+        AntigravityCliAdapter adapter = new AntigravityCliAdapter() {
             @Override
             protected String findOnPath(String binaryName) {
-                return "/usr/local/bin/gemini";
+                return "/usr/local/bin/agy";
             }
         };
         assertTrue(adapter.detect());
-        assertEquals("/usr/local/bin/gemini", adapter.getBinaryPath());
+        assertEquals("/usr/local/bin/agy", adapter.getBinaryPath());
     }
 
     @Test
-    void detect_whenGeminiNotOnPath_returnsFalseAndPathRemainsNull() {
-        GeminiCliAdapter adapter = new GeminiCliAdapter() {
+    void detect_whenAgyNotOnPath_returnsFalseAndPathRemainsNull() {
+        AntigravityCliAdapter adapter = new AntigravityCliAdapter() {
             @Override
             protected String findOnPath(String binaryName) {
                 return null;
@@ -62,9 +62,9 @@ class GeminiCliAdapterTest {
     }
 
     @Test
-    void detect_searchesForBinaryNamedGemini() {
+    void detect_searchesForBinaryNamedAgy() {
         String[] capturedName = {null};
-        GeminiCliAdapter adapter = new GeminiCliAdapter() {
+        AntigravityCliAdapter adapter = new AntigravityCliAdapter() {
             @Override
             protected String findOnPath(String binaryName) {
                 capturedName[0] = binaryName;
@@ -72,17 +72,17 @@ class GeminiCliAdapterTest {
             }
         };
         adapter.detect();
-        assertEquals("gemini", capturedName[0]);
+        assertEquals("agy", capturedName[0]);
     }
 
     // ── buildCommand after detect ──────────────────────────────────────────────
 
     @Test
     void buildCommand_afterSuccessfulDetect_returnsListWithBinaryPath() {
-        GeminiCliAdapter adapter = new GeminiCliAdapter() {
+        AntigravityCliAdapter adapter = new AntigravityCliAdapter() {
             @Override
             protected String findOnPath(String binaryName) {
-                return "/usr/local/bin/gemini";
+                return "/usr/local/bin/agy";
             }
         };
         adapter.detect();
@@ -90,6 +90,6 @@ class GeminiCliAdapterTest {
         List<String> command = adapter.buildCommand(null);
 
         assertEquals(1, command.size());
-        assertEquals("/usr/local/bin/gemini", command.get(0));
+        assertEquals("/usr/local/bin/agy", command.get(0));
     }
 }
