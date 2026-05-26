@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.jmeter.gui.plugin.MenuCreator;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem;
+import org.qainsights.jmeter.ai.correlation.CorrelationMenuItem;
 
 import javax.swing.*;
 
@@ -18,6 +19,7 @@ public class AiMenuCreator implements MenuCreator {
                 JMenu parentMenu = new JMenu("AI");
                 return new JMenuItem[] {
                         new AiMenuItem(parentMenu),
+                        new CorrelationMenuItem(),
                         new ClaudeCodeMenuItem(parentMenu)
                 };
             } catch (Throwable e) {
