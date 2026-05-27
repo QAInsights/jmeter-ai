@@ -18,6 +18,7 @@ public class CorrelationReviewDialog extends JDialog {
     private CandidateTableModel tableModel;
     private JTable table;
     private JLabel statusLabel;
+    private JLabel detailLabel;
     private JLabel timerLabel;
     private JButton correlateBtn;
     private JButton loadJtlBtn;
@@ -65,12 +66,18 @@ public class CorrelationReviewDialog extends JDialog {
         table = new JTable(tableModel);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getColumnModel().getColumn(0).setMaxWidth(40);
-        table.getColumnModel().getColumn(1).setPreferredWidth(250);
-        table.getColumnModel().getColumn(2).setPreferredWidth(120);
-        table.getColumnModel().getColumn(3).setPreferredWidth(80);
-        table.getColumnModel().getColumn(4).setPreferredWidth(350);
-        table.getColumnModel().getColumn(5).setPreferredWidth(180);
+        table.getColumnModel().getColumn(1).setPreferredWidth(200);
+        table.getColumnModel().getColumn(2).setPreferredWidth(100);
+        table.getColumnModel().getColumn(3).setPreferredWidth(60);
+        table.getColumnModel().getColumn(4).setPreferredWidth(300);
+        table.getColumnModel().getColumn(5).setPreferredWidth(150);
+        table.getColumnModel().getColumn(6).setPreferredWidth(60);
         table.setRowHeight(24);
+
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) return;
+            updateDetail();
+        });
 
         JPopupMenu rowMenu = new JPopupMenu();
         JMenuItem approveItem = new JMenuItem("Approve");
@@ -84,8 +91,13 @@ public class CorrelationReviewDialog extends JDialog {
         add(new JScrollPane(table), BorderLayout.CENTER);
 
         JPanel bottom = new JPanel(new BorderLayout());
+        JPanel statusPanel = new JPanel(new BorderLayout());
         statusLabel = new JLabel(" Click 'Run & Correlate' to replay the test plan, or 'Load JTL' to use an existing results file.");
-        bottom.add(statusLabel, BorderLayout.WEST);
+        detailLabel = new JLabel("");
+        detailLabel.setForeground(new Color(0, 100, 0));
+        statusPanel.add(statusLabel, BorderLayout.NORTH);
+        statusPanel.add(detailLabel, BorderLayout.SOUTH);
+        bottom.add(statusPanel, BorderLayout.WEST);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         selectAllBtn = new JButton("Select All");
@@ -216,6 +228,23 @@ public class CorrelationReviewDialog extends JDialog {
         if (row >= 0) { candidates.get(row).setStatus(status); tableModel.fireTableRowsUpdated(row, row); }
     }
 
+    private void updateDetail() {
+        int row = table.getSelectedRow();
+        if (row < 0 || row >= candidates.size()) {
+            detailLabel.setText("");
+            return;
+        }
+        CorrelationCandidate c = candidates.get(row);
+        List<String> targets = c.getTargetSamplerNames();
+        if (targets.isEmpty()) {
+            detailLabel.setText("  ✗ Not used in any subsequent sampler — will be skipped");
+            detailLabel.setForeground(Color.RED);
+        } else {
+            detailLabel.setText("  ✔ Replaces in: " + String.join(", ", targets));
+            detailLabel.setForeground(new Color(0, 100, 0));
+        }
+    }
+
     private void applyCorrelation() {
         CorrelationInjector injector = new CorrelationInjector();
         int count = injector.apply(candidates);
@@ -224,7 +253,7 @@ public class CorrelationReviewDialog extends JDialog {
     }
 
     private static class CandidateTableModel extends AbstractTableModel {
-        private final String[] cols = {"", "Sampler", "Variable", "Type", "Expression", "Source Location"};
+        private final String[] cols = {"", "Sampler", "Variable", "Type", "Expression", "Source", "Used In"};
         private List<CorrelationCandidate> data = new ArrayList<>();
         void setData(List<CorrelationCandidate> d) { this.data = d; fireTableDataChanged(); }
         @Override public int getRowCount() { return data.size(); }
@@ -247,6 +276,7 @@ public class CorrelationReviewDialog extends JDialog {
                 case 3: return cc.getExtractorType();
                 case 4: return cc.getExtractionPattern();
                 case 5: return cc.getSourceLocation();
+                case 6: return cc.getUsageCount();
                 default: return "";
             }
         }

@@ -138,16 +138,22 @@ public class CorrelationEngine {
         long timestamp = 0;
         String currentElement = null;
         StringBuilder textBuf = new StringBuilder();
+        int depth = 0;
         while (reader.hasNext()) {
             switch (reader.next()) {
                 case XMLStreamConstants.START_ELEMENT:
                     String name = reader.getLocalName();
                     if ("httpSample".equals(name) || "sample".equals(name)) {
-                        label = getAttr(reader, "lb");
-                        timestamp = parseLong(getAttr(reader, "ts"));
-                        responseHeaders = ""; requestHeaders = ""; responseData = ""; requestData = "";
-                        url = getAttr(reader, "url");
-                    } else { currentElement = name; textBuf.setLength(0); }
+                        if (depth == 0) {
+                            label = getAttr(reader, "lb");
+                            timestamp = parseLong(getAttr(reader, "ts"));
+                            responseHeaders = ""; requestHeaders = ""; responseData = ""; requestData = "";
+                            url = getAttr(reader, "url");
+                        }
+                        depth++;
+                    } else if (depth == 1) {
+                        currentElement = name; textBuf.setLength(0);
+                    }
                     break;
                 case XMLStreamConstants.CHARACTERS:
                     if (currentElement != null) textBuf.append(reader.getText());
@@ -155,17 +161,20 @@ public class CorrelationEngine {
                 case XMLStreamConstants.END_ELEMENT:
                     String endName = reader.getLocalName();
                     if ("httpSample".equals(endName) || "sample".equals(endName)) {
-                        SampleResult sr = new SampleResult();
-                        sr.setSampleLabel(label != null ? label : "");
-                        sr.setStampAndTime(timestamp, 0);
-                        sr.setResponseData(responseData, StandardCharsets.UTF_8.name());
-                        sr.setResponseHeaders(responseHeaders);
-                        sr.setRequestHeaders(requestHeaders);
-                        sr.setSamplerData(requestData);
-                        if (!url.isEmpty()) sr.setURL(new java.net.URL(url));
-                        sr.setSuccessful(true);
-                        results.add(sr);
-                    } else if (currentElement != null) {
+                        depth--;
+                        if (depth == 0) {
+                            SampleResult sr = new SampleResult();
+                            sr.setSampleLabel(label != null ? label : "");
+                            sr.setStampAndTime(timestamp, 0);
+                            sr.setResponseData(responseData, StandardCharsets.UTF_8.name());
+                            sr.setResponseHeaders(responseHeaders);
+                            sr.setRequestHeaders(requestHeaders);
+                            sr.setSamplerData(requestData);
+                            if (!url.isEmpty()) sr.setURL(new java.net.URL(url));
+                            sr.setSuccessful(true);
+                            results.add(sr);
+                        }
+                    } else if (currentElement != null && depth == 1) {
                         String text = textBuf.toString();
                         switch (currentElement) {
                             case "responseHeader": responseHeaders = text; break;
@@ -208,7 +217,8 @@ public class CorrelationEngine {
                 while (cm.find()) {
                     String n = cm.group(1).trim(), v = cm.group(2).trim();
                     if (config.getKnownTokens().contains(n.toLowerCase(Locale.ROOT)) && ok(v)) {
-                        if (seen.add(v + "|" + n + "|h")) candidates.add(mk(n, v, sampler, idx, "Response Header: Set-Cookie"));
+                        String key = idx + "|" + n.toLowerCase(Locale.ROOT) + "|Response Header: Set-Cookie";
+                        if (seen.add(key)) candidates.add(mk(n, v, sampler, idx, "Response Header: Set-Cookie"));
                     }
                 }
             }
@@ -225,7 +235,8 @@ public class CorrelationEngine {
                         Matcher m = Pattern.compile(pp[0], Pattern.CASE_INSENSITIVE).matcher(body);
                         while (m.find()) {
                             String v = m.group(1);
-                            if (ok(v) && seen.add(v + "|" + token + "|b"))
+                            String key = idx + "|" + token + "|" + pp[1];
+                            if (ok(v) && seen.add(key))
                                 candidates.add(mk(token, v, sampler, idx, pp[1]));
                         }
                     }
@@ -234,7 +245,8 @@ public class CorrelationEngine {
                     Matcher m = cp.getPattern().matcher(body);
                     while (m.find()) {
                         String v = m.group();
-                        if (ok(v) && seen.add(v + "|" + cp.getName() + "|b"))
+                        String key = idx + "|" + cp.getName().toLowerCase(Locale.ROOT) + "|Response Body (custom)";
+                        if (ok(v) && seen.add(key))
                             candidates.add(mk(cp.getName(), v, sampler, idx, "Response Body (custom)"));
                     }
                 }
@@ -307,9 +319,20 @@ public class CorrelationEngine {
 
     public static class Collector extends AbstractTestElement implements SampleListener {
         private static volatile List<SampleResult> shared;
-        public static void prepare() { shared = Collections.synchronizedList(new ArrayList<>()); }
+        public static void prepare() { 
+            // Clear any existing results to prevent duplicates across multiple runs
+            if (shared != null) {
+                shared.clear();
+            }
+            shared = Collections.synchronizedList(new ArrayList<>()); 
+        }
         public static List<SampleResult> getResults() { return shared != null ? new ArrayList<>(shared) : Collections.emptyList(); }
-        @Override public void sampleOccurred(SampleEvent e) { if (shared != null) shared.add(e.getResult()); }
+        @Override public void sampleOccurred(SampleEvent e) {
+            if (shared != null) {
+                SampleResult r = e.getResult();
+                if (r != null && r.getParent() == null) shared.add(r);
+            }
+        }
         @Override public void sampleStarted(SampleEvent e) {}
         @Override public void sampleStopped(SampleEvent e) {}
     }
