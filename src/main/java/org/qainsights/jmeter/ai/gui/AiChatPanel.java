@@ -213,10 +213,19 @@ public class AiChatPanel
             String selectedModel = (String) modelSelector.getSelectedItem();
             if (selectedModel != null) {
                 log.info("Model selected from dropdown: {}", selectedModel);
-                claudeService.setModel(selectedModel);
-                openAiService.setModel(selectedModel);
-                ollamaService.setModel(selectedModel);
-                deepseekService.setModel(selectedModel);
+                if (selectedModel.startsWith("openai:")) {
+                    openAiService.setModel(selectedModel.substring(7));
+                } else if (selectedModel.startsWith("ollama:")) {
+                    ollamaService.setModel(selectedModel.substring(7));
+                } else if (selectedModel.startsWith("deepseek:")) {
+                    deepseekService.setModel(selectedModel.substring(9));
+                } else if (selectedModel.startsWith("google:")) {
+                    if (googleService != null) {
+                        googleService.setModel(selectedModel.substring(7));
+                    }
+                } else {
+                    claudeService.setModel(selectedModel);
+                }
             }
         });
     }

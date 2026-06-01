@@ -298,20 +298,32 @@ public class CorrelationEngine {
     }
 
     private void generatePattern(CorrelationCandidate c) {
-        String esc = escapeRegex(c.getParameterName());
-        c.setVariableName(toVarName(c.getParameterName()));
+        String paramName = c.getParameterName();
+        c.setVariableName(toVarName(paramName));
         String loc = c.getSourceLocation();
         c.setExtractorType("regex");
+        
+        // Make the pattern flexible for parameters with leading underscores
+        // Strip leading underscores and make them optional in the regex
+        // e.g., _sourcePage or __token in config should match sourcepage, _sourcepage, __sourcepage, etc. in HTML
+        String cleanName = paramName.replaceAll("^_+", ""); // Remove all leading underscores
+        String esc = escapeRegex(cleanName);
+        
+        // Add optional underscore prefix pattern: _* matches zero or more underscores
+        String flexibleEsc = "_*" + esc;
+        
+        // Use (?i) for case-insensitive matching and (?s) for DOTALL mode
         if (loc != null && loc.contains("Set-Cookie"))
-            c.setExtractionPattern("(?i)Set-Cookie:\\s*" + esc + "=([^;]+)");
+            c.setExtractionPattern("(?i)Set-Cookie:\\s*" + flexibleEsc + "=([^;]+)");
         else if (loc != null && loc.contains("hidden input"))
-            c.setExtractionPattern("<input[^>]*name=[\"']" + esc + "[\"'][^>]*value=[\"']([^\"']+)[\"']");
+            // (?is) = case-insensitive + DOTALL mode to handle newlines and case variations
+            c.setExtractionPattern("(?is)<input[^>]*?name=[\"']" + flexibleEsc + "[\"'][^>]*?value=[\"']([^\"']+)[\"']");
         else if (loc != null && loc.contains("JSON"))
-            c.setExtractionPattern("\"" + esc + "\"\\s*:\\s*\"([^\"]+)\"");
+            c.setExtractionPattern("(?i)\"" + flexibleEsc + "\"\\s*:\\s*\"([^\"]+)\"");
         else if (loc != null && loc.contains("URL path"))
-            c.setExtractionPattern(";" + esc + "=([^;/?#\"'<>\\s]+)");
+            c.setExtractionPattern("(?i);" + flexibleEsc + "=([^;/?#\"'<>\\s]+)");
         else
-            c.setExtractionPattern(esc + "=([^&;\"'<>\\s]+)");
+            c.setExtractionPattern("(?i)" + flexibleEsc + "=([^&;\"'<>\\s]+)");
     }
 
     private static String escapeRegex(String s) { return s.replaceAll("([\\\\\\[\\](){}.*+?^$|])", "\\\\$1"); }

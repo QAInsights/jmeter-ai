@@ -1,10 +1,14 @@
 package org.qainsights.jmeter.ai.correlation;
 
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.tree.TreeNode;
+import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
@@ -82,10 +86,13 @@ public class CorrelationReviewDialog extends JDialog {
         JPopupMenu rowMenu = new JPopupMenu();
         JMenuItem approveItem = new JMenuItem("Approve");
         JMenuItem rejectItem = new JMenuItem("Reject");
+        JMenuItem goToItem = new JMenuItem("Go to");
         approveItem.addActionListener(e -> setRowStatus(CorrelationCandidate.Status.APPROVED));
         rejectItem.addActionListener(e -> setRowStatus(CorrelationCandidate.Status.PENDING));
+        goToItem.addActionListener(e -> goToSampler());
         rowMenu.add(approveItem);
         rowMenu.add(rejectItem);
+        rowMenu.add(goToItem);
         table.setComponentPopupMenu(rowMenu);
 
         add(new JScrollPane(table), BorderLayout.CENTER);
@@ -104,8 +111,12 @@ public class CorrelationReviewDialog extends JDialog {
         deselectAllBtn = new JButton("Deselect All");
         applyBtn = new JButton("Apply Selected");
 
-        selectAllBtn.addActionListener(e -> { setAllApproved(true); });
-        deselectAllBtn.addActionListener(e -> { setAllApproved(false); });
+        selectAllBtn.addActionListener(e -> {
+            setAllApproved(true);
+        });
+        deselectAllBtn.addActionListener(e -> {
+            setAllApproved(false);
+        });
         applyBtn.addActionListener(e -> applyCorrelation());
 
         buttons.add(selectAllBtn);
@@ -118,11 +129,14 @@ public class CorrelationReviewDialog extends JDialog {
     private void runCorrelation() {
         startTimer();
         new SwingWorker<List<CorrelationCandidate>, Void>() {
-            @Override protected List<CorrelationCandidate> doInBackground() throws Exception {
+            @Override
+            protected List<CorrelationCandidate> doInBackground() throws Exception {
                 lastEngine = new CorrelationEngine();
                 return lastEngine.runAndCorrelate();
             }
-            @Override protected void done() {
+
+            @Override
+            protected void done() {
                 stopTimer();
                 try {
                     List<CorrelationCandidate> result = get();
@@ -144,13 +158,18 @@ public class CorrelationReviewDialog extends JDialog {
         File file = chooser.getSelectedFile();
         startTimer();
         new SwingWorker<List<CorrelationCandidate>, Void>() {
-            @Override protected List<CorrelationCandidate> doInBackground() throws Exception {
+            @Override
+            protected List<CorrelationCandidate> doInBackground() throws Exception {
                 lastEngine = new CorrelationEngine();
                 return lastEngine.correlateFromJtl(file.toPath());
             }
-            @Override protected void done() {
+
+            @Override
+            protected void done() {
                 stopTimer();
-                try { updateResults(get()); } catch (Exception ex) {
+                try {
+                    updateResults(get());
+                } catch (Exception ex) {
                     log.error("JTL correlation failed", ex);
                     JOptionPane.showMessageDialog(CorrelationReviewDialog.this,
                             "Failed to process JTL: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -166,8 +185,8 @@ public class CorrelationReviewDialog extends JDialog {
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         JOptionPane.showMessageDialog(this,
                 "To save the JTL, run your test plan in JMeter with a 'View Results Tree'\n" +
-                "listener configured to save XML format, or use command-line:\n" +
-                "jmeter -n -t test.jmx -l results.jtl",
+                        "listener configured to save XML format, or use command-line:\n" +
+                        "jmeter -n -t test.jmx -l results.jtl",
                 "Save JTL", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -193,11 +212,11 @@ public class CorrelationReviewDialog extends JDialog {
                 timeoutWarned = true;
                 timerLabel.setForeground(Color.RED);
                 SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(CorrelationReviewDialog.this,
-                        "Execution is taking longer than expected (2+ minutes).\n\n" +
-                        "Tip: Cancel and instead run your test plan directly in JMeter,\n" +
-                        "save results as XML JTL, then use 'Load JTL' to correlate.",
-                        "Still Running", JOptionPane.WARNING_MESSAGE));
+                        JOptionPane.showMessageDialog(CorrelationReviewDialog.this,
+                                "Execution is taking longer than expected (2+ minutes).\n\n" +
+                                        "Tip: Cancel and instead run your test plan directly in JMeter,\n" +
+                                        "save results as XML JTL, then use 'Load JTL' to correlate.",
+                                "Still Running", JOptionPane.WARNING_MESSAGE));
             }
         });
         elapsedTimer.start();
@@ -225,7 +244,10 @@ public class CorrelationReviewDialog extends JDialog {
 
     private void setRowStatus(CorrelationCandidate.Status status) {
         int row = table.getSelectedRow();
-        if (row >= 0) { candidates.get(row).setStatus(status); tableModel.fireTableRowsUpdated(row, row); }
+        if (row >= 0) {
+            candidates.get(row).setStatus(status);
+            tableModel.fireTableRowsUpdated(row, row);
+        }
     }
 
     private void updateDetail() {
@@ -245,39 +267,126 @@ public class CorrelationReviewDialog extends JDialog {
         }
     }
 
+    private void goToSampler() {
+        int row = table.getSelectedRow();
+        if (row < 0 || row >= candidates.size()) {
+            return;
+        }
+        
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        if (guiPackage == null) {
+            log.warn("GuiPackage not available");
+            return;
+        }
+        
+        CorrelationCandidate candidate = candidates.get(row);
+        String samplerName = candidate.getSourceSamplerName();
+        
+        JMeterTreeNode root = (JMeterTreeNode) guiPackage.getTreeModel().getRoot();
+        JMeterTreeNode targetNode = findNode(root, samplerName);
+        
+        if (targetNode != null) {
+            JTree jTree = guiPackage.getTreeListener().getJTree();
+            TreePath path = new TreePath(targetNode.getPath());
+            
+            if (targetNode.getParent() instanceof JMeterTreeNode) {
+                jTree.expandPath(new TreePath(((JMeterTreeNode) targetNode.getParent()).getPath()));
+            }
+            
+            jTree.setSelectionPath(path);
+            jTree.scrollPathToVisible(path);
+            
+            guiPackage.getMainFrame().toFront();
+            guiPackage.getMainFrame().requestFocus();
+        } else {
+            log.warn("Sampler '{}' not found in test plan tree", samplerName);
+            JOptionPane.showMessageDialog(this,
+                    "Sampler '" + samplerName + "' not found in the test plan.",
+                    "Navigation Failed", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private JMeterTreeNode findNode(JMeterTreeNode node, String name) {
+        if (node.getName().equals(name)) return node;
+        if (name.contains("/") && node.getName().equals(name.substring(name.lastIndexOf('/') + 1))) return node;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            TreeNode child = node.getChildAt(i);
+            if (child instanceof JMeterTreeNode) {
+                JMeterTreeNode found = findNode((JMeterTreeNode) child, name);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     private void applyCorrelation() {
         CorrelationInjector injector = new CorrelationInjector();
         int count = injector.apply(candidates);
         JOptionPane.showMessageDialog(this, "Applied " + count + " correlation extractors to the test plan.", "Correlation Applied", JOptionPane.INFORMATION_MESSAGE);
-        dispose();
     }
 
     private static class CandidateTableModel extends AbstractTableModel {
         private final String[] cols = {"", "Sampler", "Variable", "Type", "Expression", "Source", "Used In"};
         private List<CorrelationCandidate> data = new ArrayList<>();
-        void setData(List<CorrelationCandidate> d) { this.data = d; fireTableDataChanged(); }
-        @Override public int getRowCount() { return data.size(); }
-        @Override public int getColumnCount() { return cols.length; }
-        @Override public String getColumnName(int c) { return cols[c]; }
-        @Override public Class<?> getColumnClass(int c) { return c == 0 ? Boolean.class : String.class; }
-        @Override public boolean isCellEditable(int r, int c) { return c == 0; }
-        @Override public void setValueAt(Object v, int r, int c) {
+
+        void setData(List<CorrelationCandidate> d) {
+            this.data = d;
+            fireTableDataChanged();
+        }
+
+        @Override
+        public int getRowCount() {
+            return data.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return cols.length;
+        }
+
+        @Override
+        public String getColumnName(int c) {
+            return cols[c];
+        }
+
+        @Override
+        public Class<?> getColumnClass(int c) {
+            return c == 0 ? Boolean.class : String.class;
+        }
+
+        @Override
+        public boolean isCellEditable(int r, int c) {
+            return c == 0;
+        }
+
+        @Override
+        public void setValueAt(Object v, int r, int c) {
             if (c == 0 && v instanceof Boolean) {
                 data.get(r).setStatus((Boolean) v ? CorrelationCandidate.Status.APPROVED : CorrelationCandidate.Status.PENDING);
                 fireTableCellUpdated(r, c);
             }
         }
-        @Override public Object getValueAt(int r, int c) {
+
+        @Override
+        public Object getValueAt(int r, int c) {
             CorrelationCandidate cc = data.get(r);
             switch (c) {
-                case 0: return cc.getStatus() == CorrelationCandidate.Status.APPROVED;
-                case 1: return cc.getSourceSamplerName();
-                case 2: return cc.getVariableName();
-                case 3: return cc.getExtractorType();
-                case 4: return cc.getExtractionPattern();
-                case 5: return cc.getSourceLocation();
-                case 6: return cc.getUsageCount();
-                default: return "";
+                case 0:
+                    return cc.getStatus() == CorrelationCandidate.Status.APPROVED;
+                case 1:
+                    return cc.getSourceSamplerName();
+                case 2:
+                    return cc.getVariableName();
+                case 3:
+                    return cc.getExtractorType();
+                case 4:
+                    return cc.getExtractionPattern();
+                case 5:
+                    return cc.getSourceLocation();
+                case 6:
+                    return cc.getUsageCount();
+                default:
+                    return "";
             }
         }
     }

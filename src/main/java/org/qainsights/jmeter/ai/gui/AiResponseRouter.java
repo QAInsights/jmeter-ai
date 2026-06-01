@@ -124,15 +124,29 @@ public class AiResponseRouter {
      * @return the matching AiService
      */
     public AiService resolveAiService(String selectedModel) {
+        if (selectedModel == null || selectedModel.isEmpty()) {
+            return claudeService;
+        }
         if (selectedModel.startsWith("openai:")) {
+            String openAiModelId = selectedModel.substring(7);
+            openAiService.setModel(openAiModelId);
             return openAiService;
         } else if (selectedModel.startsWith("ollama:")) {
+            String ollamaModelId = selectedModel.substring(7);
+            ollamaService.setModel(ollamaModelId);
             return ollamaService;
         } else if (selectedModel.startsWith("deepseek:")) {
+            String deepseekModelId = selectedModel.substring(9);
+            deepseekService.setModel(deepseekModelId);
             return deepseekService;
         } else if (selectedModel.startsWith("google:")) {
+            String googleModelId = selectedModel.substring(7);
+            if (googleService != null) {
+                googleService.setModel(googleModelId);
+            }
             return googleService;
         } else {
+            claudeService.setModel(selectedModel);
             return claudeService;
         }
     }

@@ -50,7 +50,7 @@ public class CorrelationInjector {
             }
 
             for (String targetName : c.getTargetSamplerNames()) {
-                replaceInTarget(root, targetName, c.getSampleValue(), c.getVariableName());
+                replaceInTarget(root, targetName, c.getParameterName(), c.getSampleValue(), c.getVariableName());
             }
 
             applied++;
@@ -126,12 +126,16 @@ public class CorrelationInjector {
         }
     }
 
-    private void replaceInTarget(JMeterTreeNode root, String targetName, String value, String varName) {
+    private void replaceInTarget(JMeterTreeNode root, String targetName, String paramName, String value, String varName) {
         JMeterTreeNode node = findNode(root, targetName);
-        if (node == null) return;
+        if (node == null) {
+            log.warn("Target sampler '{}' not found for replacement", targetName);
+            return;
+        }
 
         TestElement te = node.getTestElement();
         String replacement = "${" + varName + "}";
+        boolean replaced = false;
 
         if (te instanceof HTTPSamplerBase) {
             HTTPSamplerBase http = (HTTPSamplerBase) te;
@@ -140,6 +144,8 @@ public class CorrelationInjector {
             String path = http.getPath();
             if (path != null && path.contains(value)) {
                 http.setPath(path.replace(value, replacement));
+                log.info("Replaced value in path of '{}'", targetName);
+                replaced = true;
             }
 
             // Replace in arguments
@@ -147,8 +153,20 @@ public class CorrelationInjector {
             if (args != null) {
                 for (int i = 0; i < args.getArgumentCount(); i++) {
                     org.apache.jmeter.config.Argument arg = args.getArgument(i);
+                    
+                    // If argument name matches the parameter name, replace the entire value
+                    if (arg.getName() != null && arg.getName().equalsIgnoreCase(paramName)) {
+                        arg.setValue(replacement);
+                        log.info("Replaced argument '{}' value with variable reference in '{}'", arg.getName(), targetName);
+                        replaced = true;
+                        continue;
+                    }
+                    
+                    // Otherwise, check if the argument value contains the extracted value
                     if (arg.getValue() != null && arg.getValue().contains(value)) {
                         arg.setValue(arg.getValue().replace(value, replacement));
+                        log.info("Replaced value in argument '{}' of '{}'", arg.getName(), targetName);
+                        replaced = true;
                     }
                 }
             }
@@ -161,8 +179,15 @@ public class CorrelationInjector {
             if (strVal != null && strVal.contains(value)) {
                 try {
                     prop.setObjectValue(strVal.replace(value, replacement));
+                    log.info("Replaced value in property '{}' of '{}'", prop.getName(), targetName);
+                    replaced = true;
                 } catch (Exception ignored) {}
             }
+        }
+        
+        if (!replaced) {
+            log.warn("No replacements made in target sampler '{}' - parameter '{}' or value '{}' not found", 
+                    targetName, paramName, value);
         }
     }
 }
