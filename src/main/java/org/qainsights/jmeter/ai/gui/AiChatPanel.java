@@ -89,6 +89,7 @@ public class AiChatPanel
     private GoogleAiService googleService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
+    private GeminiBorderPanel geminiBorderPanel;
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -406,23 +407,18 @@ public class AiChatPanel
      * @return the assembled input panel
      */
     private JPanel createInputPanel(Font font) {
-        JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
+        geminiBorderPanel = new GeminiBorderPanel();
 
         messageField = new JTextArea(3, 20);
         messageField.setLineWrap(true);
         messageField.setWrapStyleWord(true);
         messageField.setFont(font);
         baseMessageFontSize = font.getSize2D();
-        Color inputBorderColor = getThemeColor(
-            "Component.borderColor",
-            Color.LIGHT_GRAY
-        );
-        messageField.setBorder(
-            BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(inputBorderColor),
-                BorderFactory.createEmptyBorder(5, 5, 5, 5)
-            )
-        );
+        
+        // Remove line border and set empty border for messageField
+        messageField.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        messageField.setOpaque(false); // Make it non-opaque to use GeminiBorderPanel's background
+        
         new InputBoxIntellisense(messageField);
 
         // -----------------------------------------------------------------------
@@ -481,7 +477,9 @@ public class AiChatPanel
 
         JScrollPane messageScrollPane = new JScrollPane(messageField);
         messageScrollPane.setBorder(BorderFactory.createEmptyBorder());
-        inputPanel.add(messageScrollPane, BorderLayout.CENTER);
+        messageScrollPane.setOpaque(false);
+        messageScrollPane.getViewport().setOpaque(false);
+        geminiBorderPanel.add(messageScrollPane, BorderLayout.CENTER);
 
         sendButton = createStyledButton("Send", 12);
         sendButton.addActionListener(e -> sendMessage());
@@ -499,12 +497,13 @@ public class AiChatPanel
         });
 
         JPanel buttonPanel = new JPanel(new BorderLayout());
+        buttonPanel.setOpaque(false); // Make it non-opaque
         buttonPanel.add(sendButton, BorderLayout.CENTER);
         buttonPanel.add(stopButton, BorderLayout.EAST);
 
-        inputPanel.add(buttonPanel, BorderLayout.EAST);
+        geminiBorderPanel.add(buttonPanel, BorderLayout.EAST);
 
-        return inputPanel;
+        return geminiBorderPanel;
     }
 
     /**
@@ -839,6 +838,9 @@ public class AiChatPanel
     public void setInputEnabled(boolean enabled) {
         messageField.setEnabled(enabled);
         sendButton.setEnabled(enabled);
+        if (geminiBorderPanel != null) {
+            geminiBorderPanel.setThinking(!enabled);
+        }
         if (enabled) {
             messageField.requestFocusInWindow();
         }
@@ -1218,9 +1220,7 @@ public class AiChatPanel
         removeLoadingIndicator();
         processAiResponse(response);
         playResponseChime();
-        messageField.setEnabled(true);
-        sendButton.setEnabled(true);
-        messageField.requestFocusInWindow();
+        setInputEnabled(true);
     }
 
     /**
@@ -1249,9 +1249,7 @@ public class AiChatPanel
         } catch (BadLocationException ex) {
             log.error("Error displaying error message", ex);
         }
-        messageField.setEnabled(true);
-        sendButton.setEnabled(true);
-        messageField.requestFocusInWindow();
+        setInputEnabled(true);
     }
 
     /**
