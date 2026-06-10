@@ -55,8 +55,6 @@ JMeter test plan development, optimization, and troubleshooting.
    of your JMeter installation) or into your `user.properties` file.
 4. Configure your API key(s) for Anthropic and/or OpenAI in the properties file.
 5. Restart JMeter.
-6. The Feather Wand plugin will appear as a new component in the right-click menu under "Add" > "Non-Test Elements" > "
-   Feather Wand".
 
 ## ⚙️ Configuration
 
