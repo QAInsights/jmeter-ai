@@ -43,8 +43,6 @@ class CodeRefactorerTest {
     static void setUpAll() {
         // Set up static mocks once for all tests
         aiConfigMockedStatic = mockStatic(AiConfig.class);
-        aiConfigMockedStatic.when(() -> AiConfig.getProperty("jmeter.ai.service.type", "openai")).thenReturn("openai");
-        aiConfigMockedStatic.when(() -> AiConfig.getProperty("openai.default.model", "gpt-4o")).thenReturn("gpt-4o");
 
         jOptionPaneMock = mockStatic(JOptionPane.class);
     }
@@ -62,6 +60,9 @@ class CodeRefactorerTest {
 
     @BeforeEach
     void setUp() {
+        aiConfigMockedStatic.reset();
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("jmeter.ai.service.type", "openai")).thenReturn("openai");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("openai.default.model", "gpt-4o")).thenReturn("gpt-4o");
         codeRefactorer = new CodeRefactorer(aiService);
     }
 
@@ -159,6 +160,42 @@ class CodeRefactorerTest {
 
         // Verify that the refactored code was applied to the text area
         verify(textArea).replaceSelection(eq(refactoredCode));
+    }
+
+    @Test
+    void testRefactorSelectedCode_UsesAnthropicDefaultModel() throws Exception {
+        String selectedCode = "log.info('hello')";
+        String refactoredCode = "log.info('hello')";
+
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("jmeter.ai.service.type", "openai")).thenReturn("anthropic");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.default.model", "")).thenReturn("claude-sonnet-4-6");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("claude.default.model", "")).thenReturn("");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.model", "claude-3-sonnet-20240229"))
+                .thenReturn("claude-3-sonnet-20240229");
+        when(textArea.getSelectedText()).thenReturn(selectedCode);
+        when(aiService.generateResponse(any(), any())).thenReturn(refactoredCode);
+
+        boolean result = codeRefactorer.refactorSelectedCode(textArea);
+
+        assertTrue(result);
+        verify(aiService).generateResponse(any(), eq("claude-sonnet-4-6"));
+    }
+
+    @Test
+    void testRefactorSelectedCode_UsesGoogleDefaultModel() throws Exception {
+        String selectedCode = "log.info('hello')";
+        String refactoredCode = "log.info('hello')";
+
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("jmeter.ai.service.type", "openai")).thenReturn("google");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("google.default.model", "gemini-2.5-flash"))
+                .thenReturn("gemini-2.5-flash");
+        when(textArea.getSelectedText()).thenReturn(selectedCode);
+        when(aiService.generateResponse(any(), any())).thenReturn(refactoredCode);
+
+        boolean result = codeRefactorer.refactorSelectedCode(textArea);
+
+        assertTrue(result);
+        verify(aiService).generateResponse(any(), eq("gemini-2.5-flash"));
     }
 
     /**

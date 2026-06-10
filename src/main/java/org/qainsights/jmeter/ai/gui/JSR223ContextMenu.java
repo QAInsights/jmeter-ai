@@ -11,8 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 
 /**
  * Adds a right-click context menu to JSR223 script areas.
@@ -81,40 +81,9 @@ public class JSR223ContextMenu {
      * @return true if refactoring is enabled, false otherwise
      */
     private static boolean isAiRefactoringEnabled() {
-        // Quick check if we have an AI service
-        if (sharedAiService == null) {
-            return false;
-        }
-
         // Check if AI refactoring is explicitly disabled
         String enableRefactoring = AiConfig.getProperty("jmeter.ai.refactoring.enabled", "true");
-        if (!Boolean.parseBoolean(enableRefactoring)) {
-            return false;
-        }
-
-        // Check which AI service to use from properties
-        String aiServiceType = AiConfig.getProperty("jmeter.ai.service.type", "openai");
-
-        // Check if the appropriate API key and model are configured
-        if ("openai".equalsIgnoreCase(aiServiceType)) {
-            String apiKey = AiConfig.getProperty("openai.api.key", "");
-            String model = AiConfig.getProperty("openai.default.model", "");
-            return apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
-                    && model != null && !model.isEmpty();
-        } else if ("anthropic".equalsIgnoreCase(aiServiceType)) {
-            String apiKey = AiConfig.getProperty("anthropic.api.key", "");
-            String model = AiConfig.getProperty("anthropic.model", "");
-            return apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
-                    && model != null && !model.isEmpty();
-        } else if ("ollama".equalsIgnoreCase(aiServiceType)) {
-            String host = AiConfig.getProperty("ollama.host", "");
-            String model = AiConfig.getProperty("ollama.model", "");
-            return host != null && !host.isEmpty() && !host.equals("YOUR_HOST")
-                    && model != null && !model.isEmpty();
-        }
-
-        // If no valid AI service is configured, refactoring is not available
-        return false;
+        return Boolean.parseBoolean(enableRefactoring);
     }
 
     /**
@@ -123,7 +92,7 @@ public class JSR223ContextMenu {
      * @param textArea  The text area to add the context menu to
      * @param aiService The AI service to use for refactoring
      */
-    private static void addContextMenu(RSyntaxTextArea textArea, AiService aiService) {
+    static void addContextMenu(RSyntaxTextArea textArea, AiService aiService) {
         // Check if the text area already has a context menu
         if (textArea.getClientProperty("contextMenuAdded") != null) {
             return;
@@ -137,40 +106,55 @@ public class JSR223ContextMenu {
             return;
         }
 
-        // Create the refactorer
-        CodeRefactorer refactorer = new CodeRefactorer(aiService);
+        CodeRefactorer refactorer = aiService == null ? null : new CodeRefactorer(aiService);
+        JPopupMenu popupMenu = textArea.getPopupMenu();
+        final boolean usingExistingPopupMenu = popupMenu != null;
+        final JMenuItem[] cutItem = new JMenuItem[1];
+        final JMenuItem[] copyItem = new JMenuItem[1];
+        if (popupMenu == null) {
+            popupMenu = new JPopupMenu();
 
-        JPopupMenu popupMenu = new JPopupMenu();
+            JMenuItem newCutItem = new JMenuItem("Cut");
+            newCutItem.addActionListener(e -> textArea.cut());
+            popupMenu.add(newCutItem);
+            cutItem[0] = newCutItem;
 
-        // Add menu items
-        JMenuItem cutItem = new JMenuItem("Cut");
-        cutItem.addActionListener(e -> textArea.cut());
-        popupMenu.add(cutItem);
+            JMenuItem newCopyItem = new JMenuItem("Copy");
+            newCopyItem.addActionListener(e -> textArea.copy());
+            popupMenu.add(newCopyItem);
+            copyItem[0] = newCopyItem;
 
-        JMenuItem copyItem = new JMenuItem("Copy");
-        copyItem.addActionListener(e -> textArea.copy());
-        popupMenu.add(copyItem);
+            JMenuItem pasteItem = new JMenuItem("Paste");
+            pasteItem.addActionListener(e -> textArea.paste());
+            popupMenu.add(pasteItem);
 
-        JMenuItem pasteItem = new JMenuItem("Paste");
-        pasteItem.addActionListener(e -> textArea.paste());
-        popupMenu.add(pasteItem);
+            popupMenu.addSeparator();
 
-        popupMenu.addSeparator();
+            JMenuItem selectAllItem = new JMenuItem("Select All");
+            selectAllItem.addActionListener(e -> textArea.selectAll());
+            popupMenu.add(selectAllItem);
+        }
 
-        JMenuItem selectAllItem = new JMenuItem("Select All");
-        selectAllItem.addActionListener(e -> textArea.selectAll());
-        popupMenu.add(selectAllItem);
-
-        popupMenu.addSeparator();
+        if (usingExistingPopupMenu || popupMenu.getComponentCount() > 0) {
+            popupMenu.addSeparator();
+        }
 
         // Add AI refactoring menu item
         JMenuItem aiHelpItem = new JMenuItem("Refactor Code");
-        aiHelpItem.addActionListener(e -> refactorer.refactorSelectedCode(textArea));
+        aiHelpItem.addActionListener(e -> {
+            if (refactorer != null) {
+                refactorer.refactorSelectedCode(textArea);
+            }
+        });
         popupMenu.add(aiHelpItem);
 
         // Add AI try, catch, finally menu item
         JMenuItem aiTryCatchFinallyItem = new JMenuItem("Try, Catch, Finally");
-        aiTryCatchFinallyItem.addActionListener(e -> refactorer.refactorTryCatchFinally(textArea));
+        aiTryCatchFinallyItem.addActionListener(e -> {
+            if (refactorer != null) {
+                refactorer.refactorTryCatchFinally(textArea);
+            }
+        });
         popupMenu.add(aiTryCatchFinallyItem);
 
         // Add format code menu item
@@ -210,44 +194,31 @@ public class JSR223ContextMenu {
         });
         popupMenu.add(functionsDialogItem);
 
-        // Add mouse listener to show the popup menu
-        textArea.addMouseListener(new MouseAdapter() {
+        popupMenu.addPopupMenuListener(new PopupMenuListener() {
             @Override
-            public void mousePressed(MouseEvent e) {
-                if (e.isPopupTrigger()) {
-                    showMenu(e);
-                }
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                if (e.isPopupTrigger()) {
-                    showMenu(e);
-                }
-            }
-
-            private void showMenu(MouseEvent e) {
-                // Update menu items based on selection state
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
                 boolean hasSelection = textArea.getSelectedText() != null && !textArea.getSelectedText().isEmpty();
-                cutItem.setEnabled(hasSelection);
-                copyItem.setEnabled(hasSelection);
+                boolean aiActionsEnabled = hasSelection && refactorer != null;
 
-                // Find the AI help item if it exists
-                for (int i = 0; i < popupMenu.getComponentCount(); i++) {
-                    if (popupMenu.getComponent(i) instanceof JMenuItem) {
-                        JMenuItem item = (JMenuItem) popupMenu.getComponent(i);
-                        if (item.getText().equals("Refactor Code")) {
-                            item.setEnabled(hasSelection);
-                        }
-                        if (item.getText().equals("Try, Catch, Finally")) {
-                            item.setEnabled(hasSelection);
-                        }
-                    }
+                if (cutItem[0] != null) {
+                    cutItem[0].setEnabled(hasSelection);
                 }
+                if (copyItem[0] != null) {
+                    copyItem[0].setEnabled(hasSelection);
+                }
+                aiHelpItem.setEnabled(aiActionsEnabled);
+                aiTryCatchFinallyItem.setEnabled(aiActionsEnabled);
+            }
 
-                popupMenu.show(e.getComponent(), e.getX(), e.getY());
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {
             }
         });
+        textArea.setPopupMenu(popupMenu);
 
         // Mark the text area as having a context menu
         textArea.putClientProperty("contextMenuAdded", Boolean.TRUE);

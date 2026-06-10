@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import javax.swing.*;
@@ -32,10 +35,14 @@ class AiMenuItemTest {
             if (key.equals("openai.api.key")) return configuredApiKey;
             if (key.equals("openai.default.model")) return configuredModel;
             if (key.equals("anthropic.api.key")) return configuredApiKey;
+            if (key.equals("anthropic.default.model")) return configuredModel;
+            if (key.equals("claude.default.model")) return configuredModel;
             if (key.equals("anthropic.model")) return configuredModel;
             if (key.equals("ollama.default.model")) return configuredModel;
             if (key.equals("deepseek.api.key")) return configuredApiKey;
             if (key.equals("deepseek.default.model")) return configuredModel;
+            if (key.equals("google.api.key")) return configuredApiKey;
+            if (key.equals("google.default.model")) return configuredModel;
             return defaultValue;
         });
     }
@@ -103,5 +110,27 @@ class AiMenuItemTest {
         AiMenuItem item = new AiMenuItem(parent);
 
         assertNotNull(item);
+    }
+
+    @Test
+    void createAiServiceUsesDocumentedAnthropicDefaultModelKey() {
+        configuredServiceType = "anthropic";
+        configuredApiKey = "test-key";
+        configuredModel = "claude-sonnet-4-6";
+
+        AiService service = AiMenuItem.createAiService(configuredServiceType);
+
+        assertInstanceOf(ClaudeService.class, service);
+    }
+
+    @Test
+    void createAiServiceSupportsGoogleServiceType() {
+        configuredServiceType = "google";
+        configuredApiKey = "test-google-key";
+        configuredModel = "gemini-2.5-flash";
+
+        AiService service = AiMenuItem.createAiService(configuredServiceType);
+
+        assertInstanceOf(GoogleAiService.class, service);
     }
 }

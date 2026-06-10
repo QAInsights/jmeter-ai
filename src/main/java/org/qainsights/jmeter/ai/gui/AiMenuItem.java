@@ -3,11 +3,13 @@ package org.qainsights.jmeter.ai.gui;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
+import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +63,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
      * @param serviceType the type of AI service to create
      * @return the AI service instance, or null if configuration is invalid
      */
-    private AiService createAiService(String serviceType) {
+    static AiService createAiService(String serviceType) {
         try {
             if ("openai".equalsIgnoreCase(serviceType)) {
                 // Check if OpenAI API key is configured
@@ -74,7 +76,10 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
             } else if ("anthropic".equalsIgnoreCase(serviceType)) {
                 // Check if Anthropic API key is configured
                 String apiKey = AiConfig.getProperty("anthropic.api.key", "");
-                String model = AiConfig.getProperty("anthropic.model", "");
+                String model = firstConfigured(
+                        AiConfig.getProperty("anthropic.default.model", ""),
+                        AiConfig.getProperty("claude.default.model", ""),
+                        AiConfig.getProperty("anthropic.model", ""));
                 if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
                         && model != null && !model.isEmpty()) {
                     return new ClaudeService();
@@ -91,11 +96,28 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                         && model != null && !model.isEmpty()) {
                     return new DeepseekAiService();
                 }
+            } else if ("google".equalsIgnoreCase(serviceType)) {
+                String apiKey = AiConfig.getProperty("google.api.key", "");
+                String model = AiConfig.getProperty("google.default.model", "gemini-2.5-flash");
+                if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_GOOGLE_API_KEY")
+                        && !apiKey.equals("YOUR_API_KEY") && model != null && !model.isEmpty()) {
+                    Client googleClient = Client.builder().apiKey(apiKey).build();
+                    return new GoogleAiService(googleClient);
+                }
             }
         } catch (Exception e) {
             log.error("Error creating AI service", e);
         }
         return null;
+    }
+
+    private static String firstConfigured(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     public static ImageIcon getButtonIcon(int pixelSize) {

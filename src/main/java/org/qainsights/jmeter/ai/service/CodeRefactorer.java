@@ -96,8 +96,19 @@ public class CodeRefactorer {
 
             if ("openai".equalsIgnoreCase(aiServiceType)) {
                 model = AiConfig.getProperty("openai.default.model", "gpt-4o");
+            } else if ("anthropic".equalsIgnoreCase(aiServiceType)) {
+                model = firstConfigured(
+                        AiConfig.getProperty("anthropic.default.model", ""),
+                        AiConfig.getProperty("claude.default.model", ""),
+                        AiConfig.getProperty("anthropic.model", "claude-3-sonnet-20240229"));
+            } else if ("google".equalsIgnoreCase(aiServiceType)) {
+                model = AiConfig.getProperty("google.default.model", "gemini-2.5-flash");
+            } else if ("ollama".equalsIgnoreCase(aiServiceType)) {
+                model = AiConfig.getProperty("ollama.default.model", "deepseek-r1:1.5b");
+            } else if ("deepseek".equalsIgnoreCase(aiServiceType)) {
+                model = AiConfig.getProperty("deepseek.default.model", "deepseek-chat");
             } else {
-                model = AiConfig.getProperty("anthropic.model", "claude-3-sonnet-20240229");
+                model = AiConfig.getProperty("openai.default.model", "gpt-4o");
             }
 
             String refactoredCode = aiService.generateResponse(List.of(prompt), model);
@@ -151,5 +162,14 @@ public class CodeRefactorer {
         cleaned = cleaned.replaceAll("(?i)\\n\\s*\\n.*?(note|explanation|changes|improvements):?.*$", "");
 
         return cleaned.trim();
+    }
+
+    private static String firstConfigured(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+        return "";
     }
 }
