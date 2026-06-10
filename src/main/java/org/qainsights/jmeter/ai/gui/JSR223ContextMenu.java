@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.CodeRefactorer;
+import org.qainsights.jmeter.ai.service.GroovyCodeFormatter;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import java.awt.event.ActionEvent;
 import org.apache.jmeter.gui.action.ActionNames;
@@ -160,12 +161,10 @@ public class JSR223ContextMenu {
         // Add format code menu item
         JMenuItem formatCodeItem = new JMenuItem("Format Code");
         formatCodeItem.addActionListener(e -> {
-            // This is a placeholder - you'd implement or connect to a code formatter
             String code = textArea.getText();
             if (code != null && !code.trim().isEmpty()) {
                 try {
-                    // Simple indentation formatting
-                    code = formatGroovyCode(code);
+                    code = new GroovyCodeFormatter().format(code);
                     textArea.setText(code);
                 } catch (Exception ex) {
                     log.error("Error formatting code", ex);
@@ -223,51 +222,6 @@ public class JSR223ContextMenu {
         // Mark the text area as having a context menu
         textArea.putClientProperty("contextMenuAdded", Boolean.TRUE);
         log.debug("Added context menu to JSR223 script editor");
-    }
-
-    /**
-     * Very simple code formatter for Groovy scripts
-     * This is a basic implementation and could be improved
-     */
-    private static String formatGroovyCode(String code) {
-        if (code == null || code.trim().isEmpty()) {
-            return code;
-        }
-
-        StringBuilder formatted = new StringBuilder();
-        String[] lines = code.split("\n");
-        int indentLevel = 0;
-
-        for (String line : lines) {
-            String trimmed = line.trim();
-
-            // Adjust indent level based on closing braces at the start of the line
-            if (trimmed.startsWith("}") || trimmed.startsWith(")")) {
-                indentLevel = Math.max(0, indentLevel - 1);
-            }
-
-            // Add the appropriate indentation
-            if (!trimmed.isEmpty()) {
-                for (int i = 0; i < indentLevel; i++) {
-                    formatted.append("    "); // 4 spaces per indent level
-                }
-                formatted.append(trimmed).append("\n");
-            } else {
-                formatted.append("\n"); // Preserve empty lines
-            }
-
-            // Increase indent level for lines ending with opening braces
-            if (trimmed.endsWith("{") || trimmed.endsWith("(")) {
-                indentLevel++;
-            }
-
-            // Decrease indent level for lines ending with closing braces
-            if (trimmed.endsWith("}") || trimmed.endsWith(")")) {
-                indentLevel = Math.max(0, indentLevel - 1);
-            }
-        }
-
-        return formatted.toString();
     }
 
     /**
