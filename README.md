@@ -1,41 +1,3 @@
-<!--
-================================================================================
-EXAMPLE: How a typical famous repo README looks like
-================================================================================
-
-<div align="center">
-
-  <img src="logo.png" alt="Logo" width="120">
-
-  # Project Name
-
-  [![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
-  [![Version](https://img.shields.io/badge/version-1.0.0-blue)]()
-  [![Downloads](https://img.shields.io/badge/downloads-1M+-orange)]()
-  [![License](https://img.shields.io/badge/license-MIT-green)]()
-  [![Stars](https://img.shields.io/badge/stars-10k+-yellow)]()
-
-  ### One-line tagline that hooks the reader instantly
-
-  [Getting Started](#getting-started) · [Features](#features) · [Docs]() · [Changelog]()
-
-  <img src="demo.gif" width="700" alt="Demo">
-
-</div>
-
----
-
-## Contents
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Contributing](#contributing)
-- [License](#license)
-
-================================================================================
--->
-
 <div align="center">
 
 # 🪶 Feather Wand
@@ -44,7 +6,7 @@ EXAMPLE: How a typical famous repo README looks like
 
 [![Release](https://img.shields.io/github/v/release/QAInsights/jmeter-ai?logo=github&style=flat-square)](https://github.com/QAInsights/jmeter-ai/releases)
 [![PerfAtlas](https://img.shields.io/badge/PerfAtlas-View_Plugin-b0d600?logo=apachejmeter&logoColor=white&style=flat-square)](https://plugins.jmeter.ai/plugin/feather-wand-jmeter-ai-agent/)
-[![License](https://img.shields.io/github/license/QAInsights/jmeter-ai?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/QAInsights/jmeter-ai?style=flat-square&logo=github)](https://github.com/QAInsights/jmeter-ai)
 
 [Features](#-features) · [Install](#-installation) · [Configure](#-configuration) · [Commands](#-special-commands) · [Changelog](https://github.com/QAInsights/jmeter-ai/releases)
