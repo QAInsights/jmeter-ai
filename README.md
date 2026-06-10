@@ -3,6 +3,8 @@
 This plugin provides a simple way to chat with AI in JMeter. Feather Wand serves as your intelligent assistant for
 JMeter test plan development, optimization, and troubleshooting.
 
+[![PerfAtlas](https://img.shields.io/badge/PerfAtlas-View_Plugin-b0d600?style=for-the-badge&logo=apachejmeter&logoColor=white)](https://plugins.jmeter.ai/plugin/feather-wand-jmeter-ai-agent/)
+
 > 🪄 **About the name**: The name "Feather Wand" was suggested by my children who were inspired by an episode of the
 > animated show Bluey. In the episode, a simple feather becomes a magical wand that transforms the ordinary into
 > something
@@ -68,7 +70,7 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 | Property                      | Description                                                         | Default Value |
 |-------------------------------|---------------------------------------------------------------------|---------------|
 | `jmeter.ai.streaming.enabled` | Enable real-time streaming of AI responses (token-by-token display) | `true`        |
-| `jmeter.ai.response.chime`    | Play an audio chime when AI responses complete                     | `false`       |
+| `jmeter.ai.response.chime`    | Play an audio chime when AI responses complete                      | `false`       |
 
 > When streaming is enabled (default), AI responses appear progressively in the chat as they are generated. You can
 > cancel the response at any time using the **Stop** button that appears next to the Send button. This feature is
@@ -101,15 +103,15 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 #### Google Gemini Configuration
 
-| Property                   | Description                                         | Default Value              |
-|----------------------------|-----------------------------------------------------|----------------------------|
-| `google.api.key`           | Your Google AI API key                              | Required                   |
-| `google.streaming.enabled` | Enable real-time streaming for Google Gemini        | `true`                     |
-| `google.default.model`     | Default Google Gemini model to use                  | `gemini-2.5-flash`         |
-| `google.temperature`       | Temperature setting (0.0-1.0)                       | `0.7`                      |
-| `google.max.tokens`        | Maximum tokens for AI responses                     | `4096`                     |
-| `google.max.history.size`  | Maximum conversation history size                   | `10`                       |
-| `google.system.prompt`     | System prompt that guides Gemini's responses        | See sample properties file |
+| Property                   | Description                                  | Default Value              |
+|----------------------------|----------------------------------------------|----------------------------|
+| `google.api.key`           | Your Google AI API key                       | Required                   |
+| `google.streaming.enabled` | Enable real-time streaming for Google Gemini | `true`                     |
+| `google.default.model`     | Default Google Gemini model to use           | `gemini-2.5-flash`         |
+| `google.temperature`       | Temperature setting (0.0-1.0)                | `0.7`                      |
+| `google.max.tokens`        | Maximum tokens for AI responses              | `4096`                     |
+| `google.max.history.size`  | Maximum conversation history size            | `10`                       |
+| `google.system.prompt`     | System prompt that guides Gemini's responses | See sample properties file |
 
 #### Ollama Configuration
 
@@ -130,36 +132,37 @@ to your `jmeter.properties` or `user.properties` file and modify the properties 
 
 #### Code Refactoring Configuration
 
-| Property                        | Description                                                          | Default Value |
-|---------------------------------|----------------------------------------------------------------------|---------------|
-| `jmeter.ai.refactoring.enabled` | Enable code refactoring for JSR223 script editor                     | true          |
+| Property                        | Description                                                                                           | Default Value |
+|---------------------------------|-------------------------------------------------------------------------------------------------------|---------------|
+| `jmeter.ai.refactoring.enabled` | Enable code refactoring for JSR223 script editor                                                      | true          |
 | `jmeter.ai.service.type`        | The AI service to use for code refactoring ("anthropic", "openai", "ollama", "deepseek", or "google") | "anthropic"   |
 
 #### AI CLI Terminal Configuration
 
-The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **GitHub Copilot CLI**, **OpenCode**, and **Antigravity CLI**. The plugin
+The AI CLI Terminal supports **Claude Code**, **OpenAI Codex CLI**, **GitHub Copilot CLI**, **OpenCode**, and *
+*Antigravity CLI**. The plugin
 automatically detects which CLIs are available on your system's `PATH` and presents them in a dropdown selector.
 
 **Prerequisites:**
 
-| CLI                    | Binary Name | Installation Guide                                                        |
-|------------------------|-------------|---------------------------------------------------------------------------|
-| **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)  |
-| **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                       |
+| CLI                    | Binary Name | Installation Guide                                                                               |
+|------------------------|-------------|--------------------------------------------------------------------------------------------------|
+| **Claude Code**        | `claude`    | [Claude Code Quickstart](https://docs.anthropic.com/en/docs/claude-code)                         |
+| **OpenAI Codex CLI**   | `codex`     | [OpenAI Codex CLI](https://github.com/openai/codex)                                              |
 | **GitHub Copilot CLI** | `copilot`   | [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) |
-| **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                |
-| **Antigravity CLI**    | `agy`       | [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli)  |
+| **OpenCode**           | `opencode`  | [OpenCode](https://github.com/sst/opencode)                                                      |
+| **Antigravity CLI**    | `agy`       | [Antigravity CLI](https://www.antigravity.google/product/antigravity-cli)                        |
 
-| Property                                | Description                                                                                | Default Value              |
-|-----------------------------------------|--------------------------------------------------------------------------------------------|----------------------------|
-| `jmeter.ai.terminal.claudecode.enabled` | Enable the embedded AI CLI Terminal feature (applies to all supported CLIs)                | true                       |
-| `jmeter.ai.terminal.claudecode.path`    | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`)            | Empty (auto-detect)        |
-| `jmeter.ai.terminal.claudecode.prompt`  | Custom system prompt passed to the CLI (not recommended to change)                         | See sample properties file |
-| `jmeter.ai.terminal.copilot.enabled`    | Enable GitHub Copilot CLI in the AI CLI Terminal                                           | false                      |
-| `jmeter.ai.terminal.copilot.path`       | Full path to the `copilot` executable                                                       | Empty (auto-detect)        |
-| `jmeter.ai.terminal.copilot.prompt`     | Custom system prompt for GitHub Copilot CLI                                                 | See sample properties file |
-| `jmeter.ai.terminal.antigravity.enabled`| Enable Antigravity CLI detection in the terminal (requires `agy` on PATH)                   | `false`                    |
-| `jmeter.ai.terminal.antigravity.prompt` | Custom system prompt passed to Antigravity CLI                                              | See sample properties file |
+| Property                                 | Description                                                                      | Default Value              |
+|------------------------------------------|----------------------------------------------------------------------------------|----------------------------|
+| `jmeter.ai.terminal.claudecode.enabled`  | Enable the embedded AI CLI Terminal feature (applies to all supported CLIs)      | true                       |
+| `jmeter.ai.terminal.claudecode.path`     | Full path to the `claude` executable (e.g., `/usr/local/bin/claude` or `C:\...`) | Empty (auto-detect)        |
+| `jmeter.ai.terminal.claudecode.prompt`   | Custom system prompt passed to the CLI (not recommended to change)               | See sample properties file |
+| `jmeter.ai.terminal.copilot.enabled`     | Enable GitHub Copilot CLI in the AI CLI Terminal                                 | false                      |
+| `jmeter.ai.terminal.copilot.path`        | Full path to the `copilot` executable                                            | Empty (auto-detect)        |
+| `jmeter.ai.terminal.copilot.prompt`      | Custom system prompt for GitHub Copilot CLI                                      | See sample properties file |
+| `jmeter.ai.terminal.antigravity.enabled` | Enable Antigravity CLI detection in the terminal (requires `agy` on PATH)        | `false`                    |
+| `jmeter.ai.terminal.antigravity.prompt`  | Custom system prompt passed to Antigravity CLI                                   | See sample properties file |
 
 ### 💬 Customizing the System Prompt
 
@@ -179,7 +182,8 @@ Use the `@usage` command to view detailed token usage information for your AI in
 1. **How to Use**:
 
     - Simply type `@usage` in the chat
-    - The command will show usage statistics for OpenAI, Anthropic, Google, DeepSeek, or Ollama depending on which service you're using
+    - The command will show usage statistics for OpenAI, Anthropic, Google, DeepSeek, or Ollama depending on which
+      service you're using
 
 2. **Information Provided**:
 
@@ -374,12 +378,12 @@ testing environment.
 
 ### Supported CLIs
 
-| CLI                    | Description                                                                  |
-|------------------------|------------------------------------------------------------------------------|
-| **Claude Code**        | Anthropic's agentic coding tool for natural language test plan interaction   |
-| **OpenAI Codex CLI**   | OpenAI's lightweight coding agent for terminal-based development workflows   |
-| **OpenCode**           | An open-source AI coding agent designed for terminal-based workflows         |
-| **Antigravity CLI**    | Google's agent-first terminal tool                                       |
+| CLI                  | Description                                                                |
+|----------------------|----------------------------------------------------------------------------|
+| **Claude Code**      | Anthropic's agentic coding tool for natural language test plan interaction |
+| **OpenAI Codex CLI** | OpenAI's lightweight coding agent for terminal-based development workflows |
+| **OpenCode**         | An open-source AI coding agent designed for terminal-based workflows       |
+| **Antigravity CLI**  | Google's agent-first terminal tool                                         |
 
 The plugin **automatically detects** which of these CLIs are available on your system's `PATH` and presents them
 in a dropdown selector within the terminal header. Simply select the CLI you'd like to use and start interacting.
@@ -389,7 +393,7 @@ in a dropdown selector within the terminal header. Simply select the CLI you'd l
 1. **Prerequisites**: Install one or more supported CLIs on your system (see the [Configuration](#-configuration)
    section for installation links).
 2. **Auto-detection**: Feather Wand scans your system's `PATH` on startup and populates the dropdown with
-detected CLIs.
+   detected CLIs.
 3. **CLI Selector**: Use the dropdown in the terminal header to switch between available CLIs at any time.
    Switching will automatically restart the terminal with the newly selected CLI.
 4. **Setup**: Make sure to set `jmeter.ai.terminal.claudecode.enabled=true` in your properties file.
