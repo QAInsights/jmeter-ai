@@ -143,12 +143,18 @@ class KiroCliAdapterTest {
     }
 
     private static void withProperty(String key, String value, Runnable body) {
-        String prev = org.apache.jmeter.util.JMeterUtils.getProperty(key);
+        String prev = JMeterUtils.getProperty(key);
         try {
-            org.apache.jmeter.util.JMeterUtils.setProperty(key, value);
+            JMeterUtils.setProperty(key, value);
             body.run();
         } finally {
-            org.apache.jmeter.util.JMeterUtils.setProperty(key, prev == null ? "" : prev);
+            // Remove (not blank out) when previously unset, so the default applies
+            // again regardless of test order.
+            if (prev == null) {
+                JMeterUtils.getJMeterProperties().remove(key);
+            } else {
+                JMeterUtils.setProperty(key, prev);
+            }
         }
     }
 }

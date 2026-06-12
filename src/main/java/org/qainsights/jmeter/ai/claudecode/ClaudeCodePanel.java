@@ -289,6 +289,15 @@ public class ClaudeCodePanel extends JPanel {
                                 ? selectedCli.buildCommand(testPlanDir)
                                 : new ArrayList<>(Arrays.asList(claudeBinary));
 
+                        // Audit trail: record who launched which CLI, with what flags,
+                        // and a hash of the (redacted) context that was shared.
+                        org.qainsights.jmeter.ai.security.AuditLogger.recordLaunch(
+                                selectedCli != null ? selectedCli.getName() : "unknown",
+                                claudeBinary,
+                                command,
+                                testPlanDir,
+                                org.qainsights.jmeter.ai.security.SecretRedactor.redact(systemPrompt));
+
                         // Set up environment
                         Map<String, String> env = new HashMap<>(System.getenv());
                         env.put("TERM", "xterm-256color");
