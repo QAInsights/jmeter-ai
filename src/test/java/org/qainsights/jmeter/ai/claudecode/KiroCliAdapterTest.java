@@ -159,6 +159,18 @@ class KiroCliAdapterTest {
         assertEquals("", command.get(command.size() - 1));
     }
 
+    // ── MCP wiring ─────────────────────────────────────────────────────────────
+
+    @Test
+    void supportsMcp_isTrue() {
+        assertTrue(new KiroCliAdapter().supportsMcp());
+    }
+
+    @Test
+    void mcpConfigRelativePath_isKiroWorkspaceSettings() {
+        assertEquals(".kiro/settings/mcp.json", new KiroCliAdapter().mcpConfigRelativePath());
+    }
+
     private static KiroCliAdapter detectedAdapter(String binary) {
         KiroCliAdapter adapter = new KiroCliAdapter() {
             @Override

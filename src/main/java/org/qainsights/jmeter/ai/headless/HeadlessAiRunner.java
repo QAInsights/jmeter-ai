@@ -94,6 +94,10 @@ public final class HeadlessAiRunner {
         File workingDir = resolveWorkingDir(options);
         String sharedContext = prepareContext(options, workingDir);
 
+        // Wire MCP servers (e.g. the JMeter MCP server) so the agent can run tests
+        // and parse JTLs through tools rather than free text.
+        org.qainsights.jmeter.ai.mcp.McpConfigWriter.writeFor(cli, workingDir);
+
         List<String> command = cli.buildHeadlessCommand(prompt, workingDir.getAbsolutePath());
 
         AuditLogger.recordLaunch(cli.getName(), cli.getBinaryPath(), command,

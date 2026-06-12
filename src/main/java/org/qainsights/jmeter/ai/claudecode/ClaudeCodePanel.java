@@ -284,6 +284,14 @@ public class ClaudeCodePanel extends JPanel {
                             }
                         }
 
+                        // Wire MCP servers (e.g. the JMeter MCP server) into the
+                        // working directory so the agent can run tests and parse JTLs
+                        // through tools rather than free text.
+                        if (selectedCli instanceof BaseCliAdapter && testPlanDir != null) {
+                            org.qainsights.jmeter.ai.mcp.McpConfigWriter.writeFor(
+                                    (BaseCliAdapter) selectedCli, new File(testPlanDir));
+                        }
+
                         // Build command with arguments (each adapter provides its own flags)
                         List<String> command = selectedCli != null
                                 ? selectedCli.buildCommand(testPlanDir)

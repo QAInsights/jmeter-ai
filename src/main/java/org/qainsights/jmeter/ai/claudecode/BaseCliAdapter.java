@@ -106,4 +106,22 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
         throw new UnsupportedOperationException(getName() + " does not support headless mode");
     }
 
+    /**
+     * @return {@code true} if this CLI reads a project-scoped MCP config file.
+     *         Defaults to {@code false}; CLIs that do override this together with
+     *         {@link #mcpConfigRelativePath()}.
+     */
+    public boolean supportsMcp() {
+        return false;
+    }
+
+    /**
+     * @return the MCP config path this CLI reads, <em>relative to the working
+     *         directory</em> (e.g. {@code .kiro/settings/mcp.json}), or
+     *         {@code null} if MCP wiring is not supported.
+     */
+    public String mcpConfigRelativePath() {
+        return null;
+    }
+
 }

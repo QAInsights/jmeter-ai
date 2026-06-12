@@ -107,6 +107,17 @@ public class KiroCliAdapter extends BaseCliAdapter {
     }
 
     @Override
+    public boolean supportsMcp() {
+        return true;
+    }
+
+    @Override
+    public String mcpConfigRelativePath() {
+        // Kiro reads workspace MCP config from <project-root>/.kiro/settings/mcp.json
+        return ".kiro/settings/mcp.json";
+    }
+
+    @Override
     public List<String> buildHeadlessCommand(String prompt, String workingDirectory) {
         // Kiro CLI 2.0 headless: kiro-cli chat --no-interactive [trust] "<prompt>"
         // Requires KIRO_API_KEY in the environment (Pro tier+).
