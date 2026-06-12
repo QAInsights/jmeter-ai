@@ -116,6 +116,10 @@ public class ClaudeCodePanel extends JPanel {
         if (antigravity.isEnabled() && antigravity.detect())
             available.add(antigravity);
 
+        AiCliAdapter kiro = new KiroCliAdapter();
+        if (kiro.isEnabled() && kiro.detect())
+            available.add(kiro);
+
         return available;
     }
 
@@ -262,6 +266,13 @@ public class ClaudeCodePanel extends JPanel {
                                 Files.write(claudeMdFile.toPath(),
                                         systemPrompt.getBytes(StandardCharsets.UTF_8));
                                 log.info("Wrote CLAUDE.md to: {}", claudeMdFile.getAbsolutePath());
+
+                                // AWS Kiro (and other agents) read AGENTS.md / KIRO.md
+                                // instead of CLAUDE.md, so mirror the same context there.
+                                Files.write(new File(testPlanDir, "AGENTS.md").toPath(),
+                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
+                                Files.write(new File(testPlanDir, "KIRO.md").toPath(),
+                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
                             } catch (Exception e) {
                                 log.warn("Could not write CLAUDE.md", e);
                                 claudeMdFile = null;
