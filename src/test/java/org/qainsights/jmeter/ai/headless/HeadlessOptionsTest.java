@@ -33,6 +33,14 @@ class HeadlessOptionsTest {
     }
 
     @Test
+    void parsesGenerateFlags() {
+        HeadlessOptions o = HeadlessOptions.parse(new String[]{
+                "--generate-from", "api.har", "--generate-out", "plan.jmx"});
+        assertEquals("api.har", o.generateFrom);
+        assertEquals("plan.jmx", o.generateOut);
+    }
+
+    @Test
     void helpFlagSetsHelp() {
         assertTrue(HeadlessOptions.parse(new String[]{"--help"}).help);
         assertTrue(HeadlessOptions.parse(new String[]{"-h"}).help);

@@ -22,6 +22,8 @@ public final class HeadlessOptions {
     public String prompt;
     public String promptFile;
     public String jmx;
+    public String generateFrom;
+    public String generateOut = "generated-plan.jmx";
     public String workingDir;
     public String output = "jmeter-ai-report.md";
     public String format = "md";
@@ -35,6 +37,8 @@ public final class HeadlessOptions {
                 + "  --prompt <text>       request to send (or --prompt-file)\n"
                 + "  --prompt-file <path>  read the prompt from a file\n"
                 + "  --jmx <path>          test plan shared as (redacted) context\n"
+                + "  --generate-from <path> HAR or OpenAPI/Swagger (JSON) to generate a .jmx from\n"
+                + "  --generate-out <path>  where to write the generated plan (default: generated-plan.jmx)\n"
                 + "  --working-dir <path>  directory to run the CLI in (default: temp)\n"
                 + "  --output <path>       report file (default: jmeter-ai-report.md)\n"
                 + "  --format md|json      report format (default: md)\n"
@@ -74,6 +78,12 @@ public final class HeadlessOptions {
                     break;
                 case "--jmx":
                     o.jmx = value(args, ++i, a);
+                    break;
+                case "--generate-from":
+                    o.generateFrom = value(args, ++i, a);
+                    break;
+                case "--generate-out":
+                    o.generateOut = value(args, ++i, a);
                     break;
                 case "--working-dir":
                     o.workingDir = value(args, ++i, a);

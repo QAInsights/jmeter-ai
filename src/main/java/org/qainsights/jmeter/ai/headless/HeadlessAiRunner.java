@@ -76,6 +76,28 @@ public final class HeadlessAiRunner {
     public int run(HeadlessOptions options, ProcessRunner runner, BaseCliAdapter adapter)
             throws Exception {
 
+        // Optional generation step: HAR / OpenAPI -> .jmx. If no prompt follows,
+        // this is a pure generation run; otherwise the generated plan becomes the
+        // context the AI then refines.
+        boolean hasPrompt = (options.prompt != null && !options.prompt.isEmpty())
+                || (options.promptFile != null && !options.promptFile.isEmpty());
+        if (options.generateFrom != null && !options.generateFrom.isEmpty()) {
+            String jmx = org.qainsights.jmeter.ai.generate.TestPlanGenerator
+                    .generateFromFile(options.generateFrom, null);
+            Path out = Paths.get(options.generateOut);
+            if (out.getParent() != null) {
+                Files.createDirectories(out.getParent());
+            }
+            Files.write(out, jmx.getBytes(StandardCharsets.UTF_8));
+            System.out.println("Generated test plan: " + options.generateOut);
+            if (!hasPrompt) {
+                return EXIT_OK;
+            }
+            if (options.jmx == null || options.jmx.isEmpty()) {
+                options.jmx = options.generateOut; // refine the plan we just made
+            }
+        }
+
         String prompt = resolvePrompt(options);
         if (prompt == null || prompt.trim().isEmpty()) {
             throw new HeadlessUsageException("A prompt is required (--prompt or --prompt-file)");

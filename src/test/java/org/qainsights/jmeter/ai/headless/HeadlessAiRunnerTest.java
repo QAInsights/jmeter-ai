@@ -88,6 +88,25 @@ class HeadlessAiRunnerTest {
                 () -> new HeadlessAiRunner().run(o, fixedRunner(0, "", false), adapter(true, true)));
     }
 
+    @Test
+    void generateOnlyWritesJmxAndReturnsOk(@TempDir Path dir) throws Exception {
+        Path har = dir.resolve("capture.har");
+        Files.write(har, ("{\"log\":{\"entries\":[{\"request\":{\"method\":\"GET\","
+                + "\"url\":\"https://h/x\",\"headers\":[]}}]}}").getBytes(StandardCharsets.UTF_8));
+
+        HeadlessOptions o = new HeadlessOptions();
+        o.generateFrom = har.toString();
+        o.generateOut = dir.resolve("plan.jmx").toString();
+        o.prompt = null; // generation-only
+
+        int code = new HeadlessAiRunner().run(o, fixedRunner(0, "", false), adapter(true, true));
+
+        assertEquals(HeadlessAiRunner.EXIT_OK, code);
+        String jmx = read(o.generateOut);
+        assertTrue(jmx.contains("<HTTPSamplerProxy"), jmx);
+        assertTrue(jmx.contains("HTTPSampler.path\">/x</stringProp>"), jmx);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static String read(String path) throws IOException {
