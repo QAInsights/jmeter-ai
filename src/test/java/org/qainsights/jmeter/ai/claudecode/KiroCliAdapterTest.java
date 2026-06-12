@@ -131,6 +131,34 @@ class KiroCliAdapterTest {
         });
     }
 
+    // ── headless mode ──────────────────────────────────────────────────────────
+
+    @Test
+    void supportsHeadless_isTrue() {
+        assertTrue(new KiroCliAdapter().supportsHeadless());
+    }
+
+    @Test
+    void buildHeadlessCommand_includesNoInteractiveTrustAndPrompt() {
+        KiroCliAdapter adapter = detectedAdapter("/usr/local/bin/kiro-cli");
+
+        List<String> command = adapter.buildHeadlessCommand("Lint this plan", null);
+
+        assertEquals("/usr/local/bin/kiro-cli", command.get(0));
+        assertEquals("chat", command.get(1));
+        assertTrue(command.contains("--no-interactive"), command.toString());
+        assertTrue(command.contains("--trust-tools=read,grep,fs_read"), command.toString());
+        assertEquals("Lint this plan", command.get(command.size() - 1),
+                "prompt must be the final argument");
+    }
+
+    @Test
+    void buildHeadlessCommand_nullPromptBecomesEmptyArg() {
+        KiroCliAdapter adapter = detectedAdapter("/usr/local/bin/kiro-cli");
+        List<String> command = adapter.buildHeadlessCommand(null, null);
+        assertEquals("", command.get(command.size() - 1));
+    }
+
     private static KiroCliAdapter detectedAdapter(String binary) {
         KiroCliAdapter adapter = new KiroCliAdapter() {
             @Override

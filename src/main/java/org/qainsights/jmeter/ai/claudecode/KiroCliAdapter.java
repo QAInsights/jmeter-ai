@@ -97,10 +97,33 @@ public class KiroCliAdapter extends BaseCliAdapter {
         // from the working directory for test-plan context.
         List<String> command = super.buildCommand(workingDirectory);
         command.add("chat");
+        appendTrustFlags(command);
+        return command;
+    }
 
-        // Governed tool-trust policy. Defaults to read-only tools so the agent
-        // cannot mutate the test plan or filesystem without an explicit opt-in.
-        // Admins can lock either property via a managed user.properties.
+    @Override
+    public boolean supportsHeadless() {
+        return true;
+    }
+
+    @Override
+    public List<String> buildHeadlessCommand(String prompt, String workingDirectory) {
+        // Kiro CLI 2.0 headless: kiro-cli chat --no-interactive [trust] "<prompt>"
+        // Requires KIRO_API_KEY in the environment (Pro tier+).
+        List<String> command = super.buildCommand(workingDirectory);
+        command.add("chat");
+        command.add("--no-interactive");
+        appendTrustFlags(command);
+        command.add(prompt == null ? "" : prompt);
+        return command;
+    }
+
+    /**
+     * Append the governed tool-trust policy. Defaults to read-only tools so the
+     * agent cannot mutate the test plan or filesystem without an explicit opt-in.
+     * Admins can lock either property via a managed user.properties.
+     */
+    private void appendTrustFlags(List<String> command) {
         if (AiConfig.getProperty("jmeter.ai.terminal.kiro.trust_all_tools", "false")
                 .equalsIgnoreCase("true")) {
             command.add("--trust-all-tools");
@@ -111,7 +134,6 @@ public class KiroCliAdapter extends BaseCliAdapter {
                 command.add("--trust-tools=" + trustTools);
             }
         }
-        return command;
     }
 
     @Override

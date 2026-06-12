@@ -162,8 +162,8 @@ public final class AuditLogger {
         sb.append('"').append(key).append("\":\"").append(escape(value)).append('"');
     }
 
-    /** Minimal JSON string escaping (dependency-free). */
-    static String escape(String s) {
+    /** Minimal JSON string escaping (dependency-free). Shared by report rendering. */
+    public static String escape(String s) {
         if (s == null) {
             return "";
         }

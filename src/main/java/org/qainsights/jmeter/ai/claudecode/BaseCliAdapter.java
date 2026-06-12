@@ -84,4 +84,26 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
                 "Help the user to optimize the JMeter test plan, scripting, and performance related issues.";
     }
 
+    /**
+     * @return {@code true} if this CLI can run a single prompt non-interactively
+     *         (for CI/headless use). Defaults to {@code false}; CLIs that support
+     *         it override this together with {@link #buildHeadlessCommand}.
+     */
+    public boolean supportsHeadless() {
+        return false;
+    }
+
+    /**
+     * Build the command for a one-shot, non-interactive run of {@code prompt}.
+     * Only meaningful when {@link #supportsHeadless()} is {@code true}.
+     *
+     * @param prompt           the natural-language request
+     * @param workingDirectory directory the CLI runs in (holds the context files)
+     * @return full argv starting with the binary path
+     * @throws UnsupportedOperationException if this CLI has no headless mode
+     */
+    public List<String> buildHeadlessCommand(String prompt, String workingDirectory) {
+        throw new UnsupportedOperationException(getName() + " does not support headless mode");
+    }
+
 }
