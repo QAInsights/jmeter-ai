@@ -65,6 +65,10 @@ public class ClaudeCodePanel extends JPanel {
         setPreferredSize(new Dimension(600, 600));
         setMinimumSize(new Dimension(400, 300));
 
+        // Pull managed (org-wide) config before detecting CLIs, so a platform
+        // team can centrally control which CLIs/policies apply.
+        org.qainsights.jmeter.ai.config.ManagedConfigLoader.applyOnce();
+
         availableClis = detectAvailableClis();
         if (!availableClis.isEmpty()) {
             selectedCli = availableClis.get(0);

@@ -52,6 +52,7 @@ public final class HeadlessAiRunner {
                 System.exit(EXIT_OK);
             }
             ensureJMeterProperties();
+            org.qainsights.jmeter.ai.config.ManagedConfigLoader.applyOnce();
             code = new HeadlessAiRunner().run(options, new DefaultProcessRunner(), null);
         } catch (HeadlessUsageException e) {
             System.err.println("Error: " + e.getMessage());
