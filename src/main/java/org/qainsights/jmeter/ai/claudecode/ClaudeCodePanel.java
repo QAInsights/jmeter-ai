@@ -262,17 +262,22 @@ public class ClaudeCodePanel extends JPanel {
                         // by PtyProcessBuilder, causing stray text to be sent as user input)
                         if (testPlanDir != null) {
                             try {
+                                // Redact secrets (passwords, tokens, API keys) before any
+                                // context leaves JMeter for an external AI CLI. Enabled by
+                                // default; see jmeter.ai.security.redaction.enabled.
+                                byte[] contextBytes = org.qainsights.jmeter.ai.security.SecretRedactor
+                                        .redact(systemPrompt).getBytes(StandardCharsets.UTF_8);
+
                                 claudeMdFile = new File(testPlanDir, "CLAUDE.md");
-                                Files.write(claudeMdFile.toPath(),
-                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
-                                log.info("Wrote CLAUDE.md to: {}", claudeMdFile.getAbsolutePath());
+                                Files.write(claudeMdFile.toPath(), contextBytes);
+                                log.info("Wrote CLAUDE.md to: {} (redaction enabled={})",
+                                        claudeMdFile.getAbsolutePath(),
+                                        org.qainsights.jmeter.ai.security.SecretRedactor.isEnabled());
 
                                 // AWS Kiro (and other agents) read AGENTS.md / KIRO.md
                                 // instead of CLAUDE.md, so mirror the same context there.
-                                Files.write(new File(testPlanDir, "AGENTS.md").toPath(),
-                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
-                                Files.write(new File(testPlanDir, "KIRO.md").toPath(),
-                                        systemPrompt.getBytes(StandardCharsets.UTF_8));
+                                Files.write(new File(testPlanDir, "AGENTS.md").toPath(), contextBytes);
+                                Files.write(new File(testPlanDir, "KIRO.md").toPath(), contextBytes);
                             } catch (Exception e) {
                                 log.warn("Could not write CLAUDE.md", e);
                                 claudeMdFile = null;

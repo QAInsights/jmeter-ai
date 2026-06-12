@@ -1,7 +1,11 @@
 package org.qainsights.jmeter.ai.claudecode;
 
+import org.apache.jmeter.util.JMeterUtils;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -13,6 +17,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * anonymous subclasses so tests never invoke a real system process.
  */
 class KiroCliAdapterTest {
+
+    @BeforeAll
+    static void initJMeterProperties() throws IOException {
+        // setProperty needs an initialized properties object; load an empty one.
+        if (JMeterUtils.getJMeterProperties() == null) {
+            File tmp = File.createTempFile("jmeter-test", ".properties");
+            tmp.deleteOnExit();
+            JMeterUtils.loadJMeterProperties(tmp.getAbsolutePath());
+        }
+    }
 
     // ── getName ────────────────────────────────────────────────────────────────
 
@@ -79,18 +93,62 @@ class KiroCliAdapterTest {
 
     @Test
     void buildCommand_afterDetect_appendsChatSubcommand() {
-        KiroCliAdapter adapter = new KiroCliAdapter() {
-            @Override
-            protected String findOnPath(String binaryName) {
-                return "/usr/local/bin/kiro-cli";
-            }
-        };
-        adapter.detect();
+        KiroCliAdapter adapter = detectedAdapter("/usr/local/bin/kiro-cli");
 
         List<String> command = adapter.buildCommand(null);
 
-        assertEquals(2, command.size());
         assertEquals("/usr/local/bin/kiro-cli", command.get(0));
         assertEquals("chat", command.get(1));
+    }
+
+    // ── tool-trust policy ──────────────────────────────────────────────────────
+
+    @Test
+    void buildCommand_byDefault_restrictsToReadOnlyTrustedTools() {
+        KiroCliAdapter adapter = detectedAdapter("/usr/local/bin/kiro-cli");
+
+        List<String> command = adapter.buildCommand(null);
+
+        assertTrue(command.contains("--trust-tools=read,grep,fs_read"),
+                "default policy must trust only read-only tools: " + command);
+        assertFalse(command.contains("--trust-all-tools"));
+    }
+
+    @Test
+    void buildCommand_whenTrustAllToolsEnabled_usesTrustAllFlag() {
+        withProperty("jmeter.ai.terminal.kiro.trust_all_tools", "true", () -> {
+            List<String> command = detectedAdapter("/usr/local/bin/kiro-cli").buildCommand(null);
+            assertTrue(command.contains("--trust-all-tools"), command.toString());
+            assertFalse(command.stream().anyMatch(s -> s.startsWith("--trust-tools=")));
+        });
+    }
+
+    @Test
+    void buildCommand_whenTrustToolsBlank_omitsTrustFlag() {
+        withProperty("jmeter.ai.terminal.kiro.trust_tools", "", () -> {
+            List<String> command = detectedAdapter("/usr/local/bin/kiro-cli").buildCommand(null);
+            assertFalse(command.stream().anyMatch(s -> s.startsWith("--trust-tools")), command.toString());
+        });
+    }
+
+    private static KiroCliAdapter detectedAdapter(String binary) {
+        KiroCliAdapter adapter = new KiroCliAdapter() {
+            @Override
+            protected String findOnPath(String binaryName) {
+                return binary;
+            }
+        };
+        adapter.detect();
+        return adapter;
+    }
+
+    private static void withProperty(String key, String value, Runnable body) {
+        String prev = org.apache.jmeter.util.JMeterUtils.getProperty(key);
+        try {
+            org.apache.jmeter.util.JMeterUtils.setProperty(key, value);
+            body.run();
+        } finally {
+            org.apache.jmeter.util.JMeterUtils.setProperty(key, prev == null ? "" : prev);
+        }
     }
 }

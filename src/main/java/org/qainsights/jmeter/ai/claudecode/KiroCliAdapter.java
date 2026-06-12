@@ -97,6 +97,20 @@ public class KiroCliAdapter extends BaseCliAdapter {
         // from the working directory for test-plan context.
         List<String> command = super.buildCommand(workingDirectory);
         command.add("chat");
+
+        // Governed tool-trust policy. Defaults to read-only tools so the agent
+        // cannot mutate the test plan or filesystem without an explicit opt-in.
+        // Admins can lock either property via a managed user.properties.
+        if (AiConfig.getProperty("jmeter.ai.terminal.kiro.trust_all_tools", "false")
+                .equalsIgnoreCase("true")) {
+            command.add("--trust-all-tools");
+        } else {
+            String trustTools = AiConfig
+                    .getProperty("jmeter.ai.terminal.kiro.trust_tools", "read,grep,fs_read").trim();
+            if (!trustTools.isEmpty()) {
+                command.add("--trust-tools=" + trustTools);
+            }
+        }
         return command;
     }
 
