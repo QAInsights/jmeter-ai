@@ -29,6 +29,8 @@ public final class HeadlessOptions {
     public String format = "md";
     public long timeoutSeconds = 300;
     public boolean failOnError;
+    public boolean consensus;
+    public String clis = "kiro,claude";
     public boolean help;
 
     public static String usage() {
@@ -44,6 +46,8 @@ public final class HeadlessOptions {
                 + "  --format md|json      report format (default: md)\n"
                 + "  --timeout <seconds>   wall-clock limit (default: 300)\n"
                 + "  --fail-on-error       exit non-zero if the CLI run fails\n"
+                + "  --consensus           run the prompt across multiple CLIs and diff answers\n"
+                + "  --clis <a,b>          CLIs for --consensus (default: kiro,claude)\n"
                 + "  --help                print this help";
     }
 
@@ -66,6 +70,12 @@ public final class HeadlessOptions {
                     break;
                 case "--fail-on-error":
                     o.failOnError = true;
+                    break;
+                case "--consensus":
+                    o.consensus = true;
+                    break;
+                case "--clis":
+                    o.clis = value(args, ++i, a);
                     break;
                 case "--cli":
                     o.cli = value(args, ++i, a);

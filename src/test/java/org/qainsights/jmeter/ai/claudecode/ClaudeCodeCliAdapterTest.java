@@ -133,4 +133,28 @@ class ClaudeCodeCliAdapterTest {
         String prompt = new ClaudeCodeCliAdapter().defaultPrompt();
         assertTrue(prompt.toLowerCase().contains("performance engineer"));
     }
+
+    // ── headless mode ──────────────────────────────────────────────────────────
+
+    @Test
+    void supportsHeadless_isTrue() {
+        assertTrue(new ClaudeCodeCliAdapter().supportsHeadless());
+    }
+
+    @Test
+    void buildHeadlessCommand_usesPrintFlagAndPrompt() {
+        ClaudeCodeCliAdapter adapter = new ClaudeCodeCliAdapter() {
+            @Override
+            protected String findOnPath(String binaryName) {
+                return "/usr/local/bin/claude";
+            }
+        };
+        adapter.detect();
+
+        java.util.List<String> cmd = adapter.buildHeadlessCommand("Lint this plan", "/work");
+        assertEquals("/usr/local/bin/claude", cmd.get(0));
+        assertTrue(cmd.contains("-p"), cmd.toString());
+        assertTrue(cmd.contains("Lint this plan"), cmd.toString());
+        assertTrue(cmd.contains("--add-dir"), cmd.toString());
+    }
 }

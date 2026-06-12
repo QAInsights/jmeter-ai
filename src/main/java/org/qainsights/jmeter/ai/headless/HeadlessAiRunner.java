@@ -104,6 +104,10 @@ public final class HeadlessAiRunner {
             throw new HeadlessUsageException("A prompt is required (--prompt or --prompt-file)");
         }
 
+        if (options.consensus) {
+            return runConsensus(options, runner, prompt, resolveClis(options.clis));
+        }
+
         BaseCliAdapter cli = adapter != null ? adapter : resolveAdapter(options.cli);
         if (!cli.detect()) {
             System.err.println(cli.getName() + " was not found. Install it or set its path property.");
@@ -152,10 +156,70 @@ public final class HeadlessAiRunner {
             case "kiro-cli":
             case "aws kiro":
                 return new KiroCliAdapter();
+            case "claude":
+            case "claude code":
+            case "claudecode":
+                return new org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliAdapter();
             default:
                 throw new HeadlessUsageException(
-                        "Unknown or non-headless CLI: '" + name + "'. Supported: kiro");
+                        "Unknown or non-headless CLI: '" + name + "'. Supported: kiro, claude");
         }
+    }
+
+    private List<BaseCliAdapter> resolveClis(String csv) {
+        List<BaseCliAdapter> clis = new java.util.ArrayList<>();
+        for (String part : (csv == null ? "" : csv).split(",")) {
+            String p = part.trim();
+            if (!p.isEmpty()) {
+                clis.add(resolveAdapter(p));
+            }
+        }
+        if (clis.isEmpty()) {
+            throw new HeadlessUsageException("--consensus needs at least one CLI in --clis");
+        }
+        return clis;
+    }
+
+    /** Run the prompt across multiple CLIs and write a consensus report. */
+    int runConsensus(HeadlessOptions options, ProcessRunner runner, String prompt,
+                     List<BaseCliAdapter> clis) throws IOException {
+        File workingDir = resolveWorkingDir(options);
+        String sharedContext = prepareContext(options, workingDir);
+
+        for (BaseCliAdapter cli : clis) {
+            org.qainsights.jmeter.ai.mcp.McpConfigWriter.writeFor(cli, workingDir);
+        }
+
+        org.qainsights.jmeter.ai.consensus.ConsensusRunner consensus =
+                new org.qainsights.jmeter.ai.consensus.ConsensusRunner(runner);
+        List<org.qainsights.jmeter.ai.consensus.ConsensusRunner.Outcome> outcomes =
+                consensus.run(prompt, workingDir.getAbsolutePath(), clis, options.timeoutSeconds);
+
+        // Audit each launched CLI.
+        for (org.qainsights.jmeter.ai.consensus.ConsensusRunner.Outcome o : outcomes) {
+            if (o.available) {
+                AuditLogger.recordLaunch(o.cliName + " (consensus)", "", null,
+                        workingDir.getAbsolutePath(), sharedContext);
+            }
+        }
+
+        org.qainsights.jmeter.ai.consensus.ConsensusReport report =
+                new org.qainsights.jmeter.ai.consensus.ConsensusReport(prompt, outcomes);
+        Path out = Paths.get(options.output);
+        if (out.getParent() != null) {
+            Files.createDirectories(out.getParent());
+        }
+        Files.write(out, report.render(options.format).getBytes(StandardCharsets.UTF_8));
+
+        long ok = outcomes.stream().filter(o -> o.succeeded()).count();
+        System.out.println("Consensus: " + ok + "/" + outcomes.size()
+                + " CLIs succeeded, agreement " + String.format("%.2f", report.agreementScore())
+                + " — report: " + options.output);
+
+        if (ok == 0) {
+            return options.failOnError ? 1 : EXIT_OK;
+        }
+        return EXIT_OK;
     }
 
     private String resolvePrompt(HeadlessOptions options) throws IOException {

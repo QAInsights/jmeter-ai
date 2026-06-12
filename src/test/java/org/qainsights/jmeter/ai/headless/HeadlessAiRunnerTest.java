@@ -107,6 +107,20 @@ class HeadlessAiRunnerTest {
         assertTrue(jmx.contains("HTTPSampler.path\">/x</stringProp>"), jmx);
     }
 
+    @Test
+    void consensusRunsMultipleClisAndWritesReport(@TempDir Path dir) throws Exception {
+        HeadlessOptions o = options(dir, false);
+        int code = new HeadlessAiRunner().runConsensus(o,
+                fixedRunner(0, "the db pool is exhausted", false), "why slow?",
+                Arrays.asList(adapter(true, true), adapter(true, true)));
+
+        assertEquals(HeadlessAiRunner.EXIT_OK, code);
+        String report = read(o.output);
+        assertTrue(report.contains("Consensus Report"), report);
+        assertTrue(report.contains("Agreement score:"), report);
+        assertTrue(report.contains("the db pool is exhausted"), report);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static String read(String path) throws IOException {

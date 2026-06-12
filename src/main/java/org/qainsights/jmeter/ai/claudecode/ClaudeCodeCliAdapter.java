@@ -48,6 +48,24 @@ public class ClaudeCodeCliAdapter extends BaseCliAdapter {
     }
 
     @Override
+    public boolean supportsHeadless() {
+        return true;
+    }
+
+    @Override
+    public List<String> buildHeadlessCommand(String prompt, String workingDirectory) {
+        // Claude Code headless: claude -p "<prompt>" [--add-dir <dir>]
+        List<String> command = super.buildCommand(workingDirectory);
+        command.add("-p");
+        command.add(prompt == null ? "" : prompt);
+        if (workingDirectory != null) {
+            command.add("--add-dir");
+            command.add(workingDirectory);
+        }
+        return command;
+    }
+
+    @Override
     public boolean isEnabled() {
         return AiConfig.getProperty("jmeter.ai.terminal.claudecode.enabled", "true").equals("true");
     }
