@@ -99,6 +99,34 @@ public final class HeadlessAiRunner {
             }
         }
 
+        // Correlation autopilot: detect dynamic values in a HAR and write a report.
+        // A standalone analysis step (no CLI needed); if a prompt also follows, the
+        // generated report can inform the AI's next action.
+        if (options.correlateFrom != null && !options.correlateFrom.isEmpty()) {
+            String har = new String(Files.readAllBytes(Paths.get(options.correlateFrom)),
+                    StandardCharsets.UTF_8);
+            java.util.List<org.qainsights.jmeter.ai.correlation.CorrelationCandidate> candidates;
+            try {
+                candidates = org.qainsights.jmeter.ai.correlation.HarCorrelationAnalyzer.analyze(har);
+            } catch (Exception e) {
+                throw new HeadlessUsageException("Could not analyze HAR: " + e.getMessage());
+            }
+            String report = new org.qainsights.jmeter.ai.correlation.CorrelationReport(candidates)
+                    .render(options.format);
+            Path out = Paths.get(options.output);
+            if (out.getParent() != null) {
+                Files.createDirectories(out.getParent());
+            }
+            Files.write(out, report.getBytes(StandardCharsets.UTF_8));
+            System.out.println("Correlation autopilot: found " + candidates.size()
+                    + " dynamic value(s) — report: " + options.output);
+            boolean hasPromptForCorr = (options.prompt != null && !options.prompt.isEmpty())
+                    || (options.promptFile != null && !options.promptFile.isEmpty());
+            if (!hasPromptForCorr) {
+                return EXIT_OK;
+            }
+        }
+
         String prompt = resolvePrompt(options);
         if (prompt == null || prompt.trim().isEmpty()) {
             throw new HeadlessUsageException("A prompt is required (--prompt or --prompt-file)");

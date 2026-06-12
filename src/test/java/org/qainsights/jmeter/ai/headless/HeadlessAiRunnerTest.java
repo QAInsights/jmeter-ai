@@ -121,6 +121,30 @@ class HeadlessAiRunnerTest {
         assertTrue(report.contains("the db pool is exhausted"), report);
     }
 
+    @Test
+    void correlateOnlyWritesReportAndReturnsOk(@TempDir Path dir) throws Exception {
+        Path har = dir.resolve("rec.har");
+        String json = "{\"log\":{\"entries\":["
+                + "{\"request\":{\"method\":\"GET\",\"url\":\"https://h/login\",\"headers\":[]},"
+                + " \"response\":{\"content\":{\"text\":\"{\\\"csrfToken\\\":\\\"abc123DEF456ghi\\\"}\"}}},"
+                + "{\"request\":{\"method\":\"POST\",\"url\":\"https://h/do?csrf=abc123DEF456ghi\",\"headers\":[]},"
+                + " \"response\":{\"content\":{\"text\":\"{}\"}}}"
+                + "]}}";
+        Files.write(har, json.getBytes(StandardCharsets.UTF_8));
+
+        HeadlessOptions o = new HeadlessOptions();
+        o.correlateFrom = har.toString();
+        o.output = dir.resolve("corr.md").toString();
+        o.prompt = null; // correlation-only
+
+        int code = new HeadlessAiRunner().run(o, fixedRunner(0, "", false), adapter(true, true));
+
+        assertEquals(HeadlessAiRunner.EXIT_OK, code);
+        String report = read(o.output);
+        assertTrue(report.contains("Correlation Autopilot Report"), report);
+        assertTrue(report.contains("csrfToken"), report);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static String read(String path) throws IOException {

@@ -66,7 +66,8 @@ public final class HarParser {
         return model;
     }
 
-    static HttpRequestSpec fromUrl(String url) {
+    /** Parse a full URL into protocol/domain/port/path. Shared with correlation analysis. */
+    public static HttpRequestSpec fromUrl(String url) {
         try {
             URI uri = URI.create(url);
             String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();

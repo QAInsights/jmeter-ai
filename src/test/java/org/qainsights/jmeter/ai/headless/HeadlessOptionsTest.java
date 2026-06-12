@@ -41,6 +41,15 @@ class HeadlessOptionsTest {
     }
 
     @Test
+    void parsesCorrelateAndConsensusFlags() {
+        HeadlessOptions o = HeadlessOptions.parse(new String[]{
+                "--correlate-from", "rec.har", "--consensus", "--clis", "kiro,claude"});
+        assertEquals("rec.har", o.correlateFrom);
+        assertTrue(o.consensus);
+        assertEquals("kiro,claude", o.clis);
+    }
+
+    @Test
     void helpFlagSetsHelp() {
         assertTrue(HeadlessOptions.parse(new String[]{"--help"}).help);
         assertTrue(HeadlessOptions.parse(new String[]{"-h"}).help);
