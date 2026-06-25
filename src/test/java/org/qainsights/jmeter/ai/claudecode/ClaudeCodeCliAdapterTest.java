@@ -133,4 +133,14 @@ class ClaudeCodeCliAdapterTest {
         String prompt = new ClaudeCodeCliAdapter().defaultPrompt();
         assertTrue(prompt.toLowerCase().contains("performance engineer"));
     }
+
+    @Test
+    void defaultPrompt_hasNoStringConcatenationArtifacts() {
+        String prompt = new ClaudeCodeCliAdapter().defaultPrompt();
+        // Guards against the copy-paste regression where the fallback literal
+        // contained `" +` and source-indentation newlines.
+        assertFalse(prompt.contains("\" +"));
+        assertFalse(prompt.contains("\n  "));
+        assertFalse(prompt.contains("\n"));
+    }
 }

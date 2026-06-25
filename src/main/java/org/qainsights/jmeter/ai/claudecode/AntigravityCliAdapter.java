@@ -23,8 +23,8 @@ public class AntigravityCliAdapter extends BaseCliAdapter {
     @Override
     public String defaultPrompt() {
         return AiConfig.getProperty("jmeter.ai.terminal.antigravity.prompt",
-                "You are a performance engineer and testing expert in JMeter. \" +\n" +
-                        "                \"Help the user to optimize the JMeter test plan, scripting, and performance related issues.");
+                "You are a performance engineer and testing expert in JMeter. " +
+                        "Help the user to optimize the JMeter test plan, scripting, and performance related issues.");
     }
 
 }

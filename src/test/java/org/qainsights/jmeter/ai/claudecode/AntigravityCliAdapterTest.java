@@ -92,4 +92,22 @@ class AntigravityCliAdapterTest {
         assertEquals(1, command.size());
         assertEquals("/usr/local/bin/agy", command.get(0));
     }
+
+    // ── defaultPrompt ────────────────────────────────────────────────────────────
+
+    @Test
+    void defaultPrompt_containsPerformanceEngineer() {
+        String prompt = new AntigravityCliAdapter().defaultPrompt();
+        assertTrue(prompt.toLowerCase().contains("performance engineer"));
+    }
+
+    @Test
+    void defaultPrompt_hasNoStringConcatenationArtifacts() {
+        String prompt = new AntigravityCliAdapter().defaultPrompt();
+        // Guards against the copy-paste regression where the fallback literal
+        // contained `" +` and source-indentation newlines.
+        assertFalse(prompt.contains("\" +"));
+        assertFalse(prompt.contains("\n  "));
+        assertFalse(prompt.contains("\n"));
+    }
 }

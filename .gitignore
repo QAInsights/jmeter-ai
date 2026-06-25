@@ -133,6 +133,7 @@ replay_pid*
 .vscode/settings.json
 .DS_Store
 PPA.md
+POLISH.md
 
 ollama-src
 *.txt
