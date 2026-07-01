@@ -1,8 +1,11 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
+import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -10,6 +13,7 @@ import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.SwingWorker;
@@ -67,6 +71,12 @@ public class CommandDispatcher {
                 return;
             default:
                 break;
+        }
+
+        // Tier 2: agentic tool-calling loop (feature-flagged; Claude only for the MVP).
+        if (JMeterAgent.isEnabled() && isClaudeModel(cb.getSelectedModel())) {
+            handleAgentCommand(message);
+            return;
         }
 
         log.info("Checking if message is an element request: '{}'", message);
@@ -249,6 +259,73 @@ public class CommandDispatcher {
                 }
             }
         }.execute();
+    }
+
+    /**
+     * Runs the agentic tool-calling loop for a message, streaming each tool
+     * call/result line into the chat and posting the final summary. On any
+     * failure it degrades to a plain (non-agentic) AI answer so the user is
+     * never left with a dead end.
+     */
+    private void handleAgentCommand(String message) {
+        log.info("Processing message via agent loop");
+        cb.setLastCommandType("NONE");
+        cb.setInputEnabled(false);
+        cb.removeLoadingIndicator();
+
+        new SwingWorker<String, String>() {
+            @Override
+            protected String doInBackground() {
+                try {
+                    AiService service = cb.resolveAiService(cb.getSelectedModel());
+                    if (!(service instanceof ClaudeService)) {
+                        return "Agent mode currently supports Claude models only. Select a Claude model and retry.";
+                    }
+                    JMeterAgent agent = JMeterAgent.forClaude((ClaudeService) service);
+                    AgentLoop.AgentResult result = agent.run(message, this::publish);
+                    String summary = result.getFinalText();
+                    if (!result.isCompleted()) {
+                        summary = (summary.isEmpty() ? "" : summary + "\n\n")
+                                + "[Agent stopped after reaching the step limit.]";
+                    }
+                    return summary.isEmpty() ? "Done." : summary;
+                } catch (RuntimeException agentError) {
+                    log.error("Agent loop failed, degrading to plain AI response", agentError);
+                    publish("[Agent error: " + agentError.getMessage() + " - falling back to a plain answer.]");
+                    return cb.getAiResponse(message);
+                }
+            }
+
+            @Override
+            protected void process(List<String> chunks) {
+                for (String line : chunks) {
+                    cb.appendMessageToChat(line);
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    String response = get();
+                    cb.onWorkerSuccess(response);
+                    cb.addToConversationHistory(response);
+                } catch (InterruptedException | ExecutionException e) {
+                    cb.onWorkerError("Error running the agent", e,
+                            "Sorry, I encountered an error while running the agent. Please try again.");
+                }
+            }
+        }.execute();
+    }
+
+    /** True when the selected model routes to Claude (the only agent provider in the MVP). */
+    static boolean isClaudeModel(String selectedModel) {
+        if (selectedModel == null || selectedModel.isEmpty()) {
+            return true;
+        }
+        return !selectedModel.startsWith("openai:")
+                && !selectedModel.startsWith("ollama:")
+                && !selectedModel.startsWith("deepseek:")
+                && !selectedModel.startsWith("google:");
     }
 
     /**
