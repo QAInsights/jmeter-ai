@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
@@ -26,6 +27,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * without touching the live JMeter tree.
  */
 class JMeterAgentTest {
+
+    @BeforeEach
+    void resetUndoNudge() {
+        JMeterAgent.resetUndoNudgeForTests();
+    }
 
     private static Message textMessage(String text) {
         Map<String, Object> usage = new LinkedHashMap<>();
@@ -180,5 +186,29 @@ class JMeterAgentTest {
         agent.run("show me the tree", null, progressLines::add);
 
         assertTrue(progressLines.stream().noneMatch(l -> l.contains("declined")));
+    }
+
+    @Test
+    void run_undoHistoryDisabled_showsNudgeOnceOnFirstRunOnly() {
+        // undo.history.size defaults to 0 in a plain test JVM, so UndoHistory.isEnabled()
+        // is false here - exercising the "not yet enabled" branch of the nudge.
+        ClaudeChatModel.MessageService service = params -> textMessage("ok");
+        JMeterAgent agent = new JMeterAgent(service, "claude", 1024, 5);
+
+        List<String> firstRun = new ArrayList<>();
+        agent.run("hello", null, firstRun::add);
+        assertTrue(firstRun.stream().anyMatch(l -> l.contains("Undo/Redo")));
+
+        List<String> secondRun = new ArrayList<>();
+        agent.run("hello again", null, secondRun::add);
+        assertTrue(secondRun.stream().noneMatch(l -> l.contains("Undo/Redo")));
+    }
+
+    @Test
+    void run_nullProgress_doesNotThrowWhileCheckingUndoHistory() {
+        ClaudeChatModel.MessageService service = params -> textMessage("ok");
+        JMeterAgent agent = new JMeterAgent(service, "claude", 1024, 5);
+
+        assertDoesNotThrow(() -> agent.run("hello", null, null));
     }
 }

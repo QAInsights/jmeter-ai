@@ -6,8 +6,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import org.apache.jmeter.gui.UndoHistory;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
 import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
@@ -43,6 +45,9 @@ public final class JMeterAgent {
     /** Tool names that require confirmation via the {@link ToolConfirmationGate} when set. */
     private static final Set<String> DESTRUCTIVE_TOOLS = Collections.unmodifiableSet(new HashSet<>(
             Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT)));
+
+    /** Ensures the undo-history nudge (see {@link #maybeWarnAboutUndoHistory}) fires once per session. */
+    private static final AtomicBoolean UNDO_NUDGE_SHOWN = new AtomicBoolean(false);
 
     private final ClaudeChatModel.MessageService service;
     private final String model;
@@ -113,6 +118,7 @@ public final class JMeterAgent {
      * @return the loop outcome
      */
     public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress) {
+        maybeWarnAboutUndoHistory(progress);
         ToolRegistry registry = AgentToolRegistry.createDefault();
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
@@ -153,5 +159,28 @@ public final class JMeterAgent {
         } catch (RuntimeException e) {
             return fallback;
         }
+    }
+
+    /**
+     * Nudges the user, once per JMeter session, to enable JMeter's own Undo/Redo
+     * history (disabled by default: {@code undo.history.size=0}) so agent-made
+     * changes can be reverted with Ctrl+Z. No further wiring is needed once it's
+     * enabled - the agent's mutations already fire the same {@code JMeterTreeModel}
+     * events JMeter's own GUI actions do, and {@code UndoHistory} listens generically.
+     */
+    private static void maybeWarnAboutUndoHistory(Consumer<String> progress) {
+        if (progress == null || UndoHistory.isEnabled()) {
+            return;
+        }
+        if (UNDO_NUDGE_SHOWN.compareAndSet(false, true)) {
+            progress.accept("[Note: JMeter's Undo/Redo is disabled by default. Add "
+                    + "undo.history.size=50 (or a value you prefer) to user.properties and "
+                    + "restart JMeter to be able to undo changes the agent makes.]");
+        }
+    }
+
+    /** Test-only hook to reset the one-time undo nudge between test cases. */
+    static void resetUndoNudgeForTests() {
+        UNDO_NUDGE_SHOWN.set(false);
     }
 }
