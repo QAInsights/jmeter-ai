@@ -19,6 +19,7 @@ import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
@@ -46,7 +47,7 @@ public final class JMeterAgent {
     /** Tool names that require confirmation via the {@link ToolConfirmationGate} when set. */
     private static final Set<String> DESTRUCTIVE_TOOLS = Collections.unmodifiableSet(new HashSet<>(
             Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT,
-                    OpenPlanHandler.OPEN_PLAN)));
+                    OpenPlanHandler.OPEN_PLAN, ApplyCorrelationHandler.APPLY_CORRELATION)));
 
     /** Ensures the undo-history nudge (see {@link #maybeWarnAboutUndoHistory}) fires once per session. */
     private static final AtomicBoolean UNDO_NUDGE_SHOWN = new AtomicBoolean(false);
@@ -63,8 +64,8 @@ public final class JMeterAgent {
 
     /**
      * @param confirmationGate asked before running a destructive tool ({@code delete_element},
-     *                          {@code move_element}, {@code open_plan}); {@code null} runs
-     *                          destructive tools without confirmation
+     *                          {@code move_element}, {@code open_plan}, {@code apply_correlation});
+     *                          {@code null} runs destructive tools without confirmation
      */
     public JMeterAgent(ClaudeChatModel.MessageService service, String model, long maxTokens, int maxIterations,
                        ToolConfirmationGate confirmationGate) {
@@ -82,8 +83,8 @@ public final class JMeterAgent {
 
     /**
      * Wires an agent against an existing {@link ClaudeService}'s client and model. Destructive
-     * tools (delete/move/open_plan) are gated behind a confirmation dialog unless
-     * {@code jmeter.ai.agent.confirm.destructive} is set to {@code false}.
+     * tools (delete/move/open_plan/apply_correlation) are gated behind a confirmation dialog
+     * unless {@code jmeter.ai.agent.confirm.destructive} is set to {@code false}.
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
