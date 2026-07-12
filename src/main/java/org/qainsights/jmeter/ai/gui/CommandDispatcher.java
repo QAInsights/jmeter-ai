@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -28,6 +29,7 @@ public class CommandDispatcher {
     private static final Logger log = LoggerFactory.getLogger(CommandDispatcher.class);
 
     private final CommandCallback cb;
+    private final TreeActivityGlowController glowController = new TreeActivityGlowController();
 
     public CommandDispatcher(CommandCallback callback) {
         this.cb = callback;
@@ -294,6 +296,17 @@ public class CommandDispatcher {
     }
 
     /**
+     * Extracts a tool call's {@code element_id} argument, if it has one, for
+     * {@link TreeActivityGlowController#onToolCallStarted}. Tools with no such
+     * argument (e.g. {@code run_test}, {@code save_plan}) pass {@code null}, which
+     * the controller resolves to the Test Plan node as a generic activity cue.
+     */
+    private static String elementIdOf(AssistantTurn.ToolCall call) {
+        Object id = call.getArguments().get("element_id");
+        return id == null ? null : String.valueOf(id);
+    }
+
+    /**
      * Runs the agentic tool-calling loop for a message, streaming each tool
      * call/result line into the chat, then replaying the final summary
      * token-by-token (if {@code jmeter.ai.streaming.enabled}) via the same
@@ -324,8 +337,14 @@ public class CommandDispatcher {
                         return finish("Agent mode currently supports Claude models only. Select a Claude model and retry.");
                     }
                     JMeterAgent agent = JMeterAgent.forClaude((ClaudeService) service);
-                    AgentLoop.AgentResult result = agent.run(message, priorTurns,
-                            line -> publish(AgentChunk.progress(line)));
+                    AgentLoop.AgentResult result;
+                    try {
+                        result = agent.run(message, priorTurns,
+                                line -> publish(AgentChunk.progress(line)),
+                                call -> glowController.onToolCallStarted(elementIdOf(call)));
+                    } finally {
+                        glowController.onRunFinished();
+                    }
                     String summary = result.getFinalText();
                     if (!result.isCompleted()) {
                         summary = (summary.isEmpty() ? "" : summary + "\n\n")

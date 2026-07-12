@@ -95,6 +95,34 @@ class AgentLoopTest {
     }
 
     @Test
+    void run_withOnToolCallStartedListener_isNotifiedForEachToolCallBeforeExecution() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("tu_1"));
+        model.turns.add(new AssistantTurn("Done.", Collections.emptyList()));
+
+        List<AssistantTurn.ToolCall> started = new ArrayList<>();
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5)
+                .run("go", null, started::add);
+
+        assertTrue(result.isCompleted());
+        assertEquals(1, started.size());
+        assertEquals("echo", started.get(0).getName());
+        assertEquals("v", started.get(0).getArguments().get("k"));
+    }
+
+    @Test
+    void run_withNullOnToolCallStartedListener_behavesLikeTheTwoArgOverload() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("tu_1"));
+        model.turns.add(new AssistantTurn("Done.", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5).run("go", null, null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(1, echoCalls.size());
+    }
+
+    @Test
     void run_hitsIterationCap_returnsExhausted() {
         ScriptedModel model = new ScriptedModel();
         // Always asks for another tool call.

@@ -71,29 +71,9 @@ public class GeminiBorderPanel extends JPanel {
         int height = getHeight();
 
         if (isThinking) {
-            // Calculate rotating gradient points
-            double angleRad = Math.toRadians(rotationAngle);
-            float x1 = (float) (width / 2.0 + (width / 2.0) * Math.cos(angleRad));
-            float y1 = (float) (height / 2.0 + (height / 2.0) * Math.sin(angleRad));
-            float x2 = (float) (width / 2.0 - (width / 2.0) * Math.cos(angleRad));
-            float y2 = (float) (height / 2.0 - (height / 2.0) * Math.sin(angleRad));
-
-            // Google Gemini shiny gradient colors
-            Color[] colors = {
-                new Color(0x42, 0x85, 0xF4), // Blue
-                new Color(0x9b, 0x51, 0xe0), // Purple
-                new Color(0xea, 0x43, 0x35), // Pink/Red
-                new Color(0x24, 0xb4, 0xf4), // Cyan
-                new Color(0x42, 0x85, 0xF4)  // Blue (wrap)
-            };
-            float[] fractions = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
-
-            LinearGradientPaint paint = new LinearGradientPaint(x1, y1, x2, y2, fractions, colors);
-            g2d.setPaint(paint);
-            g2d.setStroke(new BasicStroke(3.0f));
-            
-            // Draw a rounded rectangle border
-            g2d.drawRoundRect(2, 2, width - 4, height - 4, 12, 12);
+            // Rotating multi-color gradient stroke - shared with the JMeter tree's
+            // agent-activity glow (see AgentGlowBorder) via AnimatedGradientPainter.
+            AnimatedGradientPainter.paintRotatingBorder(g2d, width, height, rotationAngle, 3.0f, 12, 2, 1f);
         } else {
             // Paint a subtle default border
             Color borderColor = UIManager.getColor("Component.borderColor");

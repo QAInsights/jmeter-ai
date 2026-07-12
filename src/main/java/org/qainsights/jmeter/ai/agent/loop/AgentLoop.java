@@ -74,7 +74,24 @@ public final class AgentLoop {
      * @return the run outcome
      */
     public AgentResult run(String userMessage, Consumer<String> progress) {
+        return run(userMessage, progress, null);
+    }
+
+    /**
+     * Runs the loop for one user message, additionally notifying {@code onToolCallStarted}
+     * with the raw {@link AssistantTurn.ToolCall} just before each call is executed - e.g.
+     * to drive a UI highlight of whatever element a tool call targets. Unlike {@code progress}
+     * (a formatted display string), this exposes the call's structured arguments.
+     *
+     * @param userMessage        the user's request
+     * @param progress           receives human-readable progress lines (tool calls/results); may be null
+     * @param onToolCallStarted  notified with each tool call about to run, before it executes; may be null
+     * @return the run outcome
+     */
+    public AgentResult run(String userMessage, Consumer<String> progress,
+                            Consumer<AssistantTurn.ToolCall> onToolCallStarted) {
         Consumer<String> sink = progress == null ? s -> { } : progress;
+        Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
 
         AssistantTurn turn = model.start(userMessage);
         int iterations = 1;
@@ -90,6 +107,7 @@ public final class AgentLoop {
 
             List<ToolOutcome> outcomes = new ArrayList<>();
             for (AssistantTurn.ToolCall call : turn.getToolCalls()) {
+                toolSink.accept(call);
                 sink.accept("\u2192 " + call.getName() + " " + call.getArguments());
                 ToolResult result = executor.execute(call.getName(), call.getArguments());
                 ToolOutcome outcome = ToolOutcome.from(call, result);

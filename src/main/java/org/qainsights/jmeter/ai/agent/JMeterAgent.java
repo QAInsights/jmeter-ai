@@ -14,6 +14,7 @@ import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
 import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.schema.SchemaGrounding;
 import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolConfirmationGate;
@@ -121,6 +122,19 @@ public final class JMeterAgent {
      * @return the loop outcome
      */
     public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress) {
+        return run(userMessage, priorConversationTurns, progress, null);
+    }
+
+    /**
+     * Same as {@link #run(String, List, Consumer)}, additionally notifying
+     * {@code onToolCallStarted} with each tool call's raw {@link AssistantTurn.ToolCall}
+     * just before it executes - e.g. to drive a UI highlight of whatever element a tool
+     * call targets (see {@code TreeActivityGlowController}).
+     *
+     * @param onToolCallStarted notified with each tool call about to run; may be null
+     */
+    public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress,
+                                      Consumer<AssistantTurn.ToolCall> onToolCallStarted) {
         maybeWarnAboutUndoHistory(progress);
         ToolRegistry registry = AgentToolRegistry.createDefault();
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
@@ -128,7 +142,7 @@ public final class JMeterAgent {
         List<MessageParam> seedHistory = toSeedHistory(priorConversationTurns);
         ClaudeChatModel chat = new ClaudeChatModel(service, new ClaudeToolAdapter(),
                 registry.getSpecs(), systemPrompt, model, maxTokens, seedHistory);
-        return new AgentLoop(chat, executor, maxIterations).run(userMessage, progress);
+        return new AgentLoop(chat, executor, maxIterations).run(userMessage, progress, onToolCallStarted);
     }
 
     /**
