@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.claude;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
@@ -34,16 +35,27 @@ public final class ClaudeChatModel implements ChatModel {
     private final String systemPrompt;
     private final String model;
     private final long maxTokens;
-    private final List<MessageParam> history = new ArrayList<>();
+    private final List<MessageParam> history;
 
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens) {
+        this(service, adapter, specs, systemPrompt, model, maxTokens, Collections.emptyList());
+    }
+
+    /**
+     * @param seedHistory prior conversation turns (e.g. from an earlier chat message) to
+     *                     prepend before the new user message, giving the model multi-turn
+     *                     memory across separate agent runs.
+     */
+    public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
+                           String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory) {
         this.service = service;
         this.adapter = adapter;
         this.specs = new ArrayList<>(specs);
         this.systemPrompt = systemPrompt;
         this.model = model;
         this.maxTokens = maxTokens;
+        this.history = new ArrayList<>(seedHistory);
     }
 
     @Override

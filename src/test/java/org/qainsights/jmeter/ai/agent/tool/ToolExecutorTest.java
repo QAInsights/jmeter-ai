@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent.tool;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -102,5 +103,55 @@ class ToolExecutorTest {
     void execute_toolReturnsNull_returnsNullResultError() {
         registry.register(tool(ToolSpec.builder("nullish").build(), args -> null));
         assertEquals(ToolExecutor.ERR_NULL_RESULT, executor.execute("nullish", new HashMap<>()).getErrorCode());
+    }
+
+    @Test
+    void execute_gatedToolApproved_runsNormally() {
+        registry.register(tool(ToolSpec.builder("delete_element").build(), args -> ToolResult.ok("deleted")));
+        ToolExecutor gated = new ToolExecutor(registry, Collections.singleton("delete_element"),
+                (toolName, args) -> true);
+
+        ToolResult r = gated.execute("delete_element", new HashMap<>());
+
+        assertTrue(r.isSuccess());
+        assertEquals("deleted", r.getData());
+    }
+
+    @Test
+    void execute_gatedToolDeclined_returnsDeclinedErrorWithoutRunningTheTool() {
+        boolean[] ran = {false};
+        registry.register(tool(ToolSpec.builder("delete_element").build(), args -> {
+            ran[0] = true;
+            return ToolResult.ok("deleted");
+        }));
+        ToolExecutor gated = new ToolExecutor(registry, Collections.singleton("delete_element"),
+                (toolName, args) -> false);
+
+        ToolResult r = gated.execute("delete_element", new HashMap<>());
+
+        assertFalse(r.isSuccess());
+        assertEquals(ToolExecutor.ERR_DECLINED, r.getErrorCode());
+        assertFalse(ran[0]);
+    }
+
+    @Test
+    void execute_ungatedTool_ignoresGateEvenWhenPresent() {
+        registry.register(tool(ToolSpec.builder("get_tree_state").build(), args -> ToolResult.ok("tree")));
+        ToolExecutor gated = new ToolExecutor(registry, Collections.singleton("delete_element"),
+                (toolName, args) -> false);
+
+        ToolResult r = gated.execute("get_tree_state", new HashMap<>());
+
+        assertTrue(r.isSuccess());
+    }
+
+    @Test
+    void execute_gatedToolWithNullGate_runsWithoutConfirmation() {
+        registry.register(tool(ToolSpec.builder("delete_element").build(), args -> ToolResult.ok("deleted")));
+        ToolExecutor noGate = new ToolExecutor(registry, Collections.singleton("delete_element"), null);
+
+        ToolResult r = noGate.execute("delete_element", new HashMap<>());
+
+        assertTrue(r.isSuccess());
     }
 }

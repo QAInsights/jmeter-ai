@@ -26,10 +26,16 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - Wired into chat via `CommandDispatcher` behind feature flag `jmeter.ai.agent.enabled`
   (Claude-only), runs on a background `SwingWorker`, streams tool call/result lines,
   degrades to a plain AI answer on error.
+- Multi-turn memory: prior chat turns are seeded into `ClaudeChatModel` on each run
+  (capped to the last 10 pairs).
+- Destructive tools (`delete_element`, `move_element`) are gated behind a blocking
+  Swing confirmation dialog (`ToolConfirmationGate` / `SwingToolConfirmationGate`),
+  controlled by `jmeter.ai.agent.confirm.destructive` (default `true`).
 
 **Quality**
 
-- 543 unit tests passing. End-to-end smoke test in live JMeter confirmed working.
+- 560 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+  (add/update/delete/toggle/move all verified live).
 
 ---
 
@@ -46,11 +52,11 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 
 ### Phase B — Reliability & UX of existing tools
 
-| #  | Task                                                 | Effort | Notes                                                                                                                              |
-|----|------------------------------------------------------|--------|------------------------------------------------------------------------------------------------------------------------------------|
-| B1 | Multi-turn conversation memory for the agent         | M      | `JMeterAgent.run` currently handles one message with no prior chat context; carry history so follow-ups ("now add a header") work. |
-| B2 | Human confirmation for destructive ops in agent mode | M      | `delete_element`/`move_element` execute without asking; add an opt-in confirm gate (setting) before mutations.                     |
-| B3 | Stream the agent's final text token-by-token         | S      | Today only tool lines stream; final summary posts at once.                                                                         |
+| #  | Task                                                       | Effort | Notes                                                                                                                                                                                                                                     |
+|----|-------------------------------------------------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| B1 | ~~Multi-turn conversation memory for the agent~~ **Done**   | M      | `JMeterAgent.run(message, priorConversationTurns, progress)` seeds `ClaudeChatModel` with the chat panel's prior turns (last 10 pairs, trailing unpaired turn dropped); wired from `CommandDispatcher.handleAgentCommand`.                |
+| B2 | ~~Human confirmation for destructive ops~~ **Done**         | M      | `ToolExecutor` gates `delete_element`/`move_element` behind a `ToolConfirmationGate`; `SwingToolConfirmationGate` shows a blocking Yes/No dialog on the EDT. Setting `jmeter.ai.agent.confirm.destructive` (default `true`) toggles it. |
+| B3 | Stream the agent's final text token-by-token               | S      | Today only tool lines stream; final summary posts at once.                                                                                                                                                                                 |
 | B4 | Expand `ElementPropertyCatalog` coverage             | M      | Add HeaderManager, AuthManager, JDBC, JSR223 variants, more assertions/timers.                                                     |
 | B5 | Enumerate allowed values for enum-like keys          | S      | e.g. HTTP method GET/POST/..., CSV shareMode; surface in `get_element_schema`.                                                     |
 | B6 | Integrate mutations with JMeter Undo/Redo            | M      | Agent edits should be undoable via the standard stack.                                                                             |
@@ -86,18 +92,19 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 
 ## 3. Known gaps / risks
 
-- **No conversation context** across chat turns (B1) — biggest usability gap.
-- **Destructive ops run unattended** in agent mode (B2) — safety concern.
 - **Claude-only** — other configured providers silently fall back to non-agent path (D1/D2).
 - **`move_element` appends** as last child; no positional control yet (C5).
 - **Property catalog is representative, not exhaustive** — uncurated types rely on
   `get_element_config` live inspection (B4/B5).
 - **Undo/redo** does not yet capture agent mutations (B6).
+- **Confirmation dialog blocks the background worker thread** while waiting for the
+  user's answer (expected/intended, but the chat UI doesn't show a distinct "waiting for
+  confirmation" state — the loading indicator was already removed at that point).
 
 ---
 
 ## 4. Suggested next step
 
-Phase A (commit + live-verify toggle/move + PR), then **B1 (conversation memory)** and
-**B2 (confirmation gate)** as the highest-leverage reliability/safety improvements, before
-tackling **C1 (test execution)** as the next big capability.
+Phase A is done. B1/B2 are implemented and unit-tested (560 tests green) but not yet
+committed or live-verified — do that next, then move on to **B3 (stream final text)**
+as a quick win, followed by **C1 (test execution)** as the next big capability.

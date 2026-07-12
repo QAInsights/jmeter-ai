@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent.claude;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
@@ -15,6 +16,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.MessageParam;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -97,5 +99,39 @@ class ClaudeChatModelTest {
         // History on the 2nd call: user + assistant(tool_use) + user(tool_result) = 3.
         assertTrue(captured.get(1).messages().size() > captured.get(0).messages().size());
         assertEquals(3, captured.get(1).messages().size());
+    }
+
+    @Test
+    void constructor_withSeedHistory_prependsItToTheFirstRequest() {
+        List<MessageCreateParams> captured = new ArrayList<>();
+        ClaudeChatModel.MessageService service = params -> {
+            captured.add(params);
+            return textMessage("ok");
+        };
+        List<MessageParam> seed = Arrays.asList(
+                MessageParam.builder().role(MessageParam.Role.USER).content("earlier question").build(),
+                MessageParam.builder().role(MessageParam.Role.ASSISTANT).content("earlier answer").build());
+
+        ClaudeChatModel model = new ClaudeChatModel(service, new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude", 1024, seed);
+        model.start("follow up");
+
+        // seed (2) + the new user message (1) = 3.
+        assertEquals(3, captured.get(0).messages().size());
+    }
+
+    @Test
+    void constructor_withoutSeedHistory_sendsOnlyTheNewMessage() {
+        List<MessageCreateParams> captured = new ArrayList<>();
+        ClaudeChatModel.MessageService service = params -> {
+            captured.add(params);
+            return textMessage("ok");
+        };
+
+        ClaudeChatModel model = new ClaudeChatModel(service, new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude", 1024);
+        model.start("hello");
+
+        assertEquals(1, captured.get(0).messages().size());
     }
 }

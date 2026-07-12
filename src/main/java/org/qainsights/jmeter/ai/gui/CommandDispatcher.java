@@ -13,6 +13,8 @@ import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -273,6 +275,13 @@ public class CommandDispatcher {
         cb.setInputEnabled(false);
         cb.removeLoadingIndicator();
 
+        // The current message was just appended as the last entry; everything before
+        // it is prior conversation context to seed the agent with multi-turn memory.
+        List<String> history = cb.getConversationHistory();
+        List<String> priorTurns = history.size() > 1
+                ? new ArrayList<>(history.subList(0, history.size() - 1))
+                : Collections.<String>emptyList();
+
         new SwingWorker<String, String>() {
             @Override
             protected String doInBackground() {
@@ -282,7 +291,7 @@ public class CommandDispatcher {
                         return "Agent mode currently supports Claude models only. Select a Claude model and retry.";
                     }
                     JMeterAgent agent = JMeterAgent.forClaude((ClaudeService) service);
-                    AgentLoop.AgentResult result = agent.run(message, this::publish);
+                    AgentLoop.AgentResult result = agent.run(message, priorTurns, this::publish);
                     String summary = result.getFinalText();
                     if (!result.isCompleted()) {
                         summary = (summary.isEmpty() ? "" : summary + "\n\n")
