@@ -16,11 +16,11 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - EDT-safe tree mutations via `JMeterTreeMutator` + `EdtExecutor`.
 - Stable tree-path element ids (`ElementIdResolver`); internal wrapper root excluded.
 
-**Tools (13)**
+**Tools (14)**
 
 - Read: `get_tree_state`, `get_element_config`, `get_element_children`, `get_element_schema`.
 - Write: `add_element`, `update_element_property`, `set_property_list`, `set_structured_property_list`,
-  `delete_element`, `toggle_element`, `move_element`.
+  `delete_element`, `toggle_element`, `move_element`, `duplicate_element`.
 - Run: `run_test`, `stop_test` - dispatch through the same `ActionRouter` path as JMeter's own Start/Stop/
   Shutdown toolbar buttons; fire-and-forget (see Phase C, C1).
 
@@ -51,7 +51,7 @@ the same for *structured* lists (`HeaderManager.headers`, `Arguments.arguments`,
 
 **Quality**
 
-- 655 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+- 680 unit tests passing. End-to-end smoke test in live JMeter confirmed working
   (add/update/delete/toggle/move all verified live, including the Response
   Assertion property-corruption fix and `set_property_list`).
 
@@ -86,7 +86,7 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 | #  | Task                                       | Effort | Notes                                                                                                                                          |
 |----|--------------------------------------------|--------|------------------------------------------------------------------------------------------------------------------------------------------------|
 | C1 | ~~`run_test` / `stop_test`~~ **Done (scoped)** | L→S | Scoped down at the user's request: reuses the exact same `ActionRouter.actionPerformed(ActionNames.ACTION_START/STOP/SHUTDOWN)` path JMeter's own Start/Stop/Shutdown toolbar buttons use (`TestRunController.live()`), instead of running a private `StandardJMeterEngine` and collecting results ourselves. `run_test` and `stop_test` (`force` param: `false`→graceful Stop, `true`→Shutdown) dispatch and return immediately - they don't wait for the test or report pass/fail, since there's no public API to query "is a test running" outside the GUI's own package-private `Start` action state, and results depend on whatever listener (View Results Tree, Summary Report, ...) is already in the plan. A richer "collect and summarize results" tool is a natural follow-up if needed (tracked as C6 below). |
-| C2 | `duplicate_element` (copy subtree)         | M      | Deep-clone a node under the same parent.                                                                                                       |
+| C2 | ~~`duplicate_element` (copy subtree)~~ **Done** | M | Deep-clones a node's subtree (new `TreeNodeCloner`, mirroring JMeter's own `Copy.cloneTreeNode`/`cloneChildren`) and inserts it as the next sibling immediately after the original, under the same parent - matching JMeter's own Copy+Paste/Duplicate menu command, but without touching live tree selection (unlike the native `Duplicate` action, which operates on `JMeterTreeListener`'s selected nodes). New `ElementDuplicator` seam + `DuplicateElementHandler`, same pattern as `move_element`. Guard: Test Plan/root cannot be duplicated. |
 | C3 | `rename_element`                           | S      | Confirm/replace `update_element_property` on the name property with a dedicated verb.                                                          |
 | C4 | `save_plan` / `open_plan`                  | M      | Persist/load `.jmx`; guard destructive open.                                                                                                   |
 | C5 | `reorder_element` (index within parent)    | S      | Complement to `move_element` (currently appends as last child).                                                                                |
@@ -126,6 +126,6 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 
 ## 4. Suggested next step
 
-Phase A is done. B1/B2 are implemented and unit-tested (560 tests green) but not yet
-committed or live-verified — do that next, then move on to **B3 (stream final text)**
-as a quick win, followed by **C1 (test execution)** as the next big capability.
+Phases A and B are done. C1 (`run_test`/`stop_test`) and C2 (`duplicate_element`) are
+done. Next up in Phase C: **C3 (`rename_element`)** or **C5 (`reorder_element`)** as
+quick wins, or **C6 (`get_test_results`)** as the larger follow-up to C1.
