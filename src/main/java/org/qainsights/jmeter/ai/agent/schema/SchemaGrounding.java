@@ -150,12 +150,20 @@ public final class SchemaGrounding {
         if (et == null) {
             return null;
         }
-        return "Element type: " + et.getType() + "\n"
-                + "Category: " + et.getCategory().label() + "\n"
-                + "Valid parents: " + jsonArray(et.getValidParents()) + "\n"
-                + "Description: " + et.getDescription() + "\n"
-                + "Properties: add the element first (defaults), then inspect the live instance with "
-                + "get_element_config and set values with update_element_property.";
+        StringBuilder sb = new StringBuilder()
+                .append("Element type: ").append(et.getType()).append("\n")
+                .append("Category: ").append(et.getCategory().label()).append("\n")
+                .append("Valid parents: ").append(jsonArray(et.getValidParents())).append("\n")
+                .append("Description: ").append(et.getDescription()).append("\n");
+        String properties = ElementPropertyCatalog.describe(et.getType());
+        if (properties.isEmpty()) {
+            sb.append("Properties: add the element first (defaults), then inspect the live instance with "
+                    + "get_element_config and set values with update_element_property.");
+        } else {
+            sb.append(properties).append("\n")
+                    .append("For anything not listed, inspect the live element with get_element_config.");
+        }
+        return sb.toString();
     }
 
     private static String jsonArray(List<String> values) {

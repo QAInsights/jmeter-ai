@@ -1,0 +1,103 @@
+# JMeter AI Agent — Roadmap & Remaining Tasks
+
+Status snapshot and prioritized backlog for the agentic tool-calling feature
+(`org.qainsights.jmeter.ai.agent.*`). Branch: `feature/jmeter-ai-agent`.
+
+---
+
+## 1. Current status (done)
+
+**Architecture**
+
+- Provider-neutral agent loop: `AgentLoop`, `AssistantTurn`, `ToolOutcome`, `ChatModel`.
+- Claude integration: `ClaudeChatModel` + `ClaudeToolAdapter` (Anthropic SDK).
+- Tool framework: `ToolSpec`/`ToolParameter`/`ToolResult`, `ToolRegistry`, `ToolExecutor`.
+- Schema grounding: `SchemaGrounding` + curated `ElementPropertyCatalog`.
+- EDT-safe tree mutations via `JMeterTreeMutator` + `EdtExecutor`.
+- Stable tree-path element ids (`ElementIdResolver`); internal wrapper root excluded.
+
+**Tools (9)**
+
+- Read: `get_tree_state`, `get_element_config`, `get_element_children`, `get_element_schema`.
+- Write: `add_element`, `update_element_property`, `delete_element`, `toggle_element`, `move_element`.
+
+**Integration**
+
+- Wired into chat via `CommandDispatcher` behind feature flag `jmeter.ai.agent.enabled`
+  (Claude-only), runs on a background `SwingWorker`, streams tool call/result lines,
+  degrades to a plain AI answer on error.
+
+**Quality**
+
+- 543 unit tests passing. End-to-end smoke test in live JMeter confirmed working.
+
+---
+
+## 2. Remaining tasks (prioritized)
+
+Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
+
+### Phase A — Ship what exists
+
+| #  | Task                                                                             | Effort | Notes                                       |
+|----|----------------------------------------------------------------------------------|--------|---------------------------------------------|
+| A1 | Commit toggle/move + schema-catalog work on the branch                           | S      | Currently uncommitted.                      |
+| A2 | `mvn install` to `lib/ext`; live smoke test of `toggle_element` + `move_element` | S      | Verify EDT refresh + id changes after move. |
+
+### Phase B — Reliability & UX of existing tools
+
+| #  | Task                                                 | Effort | Notes                                                                                                                              |
+|----|------------------------------------------------------|--------|------------------------------------------------------------------------------------------------------------------------------------|
+| B1 | Multi-turn conversation memory for the agent         | M      | `JMeterAgent.run` currently handles one message with no prior chat context; carry history so follow-ups ("now add a header") work. |
+| B2 | Human confirmation for destructive ops in agent mode | M      | `delete_element`/`move_element` execute without asking; add an opt-in confirm gate (setting) before mutations.                     |
+| B3 | Stream the agent's final text token-by-token         | S      | Today only tool lines stream; final summary posts at once.                                                                         |
+| B4 | Expand `ElementPropertyCatalog` coverage             | M      | Add HeaderManager, AuthManager, JDBC, JSR223 variants, more assertions/timers.                                                     |
+| B5 | Enumerate allowed values for enum-like keys          | S      | e.g. HTTP method GET/POST/..., CSV shareMode; surface in `get_element_schema`.                                                     |
+| B6 | Integrate mutations with JMeter Undo/Redo            | M      | Agent edits should be undoable via the standard stack.                                                                             |
+
+### Phase C — New action tools
+
+| #  | Task                                       | Effort | Notes                                                                                                                                          |
+|----|--------------------------------------------|--------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| C1 | `run_test` / `stop_test` + surface results | L      | Highest user value; must stream/collect results and report pass/fail + errors back to the agent. Threading + listener wiring is the hard part. |
+| C2 | `duplicate_element` (copy subtree)         | M      | Deep-clone a node under the same parent.                                                                                                       |
+| C3 | `rename_element`                           | S      | Confirm/replace `update_element_property` on the name property with a dedicated verb.                                                          |
+| C4 | `save_plan` / `open_plan`                  | M      | Persist/load `.jmx`; guard destructive open.                                                                                                   |
+| C5 | `reorder_element` (index within parent)    | S      | Complement to `move_element` (currently appends as last child).                                                                                |
+
+### Phase D — Platform & providers
+
+| #  | Task                                        | Effort | Notes                                                                                      |
+|----|---------------------------------------------|--------|--------------------------------------------------------------------------------------------|
+| D1 | OpenAI tool-calling adapter                 | M      | Implement `ChatModel` for OpenAI; lift the Claude-only restriction in `CommandDispatcher`. |
+| D2 | Gemini / Ollama / DeepSeek adapters         | L      | One `ChatModel` per provider.                                                              |
+| D3 | Usage/telemetry integration                 | S      | Fold agent token usage into existing `@usage` tracking.                                    |
+| D4 | Configurable limits surfaced in settings UI | S      | `max.iterations`, `max.tokens`, enable flag in the options panel.                          |
+
+### Phase E — Dev experience & docs
+
+| #  | Task                                                      | Effort | Notes                                                                  |
+|----|-----------------------------------------------------------|--------|------------------------------------------------------------------------|
+| E1 | Dev menu items for `toggle_element` / `move_element`      | S      | Skipped during build; add for isolated manual testing (mirror delete). |
+| E2 | User-facing docs: enabling agent mode, settings, examples | S      | Add to `README.md` / `docs/`.                                          |
+| E3 | Lightweight E2E/integration harness                       | M      | Scripted `MessageService` fixtures exercising multi-tool flows.        |
+
+---
+
+## 3. Known gaps / risks
+
+- **No conversation context** across chat turns (B1) — biggest usability gap.
+- **Destructive ops run unattended** in agent mode (B2) — safety concern.
+- **Claude-only** — other configured providers silently fall back to non-agent path (D1/D2).
+- **`move_element` appends** as last child; no positional control yet (C5).
+- **Property catalog is representative, not exhaustive** — uncurated types rely on
+  `get_element_config` live inspection (B4/B5).
+- **Undo/redo** does not yet capture agent mutations (B6).
+
+---
+
+## 4. Suggested next step
+
+Phase A (commit + live-verify toggle/move + PR), then **B1 (conversation memory)** and
+**B2 (confirmation gate)** as the highest-leverage reliability/safety improvements, before
+tackling **C1 (test execution)** as the next big capability.

@@ -87,4 +87,20 @@ class SchemaGroundingTest {
     void schemaFor_unknownType_returnsNull() {
         assertNull(schema.schemaFor("Nope"));
     }
+
+    @Test
+    void schemaFor_typeWithCuratedProperties_listsPropertyKeys() {
+        String detail = schema.schemaFor("HTTPSamplerProxy");
+        assertNotNull(detail);
+        assertTrue(detail.contains("Common properties"));
+        assertTrue(detail.contains("HTTPSampler.domain"));
+        assertTrue(detail.contains("HTTPSampler.method"));
+    }
+
+    @Test
+    void schemaFor_typeWithoutCuratedProperties_keepsInspectLiveGuidance() {
+        String detail = schema.schemaFor("FTPSampler");
+        assertNotNull(detail);
+        assertTrue(detail.contains("get_element_config"));
+    }
 }
