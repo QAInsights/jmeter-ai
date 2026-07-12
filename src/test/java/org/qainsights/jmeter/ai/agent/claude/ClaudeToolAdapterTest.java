@@ -46,6 +46,24 @@ class ClaudeToolAdapterTest {
         assertTrue(props.containsKey("method"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void toAnthropicTool_stringArrayParam_setsArrayTypeAndStringItems() {
+        ToolSpec spec = ToolSpec.builder("set_property_list")
+                .description("Replaces a list property")
+                .addParameter(ToolParameter.builder("values", ParamType.STRING_ARRAY)
+                        .description("the values").required(true).build())
+                .build();
+
+        Tool tool = adapter.toAnthropicTool(spec);
+
+        Map<String, JsonValue> props = tool.inputSchema().properties().get()._additionalProperties();
+        Map<String, Object> valuesSchema = props.get("values").convert(Map.class);
+        assertEquals("array", valuesSchema.get("type"));
+        Map<String, Object> items = (Map<String, Object>) valuesSchema.get("items");
+        assertEquals("string", items.get("type"));
+    }
+
     /** Builds a real ContentBlock from its JSON shape, bypassing strict builders. */
     private static ContentBlock block(Map<String, Object> json) {
         return JsonValue.from(json).convert(ContentBlock.class);
@@ -73,6 +91,25 @@ class ClaudeToolAdapterTest {
         assertEquals("tu_42", call.getId());
         assertEquals("add_element", call.getName());
         assertEquals("Test Plan", call.getArguments().get("parent_id"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void toAssistantTurn_toolCallWithArrayArgument_arrivesAsListOfStrings() {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("property", "Asserion.test_strings");
+        input.put("values", Arrays.asList("200", "201"));
+
+        Map<String, Object> toolJson = new LinkedHashMap<>();
+        toolJson.put("type", "tool_use");
+        toolJson.put("id", "tu_9");
+        toolJson.put("name", "set_property_list");
+        toolJson.put("input", input);
+
+        AssistantTurn turn = adapter.toAssistantTurn(Collections.singletonList(block(toolJson)));
+
+        List<Object> values = (List<Object>) turn.getToolCalls().get(0).getArguments().get("values");
+        assertEquals(Arrays.asList("200", "201"), values);
     }
 
     @Test

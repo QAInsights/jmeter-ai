@@ -10,5 +10,7 @@ public enum ParamType {
     INTEGER,
     NUMBER,
     BOOLEAN,
-    OBJECT
+    OBJECT,
+    /** A JSON array of strings. */
+    STRING_ARRAY
 }

@@ -100,4 +100,93 @@ class ElementPropertyCatalogTest {
         assertTrue(props.stream().anyMatch(p -> p.getKey().equals("ConstantTimer.delay")));
         assertTrue(props.stream().anyMatch(p -> p.getKey().equals("RandomTimer.range")));
     }
+
+    // ==================== B5: allowed values for enum-like keys ====================
+
+    @Test
+    void allowedValues_defaultsToEmptyForFreeFormProperties() {
+        ElementPropertyCatalog.Property domain = findProperty("HTTPSamplerProxy", "HTTPSampler.domain");
+        assertTrue(domain.getAllowedValues().isEmpty());
+    }
+
+    @Test
+    void allowedValues_httpMethod_listsStandardVerbs() {
+        ElementPropertyCatalog.Property method = findProperty("HTTPSamplerProxy", "HTTPSampler.method");
+        assertEquals(
+                java.util.Arrays.asList("GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "TRACE", "PATCH"),
+                method.getAllowedValues());
+    }
+
+    @Test
+    void allowedValues_httpProtocol_isHttpOrHttps() {
+        ElementPropertyCatalog.Property protocol = findProperty("HTTPSamplerProxy", "HTTPSampler.protocol");
+        assertEquals(java.util.Arrays.asList("http", "https"), protocol.getAllowedValues());
+    }
+
+    @Test
+    void allowedValues_csvShareMode_usesLiteralShareModeStrings() {
+        ElementPropertyCatalog.Property shareMode = findProperty("CSVDataSet", "shareMode");
+        assertEquals(
+                java.util.Arrays.asList("shareMode.all", "shareMode.group", "shareMode.thread"),
+                shareMode.getAllowedValues());
+    }
+
+    @Test
+    void allowedValues_responseAssertionTestType_includesMatchAndOrModifier() {
+        ElementPropertyCatalog.Property testType = findProperty("ResponseAssertion", "Assertion.test_type");
+        assertTrue(testType.getAllowedValues().stream().anyMatch(v -> v.contains("1") && v.contains("Matches")));
+        assertTrue(testType.getAllowedValues().stream().anyMatch(v -> v.contains("32") && v.contains("Or")));
+    }
+
+    @Test
+    void allowedValues_responseAssertionTestField_includesAllEightFields() {
+        ElementPropertyCatalog.Property testField = findProperty("ResponseAssertion", "Assertion.test_field");
+        assertEquals(8, testField.getAllowedValues().size());
+        assertTrue(testField.getAllowedValues().contains("Assertion.sample_label"));
+    }
+
+    @Test
+    void allowedValues_constantThroughputTimerCalcMode_hasFiveModes() {
+        ElementPropertyCatalog.Property calcMode = findProperty("ConstantThroughputTimer", "calcMode");
+        assertEquals(5, calcMode.getAllowedValues().size());
+    }
+
+    @Test
+    void describe_rendersAllowedValuesLine() {
+        String text = ElementPropertyCatalog.describe("HTTPSamplerProxy");
+        assertTrue(text.contains("Allowed: GET, POST, PUT, DELETE, HEAD, OPTIONS, TRACE, PATCH."));
+    }
+
+    @Test
+    void describe_omitsAllowedValuesLineForFreeFormProperties() {
+        String text = ElementPropertyCatalog.describe("DurationAssertion");
+        assertFalse(text.contains("Allowed:"));
+    }
+
+    // ==================== isFlatStringListProperty ====================
+
+    @Test
+    void isFlatStringListProperty_responseAssertionTestStrings_isTrue() {
+        assertTrue(ElementPropertyCatalog.isFlatStringListProperty("ResponseAssertion", "Asserion.test_strings"));
+    }
+
+    @Test
+    void isFlatStringListProperty_isCaseInsensitiveOnType() {
+        assertTrue(ElementPropertyCatalog.isFlatStringListProperty("responseassertion", "Asserion.test_strings"));
+    }
+
+    @Test
+    void isFlatStringListProperty_unknownPropertyOrType_isFalse() {
+        assertFalse(ElementPropertyCatalog.isFlatStringListProperty("ResponseAssertion", "Assertion.test_field"));
+        assertFalse(ElementPropertyCatalog.isFlatStringListProperty("HeaderManager", "HeaderManager.headers"));
+        assertFalse(ElementPropertyCatalog.isFlatStringListProperty(null, "Asserion.test_strings"));
+        assertFalse(ElementPropertyCatalog.isFlatStringListProperty("ResponseAssertion", null));
+    }
+
+    private static ElementPropertyCatalog.Property findProperty(String type, String key) {
+        return ElementPropertyCatalog.propertiesFor(type).stream()
+                .filter(p -> p.getKey().equals(key))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No property " + key + " for type " + type));
+    }
 }

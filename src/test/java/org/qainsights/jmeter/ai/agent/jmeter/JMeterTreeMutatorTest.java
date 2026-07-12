@@ -3,6 +3,9 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jmeter.testelement.property.MapProperty;
+import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -58,6 +61,89 @@ class JMeterTreeMutatorTest {
     void updateProperty_whenMutationThrows_returnsFalse() {
         doThrow(new RuntimeException("boom")).when(model).nodeChanged(node);
         assertFalse(mutator.updateProperty(model, node, "Foo", "bar"));
+    }
+
+    @Test
+    void updateProperty_existingCollectionProperty_isRejectedWithoutMutating() {
+        when(element.getProperty("Asserion.test_strings")).thenReturn(mock(CollectionProperty.class));
+
+        assertFalse(mutator.updateProperty(model, node, "Asserion.test_strings", "200"));
+        verify(element, never()).setProperty(anyString(), anyString());
+        verify(model, never()).nodeChanged(node);
+    }
+
+    @Test
+    void updateProperty_existingMapProperty_isRejectedWithoutMutating() {
+        when(element.getProperty("Foo")).thenReturn(mock(MapProperty.class));
+
+        assertFalse(mutator.updateProperty(model, node, "Foo", "bar"));
+        verify(element, never()).setProperty(anyString(), anyString());
+    }
+
+    @Test
+    void updateProperty_existingTestElementProperty_isRejectedWithoutMutating() {
+        when(element.getProperty("Foo")).thenReturn(mock(TestElementProperty.class));
+
+        assertFalse(mutator.updateProperty(model, node, "Foo", "bar"));
+        verify(element, never()).setProperty(anyString(), anyString());
+    }
+
+    @Test
+    void updateProperty_noExistingProperty_stillSucceeds() {
+        when(element.getProperty("NewKey")).thenReturn(null);
+        assertTrue(mutator.updateProperty(model, node, "NewKey", "value"));
+        verify(element).setProperty("NewKey", "value");
+    }
+
+    // ── replacePropertyList ────────────────────────────────────────────────────
+
+    @Test
+    void replacePropertyList_noExistingProperty_succeeds() {
+        when(element.getProperty("Asserion.test_strings")).thenReturn(null);
+        assertTrue(mutator.replacePropertyList(model, node, "Asserion.test_strings",
+                java.util.Arrays.asList("200", "201")));
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void replacePropertyList_existingFlatStringCollection_succeeds() {
+        org.apache.jmeter.testelement.property.CollectionProperty existing =
+                new org.apache.jmeter.testelement.property.CollectionProperty(
+                        "Asserion.test_strings", new java.util.ArrayList<>(java.util.List.of("old")));
+        when(element.getProperty("Asserion.test_strings")).thenReturn(existing);
+
+        assertTrue(mutator.replacePropertyList(model, node, "Asserion.test_strings",
+                java.util.Collections.singletonList("200")));
+    }
+
+    @Test
+    void replacePropertyList_existingStructuredCollection_isRejected() {
+        org.apache.jmeter.testelement.property.CollectionProperty existing = mock(
+                org.apache.jmeter.testelement.property.CollectionProperty.class);
+        org.apache.jmeter.testelement.property.PropertyIterator iterator = mock(
+                org.apache.jmeter.testelement.property.PropertyIterator.class);
+        when(existing.iterator()).thenReturn(iterator);
+        when(iterator.hasNext()).thenReturn(true, false);
+        when(iterator.next()).thenReturn(mock(org.apache.jmeter.testelement.property.TestElementProperty.class));
+        when(element.getProperty("HeaderManager.headers")).thenReturn(existing);
+
+        assertFalse(mutator.replacePropertyList(model, node, "HeaderManager.headers",
+                java.util.Collections.singletonList("x")));
+        verify(model, never()).nodeChanged(node);
+    }
+
+    @Test
+    void replacePropertyList_existingScalarProperty_isRejected() {
+        when(element.getProperty("Foo")).thenReturn(mock(org.apache.jmeter.testelement.property.StringProperty.class));
+        assertFalse(mutator.replacePropertyList(model, node, "Foo", java.util.Collections.singletonList("x")));
+    }
+
+    @Test
+    void replacePropertyList_invalidInputs_returnFalse() {
+        assertFalse(mutator.replacePropertyList(null, node, "Foo", java.util.Collections.emptyList()));
+        assertFalse(mutator.replacePropertyList(model, null, "Foo", java.util.Collections.emptyList()));
+        assertFalse(mutator.replacePropertyList(model, node, " ", java.util.Collections.emptyList()));
+        assertFalse(mutator.replacePropertyList(model, node, "Foo", null));
     }
 
     // ── setEnabled ─────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
+import org.qainsights.jmeter.ai.agent.tool.handlers.SetPropertyListHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ToggleElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.UpdateElementPropertyHandler;
 
@@ -22,9 +23,10 @@ class AgentToolRegistryTest {
         assertTrue(registry.isRegistered(ReadToolHandlers.GET_ELEMENT_SCHEMA));
         assertTrue(registry.isRegistered(AddElementHandler.ADD_ELEMENT));
         assertTrue(registry.isRegistered(UpdateElementPropertyHandler.UPDATE_ELEMENT_PROPERTY));
+        assertTrue(registry.isRegistered(SetPropertyListHandler.SET_PROPERTY_LIST));
         assertTrue(registry.isRegistered(DeleteElementHandler.DELETE_ELEMENT));
         assertTrue(registry.isRegistered(ToggleElementHandler.TOGGLE_ELEMENT));
         assertTrue(registry.isRegistered(MoveElementHandler.MOVE_ELEMENT));
-        assertTrue(registry.size() >= 9);
+        assertTrue(registry.size() >= 10);
     }
 }

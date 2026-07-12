@@ -20,16 +20,18 @@ import java.util.Map;
  */
 public final class ElementPropertyCatalog {
 
-    /** A single settable property: its exact key, value type and a short description. */
+    /** A single settable property: its exact key, value type, description and (if enum-like) allowed values. */
     public static final class Property {
         private final String key;
         private final String type;
         private final String description;
+        private final List<String> allowedValues;
 
-        Property(String key, String type, String description) {
+        Property(String key, String type, String description, List<String> allowedValues) {
             this.key = key;
             this.type = type;
             this.description = description;
+            this.allowedValues = allowedValues;
         }
 
         public String getKey() {
@@ -42,6 +44,11 @@ public final class ElementPropertyCatalog {
 
         public String getDescription() {
             return description;
+        }
+
+        /** Literal values (or "value (meaning)" pairs) this property accepts; empty when free-form. */
+        public List<String> getAllowedValues() {
+            return allowedValues;
         }
     }
 
@@ -58,6 +65,30 @@ public final class ElementPropertyCatalog {
         return BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
     }
 
+    private static final Map<String, List<String>> LIST_PROPERTIES_BY_TYPE = buildListProperties();
+
+    /**
+     * True when {@code property} is a curated flat string-list property for
+     * {@code type} - i.e. safe to write with {@code set_property_list}. Kept
+     * as an explicit allowlist (rather than sniffing the live property's
+     * runtime shape) so an accidentally-empty structured collection (e.g. a
+     * header/argument list with zero entries) is never mistaken for one.
+     */
+    public static boolean isFlatStringListProperty(String type, String property) {
+        if (type == null || property == null) {
+            return false;
+        }
+        return LIST_PROPERTIES_BY_TYPE
+                .getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList())
+                .contains(property);
+    }
+
+    private static Map<String, List<String>> buildListProperties() {
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        map.put("responseassertion", Collections.singletonList("Asserion.test_strings"));
+        return Collections.unmodifiableMap(map);
+    }
+
     /**
      * Renders a human-readable "Common properties" block for the given type, or an
      * empty string when no properties are curated for it.
@@ -70,7 +101,11 @@ public final class ElementPropertyCatalog {
         StringBuilder sb = new StringBuilder("Common properties (key : type - description):\n");
         for (Property p : props) {
             sb.append("- ").append(p.getKey()).append(" : ").append(p.getType())
-                    .append(" - ").append(p.getDescription()).append('\n');
+                    .append(" - ").append(p.getDescription());
+            if (!p.getAllowedValues().isEmpty()) {
+                sb.append(" Allowed: ").append(String.join(", ", p.getAllowedValues())).append('.');
+            }
+            sb.append('\n');
         }
         sb.append("Set any of these with update_element_property; keys are case-sensitive.");
         return sb.toString();
@@ -82,9 +117,10 @@ public final class ElementPropertyCatalog {
         put(map, "HTTPSamplerProxy",
                 p("HTTPSampler.domain", "string", "Server name or IP (no scheme), e.g. example.com."),
                 p("HTTPSampler.port", "int", "Server port; blank for protocol default."),
-                p("HTTPSampler.protocol", "string", "http or https."),
+                p("HTTPSampler.protocol", "string", "Scheme used to build the request URL.", "http", "https"),
                 p("HTTPSampler.path", "string", "Request path, e.g. /login."),
-                p("HTTPSampler.method", "string", "HTTP method: GET, POST, PUT, DELETE, ..."),
+                p("HTTPSampler.method", "string", "HTTP method to use.",
+                        "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "TRACE", "PATCH"),
                 p("HTTPSampler.contentEncoding", "string", "Request body/content encoding, e.g. UTF-8."),
                 p("HTTPSampler.follow_redirects", "bool", "Follow HTTP redirects (true/false)."),
                 p("HTTPSampler.use_keepalive", "bool", "Reuse the connection (Keep-Alive)."),
@@ -109,7 +145,11 @@ public final class ElementPropertyCatalog {
 
         put(map, "ConstantThroughputTimer",
                 p("throughput", "double", "Target throughput in samples per minute."),
-                p("calcMode", "int", "Throughput scope: 0=this thread only, others share across threads."));
+                p("calcMode", "int", "Throughput scope for pacing (JMeter 5.6.x uses the plain int form below).",
+                        "0 (this thread only)", "1 (all active threads)",
+                        "2 (all active threads in current thread group)",
+                        "3 (all active threads, shared)",
+                        "4 (all active threads in current thread group, shared)"));
 
         put(map, "LoopController",
                 p("LoopController.loops", "int", "Iteration count; -1 or continue_forever loops indefinitely."),
@@ -134,11 +174,23 @@ public final class ElementPropertyCatalog {
                 p("ignoreFirstLine", "bool", "Skip the first line (header)."),
                 p("recycle", "bool", "Restart from the top at end of file."),
                 p("stopThread", "bool", "Stop the thread at end of file."),
-                p("shareMode", "string", "Sharing scope: all threads, current thread group, or current thread."));
+                p("shareMode", "string",
+                        "Sharing scope; use one of the literal values below, or a specific thread group name "
+                                + "to share with just that group.",
+                        "shareMode.all", "shareMode.group", "shareMode.thread"));
 
         put(map, "ResponseAssertion",
-                p("Assertion.test_field", "string", "Field to test, e.g. Assertion.response_data or Assertion.response_code."),
-                p("Assertion.test_type", "int", "Match mode bitmask (2=Contains, 8=Equals, 16=Substring, +4 to negate)."));
+                p("Assertion.test_field", "string", "Field of the sample result to test.",
+                        "Assertion.response_data", "Assertion.response_code", "Assertion.response_message",
+                        "Assertion.response_headers", "Assertion.request_headers", "Assertion.request_data",
+                        "Assertion.response_data_as_document", "Assertion.sample_label"),
+                p("Assertion.test_type", "int",
+                        "Bitmask: pick exactly one base value, optionally add 4 and/or 32 as modifiers.",
+                        "1 (Matches)", "2 (Contains)", "8 (Equals)", "16 (Substring)",
+                        "4 (Not, additive modifier)", "32 (Or, additive modifier)"),
+                p("Asserion.test_strings", "list<string>",
+                        "Patterns to test (note: JMeter's own property name has a typo, 'Asserion'). "
+                                + "Not settable via update_element_property - use set_property_list instead."));
 
         put(map, "RegexExtractor",
                 p("RegexExtractor.refname", "string", "Variable name to store the captured value."),
@@ -160,21 +212,27 @@ public final class ElementPropertyCatalog {
 
         put(map, "JSR223Sampler",
                 p("script", "string", "Script body to execute."),
-                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("scriptLanguage", "string",
+                        "Scripting engine; availability depends on installed JSR223 engines. groovy is bundled and recommended.",
+                        "groovy", "beanshell", "javascript", "jexl3"),
                 p("parameters", "string", "String available to the script as the Parameters/args variable."),
                 p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
                 p("filename", "string", "Optional external script file path (used instead of script)."));
 
         put(map, "JSR223PreProcessor",
                 p("script", "string", "Script body to execute before the sampler runs."),
-                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("scriptLanguage", "string",
+                        "Scripting engine; availability depends on installed JSR223 engines. groovy is bundled and recommended.",
+                        "groovy", "beanshell", "javascript", "jexl3"),
                 p("parameters", "string", "String available to the script as the Parameters/args variable."),
                 p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
                 p("filename", "string", "Optional external script file path (used instead of script)."));
 
         put(map, "JSR223PostProcessor",
                 p("script", "string", "Script body to execute after the sampler runs."),
-                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("scriptLanguage", "string",
+                        "Scripting engine; availability depends on installed JSR223 engines. groovy is bundled and recommended.",
+                        "groovy", "beanshell", "javascript", "jexl3"),
                 p("parameters", "string", "String available to the script as the Parameters/args variable."),
                 p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
                 p("filename", "string", "Optional external script file path (used instead of script)."));
@@ -184,8 +242,9 @@ public final class ElementPropertyCatalog {
 
         put(map, "SizeAssertion",
                 p("SizeAssertion.size", "long", "Response size to compare against, in bytes."),
-                p("SizeAssertion.operator", "int",
-                        "Comparison: 1=equal, 2=not equal, 3=greater than, 4=less than, 5=greater-or-equal, 6=less-or-equal."));
+                p("SizeAssertion.operator", "int", "Comparison operator.",
+                        "1 (equal)", "2 (not equal)", "3 (greater than)", "4 (less than)",
+                        "5 (greater-or-equal)", "6 (less-or-equal)"));
 
         put(map, "JSONPathAssertion",
                 p("JSON_PATH", "string", "JSONPath expression to evaluate, e.g. $.status."),
@@ -208,6 +267,12 @@ public final class ElementPropertyCatalog {
     }
 
     private static Property p(String key, String type, String description) {
-        return new Property(key, type, description);
+        return new Property(key, type, description, Collections.emptyList());
+    }
+
+    /** Overload for enum-like properties; each entry is a literal value or a "value (meaning)" pair. */
+    private static Property p(String key, String type, String description, String... allowedValues) {
+        return new Property(key, type, description,
+                Collections.unmodifiableList(new ArrayList<>(Arrays.asList(allowedValues))));
     }
 }

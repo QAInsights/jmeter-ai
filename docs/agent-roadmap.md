@@ -16,10 +16,19 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - EDT-safe tree mutations via `JMeterTreeMutator` + `EdtExecutor`.
 - Stable tree-path element ids (`ElementIdResolver`); internal wrapper root excluded.
 
-**Tools (9)**
+**Tools (10)**
 
 - Read: `get_tree_state`, `get_element_config`, `get_element_children`, `get_element_schema`.
-- Write: `add_element`, `update_element_property`, `delete_element`, `toggle_element`, `move_element`.
+- Write: `add_element`, `update_element_property`, `set_property_list`, `delete_element`, `toggle_element`, `move_element`.
+
+`update_element_property`/`JMeterTreeMutator.updateProperty` refuse to overwrite a
+property that is currently a `CollectionProperty`/`MapProperty`/`TestElementProperty`
+(a list, map or nested element) with a plain string - doing so used to corrupt the
+element (reproduced with a live `ResponseAssertion`'s `Asserion.test_strings`,
+crashing `AssertionGui.configure()` on every subsequent open). `set_property_list`
+is the safe way to write a *flat string-list* property in full (currently just
+`ResponseAssertion`'s `Asserion.test_strings`); structured lists (headers,
+arguments, auth) still need a dedicated tool - tracked below.
 
 **Integration**
 
@@ -38,8 +47,9 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 
 **Quality**
 
-- 567 unit tests passing. End-to-end smoke test in live JMeter confirmed working
-  (add/update/delete/toggle/move all verified live).
+- 610 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+  (add/update/delete/toggle/move all verified live, including the Response
+  Assertion property-corruption fix and `set_property_list`).
 
 ---
 
@@ -62,8 +72,10 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 | B2 | ~~Human confirmation for destructive ops~~ **Done**         | M      | `ToolExecutor` gates `delete_element`/`move_element` behind a `ToolConfirmationGate`; `SwingToolConfirmationGate` shows a blocking Yes/No dialog on the EDT. Setting `jmeter.ai.agent.confirm.destructive` (default `true`) toggles it. |
 | B3 | ~~Stream the agent's final text token-by-token~~ **Done**   | S      | Simulated streaming: `TextChunker` replays the already-computed final answer via the existing `appendStreamToken`/`onStreamComplete` UI, gated by `jmeter.ai.streaming.enabled`. (Real SSE streaming was considered but rejected — the loop needs the full response anyway to detect tool calls, so it wouldn't reduce latency, only add risk.) |
 | B4 | ~~Expand `ElementPropertyCatalog` coverage~~ **Done (scoped)** | M | Added JSR223Sampler/Pre/PostProcessor, DurationAssertion, SizeAssertion, JSONPathAssertion, GaussianRandomTimer (7 types, all scalar properties). Dropped HeaderManager/AuthManager/Arguments/JDBC-scope from this pass — their real content is a `CollectionProperty` (header/auth/variable list) that `update_element_property` can't set at all (scalar-only); cataloging them would be a no-op. JDBC also deferred at the user's request. Editing collection-shaped properties would need a new tool, tracked as a fresh backlog item if needed. |
-| B5 | Enumerate allowed values for enum-like keys          | S      | e.g. HTTP method GET/POST/..., CSV shareMode; surface in `get_element_schema`.                                                     |
+| B5 | ~~Enumerate allowed values for enum-like keys~~ **Done** | S | Added `Property.allowedValues` to `ElementPropertyCatalog`, rendered as an `Allowed: ...` line in `describe()`/`get_element_schema`. Covers `HTTPSampler.method`/`.protocol`, `CSVDataSet.shareMode`, `ConstantThroughputTimer.calcMode`, `ResponseAssertion` `test_field`/`test_type`, `SizeAssertion.operator`, JSR223 `scriptLanguage`. Also fixed two pre-existing inaccuracies found during the audit: `test_type` was missing `MATCH=1` and the `OR=32` modifier; `test_field` only had 2 of 8 real values (verified against JMeter source). |
 | B6 | Integrate mutations with JMeter Undo/Redo            | M      | Agent edits should be undoable via the standard stack.                                                                             |
+| B7 | ~~Fix property-type corruption + add flat string-list support~~ **Done** | M | Root cause: `JMeterTreeMutator.updateProperty` called `setProperty(key, value)` unconditionally, so a guessed/uncataloged key (e.g. `Asserion.test_strings`) silently replaced a `CollectionProperty` with a `StringProperty`, corrupting the element and crashing its GUI panel. Fixed generically (checks the *existing* property's runtime type before writing, protects every element/property, cataloged or not - regression-tested against real `ResponseAssertion`, `HeaderManager`, `Arguments`). Added `set_property_list` (+ `ParamType.STRING_ARRAY`) so the agent can actually populate flat string lists like assertion patterns, gated by an explicit `ElementPropertyCatalog.isFlatStringListProperty` allowlist. |
+| B8 | Support structured list properties (headers, arguments, auth) | M | Needs a shape beyond flat strings (name/value pairs as nested `TestElementProperty` entries) - a natural next tool once there's a concrete need. |
 
 ### Phase C — New action tools
 

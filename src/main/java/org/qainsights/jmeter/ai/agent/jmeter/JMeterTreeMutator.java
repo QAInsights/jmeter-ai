@@ -1,11 +1,20 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.tree.TreeNode;
 
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.MapProperty;
+import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
+import org.apache.jmeter.testelement.property.StringProperty;
+import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,17 +43,81 @@ public final class JMeterTreeMutator {
         this.edt = edt == null ? EdtExecutor.swing() : edt;
     }
 
-    /** Sets a string property on the node's test element. */
+    /**
+     * Sets a string property on the node's test element. Refuses to overwrite a
+     * property that is currently a collection/map/nested element (e.g. an
+     * assertion's pattern list or a header manager's headers) - doing so would
+     * replace it with a plain {@code StringProperty} of the same name and
+     * corrupt the element, crashing its GUI panel the next time it is opened.
+     */
     public boolean updateProperty(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
         if (!isValid(model, node) || property == null || property.trim().isEmpty()) {
             return false;
         }
         String safeValue = value == null ? "" : value;
         return mutate(() -> {
+            if (isNonScalar(node.getTestElement().getProperty(property))) {
+                log.warn("Refusing to overwrite non-scalar property '{}' on {} with a plain string value",
+                        property, node.getTestElement().getClass().getSimpleName());
+                return false;
+            }
             node.getTestElement().setProperty(property, safeValue);
             model.nodeChanged(node);
             return true;
         });
+    }
+
+    /**
+     * True when {@code property} is a collection, map or nested test-element
+     * property - these are not settable as a plain string via
+     * {@code update_element_property} without corrupting the element.
+     */
+    private static boolean isNonScalar(JMeterProperty property) {
+        return property instanceof CollectionProperty
+                || property instanceof MapProperty
+                || property instanceof TestElementProperty;
+    }
+
+    /**
+     * Replaces a flat string-list property (e.g. a Response Assertion's
+     * patterns) with {@code values} in full. Refuses when the existing property
+     * is present but isn't a flat {@code CollectionProperty} of plain strings
+     * (e.g. a header/argument list, whose entries are nested test elements) -
+     * callers must only invoke this for property keys known to be flat string
+     * lists (see {@code ElementPropertyCatalog.isFlatStringListProperty}).
+     */
+    public boolean replacePropertyList(JMeterTreeModel model, JMeterTreeNode node, String property,
+                                        List<String> values) {
+        if (!isValid(model, node) || property == null || property.trim().isEmpty() || values == null) {
+            return false;
+        }
+        return mutate(() -> {
+            if (!isFlatStringListOrAbsent(node.getTestElement().getProperty(property))) {
+                log.warn("Refusing to replace '{}' on {} - existing property is not a flat string list",
+                        property, node.getTestElement().getClass().getSimpleName());
+                return false;
+            }
+            node.getTestElement().setProperty(new CollectionProperty(property, new ArrayList<>(values)));
+            model.nodeChanged(node);
+            return true;
+        });
+    }
+
+    /** True when {@code property} is absent, or is a CollectionProperty made only of plain strings. */
+    private static boolean isFlatStringListOrAbsent(JMeterProperty property) {
+        if (property == null || property instanceof NullProperty) {
+            return true;
+        }
+        if (!(property instanceof CollectionProperty)) {
+            return false;
+        }
+        PropertyIterator it = ((CollectionProperty) property).iterator();
+        while (it.hasNext()) {
+            if (!(it.next() instanceof StringProperty)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Enables or disables the node and refreshes its display. */
