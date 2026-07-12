@@ -2,12 +2,21 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.tree.TreeNode;
 
+import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.control.AuthManager;
+import org.apache.jmeter.protocol.http.control.Authorization;
+import org.apache.jmeter.protocol.http.control.Header;
+import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.property.CollectionProperty;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.MapProperty;
@@ -118,6 +127,103 @@ public final class JMeterTreeMutator {
             }
         }
         return true;
+    }
+
+    /** {@code AuthManager}'s container property key; the JMeter constant for it is package-private. */
+    private static final String AUTH_LIST = "AuthManager.auth_list";
+
+    /**
+     * Replaces a structured-list property (HTTP headers, User Defined
+     * Variables/HTTP parameters, or HTTP Authorization entries) with
+     * {@code entries} in full. Each map's expected keys depend on
+     * {@code property}: {@code HeaderManager.headers} and
+     * {@code Arguments.arguments} expect {@code name}/{@code value};
+     * {@code AuthManager.auth_list} expects {@code url}/{@code username}/
+     * {@code password}/{@code domain}/{@code realm}/{@code mechanism}. Refuses
+     * when the existing property is present but isn't a collection of nested
+     * test elements, or when {@code property} isn't one of the three above, or
+     * an entry's {@code mechanism} isn't a valid {@code AuthManager.Mechanism} -
+     * callers must only invoke this for property keys known to be structured
+     * lists (see {@code ElementPropertyCatalog.isStructuredListProperty}).
+     */
+    public boolean replaceStructuredPropertyList(JMeterTreeModel model, JMeterTreeNode node, String property,
+                                                  List<Map<String, String>> entries) {
+        if (!isValid(model, node) || property == null || property.trim().isEmpty() || entries == null) {
+            return false;
+        }
+        return mutate(() -> {
+            if (!isStructuredListOrAbsent(node.getTestElement().getProperty(property))) {
+                log.warn("Refusing to replace '{}' on {} - existing property is not a structured list",
+                        property, node.getTestElement().getClass().getSimpleName());
+                return false;
+            }
+            List<TestElement> built = new ArrayList<>();
+            for (Map<String, String> entry : entries) {
+                TestElement element = buildStructuredEntry(property, entry);
+                if (element == null) {
+                    log.warn("Refusing to replace '{}' - unsupported property or invalid entry {}", property, entry);
+                    return false;
+                }
+                built.add(element);
+            }
+            node.getTestElement().setProperty(new CollectionProperty(property, built));
+            model.nodeChanged(node);
+            return true;
+        });
+    }
+
+    /** True when {@code property} is absent, or is a CollectionProperty of nested test elements. */
+    private static boolean isStructuredListOrAbsent(JMeterProperty property) {
+        if (property == null || property instanceof NullProperty) {
+            return true;
+        }
+        if (!(property instanceof CollectionProperty)) {
+            return false;
+        }
+        PropertyIterator it = ((CollectionProperty) property).iterator();
+        while (it.hasNext()) {
+            if (!(it.next() instanceof TestElementProperty)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Builds the concrete test element an entry represents, or {@code null} if unsupported/invalid. */
+    private static TestElement buildStructuredEntry(String property, Map<String, String> entry) {
+        if (HeaderManager.HEADERS.equals(property)) {
+            return new Header(field(entry, "name"), field(entry, "value"));
+        }
+        if (Arguments.ARGUMENTS.equals(property)) {
+            return new Argument(field(entry, "name"), field(entry, "value"));
+        }
+        if (AUTH_LIST.equals(property)) {
+            return buildAuthorization(entry);
+        }
+        return null;
+    }
+
+    private static Authorization buildAuthorization(Map<String, String> entry) {
+        Authorization auth = new Authorization();
+        auth.setURL(field(entry, "url"));
+        auth.setUser(field(entry, "username"));
+        auth.setPass(field(entry, "password"));
+        auth.setDomain(field(entry, "domain"));
+        auth.setRealm(field(entry, "realm"));
+        String mechanism = field(entry, "mechanism");
+        if (!mechanism.isEmpty()) {
+            try {
+                auth.setMechanism(AuthManager.Mechanism.valueOf(mechanism.toUpperCase(Locale.ROOT)));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+        return auth;
+    }
+
+    private static String field(Map<String, String> entry, String key) {
+        String value = entry.get(key);
+        return value == null ? "" : value;
     }
 
     /** Enables or disables the node and refreshes its display. */

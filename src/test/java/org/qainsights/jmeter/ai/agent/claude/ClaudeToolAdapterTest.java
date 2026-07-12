@@ -64,6 +64,24 @@ class ClaudeToolAdapterTest {
         assertEquals("string", items.get("type"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void toAnthropicTool_objectArrayParam_setsArrayTypeAndObjectItems() {
+        ToolSpec spec = ToolSpec.builder("set_structured_property_list")
+                .description("Replaces a structured list property")
+                .addParameter(ToolParameter.builder("entries", ParamType.OBJECT_ARRAY)
+                        .description("the entries").required(true).build())
+                .build();
+
+        Tool tool = adapter.toAnthropicTool(spec);
+
+        Map<String, JsonValue> props = tool.inputSchema().properties().get()._additionalProperties();
+        Map<String, Object> entriesSchema = props.get("entries").convert(Map.class);
+        assertEquals("array", entriesSchema.get("type"));
+        Map<String, Object> items = (Map<String, Object>) entriesSchema.get("items");
+        assertEquals("object", items.get("type"));
+    }
+
     /** Builds a real ContentBlock from its JSON shape, bypassing strict builders. */
     private static ContentBlock block(Map<String, Object> json) {
         return JsonValue.from(json).convert(ContentBlock.class);

@@ -89,6 +89,32 @@ public final class ElementPropertyCatalog {
         return Collections.unmodifiableMap(map);
     }
 
+    private static final Map<String, List<String>> STRUCTURED_LIST_PROPERTIES_BY_TYPE = buildStructuredListProperties();
+
+    /**
+     * True when {@code property} is a curated structured-list property (entries
+     * are objects with named fields, e.g. headers or auth records) for
+     * {@code type} - i.e. safe to write with {@code set_structured_property_list}.
+     * Kept as an explicit allowlist for the same reason as
+     * {@link #isFlatStringListProperty}.
+     */
+    public static boolean isStructuredListProperty(String type, String property) {
+        if (type == null || property == null) {
+            return false;
+        }
+        return STRUCTURED_LIST_PROPERTIES_BY_TYPE
+                .getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList())
+                .contains(property);
+    }
+
+    private static Map<String, List<String>> buildStructuredListProperties() {
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        map.put("headermanager", Collections.singletonList("HeaderManager.headers"));
+        map.put("arguments", Collections.singletonList("Arguments.arguments"));
+        map.put("authmanager", Collections.singletonList("AuthManager.auth_list"));
+        return Collections.unmodifiableMap(map);
+    }
+
     /**
      * Renders a human-readable "Common properties" block for the given type, or an
      * empty string when no properties are curated for it.
@@ -257,6 +283,23 @@ public final class ElementPropertyCatalog {
         put(map, "GaussianRandomTimer",
                 p("ConstantTimer.delay", "int", "Constant offset added to the random delay, in ms."),
                 p("RandomTimer.range", "double", "Standard deviation of the Gaussian random delay, in ms."));
+
+        put(map, "HeaderManager",
+                p("HeaderManager.headers", "list<object>",
+                        "HTTP headers to send. Not settable via update_element_property - use "
+                                + "set_structured_property_list with entries shaped {name, value}."));
+
+        put(map, "Arguments",
+                p("Arguments.arguments", "list<object>",
+                        "Name/value pairs (User Defined Variables, or an HTTP Request's parameters). Not settable "
+                                + "via update_element_property - use set_structured_property_list with entries "
+                                + "shaped {name, value}."));
+
+        put(map, "AuthManager",
+                p("AuthManager.auth_list", "list<object>",
+                        "Per-URL credentials. Not settable via update_element_property - use "
+                                + "set_structured_property_list with entries shaped {url, username, password, "
+                                + "domain, realm, mechanism}; mechanism is one of BASIC, DIGEST, KERBEROS."));
 
         return Collections.unmodifiableMap(map);
     }

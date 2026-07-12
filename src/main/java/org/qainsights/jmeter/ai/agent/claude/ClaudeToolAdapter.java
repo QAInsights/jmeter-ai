@@ -39,6 +39,8 @@ public final class ClaudeToolAdapter {
             propSchema.put("type", jsonType(param.getType()));
             if (param.getType() == ParamType.STRING_ARRAY) {
                 propSchema.put("items", Map.of("type", "string"));
+            } else if (param.getType() == ParamType.OBJECT_ARRAY) {
+                propSchema.put("items", Map.of("type", "object"));
             }
             if (param.getDescription() != null && !param.getDescription().isEmpty()) {
                 propSchema.put("description", param.getDescription());
@@ -111,6 +113,7 @@ public final class ClaudeToolAdapter {
             case OBJECT:
                 return "object";
             case STRING_ARRAY:
+            case OBJECT_ARRAY:
                 return "array";
             case STRING:
             default:

@@ -183,6 +183,43 @@ class ElementPropertyCatalogTest {
         assertFalse(ElementPropertyCatalog.isFlatStringListProperty("ResponseAssertion", null));
     }
 
+    // ==================== isStructuredListProperty ====================
+
+    @Test
+    void isStructuredListProperty_headerManagerHeaders_isTrue() {
+        assertTrue(ElementPropertyCatalog.isStructuredListProperty("HeaderManager", "HeaderManager.headers"));
+    }
+
+    @Test
+    void isStructuredListProperty_argumentsArguments_isTrue() {
+        assertTrue(ElementPropertyCatalog.isStructuredListProperty("Arguments", "Arguments.arguments"));
+    }
+
+    @Test
+    void isStructuredListProperty_authManagerAuthList_isTrue() {
+        assertTrue(ElementPropertyCatalog.isStructuredListProperty("AuthManager", "AuthManager.auth_list"));
+    }
+
+    @Test
+    void isStructuredListProperty_isCaseInsensitiveOnType() {
+        assertTrue(ElementPropertyCatalog.isStructuredListProperty("headermanager", "HeaderManager.headers"));
+    }
+
+    @Test
+    void isStructuredListProperty_unknownPropertyOrType_isFalse() {
+        assertFalse(ElementPropertyCatalog.isStructuredListProperty("HeaderManager", "Arguments.arguments"));
+        assertFalse(ElementPropertyCatalog.isStructuredListProperty("ResponseAssertion", "Asserion.test_strings"));
+        assertFalse(ElementPropertyCatalog.isStructuredListProperty(null, "HeaderManager.headers"));
+        assertFalse(ElementPropertyCatalog.isStructuredListProperty("HeaderManager", null));
+    }
+
+    @Test
+    void propertiesFor_headerManagerAndArgumentsAndAuthManager_areCurated() {
+        assertEquals("HeaderManager.headers", findProperty("HeaderManager", "HeaderManager.headers").getKey());
+        assertEquals("Arguments.arguments", findProperty("Arguments", "Arguments.arguments").getKey());
+        assertEquals("AuthManager.auth_list", findProperty("AuthManager", "AuthManager.auth_list").getKey());
+    }
+
     private static ElementPropertyCatalog.Property findProperty(String type, String key) {
         return ElementPropertyCatalog.propertiesFor(type).stream()
                 .filter(p -> p.getKey().equals(key))

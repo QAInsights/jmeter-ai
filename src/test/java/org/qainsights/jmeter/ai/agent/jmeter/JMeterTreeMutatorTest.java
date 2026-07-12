@@ -146,6 +146,88 @@ class JMeterTreeMutatorTest {
         assertFalse(mutator.replacePropertyList(model, node, "Foo", null));
     }
 
+    // ── replaceStructuredPropertyList ──────────────────────────────────────────
+
+    @Test
+    void replaceStructuredPropertyList_headerManagerHeaders_noExistingProperty_succeeds() {
+        when(element.getProperty("HeaderManager.headers")).thenReturn(null);
+        java.util.Map<String, String> entry = new java.util.LinkedHashMap<>();
+        entry.put("name", "Content-Type");
+        entry.put("value", "application/json");
+
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, "HeaderManager.headers",
+                java.util.Collections.singletonList(entry)));
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_argumentsArguments_noExistingProperty_succeeds() {
+        when(element.getProperty("Arguments.arguments")).thenReturn(null);
+        java.util.Map<String, String> entry = new java.util.LinkedHashMap<>();
+        entry.put("name", "userId");
+        entry.put("value", "123");
+
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, "Arguments.arguments",
+                java.util.Collections.singletonList(entry)));
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_authManagerAuthList_validMechanism_succeeds() {
+        when(element.getProperty("AuthManager.auth_list")).thenReturn(null);
+        java.util.Map<String, String> entry = new java.util.LinkedHashMap<>();
+        entry.put("url", "https://example.com");
+        entry.put("username", "bob");
+        entry.put("password", "secret");
+        entry.put("mechanism", "digest");
+
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, "AuthManager.auth_list",
+                java.util.Collections.singletonList(entry)));
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_authManagerAuthList_invalidMechanism_isRejected() {
+        when(element.getProperty("AuthManager.auth_list")).thenReturn(null);
+        java.util.Map<String, String> entry = new java.util.LinkedHashMap<>();
+        entry.put("url", "https://example.com");
+        entry.put("mechanism", "not-a-real-mechanism");
+
+        assertFalse(mutator.replaceStructuredPropertyList(model, node, "AuthManager.auth_list",
+                java.util.Collections.singletonList(entry)));
+        verify(model, never()).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_unsupportedProperty_isRejected() {
+        when(element.getProperty("Foo.bar")).thenReturn(null);
+        assertFalse(mutator.replaceStructuredPropertyList(model, node, "Foo.bar",
+                java.util.Collections.singletonList(java.util.Collections.singletonMap("name", "x"))));
+        verify(model, never()).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_existingFlatStringCollection_isRejected() {
+        org.apache.jmeter.testelement.property.CollectionProperty existing =
+                new org.apache.jmeter.testelement.property.CollectionProperty(
+                        "HeaderManager.headers", new java.util.ArrayList<>(java.util.List.of("not-a-header")));
+        when(element.getProperty("HeaderManager.headers")).thenReturn(existing);
+
+        assertFalse(mutator.replaceStructuredPropertyList(model, node, "HeaderManager.headers",
+                java.util.Collections.emptyList()));
+        verify(model, never()).nodeChanged(node);
+    }
+
+    @Test
+    void replaceStructuredPropertyList_invalidInputs_returnFalse() {
+        assertFalse(mutator.replaceStructuredPropertyList(null, node, "HeaderManager.headers",
+                java.util.Collections.emptyList()));
+        assertFalse(mutator.replaceStructuredPropertyList(model, null, "HeaderManager.headers",
+                java.util.Collections.emptyList()));
+        assertFalse(mutator.replaceStructuredPropertyList(model, node, " ", java.util.Collections.emptyList()));
+        assertFalse(mutator.replaceStructuredPropertyList(model, node, "HeaderManager.headers", null));
+    }
+
     // ── setEnabled ─────────────────────────────────────────────────────────────
 
     @Test

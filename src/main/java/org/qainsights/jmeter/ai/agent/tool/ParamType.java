@@ -12,5 +12,7 @@ public enum ParamType {
     BOOLEAN,
     OBJECT,
     /** A JSON array of strings. */
-    STRING_ARRAY
+    STRING_ARRAY,
+    /** A JSON array of objects; each object's shape depends on the tool/property. */
+    OBJECT_ARRAY
 }

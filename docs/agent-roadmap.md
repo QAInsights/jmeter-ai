@@ -16,10 +16,11 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - EDT-safe tree mutations via `JMeterTreeMutator` + `EdtExecutor`.
 - Stable tree-path element ids (`ElementIdResolver`); internal wrapper root excluded.
 
-**Tools (10)**
+**Tools (11)**
 
 - Read: `get_tree_state`, `get_element_config`, `get_element_children`, `get_element_schema`.
-- Write: `add_element`, `update_element_property`, `set_property_list`, `delete_element`, `toggle_element`, `move_element`.
+- Write: `add_element`, `update_element_property`, `set_property_list`, `set_structured_property_list`,
+  `delete_element`, `toggle_element`, `move_element`.
 
 `update_element_property`/`JMeterTreeMutator.updateProperty` refuse to overwrite a
 property that is currently a `CollectionProperty`/`MapProperty`/`TestElementProperty`
@@ -27,8 +28,9 @@ property that is currently a `CollectionProperty`/`MapProperty`/`TestElementProp
 element (reproduced with a live `ResponseAssertion`'s `Asserion.test_strings`,
 crashing `AssertionGui.configure()` on every subsequent open). `set_property_list`
 is the safe way to write a *flat string-list* property in full (currently just
-`ResponseAssertion`'s `Asserion.test_strings`); structured lists (headers,
-arguments, auth) still need a dedicated tool - tracked below.
+`ResponseAssertion`'s `Asserion.test_strings`); `set_structured_property_list` does
+the same for *structured* lists (`HeaderManager.headers`, `Arguments.arguments`,
+`AuthManager.auth_list`), where each entry is an object, not a plain string.
 
 **Integration**
 
@@ -47,7 +49,7 @@ arguments, auth) still need a dedicated tool - tracked below.
 
 **Quality**
 
-- 616 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+- 644 unit tests passing. End-to-end smoke test in live JMeter confirmed working
   (add/update/delete/toggle/move all verified live, including the Response
   Assertion property-corruption fix and `set_property_list`).
 
@@ -75,7 +77,7 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 | B5 | ~~Enumerate allowed values for enum-like keys~~ **Done** | S | Added `Property.allowedValues` to `ElementPropertyCatalog`, rendered as an `Allowed: ...` line in `describe()`/`get_element_schema`. Covers `HTTPSampler.method`/`.protocol`, `CSVDataSet.shareMode`, `ConstantThroughputTimer.calcMode`, `ResponseAssertion` `test_field`/`test_type`, `SizeAssertion.operator`, JSR223 `scriptLanguage`. Also fixed two pre-existing inaccuracies found during the audit: `test_type` was missing `MATCH=1` and the `OR=32` modifier; `test_field` only had 2 of 8 real values (verified against JMeter source). |
 | B6 | ~~Integrate mutations with JMeter Undo/Redo~~ **Done** | M | Turned out to need no mutator changes: `JMeterTreeMutator` already fires the same standard `JMeterTreeModel` events (`nodeChanged`/`insertNodeInto`/`removeNodeFromParent`) that JMeter's own GUI actions fire, and `org.apache.jmeter.gui.UndoHistory` listens generically as a `TreeModelListener` - so agent edits were already undoable *whenever undo history is enabled*. The catch: `UndoHistory.isEnabled()` is `undo.history.size > 0`, which **defaults to 0 (disabled)** in stock JMeter, for native GUI edits too. Added a one-time `JMeterAgent` chat nudge (`maybeWarnAboutUndoHistory`) telling the user to set `undo.history.size` if it's off. Known caveat: `move_element` is 2 undo-recordable steps (remove + insert) since JMeter's compound-transaction API (`beginUndoTransaction`/`endUndoTransaction`) is package-private to `org.apache.jmeter.gui` and unreachable from our plugin - matches JMeter's own tree drag-and-drop move. Regression-tested against a real, headless `JMeterTreeModel` (`JMeterTreeMutatorUndoIntegrationTest`). |
 | B7 | ~~Fix property-type corruption + add flat string-list support~~ **Done** | M | Root cause: `JMeterTreeMutator.updateProperty` called `setProperty(key, value)` unconditionally, so a guessed/uncataloged key (e.g. `Asserion.test_strings`) silently replaced a `CollectionProperty` with a `StringProperty`, corrupting the element and crashing its GUI panel. Fixed generically (checks the *existing* property's runtime type before writing, protects every element/property, cataloged or not - regression-tested against real `ResponseAssertion`, `HeaderManager`, `Arguments`). Added `set_property_list` (+ `ParamType.STRING_ARRAY`) so the agent can actually populate flat string lists like assertion patterns, gated by an explicit `ElementPropertyCatalog.isFlatStringListProperty` allowlist. |
-| B8 | Support structured list properties (headers, arguments, auth) | M | Needs a shape beyond flat strings (name/value pairs as nested `TestElementProperty` entries) - a natural next tool once there's a concrete need. |
+| B8 | ~~Support structured list properties (headers, arguments, auth)~~ **Done** | M | Added `set_structured_property_list` (+ `ParamType.OBJECT_ARRAY`) alongside `JMeterTreeMutator.replaceStructuredPropertyList`, gated by `ElementPropertyCatalog.isStructuredListProperty`. Covers `HeaderManager.headers` and `Arguments.arguments` (entries shaped `{name, value}` → `Header`/`Argument`) and `AuthManager.auth_list` (entries shaped `{url, username, password, domain, realm, mechanism}` → `Authorization`, with `mechanism` validated against `AuthManager.Mechanism`). Same corruption guard as `set_property_list`: refuses to overwrite an existing property unless it's absent or already a collection of nested test elements. Regression-tested against real `HeaderManager`/`Arguments`/`AuthManager` instances. |
 
 ### Phase C — New action tools
 
