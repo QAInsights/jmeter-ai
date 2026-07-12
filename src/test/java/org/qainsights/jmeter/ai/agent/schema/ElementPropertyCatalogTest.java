@@ -54,4 +54,50 @@ class ElementPropertyCatalogTest {
             assertFalse(p.getDescription().trim().isEmpty());
         }
     }
+
+    @Test
+    void propertiesFor_jsr223Sampler_includesScriptAndLanguage() {
+        List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor("JSR223Sampler");
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("script")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("scriptLanguage")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("cacheKey")));
+    }
+
+    @Test
+    void propertiesFor_jsr223PreAndPostProcessor_includeScriptAndLanguage() {
+        for (String type : new String[] { "JSR223PreProcessor", "JSR223PostProcessor" }) {
+            List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor(type);
+            assertFalse(props.isEmpty(), type + " should have curated properties");
+            assertTrue(props.stream().anyMatch(p -> p.getKey().equals("script")));
+            assertTrue(props.stream().anyMatch(p -> p.getKey().equals("scriptLanguage")));
+        }
+    }
+
+    @Test
+    void propertiesFor_durationAssertion_includesDurationKey() {
+        List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor("DurationAssertion");
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("DurationAssertion.duration")));
+    }
+
+    @Test
+    void propertiesFor_sizeAssertion_includesSizeAndOperator() {
+        List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor("SizeAssertion");
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("SizeAssertion.size")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("SizeAssertion.operator")));
+    }
+
+    @Test
+    void propertiesFor_jsonPathAssertion_includesJsonPathAndExpectedValue() {
+        List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor("JSONPathAssertion");
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("JSON_PATH")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("EXPECTED_VALUE")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("ISREGEX")));
+    }
+
+    @Test
+    void propertiesFor_gaussianRandomTimer_includesDelayAndRange() {
+        List<ElementPropertyCatalog.Property> props = ElementPropertyCatalog.propertiesFor("GaussianRandomTimer");
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("ConstantTimer.delay")));
+        assertTrue(props.stream().anyMatch(p -> p.getKey().equals("RandomTimer.range")));
+    }
 }

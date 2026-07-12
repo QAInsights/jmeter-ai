@@ -158,6 +158,47 @@ public final class ElementPropertyCatalog {
                 p("displayJMeterVariables", "bool", "Include JMeter variables in the output."),
                 p("displaySystemProperties", "bool", "Include system properties in the output."));
 
+        put(map, "JSR223Sampler",
+                p("script", "string", "Script body to execute."),
+                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("parameters", "string", "String available to the script as the Parameters/args variable."),
+                p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
+                p("filename", "string", "Optional external script file path (used instead of script)."));
+
+        put(map, "JSR223PreProcessor",
+                p("script", "string", "Script body to execute before the sampler runs."),
+                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("parameters", "string", "String available to the script as the Parameters/args variable."),
+                p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
+                p("filename", "string", "Optional external script file path (used instead of script)."));
+
+        put(map, "JSR223PostProcessor",
+                p("script", "string", "Script body to execute after the sampler runs."),
+                p("scriptLanguage", "string", "Scripting language, e.g. groovy, javascript, beanshell."),
+                p("parameters", "string", "String available to the script as the Parameters/args variable."),
+                p("cacheKey", "string", "Compiled-script cache key; blank disables caching."),
+                p("filename", "string", "Optional external script file path (used instead of script)."));
+
+        put(map, "DurationAssertion",
+                p("DurationAssertion.duration", "long", "Maximum allowed sample duration, in milliseconds."));
+
+        put(map, "SizeAssertion",
+                p("SizeAssertion.size", "long", "Response size to compare against, in bytes."),
+                p("SizeAssertion.operator", "int",
+                        "Comparison: 1=equal, 2=not equal, 3=greater than, 4=less than, 5=greater-or-equal, 6=less-or-equal."));
+
+        put(map, "JSONPathAssertion",
+                p("JSON_PATH", "string", "JSONPath expression to evaluate, e.g. $.status."),
+                p("EXPECTED_VALUE", "string", "Expected value at that path (only checked if JSONVALIDATION is true)."),
+                p("JSONVALIDATION", "bool", "Enable validating the extracted value against EXPECTED_VALUE."),
+                p("EXPECT_NULL", "bool", "Assert the extracted value is null."),
+                p("INVERT", "bool", "Invert the assertion result."),
+                p("ISREGEX", "bool", "Treat EXPECTED_VALUE as a regular expression."));
+
+        put(map, "GaussianRandomTimer",
+                p("ConstantTimer.delay", "int", "Constant offset added to the random delay, in ms."),
+                p("RandomTimer.range", "double", "Standard deviation of the Gaussian random delay, in ms."));
+
         return Collections.unmodifiableMap(map);
     }
 
