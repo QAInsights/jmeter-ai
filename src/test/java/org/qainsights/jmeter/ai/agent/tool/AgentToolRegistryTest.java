@@ -5,9 +5,12 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RenameElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ReorderElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RunTestHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.SavePlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SetPropertyListHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SetStructuredPropertyListHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.StopTestHandler;
@@ -35,8 +38,11 @@ class AgentToolRegistryTest {
         assertTrue(registry.isRegistered(MoveElementHandler.MOVE_ELEMENT));
         assertTrue(registry.isRegistered(DuplicateElementHandler.DUPLICATE_ELEMENT));
         assertTrue(registry.isRegistered(RenameElementHandler.RENAME_ELEMENT));
+        assertTrue(registry.isRegistered(ReorderElementHandler.REORDER_ELEMENT));
         assertTrue(registry.isRegistered(RunTestHandler.RUN_TEST));
         assertTrue(registry.isRegistered(StopTestHandler.STOP_TEST));
-        assertTrue(registry.size() >= 15);
+        assertTrue(registry.isRegistered(SavePlanHandler.SAVE_PLAN));
+        assertTrue(registry.isRegistered(OpenPlanHandler.OPEN_PLAN));
+        assertTrue(registry.size() >= 18);
     }
 }

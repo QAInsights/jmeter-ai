@@ -387,6 +387,53 @@ class JMeterTreeMutatorTest {
         assertFalse(mutator.moveElement(model, node, null));
     }
 
+    // ── reorderElement ─────────────────────────────────────────────────────────
+
+    @Test
+    void reorderElement_validIndex_removesAndReinsertsAtIndex() {
+        JMeterTreeNode parent = mock(JMeterTreeNode.class);
+        when(node.getParent()).thenReturn(parent);
+        when(parent.getChildCount()).thenReturn(3);
+
+        assertTrue(mutator.reorderElement(model, node, 2));
+        verify(model).removeNodeFromParent(node);
+        verify(model).insertNodeInto(node, parent, 2);
+    }
+
+    @Test
+    void reorderElement_negativeIndex_isRejected() {
+        JMeterTreeNode parent = mock(JMeterTreeNode.class);
+        when(node.getParent()).thenReturn(parent);
+        when(parent.getChildCount()).thenReturn(3);
+
+        assertFalse(mutator.reorderElement(model, node, -1));
+        verify(model, never()).removeNodeFromParent(any());
+    }
+
+    @Test
+    void reorderElement_indexAtOrPastChildCount_isRejected() {
+        JMeterTreeNode parent = mock(JMeterTreeNode.class);
+        when(node.getParent()).thenReturn(parent);
+        when(parent.getChildCount()).thenReturn(3);
+
+        assertFalse(mutator.reorderElement(model, node, 3));
+        verify(model, never()).removeNodeFromParent(any());
+    }
+
+    @Test
+    void reorderElement_rootWithNoParent_isRejected() {
+        when(node.getParent()).thenReturn(null);
+        assertFalse(mutator.reorderElement(model, node, 0));
+        verify(model, never()).removeNodeFromParent(any());
+    }
+
+    @Test
+    void reorderElement_parentNotAJMeterTreeNode_isRejected() {
+        when(node.getParent()).thenReturn(mock(TreeNode.class));
+        assertFalse(mutator.reorderElement(model, node, 0));
+        verify(model, never()).removeNodeFromParent(any());
+    }
+
     // ── duplicateElement ───────────────────────────────────────────────────────
 
     @Test

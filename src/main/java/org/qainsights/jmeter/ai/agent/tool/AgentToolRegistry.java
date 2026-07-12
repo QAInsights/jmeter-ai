@@ -7,6 +7,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RenameElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ReorderElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RunTestHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SavePlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SetPropertyListHandler;
@@ -40,6 +41,7 @@ public final class AgentToolRegistry {
         registry.register(new MoveElementHandler().tool());
         registry.register(new DuplicateElementHandler().tool());
         registry.register(new RenameElementHandler().tool());
+        registry.register(new ReorderElementHandler().tool());
         registry.register(new RunTestHandler().tool());
         registry.register(new StopTestHandler().tool());
         registry.register(new SavePlanHandler().tool());

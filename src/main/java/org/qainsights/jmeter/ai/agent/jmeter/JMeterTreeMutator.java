@@ -321,6 +321,30 @@ public final class JMeterTreeMutator {
     }
 
     /**
+     * Moves the node to a new position ({@code newIndex}, 0-based) among its
+     * current siblings, without changing its parent - a complement to
+     * {@link #moveElement}, which always appends as the last child of a
+     * (possibly different) parent. The root (a node with no parent) cannot be
+     * reordered, and {@code newIndex} must be a valid position among the
+     * node's current siblings (i.e. {@code 0 <= newIndex < parent.getChildCount()},
+     * counted before the node is removed for the move).
+     */
+    public boolean reorderElement(JMeterTreeModel model, JMeterTreeNode node, int newIndex) {
+        if (!isValid(model, node) || !(node.getParent() instanceof JMeterTreeNode)) {
+            return false;
+        }
+        JMeterTreeNode parent = (JMeterTreeNode) node.getParent();
+        if (newIndex < 0 || newIndex >= parent.getChildCount()) {
+            return false;
+        }
+        return mutate(() -> {
+            model.removeNodeFromParent(node);
+            model.insertNodeInto(node, parent, newIndex);
+            return true;
+        });
+    }
+
+    /**
      * Duplicates the node's subtree - deep-cloning its {@code TestElement} and
      * every descendant's, via {@link TreeNodeCloner} - and inserts the clone as
      * the next sibling immediately after {@code node}, under the same parent.
