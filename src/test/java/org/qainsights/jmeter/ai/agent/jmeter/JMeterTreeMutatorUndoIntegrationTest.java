@@ -104,6 +104,22 @@ class JMeterTreeMutatorUndoIntegrationTest {
     }
 
     @Test
+    void renameElement_firesTreeNodesChanged() {
+        JMeterTreeModel model = new JMeterTreeModel();
+        JMeterTreeNode root = (JMeterTreeNode) model.getRoot();
+        JMeterTreeNode child = new JMeterTreeNode(new ThreadGroup(), null);
+        model.insertNodeInto(child, root, 0);
+
+        RecordingListener listener = new RecordingListener();
+        model.addTreeModelListener(listener);
+
+        assertTrue(mutator.renameElement(model, child, "Renamed"));
+
+        assertEquals("Renamed", child.getName());
+        assertTrue(listener.events.contains("changed"));
+    }
+
+    @Test
     void duplicateElement_firesTreeNodesInserted() {
         JMeterTreeModel model = new JMeterTreeModel();
         JMeterTreeNode root = (JMeterTreeNode) model.getRoot();

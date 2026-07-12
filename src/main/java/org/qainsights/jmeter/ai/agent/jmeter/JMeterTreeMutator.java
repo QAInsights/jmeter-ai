@@ -272,6 +272,18 @@ public final class JMeterTreeMutator {
         });
     }
 
+    /** Renames the node's element and refreshes its display. */
+    public boolean renameElement(JMeterTreeModel model, JMeterTreeNode node, String newName) {
+        if (!isValid(model, node) || newName == null || newName.trim().isEmpty()) {
+            return false;
+        }
+        return mutate(() -> {
+            node.setName(newName);
+            model.nodeChanged(node);
+            return true;
+        });
+    }
+
     /**
      * Deletes the node. A node with children is only removed when
      * {@code force} is {@code true}, preventing accidental subtree deletion.

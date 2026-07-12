@@ -328,6 +328,30 @@ class JMeterTreeMutatorTest {
         verify(model, never()).removeNodeFromParent(any());
     }
 
+    // ── renameElement ──────────────────────────────────────────────────────────
+
+    @Test
+    void renameElement_setsNameAndFiresNodeChanged() {
+        assertTrue(mutator.renameElement(model, node, "New Name"));
+        verify(node).setName("New Name");
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void renameElement_invalidInputs_returnFalse() {
+        assertFalse(mutator.renameElement(null, node, "New Name"));
+        assertFalse(mutator.renameElement(model, null, "New Name"));
+        assertFalse(mutator.renameElement(model, node, null));
+        assertFalse(mutator.renameElement(model, node, " "));
+        verify(node, never()).setName(any());
+    }
+
+    @Test
+    void renameElement_whenMutationThrows_returnsFalse() {
+        doThrow(new RuntimeException("boom")).when(node).setName("New Name");
+        assertFalse(mutator.renameElement(model, node, "New Name"));
+    }
+
     // ── moveElement ────────────────────────────────────────────────────────────
 
     @Test
