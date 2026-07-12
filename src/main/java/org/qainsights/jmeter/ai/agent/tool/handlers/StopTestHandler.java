@@ -43,7 +43,11 @@ public final class StopTestHandler {
     public Tool tool() {
         ToolSpec spec = ToolSpec.builder(STOP_TEST)
                 .description("Stops the currently running test - the same action as JMeter's own 'Stop'/"
-                        + "'Shutdown' toolbar buttons. If nothing is running, this is a silent no-op.")
+                        + "'Shutdown' toolbar buttons. If nothing is running, reports that instead of "
+                        + "dispatching anything. Do not call this immediately after run_test to approximate a "
+                        + "fixed run duration - there is no delay between the two calls, so the test would be "
+                        + "stopped within milliseconds of starting. For a timed run, configure the Thread "
+                        + "Group's scheduler duration instead (see run_test's description).")
                 .addParameter(ToolParameter.builder("force", ParamType.BOOLEAN)
                         .description("false (default): graceful Stop, waits for in-flight samples to finish. "
                                 + "true: Shutdown, interrupts in-flight samples immediately.")
@@ -68,16 +72,17 @@ public final class StopTestHandler {
         if (rootSupplier.get() == null) {
             return ToolResult.error(ERR_NO_TEST_PLAN, "No test plan is currently open.");
         }
+        if (!controller.isRunning()) {
+            return ToolResult.ok("Nothing is currently running.");
+        }
         boolean force = parseBoolean(args.get("force"));
         String actionName = force ? ActionNames.ACTION_SHUTDOWN : ActionNames.ACTION_STOP;
         if (!controller.dispatch(actionName)) {
             return ToolResult.error(ERR_DISPATCH_FAILED, "Could not stop the test - no live JMeter GUI available.");
         }
         return ToolResult.ok(force
-                ? "Shutdown requested (in-flight samples interrupted immediately). If nothing was running, "
-                        + "this had no effect."
-                : "Stop requested (waits for in-flight samples to finish). If nothing was running, this had "
-                        + "no effect.");
+                ? "Shutdown requested (in-flight samples interrupted immediately)."
+                : "Stop requested (waits for in-flight samples to finish).");
     }
 
     private static boolean parseBoolean(Object value) {

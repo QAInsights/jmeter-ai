@@ -18,15 +18,21 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Unit tests for {@link StopTestHandler} using an in-memory tree and fake controller. */
 class StopTestHandlerTest {
 
-    /** Records the last dispatched action and toggles success. */
+    /** Records the last dispatched action and toggles success/running state. */
     private static final class FakeController implements TestRunController {
         String lastAction;
         boolean succeed = true;
+        boolean running = true;
 
         @Override
         public boolean dispatch(String actionName) {
             this.lastAction = actionName;
             return succeed;
+        }
+
+        @Override
+        public boolean isRunning() {
+            return running;
         }
     }
 
@@ -97,5 +103,14 @@ class StopTestHandlerTest {
 
         assertFalse(r.isSuccess());
         assertEquals(StopTestHandler.ERR_DISPATCH_FAILED, r.getErrorCode());
+    }
+
+    @Test
+    void stop_whenNothingRunning_reportsWithoutDispatching() {
+        controller.running = false;
+        ToolResult r = tool.execute(Collections.emptyMap());
+
+        assertTrue(r.isSuccess());
+        assertNull(controller.lastAction);
     }
 }

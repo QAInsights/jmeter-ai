@@ -24,6 +24,7 @@ public final class RunTestHandler {
     public static final String RUN_TEST = "run_test";
 
     public static final String ERR_NO_TEST_PLAN = "no_test_plan";
+    public static final String ERR_ALREADY_RUNNING = "already_running";
     public static final String ERR_DISPATCH_FAILED = "dispatch_failed";
 
     private final Supplier<JMeterTreeNode> rootSupplier;
@@ -45,7 +46,12 @@ public final class RunTestHandler {
                         + "toolbar button. Returns immediately once the run is triggered; it does not wait for "
                         + "the test to finish or report pass/fail results itself. Check whatever listeners "
                         + "(View Results Tree, Summary Report, ...) are in the plan for outcomes, and use "
-                        + "stop_test to stop it.")
+                        + "stop_test to stop it. Fails if a test is already running - call stop_test first. "
+                        + "There is no wait/sleep tool: do NOT call stop_test right after this to fake a fixed "
+                        + "duration - it will stop the test within milliseconds, before anything meaningful "
+                        + "runs. For a timed run, set the Thread Group's 'ThreadGroup.scheduler'=true and "
+                        + "'ThreadGroup.duration'=<seconds> via update_element_property before calling "
+                        + "run_test, and let JMeter stop it itself.")
                 .addPrecondition("A test plan must be open (see get_tree_state)")
                 .build();
 
@@ -65,6 +71,10 @@ public final class RunTestHandler {
     private ToolResult handle() {
         if (rootSupplier.get() == null) {
             return ToolResult.error(ERR_NO_TEST_PLAN, "No test plan is currently open.");
+        }
+        if (controller.isRunning()) {
+            return ToolResult.error(ERR_ALREADY_RUNNING,
+                    "A test is already running. Use stop_test to stop it before starting a new run.");
         }
         if (!controller.dispatch(ActionNames.ACTION_START)) {
             return ToolResult.error(ERR_DISPATCH_FAILED, "Could not start the test - no live JMeter GUI available.");

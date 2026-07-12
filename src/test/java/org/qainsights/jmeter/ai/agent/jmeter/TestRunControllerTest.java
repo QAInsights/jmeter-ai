@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.threads.JMeterContextService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,5 +20,13 @@ class TestRunControllerTest {
         assertFalse(controller.dispatch(ActionNames.ACTION_START));
         assertFalse(controller.dispatch(ActionNames.ACTION_STOP));
         assertFalse(controller.dispatch(ActionNames.ACTION_SHUTDOWN));
+    }
+
+    @Test
+    void live_isRunning_reflectsJMeterContextServiceActiveThreadCount() {
+        // No sampler threads active in a plain test JVM.
+        assertEquals(0, JMeterContextService.getNumberOfThreads());
+
+        assertFalse(TestRunController.live().isRunning());
     }
 }
