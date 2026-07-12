@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent.tool;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RunTestHandler;
@@ -31,8 +32,9 @@ class AgentToolRegistryTest {
         assertTrue(registry.isRegistered(DeleteElementHandler.DELETE_ELEMENT));
         assertTrue(registry.isRegistered(ToggleElementHandler.TOGGLE_ELEMENT));
         assertTrue(registry.isRegistered(MoveElementHandler.MOVE_ELEMENT));
+        assertTrue(registry.isRegistered(DuplicateElementHandler.DUPLICATE_ELEMENT));
         assertTrue(registry.isRegistered(RunTestHandler.RUN_TEST));
         assertTrue(registry.isRegistered(StopTestHandler.STOP_TEST));
-        assertTrue(registry.size() >= 13);
+        assertTrue(registry.size() >= 14);
     }
 }

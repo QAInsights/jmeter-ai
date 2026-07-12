@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.tree.TreeNode;
 
@@ -305,6 +306,33 @@ public final class JMeterTreeMutator {
             model.insertNodeInto(node, newParent, newParent.getChildCount());
             return true;
         });
+    }
+
+    /**
+     * Duplicates the node's subtree - deep-cloning its {@code TestElement} and
+     * every descendant's, via {@link TreeNodeCloner} - and inserts the clone as
+     * the next sibling immediately after {@code node}, under the same parent.
+     * This is the same result as JMeter's own Copy+Paste/Duplicate menu
+     * command, without depending on the live tree selection. The root (a node
+     * with no parent) cannot be duplicated.
+     */
+    public JMeterTreeNode duplicateElement(JMeterTreeModel model, JMeterTreeNode node) {
+        if (!isValid(model, node) || !(node.getParent() instanceof JMeterTreeNode)) {
+            return null;
+        }
+        JMeterTreeNode parent = (JMeterTreeNode) node.getParent();
+        AtomicReference<JMeterTreeNode> result = new AtomicReference<>();
+        edt.run(() -> {
+            try {
+                JMeterTreeNode clone = TreeNodeCloner.cloneSubtree(node);
+                model.insertNodeInto(clone, parent, parent.getIndex(node) + 1);
+                result.set(clone);
+            } catch (RuntimeException e) {
+                log.error("Tree mutation failed", e);
+                result.set(null);
+            }
+        });
+        return result.get();
     }
 
     private boolean isValid(JMeterTreeModel model, JMeterTreeNode node) {

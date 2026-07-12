@@ -104,6 +104,21 @@ class JMeterTreeMutatorUndoIntegrationTest {
     }
 
     @Test
+    void duplicateElement_firesTreeNodesInserted() {
+        JMeterTreeModel model = new JMeterTreeModel();
+        JMeterTreeNode root = (JMeterTreeNode) model.getRoot();
+        JMeterTreeNode child = new JMeterTreeNode(new ThreadGroup(), null);
+        model.insertNodeInto(child, root, 0);
+
+        RecordingListener listener = new RecordingListener();
+        model.addTreeModelListener(listener);
+
+        assertNotNull(mutator.duplicateElement(model, child));
+
+        assertTrue(listener.events.contains("inserted"));
+    }
+
+    @Test
     void undoHistory_isDisabledByDefaultInStockJMeter() {
         // Documents JMeter's own default: undo.history.size defaults to 0, so
         // Undo/Redo is off out of the box for native GUI edits too, not just the

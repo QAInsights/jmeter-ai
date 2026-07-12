@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -88,6 +89,43 @@ class JMeterTreeMutatorRealElementsTest {
         assertEquals(-1, loopController.getLoops());
         // The write must not have created a decoy top-level property on the ThreadGroup itself.
         assertTrue(threadGroup.getProperty("LoopController.loops") instanceof NullProperty);
+    }
+
+    @Test
+    void duplicateElement_insertsCloneAsNextSiblingUnderSameParent() {
+        JMeterTreeModel realModel = new JMeterTreeModel();
+        JMeterTreeNode root = (JMeterTreeNode) realModel.getRoot();
+        JMeterTreeNode parent = new JMeterTreeNode(new ThreadGroup(), null);
+        ConfigTestElement originalElement = new ConfigTestElement();
+        originalElement.setName("Original");
+        JMeterTreeNode original = new JMeterTreeNode(originalElement, null);
+        JMeterTreeNode sibling = node("Sibling");
+        realModel.insertNodeInto(parent, root, 0);
+        realModel.insertNodeInto(original, parent, 0);
+        realModel.insertNodeInto(sibling, parent, 1);
+
+        JMeterTreeNode duplicate = mutator.duplicateElement(realModel, original);
+
+        assertNotNull(duplicate);
+        assertEquals("Original", duplicate.getName());
+        assertNotSame(original.getTestElement(), duplicate.getTestElement());
+        assertEquals(3, parent.getChildCount());
+        assertSame(parent, duplicate.getParent());
+        assertEquals(1, parent.getIndex(duplicate));
+    }
+
+    @Test
+    void duplicateElement_cannotDuplicateTreeRoot() {
+        JMeterTreeModel realModel = new JMeterTreeModel();
+        JMeterTreeNode root = (JMeterTreeNode) realModel.getRoot();
+
+        assertNull(mutator.duplicateElement(realModel, root));
+    }
+
+    private static JMeterTreeNode node(String name) {
+        ConfigTestElement element = new ConfigTestElement();
+        element.setName(name);
+        return new JMeterTreeNode(element, null);
     }
 
     @Test

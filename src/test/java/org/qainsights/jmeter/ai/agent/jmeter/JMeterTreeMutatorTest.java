@@ -362,4 +362,24 @@ class JMeterTreeMutatorTest {
         when(node.getParent()).thenReturn(mock(TreeNode.class));
         assertFalse(mutator.moveElement(model, node, null));
     }
+
+    // ── duplicateElement ───────────────────────────────────────────────────────
+
+    @Test
+    void duplicateElement_invalidInputs_returnNull() {
+        assertNull(mutator.duplicateElement(null, node));
+        assertNull(mutator.duplicateElement(model, null));
+    }
+
+    @Test
+    void duplicateElement_nodeWithoutParent_returnsNull() {
+        when(node.getParent()).thenReturn(null);
+        assertNull(mutator.duplicateElement(model, node));
+    }
+
+    @Test
+    void duplicateElement_parentNotJMeterTreeNode_returnsNull() {
+        when(node.getParent()).thenReturn(mock(TreeNode.class));
+        assertNull(mutator.duplicateElement(model, node));
+    }
 }
