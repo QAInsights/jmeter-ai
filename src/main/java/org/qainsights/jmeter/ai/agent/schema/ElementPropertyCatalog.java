@@ -112,6 +112,7 @@ public final class ElementPropertyCatalog {
         map.put("headermanager", Collections.singletonList("HeaderManager.headers"));
         map.put("arguments", Collections.singletonList("Arguments.arguments"));
         map.put("authmanager", Collections.singletonList("AuthManager.auth_list"));
+        map.put("httpsamplerproxy", Collections.singletonList("HTTPsampler.Arguments"));
         return Collections.unmodifiableMap(map);
     }
 
@@ -152,7 +153,11 @@ public final class ElementPropertyCatalog {
                 p("HTTPSampler.use_keepalive", "bool", "Reuse the connection (Keep-Alive)."),
                 p("HTTPSampler.postBodyRaw", "bool", "Send the raw body instead of form parameters."),
                 p("HTTPSampler.connect_timeout", "int", "Connect timeout in milliseconds."),
-                p("HTTPSampler.response_timeout", "int", "Response timeout in milliseconds."));
+                p("HTTPSampler.response_timeout", "int", "Response timeout in milliseconds."),
+                p("HTTPsampler.Arguments", "list<object>",
+                        "This request's own parameters (the 'Parameters'/'Body Data' table). Not settable via "
+                                + "update_element_property - use set_structured_property_list with entries shaped "
+                                + "{name, value}."));
 
         put(map, "ThreadGroup",
                 p("ThreadGroup.num_threads", "int", "Number of virtual users (threads)."),

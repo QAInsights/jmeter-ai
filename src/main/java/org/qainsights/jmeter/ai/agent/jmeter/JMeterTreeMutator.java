@@ -17,6 +17,8 @@ import org.apache.jmeter.protocol.http.control.AuthManager;
 import org.apache.jmeter.protocol.http.control.Authorization;
 import org.apache.jmeter.protocol.http.control.Header;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.property.CollectionProperty;
 import org.apache.jmeter.testelement.property.JMeterProperty;
@@ -168,12 +170,13 @@ public final class JMeterTreeMutator {
 
     /**
      * Replaces a structured-list property (HTTP headers, User Defined
-     * Variables/HTTP parameters, or HTTP Authorization entries) with
-     * {@code entries} in full. Each map's expected keys depend on
-     * {@code property}: {@code HeaderManager.headers} and
-     * {@code Arguments.arguments} expect {@code name}/{@code value};
-     * {@code AuthManager.auth_list} expects {@code url}/{@code username}/
-     * {@code password}/{@code domain}/{@code realm}/{@code mechanism}. Refuses
+     * Variables/HTTP parameters, an HTTP Request's own parameters, or HTTP
+     * Authorization entries) with {@code entries} in full. Each map's expected
+     * keys depend on {@code property}: {@code HeaderManager.headers},
+     * {@code Arguments.arguments} and {@code HTTPsampler.Arguments} expect
+     * {@code name}/{@code value}; {@code AuthManager.auth_list} expects
+     * {@code url}/{@code username}/{@code password}/{@code domain}/
+     * {@code realm}/{@code mechanism}. Refuses
      * when the existing property is present but isn't a collection of nested
      * test elements, or when {@code property} isn't one of the three above, or
      * an entry's {@code mechanism} isn't a valid {@code AuthManager.Mechanism} -
@@ -186,24 +189,74 @@ public final class JMeterTreeMutator {
             return false;
         }
         return mutate(() -> {
-            if (!isStructuredListOrAbsent(node.getTestElement().getProperty(property))) {
-                log.warn("Refusing to replace '{}' on {} - existing property is not a structured list",
-                        property, node.getTestElement().getClass().getSimpleName());
-                return false;
+            boolean success = HTTPSamplerBase.ARGUMENTS.equals(property)
+                    ? replaceHttpSamplerArguments(node, entries)
+                    : replaceDirectCollectionProperty(node, property, entries);
+            if (success) {
+                model.nodeChanged(node);
             }
-            List<TestElement> built = new ArrayList<>();
-            for (Map<String, String> entry : entries) {
-                TestElement element = buildStructuredEntry(property, entry);
-                if (element == null) {
-                    log.warn("Refusing to replace '{}' - unsupported property or invalid entry {}", property, entry);
-                    return false;
-                }
-                built.add(element);
-            }
-            node.getTestElement().setProperty(new CollectionProperty(property, built));
-            model.nodeChanged(node);
-            return true;
+            return success;
         });
+    }
+
+    /**
+     * Replaces {@code property} where it is stored directly as a {@link CollectionProperty}
+     * on the element itself - {@code HeaderManager.headers}, the standalone
+     * {@code Arguments.arguments} (User Defined Variables), and {@code AuthManager.auth_list}.
+     */
+    private boolean replaceDirectCollectionProperty(JMeterTreeNode node, String property,
+                                                      List<Map<String, String>> entries) {
+        if (!isStructuredListOrAbsent(node.getTestElement().getProperty(property))) {
+            log.warn("Refusing to replace '{}' on {} - existing property is not a structured list",
+                    property, node.getTestElement().getClass().getSimpleName());
+            return false;
+        }
+        List<TestElement> built = buildEntries(property, entries);
+        if (built == null) {
+            return false;
+        }
+        node.getTestElement().setProperty(new CollectionProperty(property, built));
+        return true;
+    }
+
+    /**
+     * Replaces {@code HTTPSamplerBase.ARGUMENTS} - unlike the other structured-list
+     * properties, an HTTP sampler's own Parameters table is a <em>nested</em>
+     * {@link Arguments} test element ({@code TestElementProperty}), not a
+     * {@link CollectionProperty} directly on the sampler; the collection to replace is
+     * that nested element's own {@code Arguments.arguments}.
+     */
+    private boolean replaceHttpSamplerArguments(JMeterTreeNode node, List<Map<String, String>> entries) {
+        if (!(node.getTestElement() instanceof HTTPSamplerBase)) {
+            log.warn("Refusing to replace '{}' - element is not an HTTPSamplerBase", HTTPSamplerBase.ARGUMENTS);
+            return false;
+        }
+        List<TestElement> built = buildEntries(HTTPSamplerBase.ARGUMENTS, entries);
+        if (built == null) {
+            return false;
+        }
+        HTTPSamplerBase sampler = (HTTPSamplerBase) node.getTestElement();
+        Arguments arguments = sampler.getArguments();
+        if (arguments == null) {
+            arguments = new Arguments();
+            sampler.setArguments(arguments);
+        }
+        arguments.setProperty(new CollectionProperty(Arguments.ARGUMENTS, built));
+        return true;
+    }
+
+    /** Builds every entry via {@link #buildStructuredEntry}, or {@code null} if any is invalid. */
+    private static List<TestElement> buildEntries(String property, List<Map<String, String>> entries) {
+        List<TestElement> built = new ArrayList<>();
+        for (Map<String, String> entry : entries) {
+            TestElement element = buildStructuredEntry(property, entry);
+            if (element == null) {
+                log.warn("Refusing to replace '{}' - unsupported property or invalid entry {}", property, entry);
+                return null;
+            }
+            built.add(element);
+        }
+        return built;
     }
 
     /** True when {@code property} is absent, or is a CollectionProperty of nested test elements. */
@@ -230,6 +283,14 @@ public final class JMeterTreeMutator {
         }
         if (Arguments.ARGUMENTS.equals(property)) {
             return new Argument(field(entry, "name"), field(entry, "value"));
+        }
+        if (HTTPSamplerBase.ARGUMENTS.equals(property)) {
+            // HTTPSamplerBase.getQueryString() casts each entry to HTTPArgument (falling back to
+            // wrapping a plain Argument with a logged warning) - build the real type directly so an
+            // HTTP Request's own parameters (as opposed to a standalone Arguments/UDV element,
+            // handled above) are set exactly as JMeter's own "Add" button in the Parameters table
+            // would produce.
+            return new HTTPArgument(field(entry, "name"), field(entry, "value"));
         }
         if (AUTH_LIST.equals(property)) {
             return buildAuthorization(entry);

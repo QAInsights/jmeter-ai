@@ -10,6 +10,9 @@ import org.apache.jmeter.protocol.http.control.AuthManager;
 import org.apache.jmeter.protocol.http.control.Authorization;
 import org.apache.jmeter.protocol.http.control.Header;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
+import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.testelement.property.NullProperty;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
@@ -238,6 +241,43 @@ class JMeterTreeMutatorRealElementsTest {
 
         assertNotNull(authManager.getAuthObjects());
         assertEquals(0, authManager.getAuthObjects().size());
+    }
+
+    @Test
+    void httpSamplerProxy_replaceStructuredPropertyList_populatesArgumentsAsRealHttpArgument() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        Map<String, String> entry = new LinkedHashMap<>();
+        entry.put("name", "newOrder");
+        entry.put("value", "confirmed");
+
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                java.util.Collections.singletonList(entry)));
+
+        assertEquals(1, sampler.getArguments().getArguments().size());
+        Object stored = sampler.getArguments().getArguments().get(0).getObjectValue();
+        // Must be a real HTTPArgument (not a plain Argument): HTTPSamplerBase.getQueryString()
+        // casts each entry to HTTPArgument when actually running the sampler.
+        assertInstanceOf(HTTPArgument.class, stored);
+        HTTPArgument arg = (HTTPArgument) stored;
+        assertEquals("newOrder", arg.getName());
+        assertEquals("confirmed", arg.getValue());
+        assertEquals("newOrder=confirmed", sampler.getQueryString("UTF-8"));
+    }
+
+    @Test
+    void httpSamplerProxy_replaceStructuredPropertyList_calledTwice_replacesRatherThanAppends() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+
+        mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                java.util.Collections.singletonList(nameValue("A", "1")));
+        mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                java.util.Collections.singletonList(nameValue("B", "2")));
+
+        assertEquals(1, sampler.getArguments().getArguments().size());
+        HTTPArgument arg = (HTTPArgument) sampler.getArguments().getArguments().get(0).getObjectValue();
+        assertEquals("B", arg.getName());
     }
 
     private static Map<String, String> nameValue(String name, String value) {

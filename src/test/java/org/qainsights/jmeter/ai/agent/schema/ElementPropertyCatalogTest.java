@@ -201,6 +201,11 @@ class ElementPropertyCatalogTest {
     }
 
     @Test
+    void isStructuredListProperty_httpSamplerProxyArguments_isTrue() {
+        assertTrue(ElementPropertyCatalog.isStructuredListProperty("HTTPSamplerProxy", "HTTPsampler.Arguments"));
+    }
+
+    @Test
     void isStructuredListProperty_isCaseInsensitiveOnType() {
         assertTrue(ElementPropertyCatalog.isStructuredListProperty("headermanager", "HeaderManager.headers"));
     }

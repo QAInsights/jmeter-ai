@@ -61,9 +61,10 @@ public final class SetStructuredPropertyListHandler {
     public Tool tool() {
         ToolSpec spec = ToolSpec.builder(SET_STRUCTURED_PROPERTY_LIST)
                 .description("Replaces a structured list property (HTTP headers, User Defined Variables/HTTP "
-                        + "parameters, or HTTP Authorization entries) with the given entries, in full. Each "
-                        + "entry's expected fields depend on 'property': HeaderManager.headers and "
-                        + "Arguments.arguments expect {name, value}; AuthManager.auth_list expects "
+                        + "parameters, an HTTP Request's own parameters, or HTTP Authorization entries) with the "
+                        + "given entries, in full. Each entry's expected fields depend on 'property': "
+                        + "HeaderManager.headers, Arguments.arguments and HTTPsampler.Arguments expect "
+                        + "{name, value}; AuthManager.auth_list expects "
                         + "{url, username, password, domain, realm, mechanism} (mechanism is one of "
                         + "BASIC, DIGEST, KERBEROS).")
                 .addParameter(ToolParameter.builder("element_id", ParamType.STRING)
