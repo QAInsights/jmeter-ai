@@ -21,6 +21,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -44,7 +45,8 @@ public final class JMeterAgent {
 
     /** Tool names that require confirmation via the {@link ToolConfirmationGate} when set. */
     private static final Set<String> DESTRUCTIVE_TOOLS = Collections.unmodifiableSet(new HashSet<>(
-            Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT)));
+            Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT,
+                    OpenPlanHandler.OPEN_PLAN)));
 
     /** Ensures the undo-history nudge (see {@link #maybeWarnAboutUndoHistory}) fires once per session. */
     private static final AtomicBoolean UNDO_NUDGE_SHOWN = new AtomicBoolean(false);
@@ -61,8 +63,8 @@ public final class JMeterAgent {
 
     /**
      * @param confirmationGate asked before running a destructive tool ({@code delete_element},
-     *                          {@code move_element}); {@code null} runs destructive tools
-     *                          without confirmation
+     *                          {@code move_element}, {@code open_plan}); {@code null} runs
+     *                          destructive tools without confirmation
      */
     public JMeterAgent(ClaudeChatModel.MessageService service, String model, long maxTokens, int maxIterations,
                        ToolConfirmationGate confirmationGate) {
@@ -80,7 +82,7 @@ public final class JMeterAgent {
 
     /**
      * Wires an agent against an existing {@link ClaudeService}'s client and model. Destructive
-     * tools (delete/move) are gated behind a confirmation dialog unless
+     * tools (delete/move/open_plan) are gated behind a confirmation dialog unless
      * {@code jmeter.ai.agent.confirm.destructive} is set to {@code false}.
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
