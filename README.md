@@ -49,7 +49,7 @@
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude only.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 
@@ -205,6 +205,8 @@ Type any of these directly in the chat box. All commands are context-aware and w
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done — all inside the existing chat panel.
 
+> ⚠️ **Claude only.** Agent Mode currently works exclusively with **Anthropic Claude** models. OpenAI, Gemini, DeepSeek, and Ollama are not supported — they fall back to plain chat. Support for additional providers is planned.
+
 <div align="center">
 
 <img src="./images/Feather-Wand-JSR223-Menu.png" alt="Feather Wand Agent Mode" width="500">
@@ -220,7 +222,9 @@ Agent Mode is **off by default**. To turn it on:
 jmeter.ai.agent.enabled=true
 ```
 
-Select a **Claude** model from the dropdown (Agent Mode currently supports Claude only — other providers fall back to plain chat). Then just type your request naturally in the chat box — if Agent Mode is enabled and a Claude model is selected, the agent loop activates automatically.
+Select a **Claude** model from the dropdown. Then just type your request naturally in the chat box — if Agent Mode is enabled and a Claude model is selected, the agent loop activates automatically.
+
+> If a non-Claude model is selected, the request is handled by the regular (non-agentic) chat path.
 
 ### Agent Settings
 
