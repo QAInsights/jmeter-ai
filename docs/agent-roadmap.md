@@ -16,11 +16,13 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - EDT-safe tree mutations via `JMeterTreeMutator` + `EdtExecutor`.
 - Stable tree-path element ids (`ElementIdResolver`); internal wrapper root excluded.
 
-**Tools (11)**
+**Tools (13)**
 
 - Read: `get_tree_state`, `get_element_config`, `get_element_children`, `get_element_schema`.
 - Write: `add_element`, `update_element_property`, `set_property_list`, `set_structured_property_list`,
   `delete_element`, `toggle_element`, `move_element`.
+- Run: `run_test`, `stop_test` - dispatch through the same `ActionRouter` path as JMeter's own Start/Stop/
+  Shutdown toolbar buttons; fire-and-forget (see Phase C, C1).
 
 `update_element_property`/`JMeterTreeMutator.updateProperty` refuse to overwrite a
 property that is currently a `CollectionProperty`/`MapProperty`/`TestElementProperty`
@@ -49,7 +51,7 @@ the same for *structured* lists (`HeaderManager.headers`, `Arguments.arguments`,
 
 **Quality**
 
-- 644 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+- 655 unit tests passing. End-to-end smoke test in live JMeter confirmed working
   (add/update/delete/toggle/move all verified live, including the Response
   Assertion property-corruption fix and `set_property_list`).
 
@@ -83,11 +85,12 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 
 | #  | Task                                       | Effort | Notes                                                                                                                                          |
 |----|--------------------------------------------|--------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| C1 | `run_test` / `stop_test` + surface results | L      | Highest user value; must stream/collect results and report pass/fail + errors back to the agent. Threading + listener wiring is the hard part. |
+| C1 | ~~`run_test` / `stop_test`~~ **Done (scoped)** | L→S | Scoped down at the user's request: reuses the exact same `ActionRouter.actionPerformed(ActionNames.ACTION_START/STOP/SHUTDOWN)` path JMeter's own Start/Stop/Shutdown toolbar buttons use (`TestRunController.live()`), instead of running a private `StandardJMeterEngine` and collecting results ourselves. `run_test` and `stop_test` (`force` param: `false`→graceful Stop, `true`→Shutdown) dispatch and return immediately - they don't wait for the test or report pass/fail, since there's no public API to query "is a test running" outside the GUI's own package-private `Start` action state, and results depend on whatever listener (View Results Tree, Summary Report, ...) is already in the plan. A richer "collect and summarize results" tool is a natural follow-up if needed (tracked as C6 below). |
 | C2 | `duplicate_element` (copy subtree)         | M      | Deep-clone a node under the same parent.                                                                                                       |
 | C3 | `rename_element`                           | S      | Confirm/replace `update_element_property` on the name property with a dedicated verb.                                                          |
 | C4 | `save_plan` / `open_plan`                  | M      | Persist/load `.jmx`; guard destructive open.                                                                                                   |
 | C5 | `reorder_element` (index within parent)    | S      | Complement to `move_element` (currently appends as last child).                                                                                |
+| C6 | `get_test_results` (collect + summarize)   | L      | Run a private `StandardJMeterEngine` (like `CorrelationEngine.replayTestPlan`) with our own `SampleListener`/`TestStateListener` to actually report pass/fail counts + errors back to the agent, instead of relying on whatever listener happens to be in the plan. Natural follow-up to C1 if "just click Start" turns out to be insufficient in practice. |
 
 ### Phase D — Platform & providers
 

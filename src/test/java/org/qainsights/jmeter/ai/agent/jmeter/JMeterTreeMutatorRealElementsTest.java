@@ -2,12 +2,15 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.AuthManager;
 import org.apache.jmeter.protocol.http.control.Authorization;
 import org.apache.jmeter.protocol.http.control.Header;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -70,6 +73,21 @@ class JMeterTreeMutatorRealElementsTest {
         assertFalse(mutator.updateProperty(model, node, "Arguments.arguments", "not-an-argument"));
         assertNotNull(arguments.getArguments());
         assertEquals(0, arguments.getArguments().size());
+    }
+
+    @Test
+    void threadGroup_loopControllerLoops_delegatesToNestedLoopController() {
+        ThreadGroup threadGroup = new ThreadGroup();
+        LoopController loopController = new LoopController();
+        loopController.setLoops(1);
+        threadGroup.setSamplerController(loopController);
+        JMeterTreeNode node = new JMeterTreeNode(threadGroup, null);
+
+        assertTrue(mutator.updateProperty(model, node, "LoopController.loops", "-1"));
+
+        assertEquals(-1, loopController.getLoops());
+        // The write must not have created a decoy top-level property on the ThreadGroup itself.
+        assertTrue(threadGroup.getProperty("LoopController.loops") instanceof NullProperty);
     }
 
     @Test

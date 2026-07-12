@@ -95,6 +95,64 @@ class JMeterTreeMutatorTest {
         verify(element).setProperty("NewKey", "value");
     }
 
+    @Test
+    void updateProperty_propertyOwnedByNestedTestElement_delegatesToNestedElement() {
+        TestElement nested = mock(TestElement.class);
+        TestElementProperty nestedProp = mock(TestElementProperty.class);
+        when(nestedProp.getElement()).thenReturn(nested);
+
+        org.apache.jmeter.testelement.property.PropertyIterator iterator =
+                mock(org.apache.jmeter.testelement.property.PropertyIterator.class);
+        when(iterator.hasNext()).thenReturn(true, false);
+        when(iterator.next()).thenReturn(nestedProp);
+
+        when(element.getProperty("LoopController.loops"))
+                .thenReturn(new org.apache.jmeter.testelement.property.NullProperty());
+        when(element.propertyIterator()).thenReturn(iterator);
+        when(nested.getProperty("LoopController.loops"))
+                .thenReturn(new org.apache.jmeter.testelement.property.IntegerProperty("LoopController.loops", 1));
+
+        assertTrue(mutator.updateProperty(model, node, "LoopController.loops", "-1"));
+
+        verify(nested).setProperty("LoopController.loops", "-1");
+        verify(element, never()).setProperty(anyString(), anyString());
+        verify(model).nodeChanged(node);
+    }
+
+    @Test
+    void updateProperty_propertyNotFoundOnNestedElements_fallsBackToTopLevelElement() {
+        org.apache.jmeter.testelement.property.PropertyIterator iterator =
+                mock(org.apache.jmeter.testelement.property.PropertyIterator.class);
+        when(iterator.hasNext()).thenReturn(false);
+
+        when(element.getProperty("NewKey")).thenReturn(new org.apache.jmeter.testelement.property.NullProperty());
+        when(element.propertyIterator()).thenReturn(iterator);
+
+        assertTrue(mutator.updateProperty(model, node, "NewKey", "value"));
+        verify(element).setProperty("NewKey", "value");
+    }
+
+    @Test
+    void updateProperty_nestedPropertyIsNonScalar_isRejectedWithoutMutating() {
+        TestElement nested = mock(TestElement.class);
+        TestElementProperty nestedProp = mock(TestElementProperty.class);
+        when(nestedProp.getElement()).thenReturn(nested);
+
+        org.apache.jmeter.testelement.property.PropertyIterator iterator =
+                mock(org.apache.jmeter.testelement.property.PropertyIterator.class);
+        when(iterator.hasNext()).thenReturn(true, false);
+        when(iterator.next()).thenReturn(nestedProp);
+
+        when(element.getProperty("Foo.bar")).thenReturn(new org.apache.jmeter.testelement.property.NullProperty());
+        when(element.propertyIterator()).thenReturn(iterator);
+        when(nested.getProperty("Foo.bar")).thenReturn(mock(CollectionProperty.class));
+
+        assertFalse(mutator.updateProperty(model, node, "Foo.bar", "x"));
+        verify(nested, never()).setProperty(anyString(), anyString());
+        verify(element, never()).setProperty(anyString(), anyString());
+        verify(model, never()).nodeChanged(node);
+    }
+
     // ── replacePropertyList ────────────────────────────────────────────────────
 
     @Test

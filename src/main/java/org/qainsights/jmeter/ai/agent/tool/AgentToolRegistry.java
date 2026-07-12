@@ -4,8 +4,10 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
+import org.qainsights.jmeter.ai.agent.tool.handlers.RunTestHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SetPropertyListHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.SetStructuredPropertyListHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.StopTestHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ToggleElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.UpdateElementPropertyHandler;
 
@@ -32,6 +34,8 @@ public final class AgentToolRegistry {
         registry.register(new DeleteElementHandler().tool());
         registry.register(new ToggleElementHandler().tool());
         registry.register(new MoveElementHandler().tool());
+        registry.register(new RunTestHandler().tool());
+        registry.register(new StopTestHandler().tool());
         return registry;
     }
 }

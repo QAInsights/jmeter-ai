@@ -58,6 +58,13 @@ public final class JMeterTreeMutator {
      * assertion's pattern list or a header manager's headers) - doing so would
      * replace it with a plain {@code StringProperty} of the same name and
      * corrupt the element, crashing its GUI panel the next time it is opened.
+     * <p>
+     * If {@code property} isn't owned directly by the node's element but is
+     * owned by one of its nested {@code TestElementProperty} children (e.g. a
+     * {@code ThreadGroup}'s {@code LoopController.loops}, which lives on the
+     * nested {@code main_controller}), the write is delegated to that nested
+     * element instead of silently creating an unrelated top-level property of
+     * the same name that JMeter never reads.
      */
     public boolean updateProperty(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
         if (!isValid(model, node) || property == null || property.trim().isEmpty()) {
@@ -65,15 +72,41 @@ public final class JMeterTreeMutator {
         }
         String safeValue = value == null ? "" : value;
         return mutate(() -> {
-            if (isNonScalar(node.getTestElement().getProperty(property))) {
+            TestElement target = resolvePropertyOwner(node.getTestElement(), property);
+            if (isNonScalar(target.getProperty(property))) {
                 log.warn("Refusing to overwrite non-scalar property '{}' on {} with a plain string value",
-                        property, node.getTestElement().getClass().getSimpleName());
+                        property, target.getClass().getSimpleName());
                 return false;
             }
-            node.getTestElement().setProperty(property, safeValue);
+            target.setProperty(property, safeValue);
             model.nodeChanged(node);
             return true;
         });
+    }
+
+    /**
+     * Returns the element that actually owns {@code property}: {@code element}
+     * itself, unless the property is absent there but present on a nested
+     * {@code TestElementProperty} child - in which case that nested element is
+     * returned instead. Falls back to {@code element} when no owner is found
+     * (e.g. {@code property} is genuinely new), preserving the ability to set
+     * brand-new top-level properties.
+     */
+    private static TestElement resolvePropertyOwner(TestElement element, String property) {
+        if (!(element.getProperty(property) instanceof NullProperty)) {
+            return element;
+        }
+        PropertyIterator it = element.propertyIterator();
+        while (it.hasNext()) {
+            JMeterProperty candidate = it.next();
+            if (candidate instanceof TestElementProperty) {
+                TestElement nested = ((TestElementProperty) candidate).getElement();
+                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
+                    return nested;
+                }
+            }
+        }
+        return element;
     }
 
     /**
