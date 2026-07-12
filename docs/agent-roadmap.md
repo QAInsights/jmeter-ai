@@ -31,10 +31,14 @@ Status snapshot and prioritized backlog for the agentic tool-calling feature
 - Destructive tools (`delete_element`, `move_element`) are gated behind a blocking
   Swing confirmation dialog (`ToolConfirmationGate` / `SwingToolConfirmationGate`),
   controlled by `jmeter.ai.agent.confirm.destructive` (default `true`).
+- The agent's final answer is replayed token-by-token into the chat (`TextChunker` +
+  the existing `appendStreamToken`/`onStreamComplete` UI), gated by the same
+  `jmeter.ai.streaming.enabled` flag used by the plain chat path. Tool call/result
+  lines still stream as they happen; this only affects the final summary.
 
 **Quality**
 
-- 560 unit tests passing. End-to-end smoke test in live JMeter confirmed working
+- 567 unit tests passing. End-to-end smoke test in live JMeter confirmed working
   (add/update/delete/toggle/move all verified live).
 
 ---
@@ -56,7 +60,7 @@ Effort key: **S** = small (<0.5d), **M** = medium (~1d), **L** = large (>1d).
 |----|-------------------------------------------------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | B1 | ~~Multi-turn conversation memory for the agent~~ **Done**   | M      | `JMeterAgent.run(message, priorConversationTurns, progress)` seeds `ClaudeChatModel` with the chat panel's prior turns (last 10 pairs, trailing unpaired turn dropped); wired from `CommandDispatcher.handleAgentCommand`.                |
 | B2 | ~~Human confirmation for destructive ops~~ **Done**         | M      | `ToolExecutor` gates `delete_element`/`move_element` behind a `ToolConfirmationGate`; `SwingToolConfirmationGate` shows a blocking Yes/No dialog on the EDT. Setting `jmeter.ai.agent.confirm.destructive` (default `true`) toggles it. |
-| B3 | Stream the agent's final text token-by-token               | S      | Today only tool lines stream; final summary posts at once.                                                                                                                                                                                 |
+| B3 | ~~Stream the agent's final text token-by-token~~ **Done**   | S      | Simulated streaming: `TextChunker` replays the already-computed final answer via the existing `appendStreamToken`/`onStreamComplete` UI, gated by `jmeter.ai.streaming.enabled`. (Real SSE streaming was considered but rejected — the loop needs the full response anyway to detect tool calls, so it wouldn't reduce latency, only add risk.) |
 | B4 | Expand `ElementPropertyCatalog` coverage             | M      | Add HeaderManager, AuthManager, JDBC, JSR223 variants, more assertions/timers.                                                     |
 | B5 | Enumerate allowed values for enum-like keys          | S      | e.g. HTTP method GET/POST/..., CSV shareMode; surface in `get_element_schema`.                                                     |
 | B6 | Integrate mutations with JMeter Undo/Redo            | M      | Agent edits should be undoable via the standard stack.                                                                             |

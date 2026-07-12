@@ -263,11 +263,42 @@ public class CommandDispatcher {
         }.execute();
     }
 
+    /** Delay between simulated stream tokens for the agent's final answer, in milliseconds. */
+    private static final int FINAL_TEXT_TOKEN_DELAY_MS = 12;
+
+    /** Tags a published chunk as either a tool progress line or a simulated final-text token. */
+    private static final class AgentChunk {
+        private final String text;
+        private final boolean token;
+
+        private AgentChunk(String text, boolean token) {
+            this.text = text;
+            this.token = token;
+        }
+
+        static AgentChunk progress(String text) {
+            return new AgentChunk(text, false);
+        }
+
+        static AgentChunk token(String text) {
+            return new AgentChunk(text, true);
+        }
+
+        String getText() {
+            return text;
+        }
+
+        boolean isToken() {
+            return token;
+        }
+    }
+
     /**
      * Runs the agentic tool-calling loop for a message, streaming each tool
-     * call/result line into the chat and posting the final summary. On any
-     * failure it degrades to a plain (non-agentic) AI answer so the user is
-     * never left with a dead end.
+     * call/result line into the chat, then replaying the final summary
+     * token-by-token (if {@code jmeter.ai.streaming.enabled}) via the same
+     * simulated-streaming UI as the plain chat path. On any failure it degrades
+     * to a plain (non-agentic) AI answer so the user is never left with a dead end.
      */
     private void handleAgentCommand(String message) {
         log.info("Processing message via agent loop");
@@ -282,33 +313,57 @@ public class CommandDispatcher {
                 ? new ArrayList<>(history.subList(0, history.size() - 1))
                 : Collections.<String>emptyList();
 
-        new SwingWorker<String, String>() {
+        boolean streamFinalText = AiConfig.isStreamingEnabled();
+
+        new SwingWorker<String, AgentChunk>() {
             @Override
             protected String doInBackground() {
                 try {
                     AiService service = cb.resolveAiService(cb.getSelectedModel());
                     if (!(service instanceof ClaudeService)) {
-                        return "Agent mode currently supports Claude models only. Select a Claude model and retry.";
+                        return finish("Agent mode currently supports Claude models only. Select a Claude model and retry.");
                     }
                     JMeterAgent agent = JMeterAgent.forClaude((ClaudeService) service);
-                    AgentLoop.AgentResult result = agent.run(message, priorTurns, this::publish);
+                    AgentLoop.AgentResult result = agent.run(message, priorTurns,
+                            line -> publish(AgentChunk.progress(line)));
                     String summary = result.getFinalText();
                     if (!result.isCompleted()) {
                         summary = (summary.isEmpty() ? "" : summary + "\n\n")
                                 + "[Agent stopped after reaching the step limit.]";
                     }
-                    return summary.isEmpty() ? "Done." : summary;
+                    return finish(summary.isEmpty() ? "Done." : summary);
                 } catch (RuntimeException agentError) {
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
-                    publish("[Agent error: " + agentError.getMessage() + " - falling back to a plain answer.]");
-                    return cb.getAiResponse(message);
+                    publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
+                            + " - falling back to a plain answer.]"));
+                    return finish(cb.getAiResponse(message));
                 }
             }
 
+            /** Replays the final text token-by-token (if enabled) before returning it as-is. */
+            private String finish(String finalText) {
+                if (streamFinalText) {
+                    for (String chunk : TextChunker.chunk(finalText)) {
+                        publish(AgentChunk.token(chunk));
+                        try {
+                            Thread.sleep(FINAL_TEXT_TOKEN_DELAY_MS);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                }
+                return finalText;
+            }
+
             @Override
-            protected void process(List<String> chunks) {
-                for (String line : chunks) {
-                    cb.appendMessageToChat(line);
+            protected void process(List<AgentChunk> chunks) {
+                for (AgentChunk chunk : chunks) {
+                    if (chunk.isToken()) {
+                        cb.appendStreamToken(chunk.getText());
+                    } else {
+                        cb.appendMessageToChat(chunk.getText());
+                    }
                 }
             }
 
@@ -316,7 +371,11 @@ public class CommandDispatcher {
             protected void done() {
                 try {
                     String response = get();
-                    cb.onWorkerSuccess(response);
+                    if (streamFinalText) {
+                        cb.onStreamComplete(response);
+                    } else {
+                        cb.onWorkerSuccess(response);
+                    }
                     cb.addToConversationHistory(response);
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error running the agent", e,
