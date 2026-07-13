@@ -29,6 +29,7 @@
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [Special Commands](#-special-commands)
+- [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
 - [Response Chime](#-response-chime)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
@@ -48,6 +49,7 @@
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude only.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 
@@ -198,6 +200,135 @@ Type any of these directly in the chat box. All commands are context-aware and w
 
 ### `@wrap` Details
 `@wrap` uses pattern matching (not AI) to group related HTTP samplers under Transaction Controllers, preserving child elements and hierarchy. Great for imported or recorded plans.
+
+## 🤖 Agent Mode
+
+Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done — all inside the existing chat panel.
+
+> ⚠️ **Claude only.** Agent Mode currently works exclusively with **Anthropic Claude** models. OpenAI, Gemini, DeepSeek, and Ollama are not supported — they fall back to plain chat. Support for additional providers is planned.
+
+<div align="center">
+
+<img src="./images/Feather-Wand-JSR223-Menu.png" alt="Feather Wand Agent Mode" width="500">
+
+</div>
+
+### Enabling Agent Mode
+
+Agent Mode is **off by default**. To turn it on:
+
+```properties
+# In user.properties or jmeter.properties
+jmeter.ai.agent.enabled=true
+```
+
+Select a **Claude** model from the dropdown. Then just type your request naturally in the chat box — if Agent Mode is enabled and a Claude model is selected, the agent loop activates automatically.
+
+> If a non-Claude model is selected, the request is handled by the regular (non-agentic) chat path.
+
+### Agent Settings
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.agent.enabled` | Enable agent tool-calling loop | `false` |
+| `jmeter.ai.agent.max.tokens` | Max tokens per agent response | `4096` |
+| `jmeter.ai.agent.max.iterations` | Max reason-act iterations per request | `8` |
+| `jmeter.ai.agent.confirm.destructive` | Show confirmation dialog before destructive ops | `true` |
+
+> 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
+
+### Available Tools
+
+The agent has 18 tools at its disposal:
+
+**Read**
+
+| Tool | What it does |
+|------|--------------|
+| `get_tree_state` | Returns the full test-plan tree with element names, types, and enabled state. |
+| `get_element_config` | Returns all properties of a specific element. |
+| `get_element_children` | Returns the children of a specific element. |
+| `get_element_schema` | Returns the property schema and allowed values for an element type. |
+
+**Write**
+
+| Tool | What it does |
+|------|--------------|
+| `add_element` | Adds a new element (e.g. `HTTPSamplerProxy`) as a child of a parent element. |
+| `update_element_property` | Sets a scalar property (e.g. `HTTPSampler.path`) on an element. |
+| `set_property_list` | Sets a flat string-list property (e.g. `ResponseAssertion` test patterns). |
+| `set_structured_property_list` | Sets a structured list (e.g. `HeaderManager.headers`, `Arguments.arguments`, `AuthManager.auth_list`). |
+| `delete_element` | Deletes an element and its subtree. **Confirmation gated.** |
+| `toggle_element` | Enables or disables an element (disabled elements are skipped at run time). |
+| `move_element` | Reparents an element to become the last child of a new parent. **Confirmation gated.** |
+| `duplicate_element` | Deep-clones an element's subtree as the next sibling. |
+| `rename_element` | Renames an element (non-destructive; reports the new tree-path id). |
+| `reorder_element` | Repositions an element among its current siblings by index. |
+
+**Run**
+
+| Tool | What it does |
+|------|--------------|
+| `run_test` | Starts the test plan (same as JMeter's Start button). |
+| `stop_test` | Stops the running test (`force=true` for immediate shutdown). |
+| `get_test_results` | Runs the plan in a private engine, blocks until completion or timeout, and reports pass/fail counts with failure details. |
+
+**Correlation**
+
+| Tool | What it does |
+|------|--------------|
+| `find_correlation_candidates` | Probes the test plan (1 thread/1 loop) and detects dynamic values that need correlation. |
+| `apply_correlation` | Applies selected correlation candidates — adds extractors and rewrites matching values to `${variable}`. **Confirmation gated.** |
+
+**File**
+
+| Tool | What it does |
+|------|--------------|
+| `save_plan` | Saves the test plan to a `.jmx` file. |
+| `open_plan` | Opens a `.jmx` file, replacing the current plan. **Confirmation gated.** |
+
+### How It Works
+
+1. You type a request in the chat box (e.g. *"Add an HTTP Request under the Thread Group and set its path to /login"*)
+2. The agent reads the current tree state via `get_tree_state`
+3. It calls `add_element` to create the HTTP Request sampler
+4. It calls `update_element_property` to set the path
+5. It calls `get_element_config` to verify the change
+6. It responds with a natural-language summary
+
+Each tool call and result is streamed to the chat in real time, so you can follow along. The agent's final answer is replayed token-by-token (gated by `jmeter.ai.streaming.enabled`).
+
+### Safety
+
+- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show a **Yes/No confirmation dialog** before executing. Disable with `jmeter.ai.agent.confirm.destructive=false`.
+- **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 8) even if the task isn't complete.
+- **Graceful degradation**: If the agent loop fails (API error, malformed response, etc.), it falls back to a plain-text answer describing what it attempted.
+- **Undo**: All agent mutations fire the same JMeter tree-model events as GUI actions, so they're undoable with Ctrl+Z when `undo.history.size > 0`.
+
+### Examples
+
+Try these in the chat box with Agent Mode enabled and a Claude model selected:
+
+| Request | What the agent does |
+|---------|-------------------|
+| *Add an HTTP Request under the Thread Group and set its path to /login* | `get_tree_state` → `add_element` → `update_element_property` → `get_element_config` |
+| *Disable the second HTTP Request* | `get_tree_state` → `toggle_element` |
+| *Add a Response Assertion that checks for 200* | `get_tree_state` → `add_element` → `set_property_list` |
+| *Move the JSON Extractor under the first HTTP Request* | `get_tree_state` → `move_element` (asks confirmation) |
+| *Run the test and tell me if it passed* | `run_test` → `get_test_results` |
+| *Find dynamic values that need correlation* | `find_correlation_candidates` |
+| *Apply correlation for candidates 1 and 3* | `apply_correlation` (asks confirmation) |
+| *Save the test plan to /tmp/my-plan.jmx* | `save_plan` |
+
+### Dev Menu Items
+
+For isolated manual testing, Feather Wand adds dev menu items under **Run → AI Dev:** that exercise individual tools against the selected tree node without going through the agent loop. These are intended for development and debugging:
+
+- **AI Dev: Test add_element** — prompt for type/name, add under selected node
+- **AI Dev: Test update_element_property** — prompt for property/value, update selected node
+- **AI Dev: Test delete_element** — confirm, delete selected node
+- **AI Dev: Test toggle_element** — prompt for true/false, toggle selected node
+- **AI Dev: Test move_element** — prompt for destination parent id, move selected node
 
 ## 💨 Streaming AI Responses
 

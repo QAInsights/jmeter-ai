@@ -140,3 +140,4 @@ ollama-src
 settings.local.json
 .vscode/provenance/audit-trail.json
 .gitattributes
+docs/agent-roadmap.md

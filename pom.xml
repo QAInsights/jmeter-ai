@@ -8,7 +8,7 @@
 
     <groupId>com.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
-    <version>2.0.10</version>
+    <version>3.0.0</version>
     <name>jmeter-agent</name>
     <url>https://github.com/QAInsights/jmeter-ai</url>
     <description>Feather Wand - JMeter Agent for performance engineers
