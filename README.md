@@ -165,6 +165,9 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `jmeter.ai.terminal.copilot.enabled` | Enable GitHub Copilot CLI | `false` |
 | `jmeter.ai.terminal.copilot.path` | Full path to `copilot` binary | *(auto-detect)* |
 | `jmeter.ai.terminal.antigravity.enabled` | Enable Antigravity CLI | `false` |
+| `jmeter.ai.terminal.font.family` | Terminal font family (e.g. `Noto Sans Mono CJK SC`) | *(auto-detect)* |
+| `jmeter.ai.terminal.font.size` | Terminal font size | `16.0` |
+| `jmeter.ai.terminal.font.cjk.fallback` | Fall back to a CJK-capable font when needed | `true` |
 
 **Prerequisite CLIs**
 
