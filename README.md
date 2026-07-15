@@ -165,9 +165,21 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `jmeter.ai.terminal.copilot.enabled` | Enable GitHub Copilot CLI | `false` |
 | `jmeter.ai.terminal.copilot.path` | Full path to `copilot` binary | *(auto-detect)* |
 | `jmeter.ai.terminal.antigravity.enabled` | Enable Antigravity CLI | `false` |
-| `jmeter.ai.terminal.font.family` | Terminal font family (e.g. `Noto Sans Mono CJK SC`) | *(auto-detect)* |
+| `jmeter.ai.terminal.font.family` | Terminal font family (e.g. `Consolas`, `Noto Sans Mono CJK SC`) | *(auto-detect)* |
 | `jmeter.ai.terminal.font.size` | Terminal font size | `16.0` |
-| `jmeter.ai.terminal.font.cjk.fallback` | Fall back to a CJK-capable font when needed | `true` |
+| `jmeter.ai.terminal.font.cjk.fallback` | Fall back to a CJK-capable font when the selected font cannot display CJK | `true` |
+
+#### Terminal font & CJK support
+
+The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk.fallback=true` and the selected font cannot display CJK characters, the plugin automatically picks the best CJK-capable font installed on your system (`NSimSun`, `SimSun`, `MS Gothic`, `Microsoft YaHei`, `Malgun Gothic`, etc.).
+
+| Use case | Recommended configuration |
+|----------|---------------------------|
+| English / Latin only; keep your Western monospaced font | `jmeter.ai.terminal.font.family=Consolas`<br>`jmeter.ai.terminal.font.size=16.0`<br>`jmeter.ai.terminal.font.cjk.fallback=false` |
+| CJK support; let the plugin pick the best available font | `jmeter.ai.terminal.font.size=16.0`<br>`jmeter.ai.terminal.font.cjk.fallback=true` |
+| CJK support with a specific installed font | `jmeter.ai.terminal.font.family=Noto Sans Mono CJK SC`<br>`jmeter.ai.terminal.font.size=16.0`<br>`jmeter.ai.terminal.font.cjk.fallback=false` |
+
+> ⚠️ When `cjk.fallback=true` with a non-CJK font like `Consolas`, the configured family is overridden because `Consolas` has no CJK glyphs. If you want to force `Consolas`, set `cjk.fallback=false` — CJK will then render as boxes.
 
 **Prerequisite CLIs**
 
@@ -378,6 +390,12 @@ An embedded interactive terminal (JediTerm) that brings agentic AI CLIs directly
 Built on an Adapter Pattern: `AiCliAdapter` → `BaseCliAdapter` → concrete adapters (`ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, ...). To add a new CLI, implement `AiCliAdapter` and register it in `detectAvailableClis()`.
 
 > ⚠️ **Caution**: AI CLIs can execute commands and modify files. Review each CLI's documentation before enabling.
+
+### CJK / font support
+
+The terminal supports configurable fonts and CJK fallback. By default, `jmeter.ai.terminal.font.cjk.fallback=true` automatically picks the best CJK-capable font on your system. If you prefer a Western monospaced font, set `jmeter.ai.terminal.font.cjk.fallback=false`.
+
+See the [AI CLI Terminal configuration](#ai-cli-terminal) section for the full property table and recommended setups.
 
 ## 🗝️ API Configuration
 

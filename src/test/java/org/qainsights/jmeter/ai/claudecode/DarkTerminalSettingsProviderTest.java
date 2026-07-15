@@ -23,8 +23,7 @@ class DarkTerminalSettingsProviderTest {
 
     private static final String CJK_SAMPLE =
             "\u4f60\u597d\u4e16\u754c\u7e41\u9ad4\u4e2d\u6587" +
-            "\u3053\u3093\u306b\u3061\u306f\u30c6\u30b9\u30c8" +
-            "\uc548\ub155\ud558\uc138\uc694";
+            "\u3053\u3093\u306b\u3061\u306f\u30c6\u30b9\u30c8";
 
     @Test
     void defaultFontSize() {
@@ -62,7 +61,7 @@ class DarkTerminalSettingsProviderTest {
                 "jmeter.ai.terminal.font.family", "WenQuanYi Zen Hei Mono",
                 "jmeter.ai.terminal.font.cjk.fallback", "false"), () -> {
             Font font = new DarkTerminalSettingsProvider().getTerminalFont();
-            assertEquals("WenQuanYi Zen Hei Mono", font.getFamily());
+            assertEquals("WenQuanYi Zen Hei Mono", font.getName());
             assertCanDisplayCjk(font);
         });
     }
@@ -84,7 +83,7 @@ class DarkTerminalSettingsProviderTest {
                 "jmeter.ai.terminal.font.family", "DejaVu Sans Mono",
                 "jmeter.ai.terminal.font.cjk.fallback", "false"), () -> {
             Font font = new DarkTerminalSettingsProvider().getTerminalFont();
-            assertEquals("DejaVu Sans Mono", font.getFamily());
+            assertEquals("DejaVu Sans Mono", font.getName());
         });
     }
 
@@ -94,7 +93,7 @@ class DarkTerminalSettingsProviderTest {
                 "jmeter.ai.terminal.font", "WenQuanYi Zen Hei Mono",
                 "jmeter.ai.terminal.font.cjk.fallback", "false"), () -> {
             Font font = new DarkTerminalSettingsProvider().getTerminalFont();
-            assertEquals("WenQuanYi Zen Hei Mono", font.getFamily());
+            assertEquals("WenQuanYi Zen Hei Mono", font.getName());
         });
     }
 

@@ -61,6 +61,7 @@ public class DarkTerminalSettingsProvider extends DefaultSettingsProvider {
             "MingLiU_HKSCS",
             "GulimChe",
             "DotumChe",
+            "Malgun Gothic",
             // Fallback CJK UI fonts
             "Droid Sans Fallback",
             "Microsoft YaHei",
@@ -126,9 +127,10 @@ public class DarkTerminalSettingsProvider extends DefaultSettingsProvider {
         Font selected = new Font(family, Font.PLAIN, (int) size);
         boolean cjkFallback = isCjkFallbackEnabled(familyConfiguredByUser);
 
-        if (cjkFallback && !canDisplayCjk(selected)) {
+        int selectedScore = cjkScore(selected);
+        if (cjkFallback && selectedScore < CJK_SAMPLE.length()) {
             Font cjkFont = findCjkCapableFont(size);
-            if (cjkFont != null) {
+            if (cjkFont != null && cjkScore(cjkFont) > selectedScore) {
                 log.info("Terminal font '{}' does not support CJK; falling back to '{}'",
                         selected.getFamily(), cjkFont.getFamily());
                 selected = cjkFont;
@@ -175,18 +177,38 @@ public class DarkTerminalSettingsProvider extends DefaultSettingsProvider {
         return font.getFamily().equalsIgnoreCase(name);
     }
 
+    private int cjkScore(Font font) {
+        if (font == null || CJK_SAMPLE.isEmpty()) {
+            return 0;
+        }
+        int score = 0;
+        for (int i = 0; i < CJK_SAMPLE.length(); i++) {
+            if (font.canDisplay(CJK_SAMPLE.charAt(i))) {
+                score++;
+            }
+        }
+        return score;
+    }
+
     private boolean canDisplayCjk(Font font) {
-        return font != null && font.canDisplayUpTo(CJK_SAMPLE) == -1;
+        return cjkScore(font) == CJK_SAMPLE.length();
     }
 
     private Font findCjkCapableFont(float size) {
+        Font best = null;
+        int bestScore = 0;
         for (String name : CJK_CANDIDATES) {
             Font candidate = new Font(name, Font.PLAIN, (int) size);
-            if (candidate.getFamily().equalsIgnoreCase(name) && canDisplayCjk(candidate)) {
-                return candidate;
+            if (!candidate.getFamily().equalsIgnoreCase(name)) {
+                continue;
+            }
+            int score = cjkScore(candidate);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
             }
         }
-        return null;
+        return best;
     }
 
     private static String trim(String value) {
