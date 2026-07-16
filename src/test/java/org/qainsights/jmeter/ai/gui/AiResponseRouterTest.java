@@ -5,11 +5,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 
 import java.util.Collections;
 import java.util.List;
@@ -35,12 +38,26 @@ class AiResponseRouterTest {
     @Mock
     private GoogleAiService googleService;
 
+    @Mock
+    private GrokAiService grokService;
+
+    @Mock
+    private MetaMuseAiService metaMuseService;
+
     private AiResponseRouter router;
     private final List<String> history = Collections.singletonList("test prompt");
 
     @BeforeEach
     void setUp() {
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService, null);
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        holder.setGoogleService(googleService);
+        holder.setGrokService(grokService);
+        holder.setMetaMuseService(metaMuseService);
+        router = new AiResponseRouter(holder);
     }
 
     @Test
@@ -100,10 +117,38 @@ class AiResponseRouterTest {
 
     @Test
     void testGetAiResponse_Google_NullService() {
-        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null, null);
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        // google is left null
+        AiResponseRouter nullGoogleRouter = new AiResponseRouter(holder);
         String response = nullGoogleRouter.getAiResponse("google:gemini-1.5", history);
 
         assertTrue(response.contains("Google Gemini service not configured"));
+    }
+
+    @Test
+    void testGetAiResponse_Grok() {
+        when(grokService.generateResponse(history)).thenReturn("grok response");
+
+        String response = router.getAiResponse("grok:grok-2", history);
+
+        assertEquals("grok response", response);
+        verify(grokService).setModel("grok-2");
+        verify(grokService).generateResponse(history);
+    }
+
+    @Test
+    void testGetAiResponse_Meta() {
+        when(metaMuseService.generateResponse(history)).thenReturn("meta response");
+
+        String response = router.getAiResponse("meta:muse-spark-1.1", history);
+
+        assertEquals("meta response", response);
+        verify(metaMuseService).setModel("muse-spark-1.1");
+        verify(metaMuseService).generateResponse(history);
     }
 
     @Test
@@ -123,12 +168,20 @@ class AiResponseRouterTest {
         assertEquals(ollamaService, router.resolveAiService("ollama:llama3.1"));
         assertEquals(deepseekService, router.resolveAiService("deepseek:deepseek-chat"));
         assertEquals(googleService, router.resolveAiService("google:gemini-1.5"));
+        assertEquals(grokService, router.resolveAiService("grok:grok-2"));
+        assertEquals(metaMuseService, router.resolveAiService("meta:muse-spark-1.1"));
         assertEquals(claudeService, router.resolveAiService("claude-sonnet-4"));
     }
 
     @Test
     void testGenerateStreamResponse_Google_NullService() {
-        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null, null);
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        // google is left null
+        AiResponseRouter nullGoogleRouter = new AiResponseRouter(holder);
         Runnable cancelHandle = nullGoogleRouter.generateStreamResponse("google:gemini-1.5", history, token -> {}, () -> {}, err -> {});
         assertNotNull(cancelHandle);
         assertDoesNotThrow(cancelHandle::run);

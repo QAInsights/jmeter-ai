@@ -33,6 +33,8 @@ import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
 import org.qainsights.jmeter.ai.utils.VersionUtils;
@@ -89,6 +91,7 @@ public class AiChatPanel
     private DeepseekAiService deepseekService;
     private GoogleAiService googleService;
     private GrokAiService grokService;
+    private MetaMuseAiService metaMuseService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
@@ -129,8 +132,8 @@ public class AiChatPanel
         openAiService = new OpenAiService();
         ollamaService = new OllamaAiService();
         deepseekService = new DeepseekAiService();
-
         grokService = new GrokAiService();
+        metaMuseService = new MetaMuseAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
@@ -140,14 +143,7 @@ public class AiChatPanel
 
         messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
-        aiResponseRouter = new AiResponseRouter(
-            claudeService,
-            openAiService,
-            ollamaService,
-            deepseekService,
-            googleService,
-            grokService
-        );
+        aiResponseRouter = new AiResponseRouter(getServiceHolder());
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
 
@@ -231,6 +227,8 @@ public class AiChatPanel
                     }
                 } else if (selectedModel.startsWith("grok:")) {
                     grokService.setModel(selectedModel.substring(5));
+                } else if (selectedModel.startsWith("meta:")) {
+                    metaMuseService.setModel(selectedModel.substring(5));
                 } else {
                     claudeService.setModel(selectedModel);
                 }
@@ -623,6 +621,18 @@ public class AiChatPanel
         return button;
     }
 
+    private AiServiceHolder getServiceHolder() {
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        holder.setGoogleService(googleService);
+        holder.setGrokService(grokService);
+        holder.setMetaMuseService(metaMuseService);
+        return holder;
+    }
+
     /**
      * Loads the available models in the background.
      */
@@ -630,14 +640,7 @@ public class AiChatPanel
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() {
-                return Models.loadAllModels(
-                    claudeService.getClient(),
-                    openAiService.getClient(),
-                    ollamaService,
-                    deepseekService,
-                    googleService,
-                    grokService
-                );
+                return Models.loadAllModels(getServiceHolder());
             }
 
             @Override

@@ -43,11 +43,11 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, Ollama, or Grok (xAI) — all inside JMeter. |
+| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), or Meta Muse, all inside JMeter. |
 | ⚡ **Real-Time Streaming** | Watch AI responses appear token-by-token with a **Stop** button to cancel anytime. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
-| 🔍 **Context-Aware Commands** | `@this`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
+| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude only.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
@@ -170,6 +170,21 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 
 </details>
 
+<details>
+<summary><b>Meta Muse</b></summary>
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `meta.api.key` | Meta AI API key | **Required** |
+| `meta.base.url` | Base URL endpoint | `https://api.meta.ai/v1` |
+| `meta.default.model` | Default model | `muse-spark-1.1` |
+| `meta.temperature` | Temperature (0.0-1.0) | `0.7` |
+| `meta.max.tokens` | Max response tokens | `4096` |
+| `meta.max.history.size` | Conversation history size | `10` |
+| `meta.system.prompt` | System prompt | See sample file |
+
+</details>
+
 ### AI CLI Terminal
 
 | Property | Description | Default |
@@ -218,6 +233,7 @@ Type any of these directly in the chat box. All commands are context-aware and w
 | Command | What it does | Example |
 |---------|--------------|---------|
 | `@this` | Describe the selected element and suggest best practices. | `How do I configure @this?` |
+| `@testplan` | Send the entire test plan tree context to the AI (e.g. to find all target URLs). | `@testplan which URL is under test?` |
 | `@optimize` | Analyze the selected element and suggest performance tweaks. | `@optimize` or `optimize this sampler` |
 | `@lint` | Auto-rename elements for consistency. Undo/redo supported. | `@lint rename elements in PascalCase` |
 | `@wrap` | Group HTTP samplers under Transaction Controllers. | `@wrap` *(select a Thread Group first)* |

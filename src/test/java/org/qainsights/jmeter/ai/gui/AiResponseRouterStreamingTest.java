@@ -9,11 +9,14 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,6 +50,12 @@ class AiResponseRouterStreamingTest {
 
     @Mock
     private GoogleAiService googleService;
+
+    @Mock
+    private GrokAiService grokService;
+
+    @Mock
+    private MetaMuseAiService metaMuseService;
 
     private AiResponseRouter router;
 
@@ -103,8 +112,15 @@ class AiResponseRouterStreamingTest {
 
     @BeforeEach
     void setUp() {
-        // Use constructor injection manually with mock services
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService, null);
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        holder.setGoogleService(googleService);
+        holder.setGrokService(grokService);
+        holder.setMetaMuseService(metaMuseService);
+        router = new AiResponseRouter(holder);
     }
 
     // ==================== Routing to Anthropic ====================
@@ -367,5 +383,33 @@ class AiResponseRouterStreamingTest {
         AiService service = router.resolveAiService("ollama:llama3.1");
         assertSame(ollamaService, service,
                 "Ollama model (prefixed with 'ollama:') should resolve to ollamaService");
+    }
+
+    @Test
+    void testGenerateStreamResponse_withMetaModelRoutesToMetaMuseService() {
+        String metaModel = "meta:muse-spark-1.1";
+        Runnable expectedHandle = () -> {};
+
+        when(metaMuseService.generateStreamResponse(
+                eq(conversation),
+                eq("muse-spark-1.1"),
+                any(),
+                any(),
+                any()
+        )).thenReturn(expectedHandle);
+
+        Runnable result = router.generateStreamResponse(
+                metaModel, conversation,
+                token -> {},
+                () -> {},
+                e -> {}
+        );
+
+        assertSame(expectedHandle, result,
+                "Meta model (prefixed with 'meta:') should route to metaMuseService");
+        verify(metaMuseService).generateStreamResponse(
+                eq(conversation), eq("muse-spark-1.1"),
+                any(), any(), any()
+        );
     }
 }

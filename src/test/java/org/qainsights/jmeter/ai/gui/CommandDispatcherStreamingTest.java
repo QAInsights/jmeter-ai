@@ -317,6 +317,78 @@ class CommandDispatcherStreamingTest {
         verify(cb).showStopButton();
     }
 
+    // ==================== Test Plan Command ====================
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testDispatch_withTestPlanCommand_injectsAndRestoresHistory() {
+        aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
+        
+        java.util.List<String> mockHistory = new java.util.ArrayList<>();
+        mockHistory.add("@testplan what URL is under test?");
+        when(cb.getConversationHistory()).thenReturn(mockHistory);
+        
+        try (MockedStatic<org.qainsights.jmeter.ai.claudecode.TestPlanSerializer> serializerMock = 
+                mockStatic(org.qainsights.jmeter.ai.claudecode.TestPlanSerializer.class)) {
+            
+            serializerMock.when(org.qainsights.jmeter.ai.claudecode.TestPlanSerializer::serializeTestPlan)
+                    .thenReturn("Mock Test Plan Content");
+            
+            doAnswer(invocation -> {
+                assertTrue(mockHistory.get(0).contains("Mock Test Plan Content"));
+                assertTrue(mockHistory.get(0).contains("what URL is under test?"));
+                
+                Runnable onComplete = (Runnable) invocation.getArgument(2);
+                onComplete.run();
+                return (Runnable) () -> {};
+            }).when(cb).getAiStreamResponse(
+                eq("what URL is under test?"),
+                any(Consumer.class),
+                any(Runnable.class),
+                any(Consumer.class)
+            );
+            
+            commandDispatcher.dispatch("@testplan what URL is under test?");
+            
+            org.junit.jupiter.api.Assertions.assertEquals("@testplan what URL is under test?", mockHistory.get(0));
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testDispatch_withTestPlanCommand_emptyPrompt_usesDefaultMessage() {
+        aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
+        
+        java.util.List<String> mockHistory = new java.util.ArrayList<>();
+        mockHistory.add("@testplan");
+        when(cb.getConversationHistory()).thenReturn(mockHistory);
+        
+        try (MockedStatic<org.qainsights.jmeter.ai.claudecode.TestPlanSerializer> serializerMock = 
+                mockStatic(org.qainsights.jmeter.ai.claudecode.TestPlanSerializer.class)) {
+            
+            serializerMock.when(org.qainsights.jmeter.ai.claudecode.TestPlanSerializer::serializeTestPlan)
+                    .thenReturn("Mock Test Plan Content");
+            
+            doAnswer(invocation -> {
+                assertTrue(mockHistory.get(0).contains("Mock Test Plan Content"));
+                assertTrue(mockHistory.get(0).contains("Please summarize this test plan and give me key recommendations."));
+                
+                Runnable onComplete = (Runnable) invocation.getArgument(2);
+                onComplete.run();
+                return (Runnable) () -> {};
+            }).when(cb).getAiStreamResponse(
+                eq("Please summarize this test plan and give me key recommendations."),
+                any(Consumer.class),
+                any(Runnable.class),
+                any(Consumer.class)
+            );
+            
+            commandDispatcher.dispatch("@testplan");
+            
+            org.junit.jupiter.api.Assertions.assertEquals("@testplan", mockHistory.get(0));
+        }
+    }
+
     // ==================== Helper ====================
 
     @SuppressWarnings("unchecked")

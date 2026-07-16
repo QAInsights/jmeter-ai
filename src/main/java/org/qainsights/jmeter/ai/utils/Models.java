@@ -8,9 +8,11 @@ import com.anthropic.models.models.ModelListParams;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,28 +29,26 @@ public class Models {
      * Anthropic models are returned as-is; OpenAI models are prefixed with "openai:";
      * Ollama models are prefixed with "ollama:".
      *
-     * @param anthropicClient Anthropic client
-     * @param openAiClient    OpenAI client
-     * @param ollamaService   OllamaAiService
+     * @param serviceHolder Container holding all AI services
      * @return List of prefixed model IDs
      */
-    public static List<String> loadAllModels(AnthropicClient anthropicClient,
-                                             OpenAIClient openAiClient,
-                                             OllamaAiService ollamaService,
-                                             DeepseekAiService deepseekService,
-                                             GoogleAiService googleService,
-                                             GrokAiService grokService) {
+    public static List<String> loadAllModels(AiServiceHolder serviceHolder) {
         List<String> allModels = new ArrayList<>();
+        if (serviceHolder == null) {
+            return allModels;
+        }
 
         // Get Anthropic models
         try {
-            ModelListPage anthropicModels = getAnthropicModels(anthropicClient);
-            if (anthropicModels != null && anthropicModels.data() != null) {
-                for (ModelInfo model : anthropicModels.data()) {
-                    allModels.add(model.id());
-                    log.debug("Added Anthropic model: {}", model.id());
+            if (serviceHolder.getClaudeService() != null) {
+                ModelListPage anthropicModels = getAnthropicModels(serviceHolder.getClaudeService().getClient());
+                if (anthropicModels != null && anthropicModels.data() != null) {
+                    for (ModelInfo model : anthropicModels.data()) {
+                        allModels.add(model.id());
+                        log.debug("Added Anthropic model: {}", model.id());
+                    }
+                    log.info("Added {} Anthropic models", anthropicModels.data().size());
                 }
-                log.info("Added {} Anthropic models", anthropicModels.data().size());
             }
         } catch (Exception e) {
             log.error("Error loading Anthropic models: {}", e.getMessage(), e);
@@ -56,24 +56,26 @@ public class Models {
 
         // Add OpenAI models
         try {
-            com.openai.models.models.ModelListPage openAiModels = getOpenAiModels(openAiClient);
-            if (openAiModels != null && openAiModels.data() != null) {
-                for (Model openAiModel : openAiModels.data()) {
-                    if (openAiModel.id().startsWith("gpt") &&
-                            !openAiModel.id().contains("audio") &&
-                            !openAiModel.id().contains("tts") &&
-                            !openAiModel.id().contains("whisper") &&
-                            !openAiModel.id().contains("davinci") &&
-                            !openAiModel.id().contains("search") &&
-                            !openAiModel.id().contains("transcribe") &&
-                            !openAiModel.id().contains("realtime") &&
-                            !openAiModel.id().contains("instruct")) {
-                        String modelId = "openai:" + openAiModel.id();
-                        allModels.add(modelId);
-                        log.debug("Added OpenAI model to selector: {}", openAiModel.id());
+            if (serviceHolder.getOpenAiService() != null) {
+                com.openai.models.models.ModelListPage openAiModels = getOpenAiModels(serviceHolder.getOpenAiService().getClient());
+                if (openAiModels != null && openAiModels.data() != null) {
+                    for (Model openAiModel : openAiModels.data()) {
+                        if (openAiModel.id().startsWith("gpt") &&
+                                !openAiModel.id().contains("audio") &&
+                                !openAiModel.id().contains("tts") &&
+                                !openAiModel.id().contains("whisper") &&
+                                !openAiModel.id().contains("davinci") &&
+                                !openAiModel.id().contains("search") &&
+                                !openAiModel.id().contains("transcribe") &&
+                                !openAiModel.id().contains("realtime") &&
+                                !openAiModel.id().contains("instruct")) {
+                            String modelId = "openai:" + openAiModel.id();
+                            allModels.add(modelId);
+                            log.debug("Added OpenAI model to selector: {}", openAiModel.id());
+                        }
                     }
+                    log.info("Added OpenAI models to selector");
                 }
-                log.info("Added OpenAI models to selector");
             }
         } catch (Exception e) {
             log.error("Error adding OpenAI models: {}", e.getMessage(), e);
@@ -81,14 +83,16 @@ public class Models {
 
         // Add Ollama models
         try {
-            List<io.github.ollama4j.models.response.Model> ollamaModels = ollamaService.listModels();
-            if (ollamaModels != null) {
-                for (io.github.ollama4j.models.response.Model ollamaModel : ollamaModels) {
-                    String modelId = "ollama:" + ollamaModel.getName();
-                    allModels.add(modelId);
-                    log.debug("Added Ollama model to selector: {}", ollamaModel.getName());
+            if (serviceHolder.getOllamaService() != null) {
+                List<io.github.ollama4j.models.response.Model> ollamaModels = serviceHolder.getOllamaService().listModels();
+                if (ollamaModels != null) {
+                    for (io.github.ollama4j.models.response.Model ollamaModel : ollamaModels) {
+                        String modelId = "ollama:" + ollamaModel.getName();
+                        allModels.add(modelId);
+                        log.debug("Added Ollama model to selector: {}", ollamaModel.getName());
+                    }
+                    log.info("Added {} Ollama models to selector", ollamaModels.size());
                 }
-                log.info("Added {} Ollama models to selector", ollamaModels.size());
             }
         } catch (Exception e) {
             log.error("Error adding Ollama models: {}", e.getMessage(), e);
@@ -96,13 +100,15 @@ public class Models {
 
         // Add DeepSeek models
         try {
-            List<String> deepseekModels = getDeepSeekModelIds(deepseekService);
-            if (deepseekModels != null) {
-                for (String modelId : deepseekModels) {
-                    allModels.add("deepseek:" + modelId);
-                    log.debug("Added DeepSeek model to selector: {}", modelId);
+            if (serviceHolder.getDeepseekService() != null) {
+                List<String> deepseekModels = getDeepSeekModelIds(serviceHolder.getDeepseekService());
+                if (deepseekModels != null) {
+                    for (String modelId : deepseekModels) {
+                        allModels.add("deepseek:" + modelId);
+                        log.debug("Added DeepSeek model to selector: {}", modelId);
+                    }
+                    log.info("Added {} DeepSeek models to selector", deepseekModels.size());
                 }
-                log.info("Added {} DeepSeek models to selector", deepseekModels.size());
             }
         } catch (Exception e) {
             log.error("Error adding DeepSeek models: {}", e.getMessage(), e);
@@ -110,13 +116,15 @@ public class Models {
 
         // Add Google models
         try {
-            List<String> googleModels = getGoogleModelIds(googleService);
-            if (googleModels != null) {
-                for (String modelId : googleModels) {
-                    allModels.add("google:" + modelId);
-                    log.debug("Added Google model to selector: {}", modelId);
+            if (serviceHolder.getGoogleService() != null) {
+                List<String> googleModels = getGoogleModelIds(serviceHolder.getGoogleService());
+                if (googleModels != null) {
+                    for (String modelId : googleModels) {
+                        allModels.add("google:" + modelId);
+                        log.debug("Added Google model to selector: {}", modelId);
+                    }
+                    log.info("Added {} Google models to selector", googleModels.size());
                 }
-                log.info("Added {} Google models to selector", googleModels.size());
             }
         } catch (Exception e) {
             log.error("Error adding Google models: {}", e.getMessage(), e);
@@ -124,16 +132,34 @@ public class Models {
 
         // Add Grok models
         try {
-            List<String> grokModels = getGrokModelIds(grokService);
-            if (grokModels != null) {
-                for (String modelId : grokModels) {
-                    allModels.add("grok:" + modelId);
-                    log.debug("Added Grok model to selector: {}", modelId);
+            if (serviceHolder.getGrokService() != null) {
+                List<String> grokModels = getGrokModelIds(serviceHolder.getGrokService());
+                if (grokModels != null) {
+                    for (String modelId : grokModels) {
+                        allModels.add("grok:" + modelId);
+                        log.debug("Added Grok model to selector: {}", modelId);
+                    }
+                    log.info("Added {} Grok models to selector", grokModels.size());
                 }
-                log.info("Added {} Grok models to selector", grokModels.size());
             }
         } catch (Exception e) {
             log.error("Error adding Grok models: {}", e.getMessage(), e);
+        }
+
+        // Add Meta Muse models
+        try {
+            if (serviceHolder.getMetaMuseService() != null) {
+                List<String> metaMuseModels = getMetaMuseModelIds(serviceHolder.getMetaMuseService());
+                if (metaMuseModels != null) {
+                    for (String modelId : metaMuseModels) {
+                        allModels.add("meta:" + modelId);
+                        log.debug("Added Meta Muse model to selector: {}", modelId);
+                    }
+                    log.info("Added {} Meta Muse models to selector", metaMuseModels.size());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error adding Meta Muse models: {}", e.getMessage(), e);
         }
 
         return allModels;
@@ -150,64 +176,87 @@ public class Models {
         return grokService.listModels();
     }
 
+    private static List<String> getMetaMuseModelIds(MetaMuseAiService metaMuseService) {
+        if (metaMuseService == null) {
+            return new ArrayList<>();
+        }
+        return metaMuseService.listModels();
+    }
+
     /**
-     * Get a combined list of model IDs from both Anthropic and OpenAI
+     * Get a combined list of model IDs from all active services.
      *
-     * @param anthropicClient Anthropic client
-     * @param openAiClient    OpenAI client
-     * @param ollamaService   OllamaAiService
+     * @param serviceHolder Container holding all AI services
      * @return List of model IDs
      */
-    public static List<String> getModelIds(AnthropicClient anthropicClient,
-                                           OpenAIClient openAiClient,
-                                           OllamaAiService ollamaService,
-                                           DeepseekAiService deepseekService,
-                                           GoogleAiService googleService,
-                                           GrokAiService grokService) {
+    public static List<String> getModelIds(AiServiceHolder serviceHolder) {
         List<String> modelIds = new ArrayList<>();
+        if (serviceHolder == null) {
+            return modelIds;
+        }
 
         try {
             // Get Anthropic models
-            List<String> anthropicModels = getAnthropicModelIds(anthropicClient);
-            if (anthropicModels != null) {
-                modelIds.addAll(anthropicModels);
+            if (serviceHolder.getClaudeService() != null) {
+                List<String> anthropicModels = getAnthropicModelIds(serviceHolder.getClaudeService().getClient());
+                if (anthropicModels != null) {
+                    modelIds.addAll(anthropicModels);
+                }
             }
 
             // Get OpenAI models
-            List<String> openAiModels = getOpenAiModelIds(openAiClient);
-            if (openAiModels != null) {
-                modelIds.addAll(openAiModels);
+            if (serviceHolder.getOpenAiService() != null) {
+                List<String> openAiModels = getOpenAiModelIds(serviceHolder.getOpenAiService().getClient());
+                if (openAiModels != null) {
+                    modelIds.addAll(openAiModels);
+                }
             }
 
             // Get Ollama models
-            List<String> ollamaModels = getOllamaModelIds(ollamaService);
-            if (ollamaModels != null) {
-                modelIds.addAll(ollamaModels);
+            if (serviceHolder.getOllamaService() != null) {
+                List<String> ollamaModels = getOllamaModelIds(serviceHolder.getOllamaService());
+                if (ollamaModels != null) {
+                    modelIds.addAll(ollamaModels);
+                }
             }
 
             // Get DeepSeek models
-            List<String> deepseekModels = getDeepSeekModelIds(deepseekService);
-            if (deepseekModels != null) {
-                modelIds.addAll(deepseekModels);
+            if (serviceHolder.getDeepseekService() != null) {
+                List<String> deepseekModels = getDeepSeekModelIds(serviceHolder.getDeepseekService());
+                if (deepseekModels != null) {
+                    modelIds.addAll(deepseekModels);
+                }
             }
 
             // Get Google models
-            List<String> googleModels = getGoogleModelIds(googleService);
-            if (googleModels != null) {
-                modelIds.addAll(googleModels);
+            if (serviceHolder.getGoogleService() != null) {
+                List<String> googleModels = getGoogleModelIds(serviceHolder.getGoogleService());
+                if (googleModels != null) {
+                    modelIds.addAll(googleModels);
+                }
             }
 
             // Get Grok models
-            List<String> grokModels = getGrokModelIds(grokService);
-            if (grokModels != null) {
-                modelIds.addAll(grokModels);
+            if (serviceHolder.getGrokService() != null) {
+                List<String> grokModels = getGrokModelIds(serviceHolder.getGrokService());
+                if (grokModels != null) {
+                    modelIds.addAll(grokModels);
+                }
             }
 
-            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, and Grok", modelIds.size());
+            // Get Meta Muse models
+            if (serviceHolder.getMetaMuseService() != null) {
+                List<String> metaMuseModels = getMetaMuseModelIds(serviceHolder.getMetaMuseService());
+                if (metaMuseModels != null) {
+                    modelIds.addAll(metaMuseModels);
+                }
+            }
+
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, Grok, and Meta Muse", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);
-            return modelIds; // Return whatever we have, even if empty
+            return modelIds;
         }
     }
 

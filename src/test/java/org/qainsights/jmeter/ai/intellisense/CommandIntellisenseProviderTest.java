@@ -48,5 +48,6 @@ public class CommandIntellisenseProviderTest {
         assertTrue(suggestions.contains("@usage"));
         assertTrue(suggestions.contains("@optimize"));
         assertTrue(suggestions.contains("@this"));
+        assertTrue(suggestions.contains("@testplan"));
     }
 }

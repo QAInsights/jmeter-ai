@@ -73,6 +73,9 @@ public class CommandDispatcher {
             case "@usage":
                 handleUsageCommand();
                 return;
+            case "@testplan":
+                handleTestPlanCommand(message);
+                return;
             default:
                 break;
         }
@@ -131,6 +134,91 @@ public class CommandDispatcher {
                         cb.onWorkerSuccess(response);
                         cb.addToConversationHistory(response);
                     } catch (InterruptedException | ExecutionException e) {
+                        cb.onWorkerError("Error getting AI response", e,
+                                "Sorry, I encountered an error while processing your request. Please try again.");
+                    }
+                }
+            }.execute();
+        }
+    }
+
+    private void handleTestPlanCommand(String message) {
+        log.info("Processing @testplan command");
+        cb.setLastCommandType("NONE");
+        cb.setInputEnabled(false);
+
+        // Extract the user prompt by stripping out the "@testplan" prefix
+        String prompt = "";
+        int spaceIndex = message.trim().indexOf(' ');
+        if (spaceIndex != -1) {
+            prompt = message.trim().substring(spaceIndex + 1).trim();
+        }
+        if (prompt.isEmpty()) {
+            prompt = "Please summarize this test plan and give me key recommendations.";
+        }
+
+        final String userPrompt = prompt;
+        final java.util.List<String> history = cb.getConversationHistory();
+        final int lastIndex = history.size() - 1;
+        final String originalUserMessage = history.get(lastIndex);
+
+        if (org.qainsights.jmeter.ai.utils.AiConfig.isStreamingEnabled()) {
+            cb.showStopButton();
+            StringBuilder fullResponse = new StringBuilder();
+
+            // Prepare the combined prompt and temporarily inject it into the conversation history
+            String testPlanContext = org.qainsights.jmeter.ai.claudecode.TestPlanSerializer.serializeTestPlan();
+            String combinedPrompt = "Here is the context of the current JMeter test plan:\n\n"
+                    + testPlanContext + "\n\n"
+                    + "Based on the above test plan, please answer: " + userPrompt;
+            history.set(lastIndex, combinedPrompt);
+
+            cb.getAiStreamResponse(
+                userPrompt,
+                token -> {
+                    fullResponse.append(token);
+                    cb.appendStreamToken(token);
+                },
+                () -> {
+                    String response = fullResponse.toString();
+                    cb.onStreamComplete(response);
+                    cb.addToConversationHistory(response);
+                },
+                e -> {
+                    cb.onStreamError("Error getting AI stream response", e,
+                        "Sorry, I encountered an error while processing your request. Please try again.");
+                }
+            );
+
+            // Restore the original user message in the conversation history immediately
+            // so subsequent turns don't bloat the history with the massive tree
+            history.set(lastIndex, originalUserMessage);
+        } else {
+            new SwingWorker<String, Void>() {
+                @Override
+                protected String doInBackground() throws Exception {
+                    String testPlanContext = org.qainsights.jmeter.ai.claudecode.TestPlanSerializer.serializeTestPlan();
+                    String combinedPrompt = "Here is the context of the current JMeter test plan:\n\n"
+                            + testPlanContext + "\n\n"
+                            + "Based on the above test plan, please answer: " + userPrompt;
+                    
+                    history.set(lastIndex, combinedPrompt);
+                    try {
+                        return cb.getAiResponse(userPrompt);
+                    } finally {
+                        javax.swing.SwingUtilities.invokeLater(() -> {
+                            history.set(lastIndex, originalUserMessage);
+                        });
+                    }
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        String response = get();
+                        cb.onWorkerSuccess(response);
+                        cb.addToConversationHistory(response);
+                    } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
                         cb.onWorkerError("Error getting AI response", e,
                                 "Sorry, I encountered an error while processing your request. Please try again.");
                     }

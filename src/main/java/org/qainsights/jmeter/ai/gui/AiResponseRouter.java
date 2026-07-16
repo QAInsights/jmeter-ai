@@ -1,12 +1,14 @@
 package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,14 +28,16 @@ public class AiResponseRouter {
     private final DeepseekAiService deepseekService;
     private final GoogleAiService googleService;
     private final GrokAiService grokService;
+    private final MetaMuseAiService metaMuseService;
 
-    public AiResponseRouter(ClaudeService claudeService, OpenAiService openAiService, OllamaAiService ollamaService, DeepseekAiService deepseekService, GoogleAiService googleService, GrokAiService grokService) {
-        this.claudeService = claudeService;
-        this.openAiService = openAiService;
-        this.ollamaService = ollamaService;
-        this.deepseekService = deepseekService;
-        this.googleService = googleService;
-        this.grokService = grokService;
+    public AiResponseRouter(AiServiceHolder serviceHolder) {
+        this.claudeService = serviceHolder.getClaudeService();
+        this.openAiService = serviceHolder.getOpenAiService();
+        this.ollamaService = serviceHolder.getOllamaService();
+        this.deepseekService = serviceHolder.getDeepseekService();
+        this.googleService = serviceHolder.getGoogleService();
+        this.grokService = serviceHolder.getGrokService();
+        this.metaMuseService = serviceHolder.getMetaMuseService();
     }
 
     /**
@@ -83,6 +87,14 @@ public class AiResponseRouter {
                 return grokService.generateResponse(conversationHistory);
             }
             return "Error: Grok service not configured. Set grok.api.key in jmeter.properties.";
+        } else if (selectedModel.startsWith("meta:")) {
+            String metaModelId = selectedModel.substring(5);
+            log.info("Using Meta Muse model: {}", metaModelId);
+            if (metaMuseService != null) {
+                metaMuseService.setModel(metaModelId);
+                return metaMuseService.generateResponse(conversationHistory);
+            }
+            return "Error: Meta Muse service not configured. Set meta.api.key in jmeter.properties.";
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -128,6 +140,12 @@ public class AiResponseRouter {
                 return grokService.generateStreamResponse(conversationHistory, grokModelId, tokenConsumer, onComplete, onError);
             }
             return () -> {};
+        } else if (selectedModel.startsWith("meta:")) {
+            String metaModelId = selectedModel.substring(5);
+            if (metaMuseService != null) {
+                return metaMuseService.generateStreamResponse(conversationHistory, metaModelId, tokenConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
@@ -168,6 +186,12 @@ public class AiResponseRouter {
                 grokService.setModel(grokModelId);
             }
             return grokService;
+        } else if (selectedModel.startsWith("meta:")) {
+            String metaModelId = selectedModel.substring(5);
+            if (metaMuseService != null) {
+                metaMuseService.setModel(metaModelId);
+            }
+            return metaMuseService;
         } else {
             claudeService.setModel(selectedModel);
             return claudeService;

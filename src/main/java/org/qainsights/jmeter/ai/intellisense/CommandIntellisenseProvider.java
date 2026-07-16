@@ -17,6 +17,7 @@ public class CommandIntellisenseProvider {
         commands.add("@usage");
         commands.add("@optimize");
         commands.add("@this");
+        commands.add("@testplan");
 
         // Add more commands here as needed
     }
