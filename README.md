@@ -43,9 +43,9 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, or Ollama — all inside JMeter. |
+| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, Ollama, or Grok (xAI) — all inside JMeter. |
 | ⚡ **Real-Time Streaming** | Watch AI responses appear token-by-token with a **Stop** button to cancel anytime. |
-| 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, or **Antigravity** directly in JMeter. |
+| 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
@@ -156,6 +156,20 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 
 </details>
 
+<details>
+<summary><b>Grok (xAI)</b></summary>
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `grok.api.key` | xAI API key | **Required** |
+| `grok.default.model` | Default model | `grok-4.5` |
+| `grok.temperature` | Temperature (0.0-1.0) | `0.7` |
+| `grok.max.tokens` | Max response tokens | `4096` |
+| `grok.max.history.size` | Conversation history size | `10` |
+| `grok.system.prompt` | System prompt | See sample file |
+
+</details>
+
 ### AI CLI Terminal
 
 | Property | Description | Default |
@@ -165,6 +179,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `jmeter.ai.terminal.copilot.enabled` | Enable GitHub Copilot CLI | `false` |
 | `jmeter.ai.terminal.copilot.path` | Full path to `copilot` binary | *(auto-detect)* |
 | `jmeter.ai.terminal.antigravity.enabled` | Enable Antigravity CLI | `false` |
+| `jmeter.ai.terminal.grok.enabled` | Enable Grok CLI | `false` |
 | `jmeter.ai.terminal.font.family` | Terminal font family (e.g. `Consolas`, `Noto Sans Mono CJK SC`) | *(auto-detect)* |
 | `jmeter.ai.terminal.font.size` | Terminal font size | `16.0` |
 | `jmeter.ai.terminal.font.cjk.fallback` | Fall back to a CJK-capable font when the selected font cannot display CJK | `true` |
@@ -190,6 +205,7 @@ The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk
 | GitHub Copilot | `copilot` | [Docs](https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-getting-started) |
 | OpenCode | `opencode` | [Repo](https://github.com/sst/opencode) |
 | Antigravity | `agy` | [Site](https://www.antigravity.google/product/antigravity-cli) |
+| Grok CLI | `grok` | [Console](https://console.x.ai/) |
 
 ### Custom System Prompts
 
@@ -373,7 +389,7 @@ The bundled WAV plays from `src/main/resources/org/qainsights/jmeter/ai/sound/jm
 
 An embedded interactive terminal (JediTerm) that brings agentic AI CLIs directly into JMeter.
 
-**Supported CLIs:** Claude Code · OpenAI Codex · OpenCode · Antigravity
+**Supported CLIs:** Claude Code · OpenAI Codex · OpenCode · Antigravity · Grok CLI
 
 **How it works**
 1. Install one or more CLIs on your `PATH`.
@@ -407,6 +423,7 @@ See the [AI CLI Terminal configuration](#ai-cli-terminal) section for the full p
 | **OpenAI** | Sign up at [platform.openai.com](https://platform.openai.com/) → create API key | `openai.api.key` |
 | **Gemini** | Sign in at [Google AI Studio](https://aistudio.google.com/) → Get API Key | `google.api.key` |
 | **Ollama** | Install from [ollama.com](https://ollama.com/) → `ollama pull llama3.1` | No key needed |
+| **Grok (xAI)** | Sign up at [console.x.ai](https://console.x.ai/) → create API key | `grok.api.key` |
 
 Set `jmeter.ai.service.type=ollama` to switch to a local model. All other providers work side-by-side; just pick the model from the UI dropdown.
 
@@ -417,8 +434,9 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 - **OpenAI** — hides audio, TTS, whisper, davinci, search, realtime, and instruct models.
 - **Claude** — shows only the latest available models.
 - **Gemini** — shows only `gemini-*` and `gemma-*` chat models.
+- **Grok** — shows only `grok-*` chat models.
 
-Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b`
+Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5`
 
 ---
 
