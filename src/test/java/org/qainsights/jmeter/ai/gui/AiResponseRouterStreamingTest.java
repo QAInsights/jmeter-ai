@@ -104,7 +104,7 @@ class AiResponseRouterStreamingTest {
     @BeforeEach
     void setUp() {
         // Use constructor injection manually with mock services
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService);
+        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService, null);
     }
 
     // ==================== Routing to Anthropic ====================

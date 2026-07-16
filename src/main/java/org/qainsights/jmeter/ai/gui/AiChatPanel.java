@@ -31,6 +31,7 @@ import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -87,6 +88,7 @@ public class AiChatPanel
     private OllamaAiService ollamaService;
     private DeepseekAiService deepseekService;
     private GoogleAiService googleService;
+    private GrokAiService grokService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
@@ -128,6 +130,8 @@ public class AiChatPanel
         ollamaService = new OllamaAiService();
         deepseekService = new DeepseekAiService();
 
+        grokService = new GrokAiService();
+
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
             Client googleClient = Client.builder().apiKey(googleApiKey).build();
@@ -141,7 +145,8 @@ public class AiChatPanel
             openAiService,
             ollamaService,
             deepseekService,
-            googleService
+            googleService,
+            grokService
         );
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
@@ -224,6 +229,8 @@ public class AiChatPanel
                     if (googleService != null) {
                         googleService.setModel(selectedModel.substring(7));
                     }
+                } else if (selectedModel.startsWith("grok:")) {
+                    grokService.setModel(selectedModel.substring(5));
                 } else {
                     claudeService.setModel(selectedModel);
                 }
@@ -628,7 +635,8 @@ public class AiChatPanel
                     openAiService.getClient(),
                     ollamaService,
                     deepseekService,
-                    googleService
+                    googleService,
+                    grokService
                 );
             }
 
@@ -735,26 +743,28 @@ public class AiChatPanel
      */
     @Override
     public void removeLoadingIndicator() {
-        log.info("Attempting to remove loading indicator");
-        try {
-            StyledDocument doc = chatArea.getStyledDocument();
+        runOnEdt(() -> {
+            log.info("Attempting to remove loading indicator");
+            try {
+                StyledDocument doc = chatArea.getStyledDocument();
 
-            // Find the loading indicator text
-            String text = doc.getText(0, doc.getLength());
-            int index = text.lastIndexOf("AI is thinking...");
+                // Find the loading indicator text
+                String text = doc.getText(0, doc.getLength());
+                int index = text.lastIndexOf("AI is thinking...");
 
-            log.info("Loading indicator found at index: {}", index);
+                log.info("Loading indicator found at index: {}", index);
 
-            if (index != -1) {
-                // Remove the loading indicator
-                doc.remove(index, "AI is thinking...".length());
-                log.info("Loading indicator removed");
-            } else {
-                log.warn("Loading indicator not found in chat text");
+                if (index != -1) {
+                    // Remove the loading indicator
+                    doc.remove(index, "AI is thinking...".length());
+                    log.info("Loading indicator removed");
+                } else {
+                    log.warn("Loading indicator not found in chat text");
+                }
+            } catch (BadLocationException e) {
+                log.error("Error removing loading indicator", e);
             }
-        } catch (BadLocationException e) {
-            log.error("Error removing loading indicator", e);
-        }
+        });
     }
 
     /**
@@ -764,41 +774,41 @@ public class AiChatPanel
      */
     @Override
     public void processAiResponse(String response) {
-        if (response == null || response.isEmpty()) {
+        runOnEdt(() -> {
+            if (response == null || response.isEmpty()) {
+                try {
+                    messageProcessor.appendMessage(
+                        chatArea.getStyledDocument(),
+                        "No response from AI. Please try again.",
+                        Color.RED,
+                        false
+                    );
+                } catch (BadLocationException e) {
+                    log.error("Error displaying error message", e);
+                }
+                log.warn("Empty AI response");
+                return;
+            }
+
+            log.info(
+                "Processing AI response: {}",
+                response.substring(0, Math.min(100, response.length()))
+            );
+
+            // Add the AI response to the chat
+            log.info("Appending AI response to chat");
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
-                    "No response from AI. Please try again.",
-                    Color.RED,
-                    false
+                    response,
+                    getThemeColor("TextPane.foreground", Color.BLACK),
+                    true
                 );
             } catch (BadLocationException e) {
-                log.error("Error displaying error message", e);
+                log.error("Error appending AI response to chat", e);
             }
-            log.warn("Empty AI response");
-            return;
-        }
 
-        log.info(
-            "Processing AI response: {}",
-            response.substring(0, Math.min(100, response.length()))
-        );
-
-        // Add the AI response to the chat
-        log.info("Appending AI response to chat");
-        try {
-            messageProcessor.appendMessage(
-                chatArea.getStyledDocument(),
-                response,
-                getThemeColor("TextPane.foreground", Color.BLACK),
-                true
-            );
-        } catch (BadLocationException e) {
-            log.error("Error appending AI response to chat", e);
-        }
-
-        // Create element buttons for context-aware suggestions after the AI response
-        SwingUtilities.invokeLater(() -> {
+            // Create element buttons for context-aware suggestions after the AI response
             log.info("Creating element buttons for context-aware suggestions");
 
             // Make sure the navigation panel is visible
@@ -992,7 +1002,7 @@ public class AiChatPanel
 
     @Override
     public void appendUserMessage(String message) {
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1008,7 +1018,7 @@ public class AiChatPanel
 
     @Override
     public void appendLoadingIndicator() {
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1024,7 +1034,7 @@ public class AiChatPanel
 
     @Override
     public void appendRedMessage(String message) {
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1143,7 +1153,7 @@ public class AiChatPanel
      */
     @Override
     public void appendMessageToChat(String message) {
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1166,7 +1176,7 @@ public class AiChatPanel
     @Override
     public void appendErrorMessageToChat(String context, Exception e) {
         log.error(context, e);
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1195,7 +1205,7 @@ public class AiChatPanel
      * Displays a message indicating that redo is not supported for wrap operations.
      */
     private void showWrapRedoNotSupported() {
-        SwingUtilities.invokeLater(() -> {
+        runOnEdt(() -> {
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -1238,18 +1248,20 @@ public class AiChatPanel
         String userMessage
     ) {
         log.error(logMessage, e);
-        removeLoadingIndicator();
-        try {
-            messageProcessor.appendMessage(
-                chatArea.getStyledDocument(),
-                userMessage,
-                Color.RED,
-                false
-            );
-        } catch (BadLocationException ex) {
-            log.error("Error displaying error message", ex);
-        }
-        setInputEnabled(true);
+        runOnEdt(() -> {
+            removeLoadingIndicator();
+            try {
+                messageProcessor.appendMessage(
+                    chatArea.getStyledDocument(),
+                    userMessage,
+                    Color.RED,
+                    false
+                );
+            } catch (BadLocationException ex) {
+                log.error("Error displaying error message", ex);
+            }
+            setInputEnabled(true);
+        });
     }
 
     /**
@@ -1297,5 +1309,13 @@ public class AiChatPanel
             StyleConstants.setForeground(defaultStyle, newFg);
         }
         chatArea.repaint();
+    }
+
+    private void runOnEdt(Runnable runnable) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            runnable.run();
+        } else {
+            SwingUtilities.invokeLater(runnable);
+        }
     }
 }

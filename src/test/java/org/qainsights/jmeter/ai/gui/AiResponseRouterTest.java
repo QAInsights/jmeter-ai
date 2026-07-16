@@ -40,7 +40,7 @@ class AiResponseRouterTest {
 
     @BeforeEach
     void setUp() {
-        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService);
+        router = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, googleService, null);
     }
 
     @Test
@@ -100,7 +100,7 @@ class AiResponseRouterTest {
 
     @Test
     void testGetAiResponse_Google_NullService() {
-        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null);
+        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null, null);
         String response = nullGoogleRouter.getAiResponse("google:gemini-1.5", history);
 
         assertTrue(response.contains("Google Gemini service not configured"));
@@ -128,7 +128,7 @@ class AiResponseRouterTest {
 
     @Test
     void testGenerateStreamResponse_Google_NullService() {
-        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null);
+        AiResponseRouter nullGoogleRouter = new AiResponseRouter(claudeService, openAiService, ollamaService, deepseekService, null, null);
         Runnable cancelHandle = nullGoogleRouter.generateStreamResponse("google:gemini-1.5", history, token -> {}, () -> {}, err -> {});
         assertNotNull(cancelHandle);
         assertDoesNotThrow(cancelHandle::run);

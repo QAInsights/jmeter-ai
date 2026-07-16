@@ -6,6 +6,7 @@ import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,13 +25,15 @@ public class AiResponseRouter {
     private final OllamaAiService ollamaService;
     private final DeepseekAiService deepseekService;
     private final GoogleAiService googleService;
+    private final GrokAiService grokService;
 
-    public AiResponseRouter(ClaudeService claudeService, OpenAiService openAiService, OllamaAiService ollamaService, DeepseekAiService deepseekService, GoogleAiService googleService) {
+    public AiResponseRouter(ClaudeService claudeService, OpenAiService openAiService, OllamaAiService ollamaService, DeepseekAiService deepseekService, GoogleAiService googleService, GrokAiService grokService) {
         this.claudeService = claudeService;
         this.openAiService = openAiService;
         this.ollamaService = ollamaService;
         this.deepseekService = deepseekService;
         this.googleService = googleService;
+        this.grokService = grokService;
     }
 
     /**
@@ -72,6 +75,14 @@ public class AiResponseRouter {
                 return googleService.generateResponse(conversationHistory);
             }
             return "Error: Google Gemini service not configured. Set google.api.key in jmeter.properties.";
+        } else if (selectedModel.startsWith("grok:")) {
+            String grokModelId = selectedModel.substring(5);
+            log.info("Using Grok model: {}", grokModelId);
+            if (grokService != null) {
+                grokService.setModel(grokModelId);
+                return grokService.generateResponse(conversationHistory);
+            }
+            return "Error: Grok service not configured. Set grok.api.key in jmeter.properties.";
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -111,6 +122,12 @@ public class AiResponseRouter {
                 return googleService.generateStreamResponse(conversationHistory, googleModelId, tokenConsumer, onComplete, onError);
             }
             return () -> {};
+        } else if (selectedModel.startsWith("grok:")) {
+            String grokModelId = selectedModel.substring(5);
+            if (grokService != null) {
+                return grokService.generateStreamResponse(conversationHistory, grokModelId, tokenConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
@@ -145,6 +162,12 @@ public class AiResponseRouter {
                 googleService.setModel(googleModelId);
             }
             return googleService;
+        } else if (selectedModel.startsWith("grok:")) {
+            String grokModelId = selectedModel.substring(5);
+            if (grokService != null) {
+                grokService.setModel(grokModelId);
+            }
+            return grokService;
         } else {
             claudeService.setModel(selectedModel);
             return claudeService;

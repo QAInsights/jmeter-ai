@@ -116,6 +116,10 @@ public class ClaudeCodePanel extends JPanel {
         if (antigravity.isEnabled() && antigravity.detect())
             available.add(antigravity);
 
+        AiCliAdapter grok = new GrokCliAdapter();
+        if (grok.isEnabled() && grok.detect())
+            available.add(grok);
+
         return available;
     }
 

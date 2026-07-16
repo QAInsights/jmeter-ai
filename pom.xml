@@ -8,7 +8,7 @@
 
     <groupId>com.qainsights</groupId>
     <artifactId>jmeter-agent</artifactId>
-    <version>3.0.0</version>
+    <version>3.0.1</version>
     <name>jmeter-agent</name>
     <url>https://github.com/QAInsights/jmeter-ai</url>
     <description>Feather Wand - JMeter Agent for performance engineers
@@ -377,7 +377,7 @@
                     <plugin>
                         <groupId>org.sonatype.central</groupId>
                         <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.7.0</version>
+                        <version>0.11.0</version>
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>

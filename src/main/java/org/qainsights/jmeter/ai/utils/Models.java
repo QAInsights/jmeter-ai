@@ -10,6 +10,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,8 @@ public class Models {
                                              OpenAIClient openAiClient,
                                              OllamaAiService ollamaService,
                                              DeepseekAiService deepseekService,
-                                             GoogleAiService googleService) {
+                                             GoogleAiService googleService,
+                                             GrokAiService grokService) {
         List<String> allModels = new ArrayList<>();
 
         // Get Anthropic models
@@ -120,11 +122,32 @@ public class Models {
             log.error("Error adding Google models: {}", e.getMessage(), e);
         }
 
+        // Add Grok models
+        try {
+            List<String> grokModels = getGrokModelIds(grokService);
+            if (grokModels != null) {
+                for (String modelId : grokModels) {
+                    allModels.add("grok:" + modelId);
+                    log.debug("Added Grok model to selector: {}", modelId);
+                }
+                log.info("Added {} Grok models to selector", grokModels.size());
+            }
+        } catch (Exception e) {
+            log.error("Error adding Grok models: {}", e.getMessage(), e);
+        }
+
         return allModels;
     }
 
     private static List<String> getGoogleModelIds(GoogleAiService googleService) {
         return googleService.listModels();
+    }
+
+    private static List<String> getGrokModelIds(GrokAiService grokService) {
+        if (grokService == null) {
+            return new ArrayList<>();
+        }
+        return grokService.listModels();
     }
 
     /**
@@ -139,7 +162,8 @@ public class Models {
                                            OpenAIClient openAiClient,
                                            OllamaAiService ollamaService,
                                            DeepseekAiService deepseekService,
-                                           GoogleAiService googleService) {
+                                           GoogleAiService googleService,
+                                           GrokAiService grokService) {
         List<String> modelIds = new ArrayList<>();
 
         try {
@@ -173,7 +197,13 @@ public class Models {
                 modelIds.addAll(googleModels);
             }
 
-            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, and Google", modelIds.size());
+            // Get Grok models
+            List<String> grokModels = getGrokModelIds(grokService);
+            if (grokModels != null) {
+                modelIds.addAll(grokModels);
+            }
+
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, and Grok", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);
