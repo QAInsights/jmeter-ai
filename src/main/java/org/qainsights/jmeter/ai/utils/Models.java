@@ -12,6 +12,7 @@ import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.slf4j.Logger;
@@ -162,6 +163,22 @@ public class Models {
             log.error("Error adding Meta Muse models: {}", e.getMessage(), e);
         }
 
+        // Add Bedrock models
+        try {
+            if (serviceHolder.getBedrockService() != null) {
+                List<String> bedrockModels = getBedrockModelIds(serviceHolder.getBedrockService());
+                if (bedrockModels != null) {
+                    for (String modelId : bedrockModels) {
+                        allModels.add("bedrock:" + modelId);
+                        log.debug("Added Bedrock model to selector: {}", modelId);
+                    }
+                    log.info("Added {} Bedrock models to selector", bedrockModels.size());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error adding Bedrock models: {}", e.getMessage(), e);
+        }
+
         return allModels;
     }
 
@@ -181,6 +198,13 @@ public class Models {
             return new ArrayList<>();
         }
         return metaMuseService.listModels();
+    }
+
+    private static List<String> getBedrockModelIds(BedrockAiService bedrockService) {
+        if (bedrockService == null) {
+            return new ArrayList<>();
+        }
+        return bedrockService.listModels();
     }
 
     /**
@@ -252,7 +276,15 @@ public class Models {
                 }
             }
 
-            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, Grok, and Meta Muse", modelIds.size());
+            // Get Bedrock models
+            if (serviceHolder.getBedrockService() != null) {
+                List<String> bedrockModels = getBedrockModelIds(serviceHolder.getBedrockService());
+                if (bedrockModels != null) {
+                    modelIds.addAll(bedrockModels);
+                }
+            }
+
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, Grok, Meta Muse, and Bedrock", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);

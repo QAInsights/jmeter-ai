@@ -34,6 +34,7 @@ import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -92,6 +93,7 @@ public class AiChatPanel
     private GoogleAiService googleService;
     private GrokAiService grokService;
     private MetaMuseAiService metaMuseService;
+    private BedrockAiService bedrockService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
@@ -134,6 +136,7 @@ public class AiChatPanel
         deepseekService = new DeepseekAiService();
         grokService = new GrokAiService();
         metaMuseService = new MetaMuseAiService();
+        bedrockService = new BedrockAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
@@ -229,6 +232,10 @@ public class AiChatPanel
                     grokService.setModel(selectedModel.substring(5));
                 } else if (selectedModel.startsWith("meta:")) {
                     metaMuseService.setModel(selectedModel.substring(5));
+                } else if (selectedModel.startsWith("bedrock:")) {
+                    if (bedrockService != null) {
+                        bedrockService.setModel(selectedModel.substring(8));
+                    }
                 } else {
                     claudeService.setModel(selectedModel);
                 }
@@ -630,6 +637,7 @@ public class AiChatPanel
         holder.setGoogleService(googleService);
         holder.setGrokService(grokService);
         holder.setMetaMuseService(metaMuseService);
+        holder.setBedrockService(bedrockService);
         return holder;
     }
 

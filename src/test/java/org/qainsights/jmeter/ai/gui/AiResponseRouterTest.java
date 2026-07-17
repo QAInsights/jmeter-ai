@@ -13,6 +13,7 @@ import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
 
 import java.util.Collections;
 import java.util.List;
@@ -44,6 +45,9 @@ class AiResponseRouterTest {
     @Mock
     private MetaMuseAiService metaMuseService;
 
+    @Mock
+    private BedrockAiService bedrockService;
+
     private AiResponseRouter router;
     private final List<String> history = Collections.singletonList("test prompt");
 
@@ -57,6 +61,7 @@ class AiResponseRouterTest {
         holder.setGoogleService(googleService);
         holder.setGrokService(grokService);
         holder.setMetaMuseService(metaMuseService);
+        holder.setBedrockService(bedrockService);
         router = new AiResponseRouter(holder);
     }
 
@@ -152,6 +157,31 @@ class AiResponseRouterTest {
     }
 
     @Test
+    void testGetAiResponse_Bedrock() {
+        when(bedrockService.generateResponse(history)).thenReturn("bedrock response");
+
+        String response = router.getAiResponse("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0", history);
+
+        assertEquals("bedrock response", response);
+        verify(bedrockService).setModel("anthropic.claude-3-5-sonnet-20241022-v2:0");
+        verify(bedrockService).generateResponse(history);
+    }
+
+    @Test
+    void testGetAiResponse_Bedrock_NullService() {
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        holder.setOpenAiService(openAiService);
+        holder.setOllamaService(ollamaService);
+        holder.setDeepseekService(deepseekService);
+        // bedrock is left null
+        AiResponseRouter nullBedrockRouter = new AiResponseRouter(holder);
+        String response = nullBedrockRouter.getAiResponse("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0", history);
+
+        assertTrue(response.contains("Bedrock service not configured"));
+    }
+
+    @Test
     void testGetAiResponse_Anthropic() {
         when(claudeService.generateResponse(history)).thenReturn("anthropic response");
 
@@ -170,6 +200,7 @@ class AiResponseRouterTest {
         assertEquals(googleService, router.resolveAiService("google:gemini-1.5"));
         assertEquals(grokService, router.resolveAiService("grok:grok-2"));
         assertEquals(metaMuseService, router.resolveAiService("meta:muse-spark-1.1"));
+        assertEquals(bedrockService, router.resolveAiService("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0"));
         assertEquals(claudeService, router.resolveAiService("claude-sonnet-4"));
     }
 

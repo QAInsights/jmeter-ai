@@ -500,7 +500,10 @@ public class CommandDispatcher {
         return !selectedModel.startsWith("openai:")
                 && !selectedModel.startsWith("ollama:")
                 && !selectedModel.startsWith("deepseek:")
-                && !selectedModel.startsWith("google:");
+                && !selectedModel.startsWith("google:")
+                && !selectedModel.startsWith("grok:")
+                && !selectedModel.startsWith("meta:")
+                && !selectedModel.startsWith("bedrock:");
     }
 
     /**

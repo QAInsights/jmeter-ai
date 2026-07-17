@@ -17,6 +17,7 @@ import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,6 +57,9 @@ class AiResponseRouterStreamingTest {
 
     @Mock
     private MetaMuseAiService metaMuseService;
+
+    @Mock
+    private BedrockAiService bedrockService;
 
     private AiResponseRouter router;
 
@@ -120,6 +124,7 @@ class AiResponseRouterStreamingTest {
         holder.setGoogleService(googleService);
         holder.setGrokService(grokService);
         holder.setMetaMuseService(metaMuseService);
+        holder.setBedrockService(bedrockService);
         router = new AiResponseRouter(holder);
     }
 

@@ -9,6 +9,7 @@ import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,7 @@ public class AiResponseRouter {
     private final GoogleAiService googleService;
     private final GrokAiService grokService;
     private final MetaMuseAiService metaMuseService;
+    private final BedrockAiService bedrockService;
 
     public AiResponseRouter(AiServiceHolder serviceHolder) {
         this.claudeService = serviceHolder.getClaudeService();
@@ -38,6 +40,7 @@ public class AiResponseRouter {
         this.googleService = serviceHolder.getGoogleService();
         this.grokService = serviceHolder.getGrokService();
         this.metaMuseService = serviceHolder.getMetaMuseService();
+        this.bedrockService = serviceHolder.getBedrockService();
     }
 
     /**
@@ -95,6 +98,14 @@ public class AiResponseRouter {
                 return metaMuseService.generateResponse(conversationHistory);
             }
             return "Error: Meta Muse service not configured. Set meta.api.key in jmeter.properties.";
+        } else if (selectedModel.startsWith("bedrock:")) {
+            String bedrockModelId = selectedModel.substring(8);
+            log.info("Using Bedrock model: {}", bedrockModelId);
+            if (bedrockService != null) {
+                bedrockService.setModel(bedrockModelId);
+                return bedrockService.generateResponse(conversationHistory);
+            }
+            return "Error: Bedrock service not configured. Set bedrock.aws.access.key and bedrock.aws.secret.key in jmeter.properties.";
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -146,6 +157,12 @@ public class AiResponseRouter {
                 return metaMuseService.generateStreamResponse(conversationHistory, metaModelId, tokenConsumer, onComplete, onError);
             }
             return () -> {};
+        } else if (selectedModel.startsWith("bedrock:")) {
+            String bedrockModelId = selectedModel.substring(8);
+            if (bedrockService != null) {
+                return bedrockService.generateStreamResponse(conversationHistory, bedrockModelId, tokenConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
@@ -192,6 +209,12 @@ public class AiResponseRouter {
                 metaMuseService.setModel(metaModelId);
             }
             return metaMuseService;
+        } else if (selectedModel.startsWith("bedrock:")) {
+            String bedrockModelId = selectedModel.substring(8);
+            if (bedrockService != null) {
+                bedrockService.setModel(bedrockModelId);
+            }
+            return bedrockService;
         } else {
             claudeService.setModel(selectedModel);
             return claudeService;
