@@ -43,7 +43,7 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), or Meta Muse, all inside JMeter. |
+| 🤖 **Multi-Model Chat** | Talk to Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), Meta Muse, or compatible AWS Bedrock models, all inside JMeter. |
 | ⚡ **Real-Time Streaming** | Watch AI responses appear token-by-token with a **Stop** button to cancel anytime. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
@@ -182,6 +182,38 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `meta.max.tokens` | Max response tokens | `4096` |
 | `meta.max.history.size` | Conversation history size | `10` |
 | `meta.system.prompt` | System prompt | See sample file |
+
+</details>
+
+<details>
+<summary><b>AWS Bedrock</b></summary>
+
+Feather Wand uses Bedrock's standardized **Converse** and **ConverseStream** APIs for chat requests. This provides one request and streaming format across compatible Anthropic, Meta, Mistral, MiniMax, Amazon, and other Bedrock text-generation models instead of requiring a provider-specific payload formatter.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `bedrock.api.key` | Bedrock API key (bearer token) | *(empty)* |
+| `bedrock.aws.access.key` | IAM access key; used when no Bedrock API key is set | *(empty)* |
+| `bedrock.aws.secret.key` | IAM secret key | *(empty)* |
+| `bedrock.aws.region` | AWS Region used for discovery and inference | `us-east-1` |
+| `bedrock.default.model` | Default Bedrock model ID | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+| `bedrock.model.providers` | Comma-separated provider filter | `Anthropic` |
+| `bedrock.temperature` | Temperature | `0.5` |
+| `bedrock.max.tokens` | Maximum response tokens | `4096` |
+| `bedrock.max.history.size` | Conversation history size | `10` |
+| `bedrock.system.prompt` | System prompt | See sample file |
+
+**Authentication priority:** Bedrock API key, IAM access key and secret key, then the AWS default credential chain. Do not commit credentials to a properties file or source repository.
+
+**Model discovery:** The selector includes active, text-capable foundation models and active system-defined inference profiles matching `bedrock.model.providers`. Inference profiles are checked for agreement, authorization, entitlement, and regional availability before they are shown. Models such as image, embedding, reranking, and speech models are excluded from the chat selector.
+
+**Anthropic access:** Anthropic models may require the Bedrock First-Time Use form, AWS Marketplace permissions, a valid payment method, and an active model agreement. If `get-foundation-model-availability` reports `agreementAvailability=NOT_AVAILABLE`, the model can be visible in AWS discovery but cannot be invoked by the account yet.
+
+**Compatibility:** Chat models must support Bedrock Converse/ConverseStream. Models that only provide embeddings, image generation, audio, video, or other non-chat capabilities require a separate feature flow and cannot be used in this chat panel.
+
+Restart JMeter after changing Bedrock properties or installing a new plugin JAR.
+
+See the [Bedrock Converse API documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html) and [model access documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for account setup and model availability details.
 
 </details>
 
@@ -379,7 +411,7 @@ For isolated manual testing, Feather Wand adds dev menu items under **Run → AI
 
 ## 💨 Streaming AI Responses
 
-All five AI services support real-time streaming out of the box. Responses appear token-by-token as they are generated.
+All configured AI services that support streaming provide real-time responses. AWS Bedrock uses the ConverseStream API for compatible chat models. Responses appear token-by-token as they are generated.
 
 | Control | What it does |
 |---------|--------------|
@@ -440,6 +472,7 @@ See the [AI CLI Terminal configuration](#ai-cli-terminal) section for the full p
 | **Gemini** | Sign in at [Google AI Studio](https://aistudio.google.com/) → Get API Key | `google.api.key` |
 | **Ollama** | Install from [ollama.com](https://ollama.com/) → `ollama pull llama3.1` | No key needed |
 | **Grok (xAI)** | Sign up at [console.x.ai](https://console.x.ai/) → create API key | `grok.api.key` |
+| **AWS Bedrock** | Configure a Bedrock API key or AWS IAM/default credentials in the selected Region | `bedrock.api.key` or IAM properties |
 
 Set `jmeter.ai.service.type=ollama` to switch to a local model. All other providers work side-by-side; just pick the model from the UI dropdown.
 
@@ -451,8 +484,9 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 - **Claude** — shows only the latest available models.
 - **Gemini** — shows only `gemini-*` and `gemma-*` chat models.
 - **Grok** — shows only `grok-*` chat models.
+- **AWS Bedrock** — shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
 
-Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5`
+Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
 ---
 
