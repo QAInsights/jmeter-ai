@@ -550,15 +550,17 @@ public class AiChatPanel
         );
         headerPanel.add(titleLabel);
 
-        headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
-        org.qainsights.jmeter.ai.record.RecordingSessionController recController = 
-            org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
-        org.qainsights.jmeter.ai.record.RecordingArtifactStore recStore = 
-            new org.qainsights.jmeter.ai.record.RecordingArtifactStore();
-        org.qainsights.jmeter.ai.record.RecordingControlPanel recPanel = 
-            new org.qainsights.jmeter.ai.record.RecordingControlPanel(recController, recStore);
-        recPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
-        headerPanel.add(recPanel);
+        if (Boolean.parseBoolean(AiConfig.getProperty("jmeter.ai.record.enabled", "false"))) {
+            headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
+            org.qainsights.jmeter.ai.record.RecordingSessionController recController =
+                org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
+            org.qainsights.jmeter.ai.record.RecordingArtifactStore recStore =
+                new org.qainsights.jmeter.ai.record.RecordingArtifactStore();
+            org.qainsights.jmeter.ai.record.RecordingControlPanel recPanel =
+                new org.qainsights.jmeter.ai.record.RecordingControlPanel(recController, recStore);
+            recPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
+            headerPanel.add(recPanel);
+        }
 
         headerPanel.add(Box.createHorizontalGlue());
 

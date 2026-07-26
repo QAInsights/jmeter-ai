@@ -44,8 +44,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8
         </project.reporting.outputEncoding>
-        <playwright.version>1.61.0</playwright.version>
-        <har-to-jmeter-convertor.version>10.0</har-to-jmeter-convertor.version>
         <jacocoArgLine/>
     </properties>
     <repositories>
@@ -94,26 +92,6 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.20.1</version>
-        </dependency>
-        <dependency>
-            <groupId>com.microsoft.playwright</groupId>
-            <artifactId>playwright</artifactId>
-            <version>${playwright.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.vdaburon</groupId>
-            <artifactId>har-to-jmeter-convertor</artifactId>
-            <version>${har-to-jmeter-convertor.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.dataformat</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.github.ollama4j</groupId>

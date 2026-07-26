@@ -53,23 +53,10 @@ public class CommandDispatcher {
 
         org.qainsights.jmeter.ai.record.RecordingSessionController recController = org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
         if (recController.getSnapshot().state() == org.qainsights.jmeter.ai.record.RecordingSessionState.ARMED) {
-            org.qainsights.jmeter.ai.service.ClaudeService claude = cb.resolveAiService(cb.getSelectedModel()) instanceof org.qainsights.jmeter.ai.service.ClaudeService 
-                ? (org.qainsights.jmeter.ai.service.ClaudeService) cb.resolveAiService(cb.getSelectedModel()) 
-                : null;
-            if (claude == null) {
-                cb.processAiResponse("Feather Wand Recording Mode requires a Claude model. Please select a Claude model and try again.");
-                recController.transitionTo(org.qainsights.jmeter.ai.record.RecordingSessionState.OFF);
-                return;
-            }
-            org.qainsights.jmeter.ai.record.RecordingWorkflowService workflow = new org.qainsights.jmeter.ai.record.RecordingWorkflowService(
-                recController, 
-                new org.qainsights.jmeter.ai.record.ClaudeBrowserFlowPlanner(claude),
-                () -> new org.qainsights.jmeter.ai.record.PlaywrightBrowserSession(new org.qainsights.jmeter.ai.record.ClaudeElementResolver(claude))
-            );
-            org.qainsights.jmeter.ai.record.RecordingPromptRouter router = new org.qainsights.jmeter.ai.record.RecordingPromptRouter(recController, workflow);
-            if (router.route(message, cb)) {
-                return;
-            }
+            cb.processAiResponse("Record Mode is being rebuilt on Playwright MCP and JMeter's native recorder, "
+                    + "and is unavailable in this build. Returning to normal chat.");
+            recController.transitionTo(org.qainsights.jmeter.ai.record.RecordingSessionState.OFF);
+            return;
         }
 
         switch (getCommand(message)) {
