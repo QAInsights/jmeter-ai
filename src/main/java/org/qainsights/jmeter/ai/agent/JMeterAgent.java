@@ -1,6 +1,5 @@
 package org.qainsights.jmeter.ai.agent;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -15,25 +14,32 @@ import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
 import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
+import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.openai.OpenAiChatModel;
+import org.qainsights.jmeter.ai.agent.openai.OpenAiToolAdapter;
 import org.qainsights.jmeter.ai.agent.schema.SchemaGrounding;
 import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
+import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
+import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.models.messages.MessageParam;
+import com.openai.client.OpenAIClient;
 
 /**
  * Façade that wires the tool registry, executor, schema-grounded system prompt
- * and a provider {@link ClaudeChatModel} into a runnable {@link AgentLoop}. This
- * is the single entry point the chat UI calls to run an agentic request.
+ * and a provider {@link ChatModel} (Claude or OpenAI, via
+ * {@link AgentChatModelFactory}) into a runnable {@link AgentLoop}. This is the
+ * single entry point the chat UI calls to run an agentic request.
  */
 public final class JMeterAgent {
 
@@ -53,9 +59,7 @@ public final class JMeterAgent {
     /** Ensures the undo-history nudge (see {@link #maybeWarnAboutUndoHistory}) fires once per session. */
     private static final AtomicBoolean UNDO_NUDGE_SHOWN = new AtomicBoolean(false);
 
-    private final ClaudeChatModel.MessageService service;
-    private final String model;
-    private final long maxTokens;
+    private final AgentChatModelFactory chatModelFactory;
     private final int maxIterations;
     private final ToolConfirmationGate confirmationGate;
 
@@ -70,11 +74,35 @@ public final class JMeterAgent {
      */
     public JMeterAgent(ClaudeChatModel.MessageService service, String model, long maxTokens, int maxIterations,
                        ToolConfirmationGate confirmationGate) {
-        this.service = service;
-        this.model = model;
-        this.maxTokens = maxTokens;
+        this(claudeFactory(service, model, maxTokens), maxIterations, confirmationGate);
+    }
+
+    /**
+     * Provider-neutral constructor: any {@link AgentChatModelFactory} (Claude, OpenAI, ...)
+     * can drive the same tool registry, system prompt and loop.
+     */
+    public JMeterAgent(AgentChatModelFactory chatModelFactory, int maxIterations,
+                       ToolConfirmationGate confirmationGate) {
+        if (chatModelFactory == null) {
+            throw new IllegalArgumentException("chatModelFactory must not be null");
+        }
+        this.chatModelFactory = chatModelFactory;
         this.maxIterations = maxIterations;
         this.confirmationGate = confirmationGate;
+    }
+
+    /** Builds a factory that wires the Anthropic {@link ClaudeChatModel} for each run. */
+    public static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
+                                                      long maxTokens) {
+        return (specs, systemPrompt, priorTurns) -> new ClaudeChatModel(service, new ClaudeToolAdapter(),
+                specs, systemPrompt, model, maxTokens, ClaudeChatModel.toSeedHistory(priorTurns));
+    }
+
+    /** Builds a factory that wires the OpenAI {@link OpenAiChatModel} for each run. */
+    public static AgentChatModelFactory openAiFactory(OpenAiChatModel.CompletionService service, String model,
+                                                      long maxTokens) {
+        return (specs, systemPrompt, priorTurns) -> new OpenAiChatModel(service, new OpenAiToolAdapter(),
+                specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns));
     }
 
     /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */
@@ -95,6 +123,41 @@ public final class JMeterAgent {
         boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
         ToolConfirmationGate gate = confirmDestructive ? new SwingToolConfirmationGate() : null;
         return new JMeterAgent(service, claude.getCurrentModel(), maxTokens, maxIterations, gate);
+    }
+
+    /**
+     * Wires an agent against an existing {@link OpenAiService}'s client and model, using the
+     * same tool registry, system prompt, limits and destructive-tool confirmation as
+     * {@link #forClaude(ClaudeService)}.
+     */
+    public static JMeterAgent forOpenAi(OpenAiService openAi) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        OpenAIClient client = openAi.getClient();
+        OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
+        return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens), maxIterations,
+                destructiveGate());
+    }
+
+    /**
+     * Wires an agent for whichever provider backs {@code service}, or returns {@code null}
+     * if that provider has no tool-calling adapter yet (the caller then falls back to the
+     * plain, non-agentic chat path).
+     */
+    public static JMeterAgent forService(AiService service) {
+        if (service instanceof ClaudeService) {
+            return forClaude((ClaudeService) service);
+        }
+        if (service instanceof OpenAiService) {
+            return forOpenAi((OpenAiService) service);
+        }
+        return null;
+    }
+
+    /** The confirmation gate for destructive tools, or {@code null} when disabled by config. */
+    private static ToolConfirmationGate destructiveGate() {
+        boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
+        return confirmDestructive ? new SwingToolConfirmationGate() : null;
     }
 
     /**
@@ -139,35 +202,10 @@ public final class JMeterAgent {
         ToolRegistry registry = AgentToolRegistry.createDefault();
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
-        List<MessageParam> seedHistory = toSeedHistory(priorConversationTurns);
-        ClaudeChatModel chat = new ClaudeChatModel(service, new ClaudeToolAdapter(),
-                registry.getSpecs(), systemPrompt, model, maxTokens, seedHistory);
+        List<String> seedTurns = ConversationSeed.normalize(priorConversationTurns, MAX_HISTORY_TURN_PAIRS);
+        List<ToolSpec> specs = registry.getSpecs();
+        ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
         return new AgentLoop(chat, executor, maxIterations).run(userMessage, progress, onToolCallStarted);
-    }
-
-    /**
-     * Converts flat alternating user/assistant strings into seed {@link MessageParam}s,
-     * dropping a trailing unpaired turn (so the seed always ends on an assistant turn) and
-     * capping to the most recent {@link #MAX_HISTORY_TURN_PAIRS} pairs.
-     */
-    private static List<MessageParam> toSeedHistory(List<String> priorConversationTurns) {
-        if (priorConversationTurns == null || priorConversationTurns.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> turns = new ArrayList<>(priorConversationTurns);
-        if (turns.size() % 2 != 0) {
-            turns.remove(turns.size() - 1);
-        }
-        int maxEntries = MAX_HISTORY_TURN_PAIRS * 2;
-        if (turns.size() > maxEntries) {
-            turns = turns.subList(turns.size() - maxEntries, turns.size());
-        }
-        List<MessageParam> history = new ArrayList<>();
-        for (int i = 0; i < turns.size(); i++) {
-            MessageParam.Role role = (i % 2 == 0) ? MessageParam.Role.USER : MessageParam.Role.ASSISTANT;
-            history.add(MessageParam.builder().role(role).content(turns.get(i)).build());
-        }
-        return history;
     }
 
     private static long parseLong(String value, long fallback) {

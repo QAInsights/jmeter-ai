@@ -7,8 +7,7 @@ import java.util.Map;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
-import org.qainsights.jmeter.ai.agent.tool.ParamType;
-import org.qainsights.jmeter.ai.agent.tool.ToolParameter;
+import org.qainsights.jmeter.ai.agent.tool.JsonSchemaMapper;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,31 +31,13 @@ public final class ClaudeToolAdapter {
     /** Converts a provider-neutral spec into an Anthropic tool definition. */
     public Tool toAnthropicTool(ToolSpec spec) {
         Tool.InputSchema.Properties.Builder properties = Tool.InputSchema.Properties.builder();
-        List<String> required = new ArrayList<>();
-
-        for (ToolParameter param : spec.getParameters()) {
-            Map<String, Object> propSchema = new LinkedHashMap<>();
-            propSchema.put("type", jsonType(param.getType()));
-            if (param.getType() == ParamType.STRING_ARRAY) {
-                propSchema.put("items", Map.of("type", "string"));
-            } else if (param.getType() == ParamType.OBJECT_ARRAY) {
-                propSchema.put("items", Map.of("type", "object"));
-            }
-            if (param.getDescription() != null && !param.getDescription().isEmpty()) {
-                propSchema.put("description", param.getDescription());
-            }
-            if (!param.getEnumValues().isEmpty()) {
-                propSchema.put("enum", param.getEnumValues());
-            }
-            properties.putAdditionalProperty(param.getName(), JsonValue.from(propSchema));
-            if (param.isRequired()) {
-                required.add(param.getName());
-            }
+        for (Map.Entry<String, Object> property : JsonSchemaMapper.properties(spec).entrySet()) {
+            properties.putAdditionalProperty(property.getKey(), JsonValue.from(property.getValue()));
         }
 
         Tool.InputSchema schema = Tool.InputSchema.builder()
                 .properties(properties.build())
-                .required(required)
+                .required(JsonSchemaMapper.required(spec))
                 .build();
 
         return Tool.builder()
@@ -99,25 +80,6 @@ public final class ClaudeToolAdapter {
         } catch (RuntimeException e) {
             log.warn("Could not parse tool_use input as a map: {}", input, e);
             return new LinkedHashMap<>();
-        }
-    }
-
-    private static String jsonType(ParamType type) {
-        switch (type) {
-            case INTEGER:
-                return "integer";
-            case NUMBER:
-                return "number";
-            case BOOLEAN:
-                return "boolean";
-            case OBJECT:
-                return "object";
-            case STRING_ARRAY:
-            case OBJECT_ARRAY:
-                return "array";
-            case STRING:
-            default:
-                return "string";
         }
     }
 }

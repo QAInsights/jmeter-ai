@@ -58,6 +58,22 @@ public final class ClaudeChatModel implements ChatModel {
         this.history = new ArrayList<>(seedHistory);
     }
 
+    /**
+     * Converts flat alternating user/assistant strings (already normalized by
+     * {@code ConversationSeed}) into Anthropic seed messages.
+     */
+    public static List<MessageParam> toSeedHistory(List<String> alternatingTurns) {
+        List<MessageParam> seed = new ArrayList<>();
+        if (alternatingTurns == null) {
+            return seed;
+        }
+        for (int i = 0; i < alternatingTurns.size(); i++) {
+            MessageParam.Role role = (i % 2 == 0) ? MessageParam.Role.USER : MessageParam.Role.ASSISTANT;
+            seed.add(MessageParam.builder().role(role).content(alternatingTurns.get(i)).build());
+        }
+        return seed;
+    }
+
     @Override
     public AssistantTurn start(String userMessage) {
         history.add(MessageParam.builder()
