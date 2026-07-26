@@ -49,7 +49,7 @@
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude only.** |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude & OpenAI.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 
@@ -284,7 +284,7 @@ Type any of these directly in the chat box. All commands are context-aware and w
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done — all inside the existing chat panel.
 
-> ⚠️ **Claude only.** Agent Mode currently works exclusively with **Anthropic Claude** models. OpenAI, Gemini, DeepSeek, and Ollama are not supported — they fall back to plain chat. Support for additional providers is planned.
+> ⚠️ **Claude & OpenAI only.** Agent Mode currently works with **Anthropic Claude** and **OpenAI** models. Gemini, DeepSeek, Ollama, Grok, and Bedrock are not supported — they fall back to plain chat. Support for additional providers is planned.
 
 <div align="center">
 
@@ -301,9 +301,13 @@ Agent Mode is **off by default**. To turn it on:
 jmeter.ai.agent.enabled=true
 ```
 
-Select a **Claude** model from the dropdown. Then just type your request naturally in the chat box — if Agent Mode is enabled and a Claude model is selected, the agent loop activates automatically.
+Select a **Claude** or **OpenAI** model from the dropdown. Then just type your request naturally in the chat box — if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
 
-> If a non-Claude model is selected, the request is handled by the regular (non-agentic) chat path.
+> If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
+
+Both providers get the exact same tools, system prompt, safety gates and iteration limits — only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls`).
+
+> 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on — so tool calling works out of the box.
 
 ### Agent Settings
 
@@ -386,7 +390,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Examples
 
-Try these in the chat box with Agent Mode enabled and a Claude model selected:
+Try these in the chat box with Agent Mode enabled and a Claude or OpenAI model selected:
 
 | Request | What the agent does |
 |---------|-------------------|

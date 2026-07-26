@@ -6,7 +6,6 @@ import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
-import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -80,8 +79,8 @@ public class CommandDispatcher {
                 break;
         }
 
-        // Tier 2: agentic tool-calling loop (feature-flagged; Claude only for the MVP).
-        if (JMeterAgent.isEnabled() && isClaudeModel(cb.getSelectedModel())) {
+        // Tier 2: agentic tool-calling loop (feature-flagged; Claude and OpenAI).
+        if (JMeterAgent.isEnabled() && isAgentCapableModel(cb.getSelectedModel())) {
             handleAgentCommand(message);
             return;
         }
@@ -421,10 +420,11 @@ public class CommandDispatcher {
             protected String doInBackground() {
                 try {
                     AiService service = cb.resolveAiService(cb.getSelectedModel());
-                    if (!(service instanceof ClaudeService)) {
-                        return finish("Agent mode currently supports Claude models only. Select a Claude model and retry.");
+                    JMeterAgent agent = JMeterAgent.forService(service);
+                    if (agent == null) {
+                        return finish("Agent mode currently supports Claude and OpenAI models only. "
+                                + "Select one of those and retry.");
                     }
-                    JMeterAgent agent = JMeterAgent.forClaude((ClaudeService) service);
                     AgentLoop.AgentResult result;
                     try {
                         result = agent.run(message, priorTurns,
@@ -492,7 +492,16 @@ public class CommandDispatcher {
         }.execute();
     }
 
-    /** True when the selected model routes to Claude (the only agent provider in the MVP). */
+    /**
+     * True when the selected model routes to a provider with a tool-calling adapter,
+     * i.e. Anthropic Claude or OpenAI. Every other provider falls back to plain chat.
+     */
+    static boolean isAgentCapableModel(String selectedModel) {
+        return isClaudeModel(selectedModel)
+                || (selectedModel != null && selectedModel.startsWith("openai:"));
+    }
+
+    /** True when the selected model routes to Claude (non-prefixed model ids). */
     static boolean isClaudeModel(String selectedModel) {
         if (selectedModel == null || selectedModel.isEmpty()) {
             return true;
