@@ -154,6 +154,30 @@ public final class JMeterAgent {
         return null;
     }
 
+    /**
+     * The provider chat-model factory backing {@code service}, or {@code null} if that
+     * provider has no tool-calling adapter.
+     * <p>
+     * Exposed for callers that drive their own tool registry rather than the default
+     * JMeter one - Record Mode advertises browser tools instead - so provider detection
+     * and the token/model settings live in exactly one place.
+     */
+    public static AgentChatModelFactory chatModelFactoryFor(AiService service) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        if (service instanceof ClaudeService) {
+            AnthropicClient client = ((ClaudeService) service).getClient();
+            ClaudeChatModel.MessageService messages = params -> client.messages().create(params);
+            return claudeFactory(messages, ((ClaudeService) service).getCurrentModel(), maxTokens);
+        }
+        if (service instanceof OpenAiService) {
+            OpenAIClient client = ((OpenAiService) service).getClient();
+            OpenAiChatModel.CompletionService completions =
+                    params -> client.chat().completions().create(params);
+            return openAiFactory(completions, ((OpenAiService) service).getCurrentModel(), maxTokens);
+        }
+        return null;
+    }
+
     /** The confirmation gate for destructive tools, or {@code null} when disabled by config. */
     private static ToolConfirmationGate destructiveGate() {
         boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));

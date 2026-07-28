@@ -16,11 +16,29 @@ public final class RecordingArtifactStore {
     private final Path rootDirectory;
     private final int retentionDays;
 
+    private static final int DEFAULT_RETENTION_DAYS = 7;
+
     public RecordingArtifactStore() {
         this(
             AiConfig.getProperty("jmeter.ai.record.artifacts.dir", ""),
-            Integer.parseInt(AiConfig.getProperty("jmeter.ai.record.retention.days", "7"))
+            retentionDays()
         );
+    }
+
+    /**
+     * {@code AiConfig.getProperty} returns null rather than the supplied default when the
+     * properties have not been loaded, so the default is applied here instead.
+     */
+    private static int retentionDays() {
+        String configured = AiConfig.getProperty("jmeter.ai.record.retention.days", "7");
+        if (configured == null || configured.trim().isEmpty()) {
+            return DEFAULT_RETENTION_DAYS;
+        }
+        try {
+            return Integer.parseInt(configured.trim());
+        } catch (NumberFormatException e) {
+            return DEFAULT_RETENTION_DAYS;
+        }
     }
 
     public RecordingArtifactStore(String rootDirStr, int retentionDays) {

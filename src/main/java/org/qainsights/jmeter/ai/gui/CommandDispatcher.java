@@ -29,9 +29,25 @@ public class CommandDispatcher {
 
     private final CommandCallback cb;
     private final TreeActivityGlowController glowController = new TreeActivityGlowController();
+    private org.qainsights.jmeter.ai.record.RecordingPromptRouter recordingRouter;
 
     public CommandDispatcher(CommandCallback callback) {
         this.cb = callback;
+    }
+
+    /**
+     * Built on first use rather than in the constructor: Record Mode is off by default, and
+     * its artifact store reads configuration that is not present outside a JMeter process.
+     */
+    private org.qainsights.jmeter.ai.record.RecordingPromptRouter recordingRouter() {
+        if (recordingRouter == null) {
+            org.qainsights.jmeter.ai.record.RecordingSessionController controller =
+                    org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
+            recordingRouter = new org.qainsights.jmeter.ai.record.RecordingPromptRouter(controller,
+                    new org.qainsights.jmeter.ai.record.DefaultRecordingWorkflow(controller,
+                            new org.qainsights.jmeter.ai.record.RecordingArtifactStore()));
+        }
+        return recordingRouter;
     }
 
     /**
@@ -51,11 +67,10 @@ public class CommandDispatcher {
         cb.clearMessageField();
         cb.appendLoadingIndicator();
 
-        org.qainsights.jmeter.ai.record.RecordingSessionController recController = org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
-        if (recController.getSnapshot().state() == org.qainsights.jmeter.ai.record.RecordingSessionState.ARMED) {
-            cb.processAiResponse("Record Mode is being rebuilt on Playwright MCP and JMeter's native recorder, "
-                    + "and is unavailable in this build. Returning to normal chat.");
-            recController.transitionTo(org.qainsights.jmeter.ai.record.RecordingSessionState.OFF);
+        // An armed Record Mode session consumes the next message as its recording brief.
+        if (org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance().getSnapshot()
+                .state() == org.qainsights.jmeter.ai.record.RecordingSessionState.ARMED
+                && recordingRouter().route(message, cb)) {
             return;
         }
 

@@ -24,9 +24,6 @@ class RecordingSessionControllerTest {
 
         controller.transitionTo(RecordingSessionState.PLANNING);
         controller.transitionTo(RecordingSessionState.EXECUTING);
-        controller.transitionTo(RecordingSessionState.FLUSHING_HAR);
-        controller.transitionTo(RecordingSessionState.CONVERTING);
-        controller.transitionTo(RecordingSessionState.LOADING);
         controller.transitionTo(RecordingSessionState.AWAITING_CORRELATION);
         controller.transitionTo(RecordingSessionState.REVIEWING_CORRELATION);
         controller.transitionTo(RecordingSessionState.SAVING);
@@ -58,6 +55,43 @@ class RecordingSessionControllerTest {
         controller.transitionTo(RecordingSessionState.PREFLIGHT);
         assertEquals(2, snapshots.size());
         assertEquals(RecordingSessionState.PREFLIGHT, snapshots.get(1).state());
+    }
+
+    @Test
+    void should_returnToOff_when_resetAfterSuccessfulRecording() {
+        // A finished run stops in AWAITING_CORRELATION; without a reset the Record toggle
+        // would stay on and a second recording could never be started.
+        RecordingSessionController controller = new RecordingSessionController();
+        controller.startSession(new SessionConfig("P", "http://example.com", "chromium"), "dir");
+        controller.transitionTo(RecordingSessionState.PREFLIGHT);
+        controller.transitionTo(RecordingSessionState.PLANNING);
+        controller.transitionTo(RecordingSessionState.EXECUTING);
+        controller.transitionTo(RecordingSessionState.AWAITING_CORRELATION);
+
+        controller.resetToOff();
+
+        assertEquals(RecordingSessionState.OFF, controller.getSnapshot().state());
+        assertDoesNotThrow(() -> controller.startSession(
+                new SessionConfig("P2", "http://example.com", "chromium"), "dir2"));
+    }
+
+    @Test
+    void should_returnToOff_when_resetAfterFailure() {
+        RecordingSessionController controller = new RecordingSessionController();
+        controller.startSession(new SessionConfig("P", "http://example.com", "chromium"), "dir");
+        controller.transitionTo(RecordingSessionState.FAILED, "boom");
+
+        controller.resetToOff();
+
+        assertEquals(RecordingSessionState.OFF, controller.getSnapshot().state());
+    }
+
+    @Test
+    void should_beNoOp_when_resetWhileAlreadyOff() {
+        RecordingSessionController controller = new RecordingSessionController();
+
+        assertDoesNotThrow(controller::resetToOff);
+        assertEquals(RecordingSessionState.OFF, controller.getSnapshot().state());
     }
 
     @Test
