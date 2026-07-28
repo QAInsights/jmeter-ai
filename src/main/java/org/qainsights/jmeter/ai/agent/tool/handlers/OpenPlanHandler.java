@@ -14,6 +14,7 @@ import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolParameter;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+import org.qainsights.jmeter.ai.utils.PlanReplacementGuard;
 
 /**
  * The {@code open_plan} agent tool. Loads a {@code .jmx} file, replacing the
@@ -92,23 +93,22 @@ public final class OpenPlanHandler {
             return ToolResult.error(ERR_FILE_NOT_FOUND, "No file found at '" + file.getPath() + "'.");
         }
 
-        if (controller.isRunning()) {
-            return ToolResult.error(ERR_TEST_RUNNING,
-                    "A test is currently running. Use stop_test before opening another plan.");
-        }
-
-        boolean force = bool(args.get("force"));
-        if (dirtySupplier.getAsBoolean() && !force) {
-            return ToolResult.error(ERR_CONFIRM_REQUIRED,
-                    "The current test plan has unsaved changes. Call save_plan first, or re-call open_plan "
-                            + "with force=true to discard them.");
+        PlanReplacementGuard guard = new PlanReplacementGuard(dirtySupplier, controller, loader);
+        try {
+            guard.checkCanReplace(bool(args.get("force")));
+        } catch (IllegalStateException e) {
+            if (controller.isRunning()) {
+                return ToolResult.error(ERR_TEST_RUNNING, e.getMessage());
+            } else {
+                return ToolResult.error(ERR_CONFIRM_REQUIRED, e.getMessage());
+            }
         }
 
         try {
-            if (!loader.load(file)) {
+            if (!guard.loadPlan(file)) {
                 return ToolResult.error(ERR_OPEN_FAILED, "Could not open the plan - no live JMeter GUI available.");
             }
-        } catch (IOException | IllegalUserActionException e) {
+        } catch (IOException | org.apache.jmeter.exceptions.IllegalUserActionException e) {
             return ToolResult.error(ERR_OPEN_FAILED,
                     "Failed to open '" + file.getAbsolutePath() + "': " + e.getMessage());
         }
