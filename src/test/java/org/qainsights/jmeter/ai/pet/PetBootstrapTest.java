@@ -18,7 +18,7 @@ class PetBootstrapTest {
     void should_notStart_when_disabled() {
         AtomicInteger loads = new AtomicInteger();
         boolean started = PetBootstrap.start(
-                PetConfig.parse("false", "feather", "0.5"),
+                PetConfig.parse("false", "glim", "0.5"),
                 name -> {
                     loads.incrementAndGet();
                     return PetTestSupport.uniformSheet(4);
@@ -31,7 +31,7 @@ class PetBootstrapTest {
     void should_notStart_when_spritesheetMissing() {
         assumeFalse(GraphicsEnvironment.isHeadless());
         boolean started = PetBootstrap.start(
-                PetConfig.parse("true", "feather", "0.5"),
+                PetConfig.parse("true", "glim", "0.5"),
                 name -> {
                     throw new IOException("no spritesheet for " + name);
                 });

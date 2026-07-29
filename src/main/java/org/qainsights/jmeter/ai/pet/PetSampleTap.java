@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.reporters.AbstractListenerElement;
@@ -19,12 +20,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Taps per-sample results out of the listener elements (View Results Tree, Summary
- * Report, ...) already present in the test plan. Listener elements are
- * {@code NoThreadClone}, so the exact instances in the GUI tree receive
- * {@code sampleOccurred} during GUI-initiated runs; wrapping their {@link Visualizer}
- * lets the pet see failures without adding anything to the plan. Original visualizers
- * are always restored on {@link #uninstall()}. Plans with no listener element simply
- * produce no per-sample reactions.
+ * Report, ...) already present in the test plan by wrapping their {@link Visualizer},
+ * so the pet sees failures without adding anything to the plan. GUI-initiated runs
+ * execute a deep-cloned copy of the plan ({@code TreeCloner(false)} does not honor
+ * {@code NoThreadClone}), so the tap must target the listener instances in the
+ * running engine's execution tree - the GUI-tree originals never receive samples.
+ * Original visualizers are always restored on {@link #uninstall()}. Plans with no
+ * listener element simply produce no per-sample reactions.
  */
 public final class PetSampleTap {
     private static final Logger log = LoggerFactory.getLogger(PetSampleTap.class);
@@ -38,6 +40,7 @@ public final class PetSampleTap {
 
     /** Wraps the visualizer of every given listener element. Idempotent per element. */
     public synchronized void install(Collection<? extends AbstractListenerElement> listeners) {
+        int before = taps.size();
         for (AbstractListenerElement element : listeners) {
             if (element == null || taps.containsKey(element)) {
                 continue;
@@ -53,6 +56,12 @@ public final class PetSampleTap {
             } catch (Exception e) {
                 log.warn("Pet could not tap listener element '{}': {}", element.getName(), e.toString());
             }
+        }
+        int newlyTapped = taps.size() - before;
+        if (newlyTapped == 0) {
+            log.info("Pet found no new listener elements to tap ({} already tapped).", before);
+        } else {
+            log.info("Pet tapped {} listener element(s) for per-sample reactions.", newlyTapped);
         }
     }
 
@@ -72,6 +81,50 @@ public final class PetSampleTap {
     /** Number of currently tapped listener elements. */
     synchronized int tappedCount() {
         return taps.size();
+    }
+
+    /**
+     * Collects listener elements from the tree the pet should tap for the current run:
+     * the running engine's execution tree when one is available (it holds the cloned
+     * listener instances that actually receive samples), otherwise the GUI tree.
+     */
+    public static List<AbstractListenerElement> findListenersInRunTree() {
+        List<AbstractListenerElement> listeners = findListenersInEngineTree();
+        return listeners.isEmpty() ? findListenersInGuiTree() : listeners;
+    }
+
+    /**
+     * Collects every enabled listener element from the running engine's execution
+     * tree. The engine singleton and its test tree are private, so this goes through
+     * reflection; any mismatch (no engine, no configured tree, renamed fields) yields
+     * an empty list rather than a failure.
+     */
+    public static List<AbstractListenerElement> findListenersInEngineTree() {
+        try {
+            HashTree testTree = runningEngineTestTree();
+            if (testTree == null) {
+                return List.of();
+            }
+            List<AbstractListenerElement> found = new ArrayList<>();
+            collect(testTree, found);
+            return found;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            log.warn("Pet could not inspect the running engine: {}", e.toString());
+            return List.of();
+        }
+    }
+
+    private static HashTree runningEngineTestTree() throws ReflectiveOperationException {
+        Field engineField = StandardJMeterEngine.class.getDeclaredField("engine");
+        engineField.setAccessible(true);
+        Object engine = engineField.get(null);
+        if (engine == null) {
+            return null;
+        }
+        Field testField = StandardJMeterEngine.class.getDeclaredField("test");
+        testField.setAccessible(true);
+        Object tree = testField.get(engine);
+        return tree instanceof HashTree ? (HashTree) tree : null;
     }
 
     /** Collects every enabled listener element from the live GUI test plan tree. */
@@ -135,6 +188,7 @@ public final class PetSampleTap {
         @Override
         public void add(SampleResult sample) {
             if (sample != null && !sample.isSuccessful()) {
+                log.info("Pet saw failed sample '{}'.", sample.getSampleLabel());
                 try {
                     failureCallback.run();
                 } catch (RuntimeException e) {

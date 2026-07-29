@@ -20,7 +20,7 @@ public final class PetConfig {
     private static final Logger log = LoggerFactory.getLogger(PetConfig.class);
 
     public static final List<String> ALLOWED_PETS =
-            Arrays.asList("quill", "feather", "monkey", "parrot", "peacock", "robot");
+            Arrays.asList("quill", "glim", "peacock", "monkey");
     public static final String DEFAULT_PET = "quill";
     public static final double DEFAULT_SCALE = 0.5;
     public static final double MIN_SCALE = 0.25;

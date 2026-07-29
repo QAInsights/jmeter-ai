@@ -1,13 +1,17 @@
 package org.qainsights.jmeter.ai.pet;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.jmeter.reporters.AbstractListenerElement;
 import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.visualizers.Visualizer;
+import org.apache.jorphan.collections.HashTree;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,8 +20,12 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class PetSampleTapTest {
 
-    /** Minimal concrete listener element - avoids ResultCollector's file plumbing. */
-    static final class FakeListenerElement extends AbstractListenerElement {
+    /**
+     * Minimal concrete listener element - avoids ResultCollector's file plumbing.
+     * Must be public: AbstractTestElement.clone() instantiates the runtime class
+     * reflectively via its no-arg constructor.
+     */
+    public static final class FakeListenerElement extends AbstractListenerElement {
     }
 
     static final class RecordingVisualizer implements Visualizer {
@@ -148,5 +156,82 @@ class PetSampleTapTest {
     @Test
     void should_returnEmptyList_when_noGuiAvailable() {
         assertTrue(PetSampleTap.findListenersInGuiTree().isEmpty());
+    }
+
+    @Test
+    void should_returnEmptyEngineTreeList_when_noEngineIsConfigured() throws Exception {
+        Object previous = swapEngineSingleton(null);
+        try {
+            assertTrue(PetSampleTap.findListenersInEngineTree().isEmpty());
+            assertDoesNotThrow(PetSampleTap::findListenersInRunTree);
+        } finally {
+            swapEngineSingleton(previous);
+        }
+    }
+
+    @Test
+    void should_findEngineTreeListeners_when_engineIsConfigured() throws Exception {
+        Object previous = swapEngineSingleton(null);
+        try {
+            FakeListenerElement element = new FakeListenerElement();
+            StandardJMeterEngine engine = new StandardJMeterEngine();
+            engine.configure(treeWith(element));
+            List<AbstractListenerElement> found = PetSampleTap.findListenersInEngineTree();
+            assertEquals(1, found.size());
+            assertSame(element, found.get(0));
+        } finally {
+            swapEngineSingleton(previous);
+        }
+    }
+
+    /**
+     * Regression: GUI runs execute a deep-cloned plan (TreeCloner(false) ignores
+     * NoThreadClone), so the engine delivers samples to a CLONE of the listener
+     * element, not to the GUI-tree instance. The tap must wrap the engine-side clone.
+     */
+    @Test
+    void should_tapEngineSideClone_when_planWasClonedForRun() throws Exception {
+        Object previous = swapEngineSingleton(null);
+        try {
+            FakeListenerElement guiElement = new FakeListenerElement();
+            RecordingVisualizer original = new RecordingVisualizer(false);
+            guiElement.setListener(original);
+            FakeListenerElement engineSideElement = (FakeListenerElement) guiElement.clone();
+
+            StandardJMeterEngine engine = new StandardJMeterEngine();
+            engine.configure(treeWith(engineSideElement));
+
+            AtomicInteger failures = new AtomicInteger();
+            PetSampleTap tap = new PetSampleTap(failures::incrementAndGet);
+            tap.install(PetSampleTap.findListenersInRunTree());
+
+            assertFalse(PetSampleTap.readVisualizer(guiElement) instanceof PetSampleTap.TapVisualizer,
+                    "the GUI-tree original must stay untapped");
+            Visualizer engineSide = PetSampleTap.readVisualizer(engineSideElement);
+            assertTrue(engineSide instanceof PetSampleTap.TapVisualizer,
+                    "the engine-side clone must be tapped");
+
+            engineSide.add(result(false));
+            assertEquals(1, failures.get());
+            assertEquals(1, original.added.size(), "delivery must delegate to the shared original visualizer");
+        } finally {
+            swapEngineSingleton(previous);
+        }
+    }
+
+    private static HashTree treeWith(AbstractListenerElement element) {
+        HashTree tree = new HashTree();
+        TestPlan testPlan = new TestPlan("pet test plan");
+        tree.add(testPlan);
+        tree.add(testPlan, element);
+        return tree;
+    }
+
+    private static Object swapEngineSingleton(Object value) throws ReflectiveOperationException {
+        Field field = StandardJMeterEngine.class.getDeclaredField("engine");
+        field.setAccessible(true);
+        Object previous = field.get(null);
+        field.set(null, value);
+        return previous;
     }
 }

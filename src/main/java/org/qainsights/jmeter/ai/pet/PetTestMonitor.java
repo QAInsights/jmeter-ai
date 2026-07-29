@@ -38,6 +38,7 @@ public final class PetTestMonitor implements TestStateListener {
     @Override
     public synchronized void testStarted() {
         if (runActive) {
+            log.info("Pet ignored test start; it is already tracking an active run.");
             return;
         }
         runActive = true;
@@ -57,8 +58,10 @@ public final class PetTestMonitor implements TestStateListener {
     @Override
     public synchronized void testEnded() {
         if (!runActive) {
+            log.info("Pet ignored test end; it was not tracking an active run.");
             return;
         }
+        log.info("Pet saw the test run end.");
         runActive = false;
         try {
             sampleTap.uninstall();

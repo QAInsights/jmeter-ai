@@ -18,10 +18,10 @@ class PetConfigTest {
 
     @Test
     void should_parseEnabledFlag_when_trueProvided() {
-        assertTrue(PetConfig.parse("true", "feather", "0.5").isEnabled());
-        assertTrue(PetConfig.parse(" TRUE ", "feather", "0.5").isEnabled());
-        assertFalse(PetConfig.parse("false", "feather", "0.5").isEnabled());
-        assertFalse(PetConfig.parse("yes", "feather", "0.5").isEnabled());
+        assertTrue(PetConfig.parse("true", "glim", "0.5").isEnabled());
+        assertTrue(PetConfig.parse(" TRUE ", "glim", "0.5").isEnabled());
+        assertFalse(PetConfig.parse("false", "glim", "0.5").isEnabled());
+        assertFalse(PetConfig.parse("yes", "glim", "0.5").isEnabled());
     }
 
     @Test
@@ -34,7 +34,7 @@ class PetConfigTest {
     @Test
     void should_normalizeCaseAndWhitespace_when_parsingName() {
         assertEquals("monkey", PetConfig.parse("true", "  Monkey ", "0.5").getPetName());
-        assertEquals("robot", PetConfig.parse("true", "ROBOT", "0.5").getPetName());
+        assertEquals("peacock", PetConfig.parse("true", "PEACOCK", "0.5").getPetName());
     }
 
     @Test
@@ -45,20 +45,20 @@ class PetConfigTest {
 
     @Test
     void should_parseScale_when_validNumberProvided() {
-        assertEquals(1.0, PetConfig.parse("true", "feather", "1.0").getScale());
-        assertEquals(0.75, PetConfig.parse("true", "feather", " 0.75 ").getScale());
+        assertEquals(1.0, PetConfig.parse("true", "glim", "1.0").getScale());
+        assertEquals(0.75, PetConfig.parse("true", "glim", " 0.75 ").getScale());
     }
 
     @Test
     void should_clampScale_when_outOfRange() {
-        assertEquals(PetConfig.MIN_SCALE, PetConfig.parse("true", "feather", "0.01").getScale());
-        assertEquals(PetConfig.MAX_SCALE, PetConfig.parse("true", "feather", "10").getScale());
+        assertEquals(PetConfig.MIN_SCALE, PetConfig.parse("true", "glim", "0.01").getScale());
+        assertEquals(PetConfig.MAX_SCALE, PetConfig.parse("true", "glim", "10").getScale());
     }
 
     @Test
     void should_fallBackToDefaultScale_when_scaleIsInvalid() {
-        assertEquals(PetConfig.DEFAULT_SCALE, PetConfig.parse("true", "feather", "big").getScale());
-        assertEquals(PetConfig.DEFAULT_SCALE, PetConfig.parse("true", "feather", null).getScale());
+        assertEquals(PetConfig.DEFAULT_SCALE, PetConfig.parse("true", "glim", "big").getScale());
+        assertEquals(PetConfig.DEFAULT_SCALE, PetConfig.parse("true", "glim", null).getScale());
     }
 
     @Test

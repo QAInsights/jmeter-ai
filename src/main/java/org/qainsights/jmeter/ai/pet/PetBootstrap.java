@@ -72,7 +72,7 @@ public final class PetBootstrap {
         }
         PetAnimator animator = new PetAnimator(sheet::frameCount);
         PetSampleTap sampleTap = new PetSampleTap(animator::onSampleFailure);
-        PetTestMonitor monitor = new PetTestMonitor(animator, sampleTap, PetSampleTap::findListenersInGuiTree);
+        PetTestMonitor monitor = new PetTestMonitor(animator, sampleTap, PetSampleTap::findListenersInRunTree);
         monitor.register();
         PetView view = new PetView(sheet, animator, config.getScale());
         scheduleInstall(new PetOverlay(view), PetBootstrap::findMainFrameLayeredPane, 0);

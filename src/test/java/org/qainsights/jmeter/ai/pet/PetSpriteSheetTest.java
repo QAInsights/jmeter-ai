@@ -108,6 +108,38 @@ class PetSpriteSheetTest {
     }
 
     @Test
+    void should_loadBundledGlimSpritesheet_when_requestedByName() throws IOException {
+        PetSpriteSheet sheet = PetSpriteSheet.load("glim");
+        assertEquals(192, sheet.cellWidth());
+        assertEquals(208, sheet.cellHeight());
+        assertEquals(6, sheet.frameCount(PetState.IDLE));
+        assertEquals(8, sheet.frameCount(PetState.RUNNING_RIGHT));
+        assertEquals(8, sheet.frameCount(PetState.RUNNING_LEFT));
+        assertEquals(4, sheet.frameCount(PetState.WAVING));
+        assertEquals(5, sheet.frameCount(PetState.JUMPING));
+        assertEquals(8, sheet.frameCount(PetState.FAILED));
+        assertEquals(6, sheet.frameCount(PetState.WAITING));
+        assertEquals(6, sheet.frameCount(PetState.RUNNING));
+        assertEquals(6, sheet.frameCount(PetState.REVIEW));
+    }
+
+    @Test
+    void should_loadBundledPeacockSpritesheet_when_requestedByName() throws IOException {
+        PetSpriteSheet sheet = PetSpriteSheet.load("peacock");
+        assertEquals(192, sheet.cellWidth());
+        assertEquals(208, sheet.cellHeight());
+        assertEquals(6, sheet.frameCount(PetState.IDLE));
+        assertEquals(8, sheet.frameCount(PetState.RUNNING_RIGHT));
+        assertEquals(8, sheet.frameCount(PetState.RUNNING_LEFT));
+        assertEquals(4, sheet.frameCount(PetState.WAVING));
+        assertEquals(5, sheet.frameCount(PetState.JUMPING));
+        assertEquals(8, sheet.frameCount(PetState.FAILED));
+        assertEquals(6, sheet.frameCount(PetState.WAITING));
+        assertEquals(6, sheet.frameCount(PetState.RUNNING));
+        assertEquals(6, sheet.frameCount(PetState.REVIEW));
+    }
+
+    @Test
     void should_detectContentBounds_when_artworkHasPadding() throws IOException {
         PetSpriteSheet sheet = PetTestSupport.uniformSheet(4);
         // test atlas fills (2,2)-(CELL_W-2, CELL_H-2) within each cell
