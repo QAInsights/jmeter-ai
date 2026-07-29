@@ -10,11 +10,20 @@ import org.qainsights.jmeter.ai.agent.dev.ToggleElementDevMenuItem;
 import org.qainsights.jmeter.ai.agent.dev.UpdateElementPropertyDevMenuItem;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem;
 import org.qainsights.jmeter.ai.correlation.CorrelationMenuItem;
+import org.qainsights.jmeter.ai.pet.PetBootstrap;
 
 import javax.swing.*;
 
 public class AiMenuCreator implements MenuCreator {
     private static final Logger log = LoggerFactory.getLogger(AiMenuCreator.class);
+
+    public AiMenuCreator() {
+        try {
+            PetBootstrap.initialize();
+        } catch (Throwable e) {
+            log.warn("Failed to initialize the JMeter pet", e);
+        }
+    }
 
     @Override
     public JMenuItem[] getMenuItemsAtLocation(MENU_LOCATION location) {

@@ -32,6 +32,7 @@
 - [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
 - [Response Chime](#-response-chime)
+- [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
 - [API Setup](#-api-configuration)
 - [Roadmap & Issues](#-report-issues)
@@ -49,6 +50,7 @@
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
+| 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs — cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude & OpenAI.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
@@ -436,6 +438,49 @@ jmeter.ai.response.chime=true
 ```
 
 The bundled WAV plays from `src/main/resources/org/qainsights/jmeter/ai/sound/jmeter-chime.wav` with an MP3 fallback.
+
+## 🐾 Pets
+
+A draggable animated companion that lives on the JMeter canvas and reacts to your test runs. The pet gets excited when a test starts, works while samplers run, frowns on sampler failures, and celebrates clean runs. Drag it anywhere on the screen.
+
+**Available pets:** `quill` (default), `glim`, `peacock`, `monkey`
+
+```properties
+# Enable the companion pet (off by default)
+jmeter.pet.enable=true
+
+# Which pet to show: quill, glim, peacock, or monkey
+jmeter.pet.name=quill
+
+# Render scale (0.25 - 2.0); 0.5 shows the pet at about 96x104 pixels
+jmeter.pet.scale=0.5
+```
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.pet.enable` | Show the companion pet on the canvas | `false` |
+| `jmeter.pet.name` | Which pet sprite to display (one of `quill`, `glim`, `peacock`, `monkey`) | `quill` |
+| `jmeter.pet.scale` | Render scale, clamped to `[0.25, 2.0]` | `0.5` |
+
+Invalid values never fail — they log a warning and fall back to the defaults above.
+
+### Animation States
+
+Each pet spritesheet is an 8-column × 9-row atlas (192×208 px cells). Frame counts are auto-detected per row by scanning for the first fully transparent cell, so no per-pet frame configuration is needed. The nine rows map to these states:
+
+| Row | State | Loops | When it plays |
+|-----|-------|-------|---------------|
+| 0 | `IDLE` | yes | Resting between runs |
+| 1 | `RUNNING_RIGHT` | yes | Test running (moving right) |
+| 2 | `RUNNING_LEFT` | yes | Test running (moving left) |
+| 3 | `WAVING` | no | Greeting / celebrating a clean run |
+| 4 | `JUMPING` | no | Celebratory jump |
+| 5 | `FAILED` | no | A sampler failed |
+| 6 | `WAITING` | yes | Waiting for the test to progress |
+| 7 | `RUNNING` | yes | General running animation |
+| 8 | `REVIEW` | yes | Reviewing results at the end of a run |
+
+Looping states play continuously; one-shot states play a fixed number of loops and then revert to the animator's base state.
 
 ## 💻 Multi-AI CLI Terminal
 
