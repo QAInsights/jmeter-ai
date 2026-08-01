@@ -443,6 +443,12 @@ The bundled WAV plays from `src/main/resources/org/qainsights/jmeter/ai/sound/jm
 
 A draggable animated companion that lives on the JMeter canvas and reacts to your test runs. The pet gets excited when a test starts, works while samplers run, frowns on sampler failures, and celebrates clean runs. Drag it anywhere on the screen.
 
+<div align="center">
+
+<img src="./images/jmeter-pets.png" alt="Feather Wand pets" width="700">
+
+</div>
+
 **Available pets:** `quill` (default), `glim`, `peacock`, `monkey`
 
 ```properties
