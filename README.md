@@ -48,11 +48,11 @@
 | ⚡ **Real-Time Streaming** | Watch AI responses appear token-by-token with a **Stop** button to cancel anytime. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
-| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage` — each tailored to your test plan. |
+| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
-| 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs — cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan — add elements, set properties, run tests, correlate dynamic values — through 18 tools. **Claude & OpenAI.** |
-| 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown — no audio/TTS clutter. |
+| 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan (add elements, set properties, run tests, correlate dynamic values) through 18 tools. **Claude & OpenAI.** |
+| 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown, no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 
 ---
@@ -243,7 +243,7 @@ The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk
 | CJK support; let the plugin pick the best available font | `jmeter.ai.terminal.font.size=16.0`<br>`jmeter.ai.terminal.font.cjk.fallback=true` |
 | CJK support with a specific installed font | `jmeter.ai.terminal.font.family=Noto Sans Mono CJK SC`<br>`jmeter.ai.terminal.font.size=16.0`<br>`jmeter.ai.terminal.font.cjk.fallback=false` |
 
-> ⚠️ When `cjk.fallback=true` with a non-CJK font like `Consolas`, the configured family is overridden because `Consolas` has no CJK glyphs. If you want to force `Consolas`, set `cjk.fallback=false` — CJK will then render as boxes.
+> ⚠️ When `cjk.fallback=true` with a non-CJK font like `Consolas`, the configured family is overridden because `Consolas` has no CJK glyphs. If you want to force `Consolas`, set `cjk.fallback=false`; CJK will then render as boxes.
 
 **Prerequisite CLIs**
 
@@ -258,7 +258,7 @@ The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk
 
 ### Custom System Prompts
 
-Each service supports its own `*.system.prompt` property — tweak them in your properties file to focus the AI on specific JMeter topics or team conventions.
+Each service supports its own `*.system.prompt` property; tweak them in your properties file to focus the AI on specific JMeter topics or team conventions.
 
 ## 🔍 Special Commands
 
@@ -284,9 +284,9 @@ Type any of these directly in the chat box. All commands are context-aware and w
 
 ## 🤖 Agent Mode
 
-Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done — all inside the existing chat panel.
+Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done, all inside the existing chat panel.
 
-> ⚠️ **Claude & OpenAI only.** Agent Mode currently works with **Anthropic Claude** and **OpenAI** models. Gemini, DeepSeek, Ollama, Grok, and Bedrock are not supported — they fall back to plain chat. Support for additional providers is planned.
+> ⚠️ **Claude & OpenAI only.** Agent Mode currently works with **Anthropic Claude** and **OpenAI** models. Gemini, DeepSeek, Ollama, Grok, and Bedrock are not supported; they fall back to plain chat. Support for additional providers is planned.
 
 <div align="center">
 
@@ -303,13 +303,47 @@ Agent Mode is **off by default**. To turn it on:
 jmeter.ai.agent.enabled=true
 ```
 
-Select a **Claude** or **OpenAI** model from the dropdown. Then just type your request naturally in the chat box — if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
+Select a **Claude** or **OpenAI** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
 
 > If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
 
-Both providers get the exact same tools, system prompt, safety gates and iteration limits — only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls`).
+Both providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls`).
 
-> 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on — so tool calling works out of the box.
+> 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
+
+### Claude vs. OpenAI: How the Adapters Differ
+
+Both providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical to both; only the wire format differs:
+
+| Aspect | Anthropic Claude (`anthropic-java`) | OpenAI (`openai-java`) |
+|--------|--------------------------------------|--------------------------|
+| Tool definition | `Tool` (native tool schema) | `ChatCompletionFunctionTool` (function-type only; non-function "custom" tool calls are ignored) |
+| System prompt | Top-level `system` string, separate from `messages` | A message inside the rolling `messages` list |
+| Message roles | `user` / `assistant` only (tool outcomes ride back as a `user` turn of `tool_result` content blocks) | `system` / `user` / `assistant` / **`tool`** |
+| Tool-call arguments | Already a `JsonValue` → converted to a `Map` directly | A JSON **string** → parsed with Jackson (tolerates malformed JSON) |
+| Tool-result error signaling | Native `is_error` boolean | No native error flag; errors are conveyed via an `ERROR [...]` prefix in the content |
+| Model-specific quirks | None needed | `reasoning_effort=none` forced for gpt-5.1+ (else tool calls 400); temperature never sent (o1/o3/o4/gpt-5 reject non-default values) |
+
+### Provider Support Roadmap
+
+Feather Wand already talks to more providers than Agent Mode currently supports; most of the gap is *wiring*, not feasibility, since several already share Claude's or OpenAI's SDK under the hood:
+
+| Provider | Already in Feather Wand? | Tool-calling on the wire? | Adapter effort |
+|----------|---------------------------|----------------------------|-----------------|
+| **Anthropic Claude** | ✅ Agent Mode | Native `tool_use` | Done |
+| **OpenAI** | ✅ Agent Mode | Native `tool_calls` | Done |
+| **DeepSeek** | Plain chat only | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | 🟢 Trivial (already uses `openai-java`/`anthropic-java` pointed at `api.deepseek.com`) |
+| **Grok (xAI)** | Plain chat only | Yes: OpenAI-style function tools | 🟢 Trivial (already uses `openai-java` pointed at `api.x.ai`) |
+| **Meta "Muse"** | Plain chat only | Likely yes (OpenAI-compatible endpoint) | 🟢 Trivial, pending confirmation (already uses `openai-java` pointed at `api.meta.ai`) |
+| **Kimi K2/K3 (Moonshot AI)** | Not yet added | Yes: standard OpenAI-shaped `tools`/`tool_calls` | 🟢 Trivial (same "point `openai-java` at a new base URL" pattern) |
+| **Poolside (Laguna models)** | Not yet added | Yes: OpenAI-compatible `tools`/`tool_choice` at `inference.poolside.ai` (also via OpenRouter/Bedrock) | 🟢 Trivial (same pattern) |
+| **Mistral AI** | Not yet added | Yes: native function-calling, OpenAI-similar shape | 🟢 Trivial (same pattern) |
+| **Alibaba Qwen** | Not yet added | Yes: OpenAI-compatible DashScope endpoint | 🟢 Trivial (same pattern) |
+| **Zhipu GLM** | Not yet added | Yes: OpenAI-compatible tool calling | 🟢 Trivial (same pattern) |
+| **Google Gemini** | Plain chat only | Yes: `FunctionDeclaration`/`Tool` via the official `google-genai` SDK | 🟡 Medium (new adapter mapping `ToolSpec` → `FunctionDeclaration` and function-call parts → `AssistantTurn`). **Next up.** |
+| **Ollama (local)** | Plain chat only | Yes: `ollama4j` has native `Tools.Tool` registration for tool-capable local models (Llama 3.1+, Qwen, Mistral, ...) | 🟡 Medium (new adapter; also gated by which local model is pulled) |
+| **AWS Bedrock** | Plain chat only | Yes: the `Converse`/`ConverseStream` API's `toolConfig` is provider-agnostic across every model family Bedrock hosts (Anthropic, Meta Llama, Mistral, Amazon Nova, Cohere, AI21) | 🟡 Medium, high leverage (one `BedrockToolAdapter` unlocks tool-calling for every Bedrock-hosted model at once) |
+| **Cohere (Command R+)** | Not yet added | Yes, but its own (non-OpenAI-shaped) tool-use API | 🔴 Bespoke adapter needed |
 
 ### Agent Settings
 
@@ -363,7 +397,7 @@ The agent has 18 tools at its disposal:
 | Tool | What it does |
 |------|--------------|
 | `find_correlation_candidates` | Probes the test plan (1 thread/1 loop) and detects dynamic values that need correlation. |
-| `apply_correlation` | Applies selected correlation candidates — adds extractors and rewrites matching values to `${variable}`. **Confirmation gated.** |
+| `apply_correlation` | Applies selected correlation candidates: adds extractors and rewrites matching values to `${variable}`. **Confirmation gated.** |
 
 **File**
 
@@ -409,11 +443,11 @@ Try these in the chat box with Agent Mode enabled and a Claude or OpenAI model s
 
 For isolated manual testing, Feather Wand adds dev menu items under **Run → AI Dev:** that exercise individual tools against the selected tree node without going through the agent loop. These are intended for development and debugging:
 
-- **AI Dev: Test add_element** — prompt for type/name, add under selected node
-- **AI Dev: Test update_element_property** — prompt for property/value, update selected node
-- **AI Dev: Test delete_element** — confirm, delete selected node
-- **AI Dev: Test toggle_element** — prompt for true/false, toggle selected node
-- **AI Dev: Test move_element** — prompt for destination parent id, move selected node
+- **AI Dev: Test add_element**: prompt for type/name, add under selected node
+- **AI Dev: Test update_element_property**: prompt for property/value, update selected node
+- **AI Dev: Test delete_element**: confirm, delete selected node
+- **AI Dev: Test toggle_element**: prompt for true/false, toggle selected node
+- **AI Dev: Test move_element**: prompt for destination parent id, move selected node
 
 ## 💨 Streaming AI Responses
 
@@ -421,7 +455,7 @@ All configured AI services that support streaming provide real-time responses. A
 
 | Control | What it does |
 |---------|--------------|
-| **Stop** | Appears next to the Send button during streaming — click to cancel mid-response. |
+| **Stop** | Appears next to the Send button during streaming; click to cancel mid-response. |
 
 **Disable streaming:**
 
@@ -468,7 +502,7 @@ jmeter.pet.scale=0.5
 | `jmeter.pet.name` | Which pet sprite to display (one of `quill`, `glim`, `peacock`, `monkey`) | `quill` |
 | `jmeter.pet.scale` | Render scale, clamped to `[0.25, 2.0]` | `0.5` |
 
-Invalid values never fail — they log a warning and fall back to the defaults above.
+Invalid values never fail; they log a warning and fall back to the defaults above.
 
 ### Animation States
 
@@ -502,8 +536,8 @@ An embedded interactive terminal (JediTerm) that brings agentic AI CLIs directly
 5. Use natural language to run tests, parse JTL files, refactor scripts, and more.
 
 **Buttons**
-- **Reload** — refresh the test plan from disk.
-- **Ctx** — resend the current test-plan context.
+- **Reload**: refresh the test plan from disk.
+- **Ctx**: resend the current test-plan context.
 
 **Architecture**
 Built on an Adapter Pattern: `AiCliAdapter` → `BaseCliAdapter` → concrete adapters (`ClaudeCodeCliAdapter`, `OpenAiCodexCliAdapter`, ...). To add a new CLI, implement `AiCliAdapter` and register it in `detectAvailableClis()`.
@@ -535,11 +569,11 @@ Set `jmeter.ai.service.type=ollama` to switch to a local model. All other provid
 
 Feather Wand automatically hides non-chat models so you only see useful options:
 
-- **OpenAI** — hides audio, TTS, whisper, davinci, search, realtime, and instruct models.
-- **Claude** — shows only the latest available models.
-- **Gemini** — shows only `gemini-*` and `gemma-*` chat models.
-- **Grok** — shows only `grok-*` chat models.
-- **AWS Bedrock** — shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
+- **OpenAI**: hides audio, TTS, whisper, davinci, search, realtime, and instruct models.
+- **Claude**: shows only the latest available models.
+- **Gemini**: shows only `gemini-*` and `gemma-*` chat models.
+- **Grok**: shows only `grok-*` chat models.
+- **AWS Bedrock**: shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
 
 Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
@@ -555,11 +589,11 @@ See what's next on the [project board](https://github.com/users/QAInsights/proje
 
 ## ⚠️ Disclaimer
 
-- **Verify everything** — AI can hallucinate. Double-check critical suggestions before production runs.
-- **Backup first** — Save your `.jmx` before letting AI refactor it.
-- **Test in staging** — Validate changes in a safe environment.
-- **Watch costs** — Token usage adds up. Use `@usage` to keep an eye on it.
-- **No secrets in chat** — Never paste credentials or proprietary code into the chat box.
+- **Verify everything**: AI can hallucinate. Double-check critical suggestions before production runs.
+- **Backup first**: save your `.jmx` before letting AI refactor it.
+- **Test in staging**: validate changes in a safe environment.
+- **Watch costs**: token usage adds up. Use `@usage` to keep an eye on it.
+- **No secrets in chat**: never paste credentials or proprietary code into the chat box.
 
 Feather Wand is an assistant, not a replacement for engineering judgment.
 
