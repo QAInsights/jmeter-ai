@@ -61,6 +61,7 @@ class ThemeColorsTest {
             assertNotNull(ThemeColors.foreground());
             assertNotNull(ThemeColors.codeBackground());
             assertNotNull(ThemeColors.hoverBackground());
+            assertNotNull(ThemeColors.userBubbleBackground());
         }
     }
 
@@ -88,6 +89,17 @@ class ThemeColorsTest {
         assertTrue(contrast(ThemeColors.error(), lightBg) > 0.25);
         assertTrue(contrast(ThemeColors.info(), lightBg) > 0.25);
         assertTrue(contrast(ThemeColors.success(), lightBg) > 0.25);
+    }
+
+    @Test
+    void userBubbleIsLightGreyOnLightThemeAndLiftedPanelOnDark() {
+        forceLightTheme();
+        assertEquals(new Color(0xDE, 0xDE, 0xDE), ThemeColors.userBubbleBackground());
+
+        forceDarkTheme();
+        Color panel = UIManager.getColor("Panel.background");
+        assertTrue(ThemeColors.luminance(ThemeColors.userBubbleBackground())
+                > ThemeColors.luminance(panel));
     }
 
     @Test

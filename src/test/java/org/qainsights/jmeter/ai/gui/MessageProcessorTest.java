@@ -148,48 +148,6 @@ class MessageProcessorTest {
     }
 
     @Test
-    void testAppendTurnHeaderInsertsBoldSender() throws Exception {
-        MessageProcessor processor = new MessageProcessor();
-        StyledDocument doc = new DefaultStyledDocument();
-
-        processor.appendTurnHeader(doc, "Feather Wand", Color.BLUE);
-
-        String text = doc.getText(0, doc.getLength());
-        assertEquals("Feather Wand\n", text);
-
-        // Sender text must be bold with the given color
-        javax.swing.text.Element elem = doc.getCharacterElement(0);
-        assertTrue(StyleConstants.isBold(elem.getAttributes()));
-        assertEquals(Color.BLUE, StyleConstants.getForeground(elem.getAttributes()));
-    }
-
-    @Test
-    void testAppendTurnHeaderAddsSpacingBetweenTurns() throws Exception {
-        MessageProcessor processor = new MessageProcessor();
-        StyledDocument doc = new DefaultStyledDocument();
-        doc.insertString(0, "previous turn\n", null);
-
-        processor.appendTurnHeader(doc, "You", Color.GRAY);
-
-        String text = doc.getText(0, doc.getLength());
-        assertEquals("previous turn\n\nYou\n", text);
-    }
-
-    @Test
-    void testAppendToolActivityUsesSecondaryMonospaceStyle() throws Exception {
-        MessageProcessor processor = new MessageProcessor();
-        StyledDocument doc = new DefaultStyledDocument();
-
-        processor.appendToolActivity(doc, "tool add_element started");
-
-        String text = doc.getText(0, doc.getLength());
-        assertEquals("tool add_element started\n", text);
-
-        javax.swing.text.Element elem = doc.getCharacterElement(0);
-        assertEquals(Font.MONOSPACED, StyleConstants.getFontFamily(elem.getAttributes()));
-    }
-
-    @Test
     void testCommandCallbackDefaultToolActivityDelegates() {
         java.util.List<String> captured = new java.util.ArrayList<>();
         CommandCallback cb = new CommandCallback() {

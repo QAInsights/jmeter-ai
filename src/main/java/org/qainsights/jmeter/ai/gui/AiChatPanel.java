@@ -12,13 +12,7 @@ import java.net.URI;
 import java.text.AttributedCharacterIterator;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import javax.swing.*;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.Style;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
 import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -46,23 +40,7 @@ import org.slf4j.LoggerFactory;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
-import javax.swing.*;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.SimpleAttributeSet;
-import javax.swing.text.Style;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyledDocument;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.net.URI;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 
 /**
  * Panel for interacting with AI to generate and modify JMeter test plans.
@@ -80,7 +58,7 @@ public class AiChatPanel
     );
 
     // UI components (kept for backward compatibility)
-    private JTextPane chatArea;
+    private TranscriptView transcript;
     private JTextArea messageField;
     private JButton sendButton;
     private JButton stopButton;
@@ -98,14 +76,12 @@ public class AiChatPanel
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
-    private final ThinkingIndicator thinkingIndicator = new ThinkingIndicator();
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
     private float baseMessageFontSize;
 
     // Component managers
-    private final MessageProcessor messageProcessor;
     private final ElementInfoProvider elementInfoProvider;
     private final AiResponseRouter aiResponseRouter;
     private final CommandDispatcher commandDispatcher;
@@ -146,7 +122,6 @@ public class AiChatPanel
             googleService = new GoogleAiService(googleClient);
         }
 
-        messageProcessor = new MessageProcessor();
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(getServiceHolder());
         commandDispatcher = new CommandDispatcher(this);
@@ -240,33 +215,20 @@ public class AiChatPanel
         );
         chatPanel.add(createHeaderPanel(), BorderLayout.NORTH);
 
-        chatArea = new JTextPane();
-        chatArea.setEditable(false);
-        chatArea.setFont(font);
+        transcript = new TranscriptView(font);
         baseChatFontSize = font.getSize2D();
-        chatArea.setBackground(
+        transcript.setBackground(
             getThemeColor("TextPane.background", Color.WHITE)
         );
-        chatArea.setForeground(
-            getThemeColor("TextPane.foreground", Color.BLACK)
-        );
-        Style defaultStyle = chatArea.getStyledDocument().getStyle("default");
-        if (defaultStyle != null) {
-            StyleConstants.setForeground(
-                defaultStyle,
-                getThemeColor("TextPane.foreground", Color.BLACK)
-            );
-        }
-
-        StyledDocument doc = chatArea.getStyledDocument();
-        SimpleAttributeSet leftAlign = new SimpleAttributeSet();
-        StyleConstants.setAlignment(leftAlign, StyleConstants.ALIGN_LEFT);
-        doc.setParagraphAttributes(0, doc.getLength(), leftAlign, false);
+        transcript.setOpaque(true);
 
         registerUndoRedoKeyBindings();
 
-        JScrollPane scrollPane = new JScrollPane(chatArea);
+        JScrollPane scrollPane = new JScrollPane(transcript);
         scrollPane.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        scrollPane.getViewport().setBackground(
+            getThemeColor("TextPane.background", Color.WHITE)
+        );
         chatPanel.add(scrollPane, BorderLayout.CENTER);
         return chatPanel;
     }
@@ -275,10 +237,10 @@ public class AiChatPanel
      * Registers undo and redo keyboard shortcuts on the chat area.
      */
     private void registerUndoRedoKeyBindings() {
-        InputMap inputMap = chatArea.getInputMap(
+        InputMap inputMap = transcript.getInputMap(
             JComponent.WHEN_IN_FOCUSED_WINDOW
         );
-        ActionMap actionMap = chatArea.getActionMap();
+        ActionMap actionMap = transcript.getActionMap();
 
         inputMap.put(Constants.UNDO_KEY_STROKE, "undoAction");
         actionMap.put(
@@ -718,19 +680,7 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-
-        String welcomeMessage = Constants.WELCOME_MESSAGE;
-
-        try {
-            messageProcessor.appendMessage(
-                chatArea.getStyledDocument(),
-                welcomeMessage,
-                getThemeColor("TextPane.foreground", Color.BLACK),
-                true
-            );
-        } catch (BadLocationException e) {
-            log.error("Error displaying welcome message", e);
-        }
+        transcript.addAssistantMessage(Constants.WELCOME_MESSAGE);
     }
 
     /**
@@ -739,8 +689,8 @@ public class AiChatPanel
     private void startNewConversation() {
         log.info("Starting new conversation");
 
-        // Clear the chat area
-        chatArea.setText("");
+        // Clear the transcript
+        transcript.clearTranscript();
 
         // Clear the conversation history
         conversationHistory.clear();
@@ -776,7 +726,7 @@ public class AiChatPanel
     public void removeLoadingIndicator() {
         runOnEdt(() -> {
             log.info("Removing loading indicator");
-            thinkingIndicator.stop(chatArea.getStyledDocument());
+            transcript.hideThinking();
         });
     }
 
@@ -789,16 +739,10 @@ public class AiChatPanel
     public void processAiResponse(String response) {
         runOnEdt(() -> {
             if (response == null || response.isEmpty()) {
-                try {
-                    messageProcessor.appendMessage(
-                        chatArea.getStyledDocument(),
-                        "No response from AI. Please try again.",
-                        ThemeColors.error(),
-                        false
-                    );
-                } catch (BadLocationException e) {
-                    log.error("Error displaying error message", e);
-                }
+                transcript.addSystemMessage(
+                    "No response from AI. Please try again.",
+                    ThemeColors.error()
+                );
                 log.warn("Empty AI response");
                 return;
             }
@@ -810,23 +754,9 @@ public class AiChatPanel
 
             // Add the AI response to the chat
             log.info("Appending AI response to chat");
-            JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
             boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
-            try {
-                messageProcessor.appendTurnHeader(
-                    chatArea.getStyledDocument(),
-                    "Feather Wand",
-                    ThemeColors.accent()
-                );
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    response,
-                    getThemeColor("TextPane.foreground", Color.BLACK),
-                    true
-                );
-            } catch (BadLocationException e) {
-                log.error("Error appending AI response to chat", e);
-            }
+            transcript.addAssistantMessage(response);
 
             // Create element buttons for context-aware suggestions after the AI response
             log.info("Creating element buttons for context-aware suggestions");
@@ -886,40 +816,18 @@ public class AiChatPanel
     }
 
     private boolean firstTokenReceived = false;
-    /** Document offset where streaming output begins; used to remove raw text and re-render with markdown on completion. */
-    private int streamStartPosition = -1;
 
     @Override
     public void appendStreamToken(String token) {
         SwingUtilities.invokeLater(() -> {
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
-                // Show the assistant header before tokens start arriving; it is
-                // inserted BEFORE the recorded stream start position so the
-                // markdown re-render in onStreamComplete keeps it intact.
-                try {
-                    messageProcessor.appendTurnHeader(
-                        chatArea.getStyledDocument(),
-                        "Feather Wand",
-                        ThemeColors.accent()
-                    );
-                } catch (BadLocationException e) {
-                    log.error("Error appending assistant header", e);
-                }
-                // Record where streaming output begins so onStreamComplete can
-                // strip the raw text and re-render it with full markdown processing.
-                streamStartPosition = chatArea.getStyledDocument().getLength();
                 firstTokenReceived = true;
             }
-            try {
-                StyledDocument doc = chatArea.getStyledDocument();
-                JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
-                boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
-                doc.insertString(doc.getLength(), token, null);
-                ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
-            } catch (BadLocationException e) {
-                log.error("Error appending stream token", e);
-            }
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
+            boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
+            transcript.appendStreamToken(token);
+            ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
         });
     }
 
@@ -927,47 +835,14 @@ public class AiChatPanel
     public void onStreamComplete(String fullResponse) {
         SwingUtilities.invokeLater(() -> {
             playResponseChime();
-            // Capture the pinned state before the remove/re-render changes the
-            // document length (and with it the scrollbar maximum).
-            JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
+            // Capture the pinned state before the re-render changes the
+            // transcript height (and with it the scrollbar maximum).
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
             boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
-            try {
-                StyledDocument doc = chatArea.getStyledDocument();
-
-                // Remove the raw streamed text (plain markdown inserted token-by-token)
-                // and replace it with fully-processed markdown so that code blocks
-                // get their styled panel with the Copy button.
-                if (
-                    streamStartPosition >= 0 &&
-                    streamStartPosition <= doc.getLength()
-                ) {
-                    int rawLength = doc.getLength() - streamStartPosition;
-                    if (rawLength > 0) {
-                        doc.remove(streamStartPosition, rawLength);
-                    }
-                    messageProcessor.appendMessage(
-                        doc,
-                        fullResponse,
-                        getThemeColor("TextPane.foreground", Color.BLACK),
-                        true
-                    );
-                } else {
-                    // Fallback: no position was recorded, just add a newline
-                    doc.insertString(
-                        doc.getLength(),
-                        "\n",
-                        new SimpleAttributeSet()
-                    );
-                }
-
-                ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
-            } catch (BadLocationException e) {
-                log.error(
-                    "Error re-rendering stream response with markdown",
-                    e
-                );
-            }
-            streamStartPosition = -1;
+            // Re-render the streamed card with full markdown so code blocks
+            // get their styled panel with the Copy button.
+            transcript.completeStream(fullResponse);
+            ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
             firstTokenReceived = false;
             hideStopButton();
             setInputEnabled(true);
@@ -981,7 +856,6 @@ public class AiChatPanel
         String userMessage
     ) {
         SwingUtilities.invokeLater(() -> {
-            streamStartPosition = -1;
             firstTokenReceived = false;
             hideStopButton();
             onWorkerError(logMessage, e, userMessage);
@@ -1015,45 +889,26 @@ public class AiChatPanel
     @Override
     public void appendUserMessage(String message) {
         runOnEdt(() -> {
-            try {
-                StyledDocument doc = chatArea.getStyledDocument();
-                // Render as a turn header + body instead of an inline
-                // "You:" prefix for clearer visual separation of turns.
-                String body = message.startsWith("You: ")
-                    ? message.substring(5)
-                    : message;
-                messageProcessor.appendTurnHeader(
-                    doc,
-                    "You",
-                    ThemeColors.secondaryText()
-                );
-                messageProcessor.appendMessage(doc, body, null, false);
-            } catch (BadLocationException e) {
-                log.error("Error appending user message to chat", e);
-            }
+            // Render as a user bubble; strip the legacy "You: " prefix that
+            // CommandDispatcher still prepends (the card shows its own header).
+            String body = message.startsWith("You: ")
+                ? message.substring(5)
+                : message;
+            transcript.addUserMessage(body);
         });
     }
 
     @Override
     public void appendLoadingIndicator() {
         runOnEdt(() -> {
-            thinkingIndicator.start(chatArea.getStyledDocument());
+            transcript.showThinking();
         });
     }
 
     @Override
     public void appendRedMessage(String message) {
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    message,
-                    ThemeColors.error(),
-                    false
-                );
-            } catch (BadLocationException e) {
-                log.error("Error displaying message", e);
-            }
+            transcript.addSystemMessage(message, ThemeColors.error());
         });
     }
 
@@ -1129,11 +984,10 @@ public class AiChatPanel
     private void updateFontSizes() {
         float scale = JMeterUIDefaults.INSTANCE.getScale();
 
-        // Update chat area font
-        Font currentChatFont = chatArea.getFont();
+        // Update transcript font (propagated to every message card)
+        Font currentChatFont = transcript.getFont();
         float newChatSize = baseChatFontSize * scale;
-        Font newChatFont = currentChatFont.deriveFont(newChatSize);
-        chatArea.setFont(newChatFont);
+        transcript.applyFont(currentChatFont.deriveFont(newChatSize));
 
         // Update message field font
         Font currentMessageFont = messageField.getFont();
@@ -1163,30 +1017,14 @@ public class AiChatPanel
     @Override
     public void appendMessageToChat(String message) {
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    message,
-                    null,
-                    false
-                );
-            } catch (BadLocationException ex) {
-                log.error("Error displaying message", ex);
-            }
+            transcript.addSystemMessage(message, null);
         });
     }
 
     @Override
     public void appendToolActivity(String message) {
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendToolActivity(
-                    chatArea.getStyledDocument(),
-                    message
-                );
-            } catch (BadLocationException ex) {
-                log.error("Error displaying tool activity", ex);
-            }
+            transcript.addToolActivity(message);
         });
     }
 
@@ -1200,16 +1038,10 @@ public class AiChatPanel
     public void appendErrorMessageToChat(String context, Exception e) {
         log.error(context, e);
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    context + ": " + e.getMessage(),
-                    ThemeColors.error(),
-                    false
-                );
-            } catch (BadLocationException ex) {
-                log.error("Error displaying error message", ex);
-            }
+            transcript.addSystemMessage(
+                context + ": " + e.getMessage(),
+                ThemeColors.error()
+            );
         });
     }
 
@@ -1229,16 +1061,10 @@ public class AiChatPanel
      */
     private void showWrapRedoNotSupported() {
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
-                    ThemeColors.info(),
-                    false
-                );
-            } catch (BadLocationException ex) {
-                log.error("Error displaying message", ex);
-            }
+            transcript.addSystemMessage(
+                "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
+                ThemeColors.info()
+            );
         });
     }
 
@@ -1273,16 +1099,7 @@ public class AiChatPanel
         log.error(logMessage, e);
         runOnEdt(() -> {
             removeLoadingIndicator();
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    userMessage,
-                    ThemeColors.error(),
-                    false
-                );
-            } catch (BadLocationException ex) {
-                log.error("Error displaying error message", ex);
-            }
+            transcript.addSystemMessage(userMessage, ThemeColors.error());
             setInputEnabled(true);
         });
     }
@@ -1323,15 +1140,14 @@ public class AiChatPanel
     }
 
     private void refreshChatColors() {
-        Color newFg = getThemeColor("TextPane.foreground", Color.BLACK);
         Color newBg = getThemeColor("TextPane.background", Color.WHITE);
-        chatArea.setBackground(newBg);
-        chatArea.setForeground(newFg);
-        Style defaultStyle = chatArea.getStyledDocument().getStyle("default");
-        if (defaultStyle != null) {
-            StyleConstants.setForeground(defaultStyle, newFg);
+        transcript.setBackground(newBg);
+        JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
+        if (scrollPane != null) {
+            scrollPane.getViewport().setBackground(newBg);
         }
-        chatArea.repaint();
+        transcript.refreshTheme();
+        transcript.repaint();
 
         // Re-theme the composer and its animated border so they never keep
         // stale colors after a light/dark theme switch.

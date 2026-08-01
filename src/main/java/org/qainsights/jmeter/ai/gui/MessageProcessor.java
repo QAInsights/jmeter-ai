@@ -32,52 +32,6 @@ public class MessageProcessor {
     }
 
     /**
-     * Appends a sender header for a chat turn (e.g. "You" or the assistant
-     * name): bold, in the given accent color, with extra spacing above so
-     * turns are visually separated without needing bubbles.
-     *
-     * @param doc    The document to add the header to
-     * @param sender The sender display name
-     * @param color  The header color
-     * @throws BadLocationException If there is an error with the document location
-     */
-    public void appendTurnHeader(
-        StyledDocument doc,
-        String sender,
-        Color color
-    ) throws BadLocationException {
-        SimpleAttributeSet style = new SimpleAttributeSet();
-        StyleConstants.setBold(style, true);
-        StyleConstants.setForeground(style, color);
-        StyleConstants.setFontFamily(style, Font.DIALOG);
-
-        // Extra spacing between turns (skip the leading gap on an empty doc)
-        if (doc.getLength() > 0) {
-            doc.insertString(doc.getLength(), "\n", style);
-        }
-        doc.insertString(doc.getLength(), sender + "\n", style);
-    }
-
-    /**
-     * Appends an agent tool-activity status line: de-emphasized monospaced
-     * text so tool calls read as background activity, not conversation.
-     *
-     * @param doc     The document to add the line to
-     * @param message The tool activity description
-     * @throws BadLocationException If there is an error with the document location
-     */
-    public void appendToolActivity(StyledDocument doc, String message)
-        throws BadLocationException {
-        SimpleAttributeSet style = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(style, Font.MONOSPACED);
-        StyleConstants.setForeground(
-            style,
-            org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText()
-        );
-        doc.insertString(doc.getLength(), message + "\n", style);
-    }
-
-    /**
      * Gets the stored code snippets.
      *
      * @return The map of code snippets

@@ -41,6 +41,16 @@ Rules: every new class/method ships with a unit test; keep files under 400-450 l
 | M6 | Correlation Studio + Record dialogs: gridless table, spacing, default buttons | `correlation/CorrelationReviewDialog.java`, `record/RecordingConfigDialog.java` | DONE |
 | **V2** | **Phase 2 VERIFY: `mvn test` (1325 pass, 2 skipped) + `mvn install` -> jar copied to JMeter lib/ext** | - | DONE (2026-08-01) |
 
+## Phase 3 - High Effort (user approved; pure Swing per earlier decision, so H2/H3 stay out)
+
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| H1a | MessageCard: per-message bubble component (sender header, copy button, markdown body; tinted user bubble, flat assistant) (+test) | NEW `gui/MessageCard.java` | DONE |
+| H1b | TranscriptView: message-list container replacing single JTextPane (add/stream/complete/activity/thinking/clear, zoom + theme propagation) (+test) | NEW `gui/TranscriptView.java` | DONE |
+| H1c | Rewire AiChatPanel callbacks to TranscriptView; CommandCallback contract unchanged; retired ThinkingIndicator + turn-header/activity APIs superseded by cards | `gui/AiChatPanel.java`, `gui/MessageProcessor.java` | DONE |
+| H4 | ToolActivityGroup: collapsible "Agent activity" group with ASCII spinner while running, auto-collapse on finish (+test) | NEW `gui/ToolActivityGroup.java` | DONE |
+| **V3** | **Phase 3 VERIFY: `mvn test` (1335 pass, 2 skipped) + `mvn install` -> jar copied to JMeter lib/ext** | - | DONE (2026-08-01) |
+
 ## Final
 
 | # | Task | Status |

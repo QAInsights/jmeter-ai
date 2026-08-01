@@ -100,6 +100,18 @@ public final class ThemeColors {
     }
 
     /**
+     * Background for the user's chat bubble: a professional light grey
+     * (#DEDEDE) on light themes; on dark themes the panel background lifted
+     * slightly so the bubble reads as a card without glaring.
+     */
+    public static Color userBubbleBackground() {
+        if (!isDark()) {
+            return new Color(0xDE, 0xDE, 0xDE);
+        }
+        return shift(themeColor("Panel.background", new Color(43, 43, 43)), 24);
+    }
+
+    /**
      * Reads a color from the current UIManager theme, falling back to a default
      * if the key is not defined by the active look-and-feel.
      */
