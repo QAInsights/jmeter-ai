@@ -4,6 +4,7 @@ import java.awt.*;
 import java.io.File;
 import javax.swing.*;
 import org.apache.jmeter.gui.GuiPackage;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 /**
@@ -72,13 +73,13 @@ public final class RecordingControlPanel extends JPanel {
             
             if (snapshot.state() == RecordingSessionState.ARMED) {
                 statusLabel.setText("🟢 ARMED");
-                statusLabel.setForeground(new Color(0, 150, 0));
+                statusLabel.setForeground(ThemeColors.success());
             } else if (active) {
                 statusLabel.setText("🟡 " + snapshot.state().name());
-                statusLabel.setForeground(Color.BLUE);
+                statusLabel.setForeground(ThemeColors.warning());
             } else {
                 statusLabel.setText("🔴 OFF");
-                statusLabel.setForeground(Color.DARK_GRAY);
+                statusLabel.setForeground(ThemeColors.secondaryText());
             }
         });
     }

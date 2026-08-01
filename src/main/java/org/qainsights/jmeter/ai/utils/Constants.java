@@ -96,15 +96,15 @@ public class Constants {
             "\n" +
             "Version: JMeter 5.6+ (Also support questions about older versions from 3.0+)";
 
-    public static final String WELCOME_MESSAGE = "# Welcome to Feather Wand - JMeter Agent\n\n" +
-            "I'm here to help you with your JMeter test plan. You can ask me questions about JMeter, " +
-            "request help with creating test elements, or get advice on optimizing your tests.\n\n" +
-            "**Special commands:**\n" +
-            "- Use `@this` to get information about the currently selected element\n" +
-            "- Use `@testplan` to send the entire test plan context to the AI (e.g. `@testplan which URL is under test?`)\n" +
-            "- Use `@optimize` to get optimization suggestions for your test plan\n" +
-            "- Use `@lint` to rename elements in your test plan with meaningful names\n" +
-            "- Use `@wrap` to group HTTP request samplers under Transaction Controllers\n" +
-            "- Use `@usage` to view usage statistics for your AI interactions\n\n" +
-            "How can I assist you today?";
+    public static final String WELCOME_MESSAGE = "# Welcome to Feather Wand\n\n" +
+            "Your AI assistant for Apache JMeter. Ask questions about your test plan, " +
+            "create or modify elements, and get optimization advice - right from this panel.\n\n" +
+            "**Try a command** (type `@` for suggestions):\n" +
+            "- `@this` - inspect the currently selected element\n" +
+            "- `@testplan` - ask questions about the whole test plan\n" +
+            "- `@optimize` - get optimization suggestions\n" +
+            "- `@lint` - rename elements with meaningful names\n" +
+            "- `@wrap` - group samplers under Transaction Controllers\n" +
+            "- `@usage` - view AI usage statistics\n\n" +
+            "Type a message below and press **Enter** to send. How can I help today?";
 }

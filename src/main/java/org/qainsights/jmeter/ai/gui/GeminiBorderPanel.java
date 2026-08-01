@@ -17,16 +17,11 @@ public class GeminiBorderPanel extends JPanel {
 
     public GeminiBorderPanel() {
         super(new BorderLayout());
-        
+
         // Add padding to leave room for the animated border
         setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        
-        // Use default text area background for a unified look
-        Color bg = UIManager.getColor("TextArea.background");
-        if (bg == null) {
-            bg = Color.WHITE;
-        }
-        setBackground(bg);
+
+        applyThemeBackground();
 
         // Set up the animation timer (updates angle and repaints)
         animationTimer = new Timer(30, new ActionListener() {
@@ -59,6 +54,29 @@ public class GeminiBorderPanel extends JPanel {
 
     public boolean isThinking() {
         return isThinking;
+    }
+
+    /**
+     * Re-applies the theme background when the look-and-feel changes
+     * (e.g. switching between JMeter's light and dark themes), so the
+     * composer never keeps a stale color from the previous theme.
+     */
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        applyThemeBackground();
+    }
+
+    /**
+     * Applies the default text area background for a unified look. Reads the
+     * color from the current theme on every call rather than caching it.
+     */
+    public void applyThemeBackground() {
+        Color bg = UIManager.getColor("TextArea.background");
+        if (bg == null) {
+            bg = Color.WHITE;
+        }
+        setBackground(bg);
     }
 
     @Override

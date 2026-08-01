@@ -72,6 +72,7 @@ public class TreeNavigationButtons {
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setContentAreaFilled(true);
+        button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
     }
 
     public JButton getUpButton() {

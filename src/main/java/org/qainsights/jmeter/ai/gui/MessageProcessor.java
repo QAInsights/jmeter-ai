@@ -401,30 +401,6 @@ public class MessageProcessor {
      * @return A color suitable for code block backgrounds
      */
     private static Color getCodeBlockBackground() {
-        Color panelBg = UIManager.getColor("Panel.background");
-        if (panelBg == null) {
-            return new Color(240, 240, 240);
-        }
-        // Slightly shift the panel background for visual distinction
-        int r = panelBg.getRed();
-        int g = panelBg.getGreen();
-        int b = panelBg.getBlue();
-        // Detect dark vs light theme by luminance
-        double luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
-        if (luminance < 0.5) {
-            // Dark theme: lighten slightly
-            return new Color(
-                Math.min(r + 20, 255),
-                Math.min(g + 20, 255),
-                Math.min(b + 20, 255)
-            );
-        } else {
-            // Light theme: darken slightly
-            return new Color(
-                Math.max(r - 15, 0),
-                Math.max(g - 15, 0),
-                Math.max(b - 15, 0)
-            );
-        }
+        return org.qainsights.jmeter.ai.gui.theme.ThemeColors.codeBackground();
     }
 }

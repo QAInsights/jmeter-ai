@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.correlation;
 
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +102,7 @@ public class CorrelationReviewDialog extends JDialog {
         JPanel statusPanel = new JPanel(new BorderLayout());
         statusLabel = new JLabel(" Click 'Run & Correlate' to replay the test plan, or 'Load JTL' to use an existing results file.");
         detailLabel = new JLabel("");
-        detailLabel.setForeground(new Color(0, 100, 0));
+        detailLabel.setForeground(ThemeColors.success());
         statusPanel.add(statusLabel, BorderLayout.NORTH);
         statusPanel.add(detailLabel, BorderLayout.SOUTH);
         bottom.add(statusPanel, BorderLayout.WEST);
@@ -203,14 +204,14 @@ public class CorrelationReviewDialog extends JDialog {
         startTime = System.currentTimeMillis();
         timeoutWarned = false;
         timerLabel.setVisible(true);
-        timerLabel.setForeground(Color.BLACK);
+        timerLabel.setForeground(ThemeColors.foreground());
         if (elapsedTimer != null) elapsedTimer.stop();
         elapsedTimer = new javax.swing.Timer(500, e -> {
             long elapsed = (System.currentTimeMillis() - startTime) / 1000;
             timerLabel.setText(String.format("%d:%02d", elapsed / 60, elapsed % 60));
             if (elapsed >= 120 && !timeoutWarned) {
                 timeoutWarned = true;
-                timerLabel.setForeground(Color.RED);
+                timerLabel.setForeground(ThemeColors.error());
                 SwingUtilities.invokeLater(() ->
                         JOptionPane.showMessageDialog(CorrelationReviewDialog.this,
                                 "Execution is taking longer than expected (2+ minutes).\n\n" +
@@ -260,10 +261,10 @@ public class CorrelationReviewDialog extends JDialog {
         List<String> targets = c.getTargetSamplerNames();
         if (targets.isEmpty()) {
             detailLabel.setText("  ✗ Not used in any subsequent sampler — will be skipped");
-            detailLabel.setForeground(Color.RED);
+            detailLabel.setForeground(ThemeColors.error());
         } else {
             detailLabel.setText("  ✔ Replaces in: " + String.join(", ", targets));
-            detailLabel.setForeground(new Color(0, 100, 0));
+            detailLabel.setForeground(ThemeColors.success());
         }
     }
 

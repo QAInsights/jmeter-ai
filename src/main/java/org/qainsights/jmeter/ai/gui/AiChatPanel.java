@@ -23,6 +23,7 @@ import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jorphan.gui.JMeterUIDefaults;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -97,6 +98,7 @@ public class AiChatPanel
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
+    private final ThinkingIndicator thinkingIndicator = new ThinkingIndicator();
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -193,26 +195,7 @@ public class AiChatPanel
     private void initModelSelector() {
         modelSelector = new JComboBox<>();
         modelSelector.addItem(null); // Add empty item while loading
-        modelSelector.setRenderer(
-            new DefaultListCellRenderer() {
-                @Override
-                public Component getListCellRendererComponent(
-                    JList<?> list,
-                    Object value,
-                    int index,
-                    boolean isSelected,
-                    boolean cellHasFocus
-                ) {
-                    return super.getListCellRendererComponent(
-                        list,
-                        Objects.requireNonNullElse(value, "Loading models..."),
-                        index,
-                        isSelected,
-                        cellHasFocus
-                    );
-                }
-            }
-        );
+        modelSelector.setRenderer(new ModelDisplayRenderer());
         loadModelsInBackground();
         modelSelector.addActionListener(e -> {
             String selectedModel = (String) modelSelector.getSelectedItem();
@@ -251,10 +234,7 @@ public class AiChatPanel
      */
     private JPanel createChatPanel(Font font) {
         JPanel chatPanel = new JPanel(new BorderLayout());
-        Color borderColor = getThemeColor(
-            "Component.borderColor",
-            UIManager.getColor("Separator.foreground")
-        );
+        Color borderColor = ThemeColors.border();
         chatPanel.setBorder(
             BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)
         );
@@ -382,32 +362,32 @@ public class AiChatPanel
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
-        JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        modelPanel.add(new JLabel("Model: "));
-        modelPanel.add(modelSelector);
-        bottomPanel.add(modelPanel, BorderLayout.NORTH);
-
-        bottomPanel.add(createNavigationPanel(), BorderLayout.CENTER);
+        bottomPanel.add(createToolbarRow(), BorderLayout.NORTH);
         bottomPanel.add(createInputPanel(font), BorderLayout.SOUTH);
         return bottomPanel;
     }
 
     /**
-     * Creates and initialises the navigation panel for tree navigation and element
-     * suggestion buttons.
+     * Creates the slim toolbar row: model selector on the left and the tree
+     * navigation icons flush right - replacing the old fixed-height
+     * "Navigation" titled block and freeing vertical space for the chat.
      *
-     * @return the assembled navigation panel
+     * @return the assembled toolbar row
      */
-    private JPanel createNavigationPanel() {
-        navigationPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
-        navigationPanel.setBorder(
-            BorderFactory.createTitledBorder("Navigation")
-        );
-        navigationPanel.add(treeNavigationButtons.getUpButton());
-        navigationPanel.add(treeNavigationButtons.getDownButton());
+    private JPanel createToolbarRow() {
+        navigationPanel = new JPanel(new BorderLayout(5, 0));
+        navigationPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
 
-        navigationPanel.setMinimumSize(new Dimension(100, 70));
-        navigationPanel.setPreferredSize(new Dimension(500, 70));
+        JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        modelPanel.add(new JLabel("Model:"));
+        modelPanel.add(modelSelector);
+        navigationPanel.add(modelPanel, BorderLayout.WEST);
+
+        JPanel navButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        navButtons.add(treeNavigationButtons.getUpButton());
+        navButtons.add(treeNavigationButtons.getDownButton());
+        navigationPanel.add(navButtons, BorderLayout.EAST);
+
         navigationPanel.setVisible(true);
         return navigationPanel;
     }
@@ -421,7 +401,9 @@ public class AiChatPanel
     private JPanel createInputPanel(Font font) {
         geminiBorderPanel = new GeminiBorderPanel();
 
-        messageField = new JTextArea(3, 20);
+        PlaceholderTextArea input = new PlaceholderTextArea(3, 20);
+        input.setPlaceholder("Ask about your test plan - type @ for commands");
+        messageField = input;
         messageField.setLineWrap(true);
         messageField.setWrapStyleWord(true);
         messageField.setFont(font);
@@ -494,9 +476,11 @@ public class AiChatPanel
         geminiBorderPanel.add(messageScrollPane, BorderLayout.CENTER);
 
         sendButton = createStyledButton("Send", 12);
+        sendButton.setToolTipText("Send message (Enter)");
         sendButton.addActionListener(e -> sendMessage());
 
         stopButton = createStyledButton("Stop", 12);
+        stopButton.setToolTipText("Stop the current response");
         stopButton.setVisible(false);
         stopButton.addActionListener(e -> {
             if (currentCancelHandle != null) {
@@ -515,6 +499,16 @@ public class AiChatPanel
 
         geminiBorderPanel.add(buttonPanel, BorderLayout.EAST);
 
+        JLabel hintLabel = new JLabel("Enter to send · Shift+Enter for newline");
+        hintLabel.setForeground(ThemeColors.secondaryText());
+        hintLabel.setFont(
+            hintLabel.getFont().deriveFont(hintLabel.getFont().getSize2D() - 2f)
+        );
+        JPanel hintPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        hintPanel.setOpaque(false);
+        hintPanel.add(hintLabel);
+        geminiBorderPanel.add(hintPanel, BorderLayout.SOUTH);
+
         return geminiBorderPanel;
     }
 
@@ -526,10 +520,7 @@ public class AiChatPanel
     private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.X_AXIS));
-        Color headerBorderColor = getThemeColor(
-            "Separator.foreground",
-            Color.LIGHT_GRAY
-        );
+        Color headerBorderColor = ThemeColors.border();
         headerPanel.setBorder(
             BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 1, 0, headerBorderColor),
@@ -627,15 +618,32 @@ public class AiChatPanel
             new Font(button.getFont().getName(), Font.BOLD, fontSize)
         );
         button.setFocusPainted(false);
-        Color borderColor = getThemeColor(
-            "Component.borderColor",
-            Color.LIGHT_GRAY
-        );
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        Color borderColor = ThemeColors.border();
         button.setBorder(
             BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(borderColor, 1, true),
                 BorderFactory.createEmptyBorder(2, 8, 2, 8)
             )
+        );
+
+        // Subtle theme-aware hover tint; restores the original background
+        // (which may be a custom brand color, e.g. the donate button) on exit.
+        Color baseBackground = button.getBackground();
+        button.addMouseListener(
+            new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseEntered(java.awt.event.MouseEvent e) {
+                    if (button.isEnabled()) {
+                        button.setBackground(ThemeColors.hoverBackground());
+                    }
+                }
+
+                @Override
+                public void mouseExited(java.awt.event.MouseEvent e) {
+                    button.setBackground(baseBackground);
+                }
+            }
         );
         return button;
     }
@@ -767,26 +775,8 @@ public class AiChatPanel
     @Override
     public void removeLoadingIndicator() {
         runOnEdt(() -> {
-            log.info("Attempting to remove loading indicator");
-            try {
-                StyledDocument doc = chatArea.getStyledDocument();
-
-                // Find the loading indicator text
-                String text = doc.getText(0, doc.getLength());
-                int index = text.lastIndexOf("AI is thinking...");
-
-                log.info("Loading indicator found at index: {}", index);
-
-                if (index != -1) {
-                    // Remove the loading indicator
-                    doc.remove(index, "AI is thinking...".length());
-                    log.info("Loading indicator removed");
-                } else {
-                    log.warn("Loading indicator not found in chat text");
-                }
-            } catch (BadLocationException e) {
-                log.error("Error removing loading indicator", e);
-            }
+            log.info("Removing loading indicator");
+            thinkingIndicator.stop(chatArea.getStyledDocument());
         });
     }
 
@@ -803,7 +793,7 @@ public class AiChatPanel
                     messageProcessor.appendMessage(
                         chatArea.getStyledDocument(),
                         "No response from AI. Please try again.",
-                        Color.RED,
+                        ThemeColors.error(),
                         false
                     );
                 } catch (BadLocationException e) {
@@ -820,6 +810,8 @@ public class AiChatPanel
 
             // Add the AI response to the chat
             log.info("Appending AI response to chat");
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
+            boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
             try {
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
@@ -849,15 +841,7 @@ public class AiChatPanel
 
             // Scroll to the bottom of the chat area to show the latest message
             SwingUtilities.invokeLater(() -> {
-                JScrollPane scrollPane =
-                    (JScrollPane) SwingUtilities.getAncestorOfClass(
-                        JScrollPane.class,
-                        chatArea
-                    );
-                if (scrollPane != null) {
-                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
-                    vertical.setValue(vertical.getMaximum());
-                }
+                ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
                 playResponseChime();
             });
         });
@@ -912,17 +896,10 @@ public class AiChatPanel
             }
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
+                JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
+                boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
                 doc.insertString(doc.getLength(), token, null);
-
-                JScrollPane scrollPane =
-                    (JScrollPane) SwingUtilities.getAncestorOfClass(
-                        JScrollPane.class,
-                        chatArea
-                    );
-                if (scrollPane != null) {
-                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
-                    vertical.setValue(vertical.getMaximum());
-                }
+                ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
             } catch (BadLocationException e) {
                 log.error("Error appending stream token", e);
             }
@@ -933,6 +910,10 @@ public class AiChatPanel
     public void onStreamComplete(String fullResponse) {
         SwingUtilities.invokeLater(() -> {
             playResponseChime();
+            // Capture the pinned state before the remove/re-render changes the
+            // document length (and with it the scrollbar maximum).
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
+            boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
             try {
                 StyledDocument doc = chatArea.getStyledDocument();
 
@@ -962,16 +943,7 @@ public class AiChatPanel
                     );
                 }
 
-                // Scroll to bottom
-                JScrollPane scrollPane =
-                    (JScrollPane) SwingUtilities.getAncestorOfClass(
-                        JScrollPane.class,
-                        chatArea
-                    );
-                if (scrollPane != null) {
-                    JScrollBar vertical = scrollPane.getVerticalScrollBar();
-                    vertical.setValue(vertical.getMaximum());
-                }
+                ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
             } catch (BadLocationException e) {
                 log.error(
                     "Error re-rendering stream response with markdown",
@@ -1042,16 +1014,7 @@ public class AiChatPanel
     @Override
     public void appendLoadingIndicator() {
         runOnEdt(() -> {
-            try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    "AI is thinking...",
-                    getThemeColor("Label.disabledForeground", Color.GRAY),
-                    false
-                );
-            } catch (BadLocationException e) {
-                log.error("Error adding loading indicator", e);
-            }
+            thinkingIndicator.start(chatArea.getStyledDocument());
         });
     }
 
@@ -1062,7 +1025,7 @@ public class AiChatPanel
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
                     message,
-                    Color.RED,
+                    ThemeColors.error(),
                     false
                 );
             } catch (BadLocationException e) {
@@ -1204,7 +1167,7 @@ public class AiChatPanel
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
                     context + ": " + e.getMessage(),
-                    Color.RED,
+                    ThemeColors.error(),
                     false
                 );
             } catch (BadLocationException ex) {
@@ -1233,7 +1196,7 @@ public class AiChatPanel
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
                     "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
-                    Color.BLUE,
+                    ThemeColors.info(),
                     false
                 );
             } catch (BadLocationException ex) {
@@ -1277,7 +1240,7 @@ public class AiChatPanel
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
                     userMessage,
-                    Color.RED,
+                    ThemeColors.error(),
                     false
                 );
             } catch (BadLocationException ex) {
@@ -1332,6 +1295,23 @@ public class AiChatPanel
             StyleConstants.setForeground(defaultStyle, newFg);
         }
         chatArea.repaint();
+
+        // Re-theme the composer and its animated border so they never keep
+        // stale colors after a light/dark theme switch.
+        if (geminiBorderPanel != null) {
+            geminiBorderPanel.applyThemeBackground();
+        }
+        if (messageField != null) {
+            messageField.setBackground(
+                getThemeColor("TextArea.background", Color.WHITE)
+            );
+            messageField.setForeground(
+                getThemeColor("TextArea.foreground", Color.BLACK)
+            );
+            messageField.setCaretColor(
+                getThemeColor("TextArea.foreground", Color.BLACK)
+            );
+        }
     }
 
     private void runOnEdt(Runnable runnable) {
