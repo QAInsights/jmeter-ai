@@ -96,29 +96,15 @@ public class ClaudeCodePanel extends JPanel {
     private List<AiCliAdapter> detectAvailableClis() {
         List<AiCliAdapter> available = new ArrayList<>();
 
-        AiCliAdapter claude = new ClaudeCodeCliAdapter();
-        if (claude.isEnabled() && claude.detect())
-            available.add(claude);
-
-        AiCliAdapter codex = new OpenAiCodexCliAdapter();
-        if (codex.isEnabled() && codex.detect())
-            available.add(codex);
-
-        AiCliAdapter opencode = new OpenCodeCliAdapter();
-        if (opencode.isEnabled() && opencode.detect())
-            available.add(opencode);
-
-        AiCliAdapter copilot = new CopilotCliAdapter();
-        if (copilot.isEnabled() && copilot.detect())
-            available.add(copilot);
-        
-        AiCliAdapter antigravity = new AntigravityCliAdapter();
-        if (antigravity.isEnabled() && antigravity.detect())
-            available.add(antigravity);
-
-        AiCliAdapter grok = new GrokCliAdapter();
-        if (grok.isEnabled() && grok.detect())
-            available.add(grok);
+        // Each adapter is evaluated through CliDetector, which logs the reason
+        // (disabled by config / not on PATH / detected) so users can tell the
+        // three failure modes apart instead of seeing a generic "not detected".
+        CliDetector.evaluate(new ClaudeCodeCliAdapter(), log).ifPresent(available::add);
+        CliDetector.evaluate(new OpenAiCodexCliAdapter(), log).ifPresent(available::add);
+        CliDetector.evaluate(new OpenCodeCliAdapter(), log).ifPresent(available::add);
+        CliDetector.evaluate(new CopilotCliAdapter(), log).ifPresent(available::add);
+        CliDetector.evaluate(new AntigravityCliAdapter(), log).ifPresent(available::add);
+        CliDetector.evaluate(new GrokCliAdapter(), log).ifPresent(available::add);
 
         return available;
     }
