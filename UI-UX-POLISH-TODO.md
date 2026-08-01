@@ -51,12 +51,24 @@ Rules: every new class/method ships with a unit test; keep files under 400-450 l
 | H4 | ToolActivityGroup: collapsible "Agent activity" group with ASCII spinner while running, auto-collapse on finish (+test) | NEW `gui/ToolActivityGroup.java` | DONE |
 | **V3** | **Phase 3 VERIFY: `mvn test` (1335 pass, 2 skipped) + `mvn install` -> jar copied to JMeter lib/ext** | - | DONE (2026-08-01) |
 
+## Post-Phase 3 fixes (user-tested)
+
+| # | Task | Status |
+|---|------|--------|
+| P1 | Horizontal scrollbar regression: TranscriptView implements Scrollable (wrap to viewport width) (+test) | DONE |
+| P2 | Rounded user bubbles (custom-painted, 14px arc) + professional light grey #DEDEDE (dark theme: lifted panel) (+pixel-level test) | DONE |
+
 ## Final
 
 | # | Task | Status |
 |---|------|--------|
-| F1 | Update plan file with completion status | TODO |
-| F2 | Manual smoke checklist for user: JMeter 5.6.3 light+dark, live theme switch, streaming, @commands, agent tool calls, code-block copy, CJK/IME input | TODO |
+| F1 | Update plan file with completion status | DONE (2026-08-01) |
+| F2 | Manual smoke checklist: JMeter 5.6.3 light+dark, live theme switch, streaming, @commands, agent tool calls, code-block copy, CJK/IME input | DONE by user across phases (scrollbar + bubble issues found & fixed) |
+| F3 | Push to origin/main | DONE — f93612b (P1), 3640123 (P2), d46f5cc (P3 + fixes) |
+
+## Status: COMPLETE (all phases shipped 2026-08-01)
+
+Deferred ideas for a future round: syntax highlighting in code blocks (needs RSyntaxTextArea), proper markdown engine (flexmark), wrapping inside code blocks, assistant cards as rounded cards too.
 
 ---
 
