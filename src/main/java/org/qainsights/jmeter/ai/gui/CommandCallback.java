@@ -65,6 +65,15 @@ public interface CommandCallback {
 
     void appendMessageToChat(String message);
 
+    /**
+     * Appends an agent tool-activity status line (tool call start/finish).
+     * Default renders it as a plain chat message; implementations may style
+     * it as de-emphasized background activity instead.
+     */
+    default void appendToolActivity(String message) {
+        appendMessageToChat(message);
+    }
+
     void appendErrorMessageToChat(String context, Exception e);
 
     // --- Worker callbacks ---

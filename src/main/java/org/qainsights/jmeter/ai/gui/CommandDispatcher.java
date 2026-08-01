@@ -492,7 +492,7 @@ public class CommandDispatcher {
                     if (chunk.isToken()) {
                         cb.appendStreamToken(chunk.getText());
                     } else {
-                        cb.appendMessageToChat(chunk.getText());
+                        cb.appendToolActivity(chunk.getText());
                     }
                 }
             }

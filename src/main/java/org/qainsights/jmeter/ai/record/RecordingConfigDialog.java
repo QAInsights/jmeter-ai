@@ -72,6 +72,7 @@ public final class RecordingConfigDialog extends JDialog {
         start.addActionListener(e -> validateAndConfirm());
         btnPanel.add(cancel);
         btnPanel.add(start);
+        getRootPane().setDefaultButton(start);
         return btnPanel;
     }
 

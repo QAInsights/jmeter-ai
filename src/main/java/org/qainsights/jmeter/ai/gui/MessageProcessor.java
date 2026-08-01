@@ -1,14 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import javax.swing.*;
-import javax.swing.Timer; // Added missing import
 import javax.swing.text.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +16,7 @@ public class MessageProcessor {
         MessageProcessor.class
     );
 
-    private static final Pattern CODE_BLOCK_PATTERN = Pattern.compile(
-        "```([\\w-]*)\\s*([\\s\\S]*?)```"
-    );
-    private final Map<String, String> codeSnippets = new HashMap<>();
+    private final MarkdownRenderer markdownRenderer = new MarkdownRenderer();
 
     /**
      * Processes a markdown message and applies formatting to the document.
@@ -38,299 +28,53 @@ public class MessageProcessor {
     public void processMarkdownMessage(StyledDocument doc, String message)
         throws BadLocationException {
         log.info("Processing markdown message");
-
-        // Extract code blocks first
-        Matcher matcher = CODE_BLOCK_PATTERN.matcher(message);
-        StringBuffer sb = new StringBuffer();
-        int codeBlockCount = 0;
-
-        while (matcher.find()) {
-            codeBlockCount++;
-            String language = matcher.group(1).trim();
-            String code = matcher.group(2);
-
-            // Store the code snippet for potential reuse
-            String snippetKey = "snippet_" + codeBlockCount;
-            codeSnippets.put(snippetKey, code);
-
-            // Replace the code block with a placeholder
-            // Add extra newlines before and after for better spacing
-            String placeholder =
-                "\n[CODE_BLOCK:" + snippetKey + ":" + language + "]\n";
-            matcher.appendReplacement(
-                sb,
-                Matcher.quoteReplacement(placeholder)
-            );
-        }
-        matcher.appendTail(sb);
-
-        // Process the text without code blocks
-        String processedText = sb.toString();
-        processBasicMarkdown(doc, processedText);
+        markdownRenderer.process(doc, message);
     }
 
     /**
-     * Processes basic markdown formatting and code block placeholders.
+     * Appends a sender header for a chat turn (e.g. "You" or the assistant
+     * name): bold, in the given accent color, with extra spacing above so
+     * turns are visually separated without needing bubbles.
      *
-     * @param doc The document to apply formatting to
-     * @param text The text to process
+     * @param doc    The document to add the header to
+     * @param sender The sender display name
+     * @param color  The header color
      * @throws BadLocationException If there is an error with the document location
      */
-    private void processBasicMarkdown(StyledDocument doc, String text)
-        throws BadLocationException {
-        // Split the text by lines to process each line separately
-        String[] lines = text.split("\n");
-
-        // Define styles.
-        // Use "Dialog" (a Java logical/composite font) instead of "SansSerif"
-        // so that the JVM's CJK fallback chain is active.  On Windows, "SansSerif"
-        // maps to a physical font (Arial) that may not have full CJK coverage,
-        // causing Chinese / Japanese / Korean characters to render as empty boxes.
-        // "Dialog" is always a composite font and includes platform CJK fonts.
-        SimpleAttributeSet normal = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(normal, Font.DIALOG);
-
-        SimpleAttributeSet bold = new SimpleAttributeSet(normal);
-        StyleConstants.setBold(bold, true);
-
-        SimpleAttributeSet italic = new SimpleAttributeSet(normal);
-        StyleConstants.setItalic(italic, true);
-
-        SimpleAttributeSet heading1 = new SimpleAttributeSet(bold);
-        StyleConstants.setFontSize(
-            heading1,
-            StyleConstants.getFontSize(normal) + 6
-        );
-
-        SimpleAttributeSet heading2 = new SimpleAttributeSet(bold);
-        StyleConstants.setFontSize(
-            heading2,
-            StyleConstants.getFontSize(normal) + 4
-        );
-
-        SimpleAttributeSet heading3 = new SimpleAttributeSet(bold);
-        StyleConstants.setFontSize(
-            heading3,
-            StyleConstants.getFontSize(normal) + 2
-        );
-
-        SimpleAttributeSet codeStyle = new SimpleAttributeSet();
-        StyleConstants.setFontFamily(codeStyle, "Monospaced");
-        StyleConstants.setBackground(codeStyle, getCodeBlockBackground());
-
-        // Process each line
-        for (String line : lines) {
-            // Check for code block placeholder
-            if (
-                line.trim().startsWith("[CODE_BLOCK:") &&
-                line.trim().endsWith("]")
-            ) {
-                // Extract snippet key and language
-                String[] parts = line
-                    .trim()
-                    .substring(12, line.trim().length() - 1)
-                    .split(":");
-                String snippetKey = parts[0];
-                String language = parts.length > 1 ? parts[1] : "";
-
-                // Get the code snippet
-                String code = codeSnippets.get(snippetKey);
-
-                if (code != null) {
-                    // Add extra spacing before the code block
-                    doc.insertString(doc.getLength(), "\n", normal);
-
-                    // Create a direct text-based code block with styling
-                    renderCodeBlock(doc, code, language, codeStyle);
-
-                    // Add extra spacing after the code block
-                    doc.insertString(doc.getLength(), "\n", normal);
-                }
-                continue;
-            }
-
-            // Check for headings
-            if (line.startsWith("# ")) {
-                doc.insertString(
-                    doc.getLength(),
-                    line.substring(2) + "\n",
-                    heading1
-                );
-            } else if (line.startsWith("## ")) {
-                doc.insertString(
-                    doc.getLength(),
-                    line.substring(3) + "\n",
-                    heading2
-                );
-            } else if (line.startsWith("### ")) {
-                doc.insertString(
-                    doc.getLength(),
-                    line.substring(4) + "\n",
-                    heading3
-                );
-            } else {
-                // Process inline formatting
-                StringBuilder currentText = new StringBuilder();
-                AttributeSet currentStyle = normal;
-
-                for (int i = 0; i < line.length(); i++) {
-                    char c = line.charAt(i);
-
-                    // Check for bold (**text**)
-                    if (
-                        c == '*' &&
-                        i + 1 < line.length() &&
-                        line.charAt(i + 1) == '*'
-                    ) {
-                        // Insert accumulated text with current style
-                        doc.insertString(
-                            doc.getLength(),
-                            currentText.toString(),
-                            currentStyle
-                        );
-                        currentText.setLength(0);
-
-                        // Toggle bold style
-                        if (currentStyle == bold) {
-                            currentStyle = normal;
-                        } else {
-                            currentStyle = bold;
-                        }
-
-                        // Skip the second asterisk
-                        i++;
-                    }
-                    // Check for italic (*text*)
-                    else if (c == '*') {
-                        // Insert accumulated text with current style
-                        doc.insertString(
-                            doc.getLength(),
-                            currentText.toString(),
-                            currentStyle
-                        );
-                        currentText.setLength(0);
-
-                        // Toggle italic style
-                        if (currentStyle == italic) {
-                            currentStyle = normal;
-                        } else {
-                            currentStyle = italic;
-                        }
-                    }
-                    // Check for inline code (`text`)
-                    else if (c == '`') {
-                        // Insert accumulated text with current style
-                        doc.insertString(
-                            doc.getLength(),
-                            currentText.toString(),
-                            currentStyle
-                        );
-                        currentText.setLength(0);
-
-                        // Toggle code style
-                        if (currentStyle == codeStyle) {
-                            currentStyle = normal;
-                        } else {
-                            currentStyle = codeStyle;
-                        }
-                    }
-                    // Regular character
-                    else {
-                        currentText.append(c);
-                    }
-                }
-
-                // Insert any remaining text
-                doc.insertString(
-                    doc.getLength(),
-                    currentText.toString() + "\n",
-                    currentStyle
-                );
-            }
-        }
-    }
-
-    /**
-     * Renders a code block directly as text with styling.
-     *
-     * @param doc The document to render the code block in
-     * @param code The code to render
-     * @param language The language of the code
-     * @param codeStyle The style to apply to the code
-     * @throws BadLocationException If there is an error with the document location
-     */
-    private void renderCodeBlock(
+    public void appendTurnHeader(
         StyledDocument doc,
-        String code,
-        String language,
-        SimpleAttributeSet codeStyle
+        String sender,
+        Color color
     ) throws BadLocationException {
-        // Create a panel for the code block with a border layout
-        JPanel codePanel = new JPanel(new BorderLayout());
-        codePanel.setBackground(getCodeBlockBackground());
-        codePanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+        SimpleAttributeSet style = new SimpleAttributeSet();
+        StyleConstants.setBold(style, true);
+        StyleConstants.setForeground(style, color);
+        StyleConstants.setFontFamily(style, Font.DIALOG);
 
-        // Create a header panel for language and copy button
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(getCodeBlockBackground());
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-
-        // Add language label if present
-        if (!language.isEmpty()) {
-            JLabel languageLabel = new JLabel(language);
-            languageLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
-            headerPanel.add(languageLabel, BorderLayout.WEST);
+        // Extra spacing between turns (skip the leading gap on an empty doc)
+        if (doc.getLength() > 0) {
+            doc.insertString(doc.getLength(), "\n", style);
         }
+        doc.insertString(doc.getLength(), sender + "\n", style);
+    }
 
-        // Create a copy button
-        JButton copyButton = new JButton("Copy");
-        copyButton.setToolTipText("Copy code to clipboard");
-        copyButton.addActionListener(
-            new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    // Copy code to clipboard
-                    java.awt.Toolkit.getDefaultToolkit()
-                        .getSystemClipboard()
-                        .setContents(
-                            new java.awt.datatransfer.StringSelection(code),
-                            null
-                        );
-
-                    // Provide visual feedback
-                    copyButton.setText("Copied!");
-                    Timer timer = new Timer(1500, event ->
-                        copyButton.setText("Copy")
-                    );
-                    timer.setRepeats(false);
-                    timer.start();
-                }
-            }
+    /**
+     * Appends an agent tool-activity status line: de-emphasized monospaced
+     * text so tool calls read as background activity, not conversation.
+     *
+     * @param doc     The document to add the line to
+     * @param message The tool activity description
+     * @throws BadLocationException If there is an error with the document location
+     */
+    public void appendToolActivity(StyledDocument doc, String message)
+        throws BadLocationException {
+        SimpleAttributeSet style = new SimpleAttributeSet();
+        StyleConstants.setFontFamily(style, Font.MONOSPACED);
+        StyleConstants.setForeground(
+            style,
+            org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText()
         );
-
-        // Add the copy button to the header
-        headerPanel.add(copyButton, BorderLayout.EAST);
-
-        // Add the header panel to the code panel
-        codePanel.add(headerPanel, BorderLayout.NORTH);
-
-        // Create a text area for the code
-        JTextArea codeArea = new JTextArea(code.trim()); // Trim to remove extra lines
-        codeArea.setFont(UIManager.getFont("TextField.font")); // Use default font
-        codeArea.setEditable(false);
-        codeArea.setBackground(getCodeBlockBackground());
-        codeArea.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-        // Add the code area to the panel
-        codePanel.add(codeArea, BorderLayout.CENTER);
-
-        // Insert the code panel into the document
-        SimpleAttributeSet panelStyle = new SimpleAttributeSet();
-        StyleConstants.setComponent(panelStyle, codePanel);
-        doc.insertString(doc.getLength(), " ", panelStyle);
-
-        // Add extra spacing after the code block
-        doc.insertString(doc.getLength(), "\n", codeStyle);
+        doc.insertString(doc.getLength(), message + "\n", style);
     }
 
     /**
@@ -339,7 +83,7 @@ public class MessageProcessor {
      * @return The map of code snippets
      */
     public Map<String, String> getCodeSnippets() {
-        return codeSnippets;
+        return markdownRenderer.getCodeSnippets();
     }
 
     /**
@@ -392,15 +136,5 @@ public class MessageProcessor {
 
         // Scroll to the bottom of the document
         // This is handled by the caller
-    }
-
-    /**
-     * Gets a code block background color that is slightly different from the
-     * panel background, providing visual distinction in both light and dark themes.
-     *
-     * @return A color suitable for code block backgrounds
-     */
-    private static Color getCodeBlockBackground() {
-        return org.qainsights.jmeter.ai.gui.theme.ThemeColors.codeBackground();
     }
 }

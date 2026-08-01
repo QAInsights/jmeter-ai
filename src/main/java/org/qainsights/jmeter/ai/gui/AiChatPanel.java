@@ -813,6 +813,11 @@ public class AiChatPanel
             JScrollPane scrollPane = ChatScroller.scrollPaneOf(chatArea);
             boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
             try {
+                messageProcessor.appendTurnHeader(
+                    chatArea.getStyledDocument(),
+                    "Feather Wand",
+                    ThemeColors.accent()
+                );
                 messageProcessor.appendMessage(
                     chatArea.getStyledDocument(),
                     response,
@@ -889,6 +894,18 @@ public class AiChatPanel
         SwingUtilities.invokeLater(() -> {
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
+                // Show the assistant header before tokens start arriving; it is
+                // inserted BEFORE the recorded stream start position so the
+                // markdown re-render in onStreamComplete keeps it intact.
+                try {
+                    messageProcessor.appendTurnHeader(
+                        chatArea.getStyledDocument(),
+                        "Feather Wand",
+                        ThemeColors.accent()
+                    );
+                } catch (BadLocationException e) {
+                    log.error("Error appending assistant header", e);
+                }
                 // Record where streaming output begins so onStreamComplete can
                 // strip the raw text and re-render it with full markdown processing.
                 streamStartPosition = chatArea.getStyledDocument().getLength();
@@ -999,12 +1016,18 @@ public class AiChatPanel
     public void appendUserMessage(String message) {
         runOnEdt(() -> {
             try {
-                messageProcessor.appendMessage(
-                    chatArea.getStyledDocument(),
-                    message,
-                    null,
-                    false
+                StyledDocument doc = chatArea.getStyledDocument();
+                // Render as a turn header + body instead of an inline
+                // "You:" prefix for clearer visual separation of turns.
+                String body = message.startsWith("You: ")
+                    ? message.substring(5)
+                    : message;
+                messageProcessor.appendTurnHeader(
+                    doc,
+                    "You",
+                    ThemeColors.secondaryText()
                 );
+                messageProcessor.appendMessage(doc, body, null, false);
             } catch (BadLocationException e) {
                 log.error("Error appending user message to chat", e);
             }
@@ -1149,6 +1172,20 @@ public class AiChatPanel
                 );
             } catch (BadLocationException ex) {
                 log.error("Error displaying message", ex);
+            }
+        });
+    }
+
+    @Override
+    public void appendToolActivity(String message) {
+        runOnEdt(() -> {
+            try {
+                messageProcessor.appendToolActivity(
+                    chatArea.getStyledDocument(),
+                    message
+                );
+            } catch (BadLocationException ex) {
+                log.error("Error displaying tool activity", ex);
             }
         });
     }

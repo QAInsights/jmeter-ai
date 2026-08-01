@@ -146,4 +146,157 @@ class MessageProcessorTest {
 
         assertEquals("Copied!", copyButton.getText());
     }
+
+    @Test
+    void testAppendTurnHeaderInsertsBoldSender() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendTurnHeader(doc, "Feather Wand", Color.BLUE);
+
+        String text = doc.getText(0, doc.getLength());
+        assertEquals("Feather Wand\n", text);
+
+        // Sender text must be bold with the given color
+        javax.swing.text.Element elem = doc.getCharacterElement(0);
+        assertTrue(StyleConstants.isBold(elem.getAttributes()));
+        assertEquals(Color.BLUE, StyleConstants.getForeground(elem.getAttributes()));
+    }
+
+    @Test
+    void testAppendTurnHeaderAddsSpacingBetweenTurns() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+        doc.insertString(0, "previous turn\n", null);
+
+        processor.appendTurnHeader(doc, "You", Color.GRAY);
+
+        String text = doc.getText(0, doc.getLength());
+        assertEquals("previous turn\n\nYou\n", text);
+    }
+
+    @Test
+    void testAppendToolActivityUsesSecondaryMonospaceStyle() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendToolActivity(doc, "tool add_element started");
+
+        String text = doc.getText(0, doc.getLength());
+        assertEquals("tool add_element started\n", text);
+
+        javax.swing.text.Element elem = doc.getCharacterElement(0);
+        assertEquals(Font.MONOSPACED, StyleConstants.getFontFamily(elem.getAttributes()));
+    }
+
+    @Test
+    void testCommandCallbackDefaultToolActivityDelegates() {
+        java.util.List<String> captured = new java.util.ArrayList<>();
+        CommandCallback cb = new CommandCallback() {
+            @Override public void setInputEnabled(boolean enabled) {}
+            @Override public void clearMessageField() {}
+            @Override public void appendUserMessage(String message) {}
+            @Override public void appendLoadingIndicator() {}
+            @Override public void removeLoadingIndicator() {}
+            @Override public void processAiResponse(String response) {}
+            @Override public void appendRedMessage(String message) {}
+            @Override public void showStopButton() {}
+            @Override public void hideStopButton() {}
+            @Override public void appendStreamToken(String token) {}
+            @Override public void onStreamComplete(String fullResponse) {}
+            @Override public void onStreamError(String l, Exception e, String u) {}
+            @Override public Runnable getAiStreamResponse(String m, java.util.function.Consumer<String> t, Runnable c, java.util.function.Consumer<Exception> e) { return () -> {}; }
+            @Override public String getSelectedModel() { return null; }
+            @Override public java.util.List<String> getConversationHistory() { return java.util.Collections.emptyList(); }
+            @Override public void addToConversationHistory(String entry) {}
+            @Override public String getAiResponse(String message) { return null; }
+            @Override public org.qainsights.jmeter.ai.service.AiService resolveAiService(String selectedModel) { return null; }
+            @Override public String getCurrentElementInfo() { return null; }
+            @Override public void setLastCommandType(String type) {}
+            @Override public void appendMessageToChat(String message) { captured.add(message); }
+            @Override public void appendErrorMessageToChat(String context, Exception e) {}
+            @Override public void onWorkerSuccess(String response) {}
+            @Override public void onWorkerError(String l, Exception e, String u) {}
+        };
+
+        cb.appendToolActivity("tool line");
+        assertEquals(java.util.List.of("tool line"), captured);
+    }
+
+    @Test
+    void testBulletLinesRenderAsBullets() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendMessage(doc, "- first item\n- second item", Color.BLACK, true);
+
+        String text = doc.getText(0, doc.getLength());
+        assertTrue(text.contains("• first item"));
+        assertTrue(text.contains("• second item"));
+        assertFalse(text.contains("- first item"));
+    }
+
+    @Test
+    void testBulletLinesKeepInlineFormatting() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendMessage(doc, "- use `@this` to inspect", Color.BLACK, true);
+
+        String text = doc.getText(0, doc.getLength());
+        assertTrue(text.contains("• use @this to inspect"));
+        assertFalse(text.contains("`"));
+    }
+
+    @Test
+    void testHorizontalRuleRendersDividerComponent() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendMessage(doc, "above\n---\nbelow", Color.BLACK, true);
+
+        String text = doc.getText(0, doc.getLength());
+        assertTrue(text.contains("above"));
+        assertTrue(text.contains("below"));
+        assertFalse(text.contains("---"));
+
+        // The rule is an embedded component, not text
+        boolean foundComponent = false;
+        for (int i = 0; i < doc.getLength(); i++) {
+            javax.swing.text.Element elem = doc.getCharacterElement(i);
+            if (StyleConstants.getComponent(elem.getAttributes()) != null) {
+                foundComponent = true;
+                break;
+            }
+        }
+        assertTrue(foundComponent);
+    }
+
+    @Test
+    void testLinksRenderAsStyledLabelWithoutUrl() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendMessage(doc, "see [JMeter docs](https://jmeter.apache.org) here", Color.BLACK, true);
+
+        String text = doc.getText(0, doc.getLength());
+        assertTrue(text.contains("see JMeter docs here"));
+        assertFalse(text.contains("jmeter.apache.org"));
+
+        // The label must be underlined (link styling)
+        int labelStart = text.indexOf("JMeter docs");
+        javax.swing.text.Element elem = doc.getCharacterElement(labelStart);
+        assertTrue(StyleConstants.isUnderline(elem.getAttributes()));
+    }
+
+    @Test
+    void testNonLinkBracketsPassThroughLiterally() throws Exception {
+        MessageProcessor processor = new MessageProcessor();
+        StyledDocument doc = new DefaultStyledDocument();
+
+        processor.appendMessage(doc, "array[0] and [bracket]", Color.BLACK, true);
+
+        String text = doc.getText(0, doc.getLength());
+        assertTrue(text.contains("array[0] and [bracket]"));
+    }
 }

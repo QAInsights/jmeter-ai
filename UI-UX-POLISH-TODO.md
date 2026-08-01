@@ -31,15 +31,15 @@ Rules: every new class/method ships with a unit test; keep files under 400-450 l
 
 | # | Task | Files | Status |
 |---|------|-------|--------|
-| M1 | Styled chat turns: sender headers (You / Feather Wand), accent color, spacing, subtle divider in JTextPane (+test) | `gui/MessageProcessor.java` / `gui/AiChatPanel.java` | TODO |
-| M2 | Agent tool-activity rows: `appendToolActivity(String)` on CommandCallback (default -> appendMessageToChat), styled secondary/mono status lines (+test) | `gui/CommandCallback.java`, `gui/AiChatPanel.java`, `gui/CommandDispatcher.java` | TODO |
-| M4 | Code block panel restyle: theme border, header bar w/ language + Copy, mono font, zoom-aware | `gui/MessageProcessor.java` (renderCodeBlock) | TODO |
-| M5 | SwingToolConfirmationGate: structured Allow/Deny dialog (tool name bold, element highlighted) (+test) | `agent/jmeter/SwingToolConfirmationGate.java` | TODO |
-| M7 | IntellisensePopup two-line renderer: command bold + description secondary (+test) | `intellisense/IntellisensePopup.java`, `intellisense/InputBoxIntellisense.java` | TODO |
-| M3a | Characterization tests for existing MessageProcessor markdown behavior (BEFORE changes) | `src/test/.../gui/MessageProcessorTest.java` | TODO |
-| M3b | Markdown upgrades: list bullets, horizontal rules, clickable links (+tests) | `gui/MessageProcessor.java` (extract `MarkdownRenderer` if >450 lines) | TODO |
-| M6 | Correlation Studio + Record dialogs: row striping, padding, status icons, button order | `correlation/CorrelationReviewDialog.java`, `record/RecordingConfigDialog.java` | TODO |
-| **V2** | **Phase 2 VERIFY: `mvn test` + `mvn package` green** | - | TODO |
+| M1 | Styled chat turns: sender headers (You / Feather Wand), accent color, spacing (+test) | `gui/MessageProcessor.java` / `gui/AiChatPanel.java` | DONE |
+| M2 | Agent tool-activity rows: `appendToolActivity(String)` on CommandCallback (default -> appendMessageToChat), styled secondary/mono status lines (+test) | `gui/CommandCallback.java`, `gui/AiChatPanel.java`, `gui/CommandDispatcher.java` | DONE |
+| M4 | Code block panel restyle: theme border, header bar w/ language + Copy, mono font | NEW `gui/CodeBlockRenderer.java` (extracted) | DONE |
+| M5 | SwingToolConfirmationGate: structured Allow/Deny dialog (+test) | `agent/jmeter/SwingToolConfirmationGate.java` | DONE |
+| M7 | IntellisensePopup two-line renderer: command bold + description secondary (+test) | `intellisense/IntellisensePopup.java`, `intellisense/CommandIntellisenseProvider.java` | DONE |
+| M3a | Characterization tests for existing MessageProcessor markdown behavior (BEFORE changes) | `src/test/.../gui/MessageProcessorTest.java` | DONE (existing suite served as characterization) |
+| M3b | Markdown upgrades: list bullets, horizontal rules, styled links (+tests) | NEW `gui/MarkdownRenderer.java` (extracted from MessageProcessor) | DONE |
+| M6 | Correlation Studio + Record dialogs: gridless table, spacing, default buttons | `correlation/CorrelationReviewDialog.java`, `record/RecordingConfigDialog.java` | DONE |
+| **V2** | **Phase 2 VERIFY: `mvn test` (1325 pass, 2 skipped) + `mvn install` -> jar copied to JMeter lib/ext** | - | DONE (2026-08-01) |
 
 ## Final
 

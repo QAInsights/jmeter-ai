@@ -42,9 +42,34 @@ public final class SwingToolConfirmationGate implements ToolConfirmationGate {
     }
 
     private static boolean showDialog(String message) {
-        int choice = JOptionPane.showConfirmDialog(null, message, "Confirm AI agent action",
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        Object[] options = {"Allow", "Deny"};
+        int choice = JOptionPane.showOptionDialog(null, buildConfirmPanel(message),
+                "Confirm AI Agent Action", JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, options, options[0]);
         return choice == JOptionPane.YES_OPTION;
+    }
+
+    /**
+     * Builds the structured dialog body: a bold action summary above the
+     * wrapped detail text. Package-private for testing.
+     */
+    static javax.swing.JPanel buildConfirmPanel(String message) {
+        javax.swing.JPanel panel = new javax.swing.JPanel(new java.awt.BorderLayout(0, 8));
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 4, 4, 4));
+
+        javax.swing.JLabel title = new javax.swing.JLabel("The AI agent requests your approval");
+        title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD));
+        panel.add(title, java.awt.BorderLayout.NORTH);
+
+        javax.swing.JTextArea detail = new javax.swing.JTextArea(message);
+        detail.setEditable(false);
+        detail.setOpaque(false);
+        detail.setLineWrap(true);
+        detail.setWrapStyleWord(true);
+        detail.setFont(javax.swing.UIManager.getFont("Label.font"));
+        detail.setSize(new java.awt.Dimension(360, Short.MAX_VALUE));
+        panel.add(detail, java.awt.BorderLayout.CENTER);
+        return panel;
     }
 
     private static String describe(String toolName, Map<String, Object> arguments) {

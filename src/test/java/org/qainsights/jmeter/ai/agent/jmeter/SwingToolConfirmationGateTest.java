@@ -70,4 +70,27 @@ class SwingToolConfirmationGateTest {
 
         assertTrue(usedExecutor[0]);
     }
+
+    @Test
+    void buildConfirmPanel_containsTitleAndWrappedDetail() {
+        javax.swing.JPanel panel = SwingToolConfirmationGate.buildConfirmPanel(
+                "The AI agent wants to run 'delete_element' on 'Test Plan/Thread Group'.");
+
+        javax.swing.JLabel title = null;
+        javax.swing.JTextArea detail = null;
+        for (java.awt.Component c : panel.getComponents()) {
+            if (c instanceof javax.swing.JLabel) {
+                title = (javax.swing.JLabel) c;
+            } else if (c instanceof javax.swing.JTextArea) {
+                detail = (javax.swing.JTextArea) c;
+            }
+        }
+
+        assertNotNull(title);
+        assertTrue(title.getFont().isBold());
+        assertNotNull(detail);
+        assertFalse(detail.isEditable());
+        assertTrue(detail.getLineWrap());
+        assertTrue(detail.getText().contains("delete_element"));
+    }
 }

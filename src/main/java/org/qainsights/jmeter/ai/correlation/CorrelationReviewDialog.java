@@ -78,6 +78,9 @@ public class CorrelationReviewDialog extends JDialog {
         table.getColumnModel().getColumn(5).setPreferredWidth(150);
         table.getColumnModel().getColumn(6).setPreferredWidth(60);
         table.setRowHeight(24);
+        table.setShowGrid(false);
+        table.setIntercellSpacing(new Dimension(8, 4));
+        table.setFillsViewportHeight(true);
 
         table.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
@@ -125,6 +128,7 @@ public class CorrelationReviewDialog extends JDialog {
         buttons.add(applyBtn);
         bottom.add(buttons, BorderLayout.EAST);
         add(bottom, BorderLayout.SOUTH);
+        getRootPane().setDefaultButton(applyBtn);
     }
 
     private void runCorrelation() {

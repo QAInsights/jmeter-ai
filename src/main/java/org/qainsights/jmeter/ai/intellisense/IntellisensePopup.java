@@ -18,6 +18,7 @@ public class IntellisensePopup {
         suggestionList = new JList<>();
         suggestionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         suggestionList.setFocusable(false);
+        suggestionList.setCellRenderer(new SuggestionCellRenderer());
         scrollPane = new JScrollPane(suggestionList);
         scrollPane.setBorder(null);
         popupMenu.setBorder(BorderFactory.createLineBorder(org.qainsights.jmeter.ai.gui.theme.ThemeColors.border()));
@@ -63,10 +64,41 @@ public class IntellisensePopup {
     
     /**
      * Gets the currently selected index in the suggestion list.
-     * 
+     *
      * @return The selected index, or 0 if nothing is selected
      */
     public int getSelectedIndex() {
         return suggestionList.getSelectedIndex();
+    }
+
+    /**
+     * Two-line suggestion cell: the command in bold on top, its one-line
+     * description in de-emphasized text below. Suggestions without a known
+     * description render as a single line.
+     */
+    static class SuggestionCellRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(
+                JList<?> list, Object value, int index,
+                boolean isSelected, boolean cellHasFocus) {
+            String command = value == null ? "" : value.toString();
+            String description = CommandIntellisenseProvider.getDescription(command);
+
+            JLabel label = (JLabel) super.getListCellRendererComponent(
+                    list, command, index, isSelected, cellHasFocus);
+
+            if (description.isEmpty()) {
+                label.setText(command);
+                label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+            } else {
+                Color secondary = org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText();
+                label.setText("<html><b>" + command + "</b><br>"
+                        + "<span style='color:rgb(" + secondary.getRed() + ","
+                        + secondary.getGreen() + "," + secondary.getBlue()
+                        + ");font-size:9px;'>" + description + "</span></html>");
+                label.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+            }
+            return label;
+        }
     }
 }
