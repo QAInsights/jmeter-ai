@@ -90,10 +90,25 @@ public final class AgentLoop {
      */
     public AgentResult run(String userMessage, Consumer<String> progress,
                             Consumer<AssistantTurn.ToolCall> onToolCallStarted) {
+        return run(userMessage, progress, onToolCallStarted, null);
+    }
+
+    /**
+     * Same as {@link #run(String, Consumer, Consumer)}, additionally forwarding the
+     * model's per-turn reasoning (extended thinking) to {@code reasoning} after each
+     * turn, so it can render in a thoughts card instead of being dropped.
+     *
+     * @param reasoning receives each turn's thinking text (may be null)
+     */
+    public AgentResult run(String userMessage, Consumer<String> progress,
+                            Consumer<AssistantTurn.ToolCall> onToolCallStarted,
+                            Consumer<String> reasoning) {
         Consumer<String> sink = progress == null ? s -> { } : progress;
         Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
+        Consumer<String> reasoningSink = reasoning == null ? s -> { } : reasoning;
 
         AssistantTurn turn = model.start(userMessage);
+        forwardReasoning(reasoningSink);
         int iterations = 1;
 
         while (true) {
@@ -117,7 +132,16 @@ public final class AgentLoop {
             }
 
             turn = model.next(outcomes);
+            forwardReasoning(reasoningSink);
             iterations++;
+        }
+    }
+
+    /** Drains the model's reasoning from the last turn into the sink (no-op when none). */
+    private void forwardReasoning(Consumer<String> reasoningSink) {
+        String reasoning = model.consumeLastReasoning();
+        if (reasoning != null && !reasoning.isBlank()) {
+            reasoningSink.accept(reasoning);
         }
     }
 

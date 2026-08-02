@@ -41,6 +41,15 @@ public interface CommandCallback {
 
     Runnable getAiStreamResponse(String message, java.util.function.Consumer<String> tokenConsumer, Runnable onComplete, java.util.function.Consumer<Exception> onError);
 
+    /**
+     * Appends a streamed reasoning (thinking) token to the transcript's
+     * thinking card. Default ignores reasoning; the chat panel routes it into
+     * the collapsible thoughts card (plain chat streaming and agent mode).
+     */
+    default void appendReasoningToken(String token) {
+        // no reasoning display by default
+    }
+
     // --- Shared data ---
 
     String getSelectedModel();

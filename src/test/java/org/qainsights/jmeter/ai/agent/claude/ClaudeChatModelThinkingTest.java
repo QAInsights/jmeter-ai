@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 
 import com.anthropic.core.JsonValue;
@@ -29,6 +30,26 @@ class ClaudeChatModelThinkingTest {
         json.put("stop_reason", "end_turn");
         json.put("usage", Map.of("input_tokens", 0, "output_tokens", 0));
         json.put("content", List.of(Map.of("type", "text", "text", text)));
+        return JsonValue.from(json).convert(Message.class);
+    }
+
+    /** A message with a thinking block followed by a text block. */
+    private static Message thinkingMessage(String thinking, String text) {
+        Map<String, Object> thinkingBlock = new LinkedHashMap<>();
+        thinkingBlock.put("type", "thinking");
+        thinkingBlock.put("thinking", thinking);
+        thinkingBlock.put("signature", "sig");
+        Map<String, Object> textBlock = new LinkedHashMap<>();
+        textBlock.put("type", "text");
+        textBlock.put("text", text);
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("id", "m_1");
+        json.put("type", "message");
+        json.put("role", "assistant");
+        json.put("model", "claude");
+        json.put("stop_reason", "end_turn");
+        json.put("usage", Map.of("input_tokens", 0, "output_tokens", 0));
+        json.put("content", List.of(thinkingBlock, textBlock));
         return JsonValue.from(json).convert(Message.class);
     }
 
@@ -84,6 +105,48 @@ class ClaudeChatModelThinkingTest {
                 "fable must get the adaptive thinking config, not a budget");
         // adaptive thinking needs no max_tokens bump
         assertEquals(1024, params.maxTokens());
+    }
+
+    @Test
+    void consumeLastReasoningReturnsThinkingFromLastTurn() {
+        ClaudeChatModel model = new ClaudeChatModel(
+                params -> thinkingMessage("deep thoughts", "the answer"), new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude-sonnet-4-6", 1024,
+                Collections.emptyList(), 2048L);
+
+        AssistantTurn turn = model.start("hi");
+
+        assertEquals("the answer", turn.getText());
+        assertEquals("deep thoughts", model.consumeLastReasoning());
+        // consuming clears it
+        assertNull(model.consumeLastReasoning());
+    }
+
+    @Test
+    void adaptiveRunSendsOutputConfigEffort() {
+        List<MessageCreateParams> captured = new ArrayList<>();
+        ClaudeChatModel model = new ClaudeChatModel(capturing(captured), new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude-fable-5", 1024,
+                Collections.emptyList(), 1L, "xhigh");
+
+        model.start("inspect the plan");
+
+        MessageCreateParams params = captured.get(0);
+        assertTrue(params.thinking().get().adaptive().isPresent());
+        assertEquals(com.anthropic.models.messages.OutputConfig.Effort.XHIGH,
+                params.outputConfig().orElseThrow().effort().orElseThrow());
+    }
+
+    @Test
+    void adaptiveRunWithoutEffortSendsNoOutputConfig() {
+        List<MessageCreateParams> captured = new ArrayList<>();
+        ClaudeChatModel model = new ClaudeChatModel(capturing(captured), new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude-fable-5", 1024,
+                Collections.emptyList(), 1L);
+
+        model.start("inspect the plan");
+
+        assertTrue(captured.get(0).outputConfig().isEmpty());
     }
 
     @Test

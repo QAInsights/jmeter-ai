@@ -199,11 +199,13 @@ public class MetaMuseAiService implements AiService {
         // summary=auto is what makes Muse's reasoning visible at all - Chat
         // Completions redacts the chain of thought for external callers.
         MetaReasoning.effortFor(reasoningSettings, modelToUse).ifPresent(effort -> {
+            Reasoning.Summary summaryLevel = summaryLevel();
             builder.reasoning(Reasoning.builder()
                     .effort(effort)
-                    .summary(Reasoning.Summary.AUTO)
+                    .summary(summaryLevel)
                     .build());
-            log.info("Reasoning effort set to {} with summary=auto for model {}", effort, modelToUse);
+            log.info("Reasoning effort set to {} with summary={} for model {}",
+                    effort, summaryLevel, modelToUse);
         });
 
         List<String> history = filterErrorMessages(buildLimitedHistory(conversation));
@@ -227,6 +229,23 @@ public class MetaMuseAiService implements AiService {
     private static ResponseInputItem inputItem(EasyInputMessage.Role role, String text) {
         return ResponseInputItem.ofEasyInputMessage(
                 EasyInputMessage.builder().role(role).content(text).build());
+    }
+
+    /**
+     * The reasoning-summary level to request: {@code meta.reasoning.summary} =
+     * auto (default), concise, or detailed. Unknown values fall back to auto.
+     */
+    static Reasoning.Summary summaryLevel() {
+        String level = AiConfig.getProperty("meta.reasoning.summary", "auto")
+                .trim().toLowerCase(java.util.Locale.ROOT);
+        switch (level) {
+            case "concise":
+                return Reasoning.Summary.CONCISE;
+            case "detailed":
+                return Reasoning.Summary.DETAILED;
+            default:
+                return Reasoning.Summary.AUTO;
+        }
     }
 
     /** Concatenated output text from a Responses API response. */

@@ -81,7 +81,7 @@ public final class AnthropicThinking {
     }
 
     /** Maps a lowercase effort level onto the SDK enum; unknown levels yield null. */
-    static OutputConfig.Effort toOutputEffort(String level) {
+    public static OutputConfig.Effort toOutputEffort(String level) {
         String normalized = level == null ? "" : level.trim().toLowerCase(Locale.ROOT);
         switch (normalized) {
             case "low":

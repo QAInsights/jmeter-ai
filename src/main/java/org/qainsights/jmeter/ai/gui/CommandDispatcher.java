@@ -452,7 +452,8 @@ public class CommandDispatcher {
                     try {
                         result = agent.run(message, priorTurns,
                                 line -> publish(AgentChunk.progress(line)),
-                                call -> glowController.onToolCallStarted(elementIdOf(call)));
+                                call -> glowController.onToolCallStarted(elementIdOf(call)),
+                                reasoning -> cb.appendReasoningToken(reasoning));
                     } finally {
                         glowController.onRunFinished();
                     }

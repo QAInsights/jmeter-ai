@@ -18,4 +18,15 @@ public interface ChatModel {
 
     /** Sends the outcomes of the previous turn's tool calls and returns the next turn. */
     AssistantTurn next(List<ToolOutcome> toolOutcomes);
+
+    /**
+     * Returns and clears the reasoning text captured from the most recent turn's
+     * response (e.g. a Claude thinking block), or null when there was none. The
+     * {@link AgentLoop} drains this after every turn and forwards it to the run's
+     * reasoning consumer, so extended thinking renders in the UI instead of being
+     * silently dropped by the tool adapters. Default: no reasoning.
+     */
+    default String consumeLastReasoning() {
+        return null;
+    }
 }

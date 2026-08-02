@@ -920,7 +920,8 @@ public class AiChatPanel
     }
 
     /** Routes a streamed reasoning token into the transcript's thinking card (on the EDT). */
-    private void appendReasoningToken(String token) {
+    @Override
+    public void appendReasoningToken(String token) {
         SwingUtilities.invokeLater(() -> {
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
@@ -1129,6 +1130,7 @@ public class AiChatPanel
     @Override
     public void onWorkerSuccess(String response) {
         removeLoadingIndicator();
+        runOnEdt(() -> transcript.finishReasoning());
         showNonStreamReasoning();
         processAiResponse(response);
         playResponseChime();

@@ -312,6 +312,8 @@ Both providers get the exact same tools, system prompt, safety gates and iterati
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
+> 💡 **Thinking in Agent Mode (Claude)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration — keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
+
 ### Claude vs. OpenAI: How the Adapters Differ
 
 Both providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical to both; only the wire format differs:
@@ -482,7 +484,7 @@ Effort levels shown in the dropdown come straight from the vendored per-model da
 | Gemini 3 | always on | low / high | `thinkingLevel` |
 | Ollama (thinking models) | yes | low / medium / high | Capability probed live via `/api/show`; UI overrides `ollama.thinking.*` properties |
 | Grok 4.5 | always on | low / medium / high | `reasoning_effort` (cannot be disabled); summarized reasoning shown in the Thoughts card |
-| Meta Muse Spark | always on | minimal / low / medium / high / xhigh | `reasoning_effort`; reasoning shown in the Thoughts card |
+| Meta Muse Spark | always on | minimal / low / medium / high / xhigh | `reasoning_effort` via the Responses API with `reasoning.summary`; summary shown in the Thoughts card (verbosity via `meta.reasoning.summary=auto\|concise\|detailed`, default `auto`) |
 | Bedrock: Claude | yes | low / medium / high / max (+ xhigh on newer) | Thinking JSON in `additionalModelRequestFields` (budget or adaptive) |
 | Bedrock: Nova 2 Lite | yes | low / medium / high | `reasoningConfig.maxReasoningEffort`; off by default; `high` drops temperature per AWS requirement |
 | Bedrock: OpenAI (gpt-oss, gpt-5.x) | gpt-5.x only | low / medium / high (+ none / xhigh / max on gpt-5.x) | `reasoning_effort` (snake_case) |

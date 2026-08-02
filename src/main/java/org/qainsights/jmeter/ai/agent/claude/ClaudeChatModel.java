@@ -42,7 +42,9 @@ public final class ClaudeChatModel implements ChatModel {
     private final String model;
     private final long maxTokens;
     private final Long thinkingBudget;
+    private final String thinkingEffort;
     private final List<MessageParam> history;
+    private String lastReasoning;
 
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens) {
@@ -69,6 +71,17 @@ public final class ClaudeChatModel implements ChatModel {
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory,
                            Long thinkingBudget) {
+        this(service, adapter, specs, systemPrompt, model, maxTokens, seedHistory, thinkingBudget, null);
+    }
+
+    /**
+     * @param thinkingBudget extended-thinking budget in tokens (or the adaptive marker), or null
+     * @param thinkingEffort effort level for adaptive-thinking models (fable family),
+     *                       sent via {@code output_config}; may be null
+     */
+    public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
+                           String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory,
+                           Long thinkingBudget, String thinkingEffort) {
         this.service = service;
         this.adapter = adapter;
         this.specs = new ArrayList<>(specs);
@@ -76,12 +89,20 @@ public final class ClaudeChatModel implements ChatModel {
         this.model = model;
         this.maxTokens = maxTokens;
         this.thinkingBudget = thinkingBudget;
+        this.thinkingEffort = thinkingEffort;
         this.history = new ArrayList<>(seedHistory);
     }
 
     /** The thinking budget this run was created with, or null when thinking is off. */
     public Long getThinkingBudget() {
         return thinkingBudget;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
     }
 
     /**
@@ -138,7 +159,14 @@ public final class ClaudeChatModel implements ChatModel {
             params.thinking(ThinkingConfigAdaptive.builder()
                     .display(ThinkingConfigAdaptive.Display.SUMMARIZED)
                     .build());
-            log.info("Agent run: adaptive thinking ENABLED for model {}", model);
+            com.anthropic.models.messages.OutputConfig.Effort effort =
+                    org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking.toOutputEffort(thinkingEffort);
+            if (effort != null) {
+                params.outputConfig(com.anthropic.models.messages.OutputConfig.builder()
+                        .effort(effort).build());
+            }
+            log.info("Agent run: adaptive thinking ENABLED for model {} (effort: {})",
+                    model, thinkingEffort == null ? "default" : thinkingEffort);
         } else if (thinkingOn) {
             params.thinking(ThinkingConfigEnabled.builder().budgetTokens(thinkingBudget).build());
             log.info("Agent run: thinking ENABLED for model {} with budget {} tokens", model, thinkingBudget);
@@ -149,6 +177,8 @@ public final class ClaudeChatModel implements ChatModel {
 
         Message response = service.create(params.build());
         history.add(response.toParam());
+        lastReasoning = org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking
+                .extractThinking(response.content());
         return adapter.toAssistantTurn(response.content());
     }
 }

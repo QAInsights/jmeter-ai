@@ -48,6 +48,7 @@ public final class JMeterAgent {
     public static final String MAX_TOKENS_KEY = "jmeter.ai.agent.max.tokens";
     public static final String MAX_ITERATIONS_KEY = "jmeter.ai.agent.max.iterations";
     public static final String CONFIRM_DESTRUCTIVE_KEY = "jmeter.ai.agent.confirm.destructive";
+    public static final String THINKING_EFFORT_KEY = "jmeter.ai.agent.thinking.effort";
 
     /** Max prior user/assistant turn *pairs* seeded into a run, to bound token usage. */
     private static final int MAX_HISTORY_TURN_PAIRS = 10;
@@ -101,12 +102,29 @@ public final class JMeterAgent {
     /**
      * Builds a factory that wires the Anthropic {@link ClaudeChatModel} for each run,
      * applying the user's reasoning settings (extended thinking on capable models).
+     * The effort comes from {@code jmeter.ai.agent.thinking.effort} when set,
+     * otherwise from the toolbar selection.
      */
     public static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
                                                       long maxTokens, ReasoningSettings reasoningSettings) {
         Long thinkingBudget = thinkingBudgetFor(reasoningSettings, model);
+        String effort = thinkingBudget == null ? null : effectiveAgentEffort(reasoningSettings);
         return (specs, systemPrompt, priorTurns) -> new ClaudeChatModel(service, new ClaudeToolAdapter(),
-                specs, systemPrompt, model, maxTokens, ClaudeChatModel.toSeedHistory(priorTurns), thinkingBudget);
+                specs, systemPrompt, model, maxTokens, ClaudeChatModel.toSeedHistory(priorTurns),
+                thinkingBudget, effort);
+    }
+
+    /**
+     * The effort level for an agent run: the {@code jmeter.ai.agent.thinking.effort}
+     * property when set (lets loops run cheaper than the chat), otherwise the
+     * toolbar's current selection.
+     */
+    static String effectiveAgentEffort(ReasoningSettings settings) {
+        String override = AiConfig.getProperty(THINKING_EFFORT_KEY, "").trim();
+        if (!override.isEmpty()) {
+            return override.toLowerCase(java.util.Locale.ROOT);
+        }
+        return settings != null ? settings.getEffort() : "medium";
     }
 
     /**
@@ -123,7 +141,7 @@ public final class JMeterAgent {
             return 1L;
         }
         return org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities
-                .anthropicBudgetTokens(settings.getEffort());
+                .anthropicBudgetTokens(effectiveAgentEffort(settings));
     }
 
     /** Builds a factory that wires the OpenAI {@link OpenAiChatModel} for each run. */
@@ -262,6 +280,18 @@ public final class JMeterAgent {
      */
     public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress,
                                       Consumer<AssistantTurn.ToolCall> onToolCallStarted) {
+        return run(userMessage, priorConversationTurns, progress, onToolCallStarted, null);
+    }
+
+    /**
+     * Same as {@link #run(String, List, Consumer, Consumer)}, additionally forwarding
+     * each turn's thinking text (extended thinking) to {@code reasoning}, so the UI
+     * can render it in a collapsed thoughts card per run.
+     *
+     * @param reasoning receives each turn's thinking text (may be null)
+     */
+    public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress,
+                                      Consumer<AssistantTurn.ToolCall> onToolCallStarted, Consumer<String> reasoning) {
         maybeWarnAboutUndoHistory(progress);
         ToolRegistry registry = AgentToolRegistry.createDefault();
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
@@ -269,7 +299,8 @@ public final class JMeterAgent {
         List<String> seedTurns = ConversationSeed.normalize(priorConversationTurns, MAX_HISTORY_TURN_PAIRS);
         List<ToolSpec> specs = registry.getSpecs();
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
-        return new AgentLoop(chat, executor, maxIterations).run(userMessage, progress, onToolCallStarted);
+        return new AgentLoop(chat, executor, maxIterations)
+                .run(userMessage, progress, onToolCallStarted, reasoning);
     }
 
     private static long parseLong(String value, long fallback) {
