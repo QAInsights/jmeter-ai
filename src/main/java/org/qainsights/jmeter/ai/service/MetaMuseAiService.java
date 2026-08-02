@@ -37,6 +37,8 @@ public class MetaMuseAiService implements AiService {
     private final long maxTokens;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private final java.util.concurrent.atomic.AtomicBoolean extraFieldsLogged =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public MetaMuseAiService() {
         String apiKey = AiConfig.getProperty("meta.api.key", "");
@@ -157,8 +159,12 @@ public class MetaMuseAiService implements AiService {
                     stream.stream()
                             .flatMap(chunk -> chunk.choices().stream())
                             .forEach(choice -> {
-                                String reasoning = DeepSeekReasoning.reasoningContent(
-                                        choice.delta()._additionalProperties());
+                                java.util.Map<String, com.openai.core.JsonValue> extraFields =
+                                        choice.delta()._additionalProperties();
+                                if (!extraFields.isEmpty() && extraFieldsLogged.compareAndSet(false, true)) {
+                                    log.info("Meta Muse stream extra fields: {}", extraFields.keySet());
+                                }
+                                String reasoning = DeepSeekReasoning.reasoningContent(extraFields);
                                 if (reasoning != null && !reasoning.isEmpty()) {
                                     javax.swing.SwingUtilities.invokeLater(
                                             () -> reasoningConsumer.accept(reasoning));
