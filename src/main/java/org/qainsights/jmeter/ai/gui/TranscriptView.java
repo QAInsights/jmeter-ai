@@ -37,6 +37,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     private MessageCard streamingCard;
     private ToolActivityGroup activityGroup;
     private ThinkingRow thinkingRow;
+    private ThinkingCard thinkingCard;
 
     TranscriptView(Font baseFont) {
         this.baseFont = baseFont;
@@ -94,6 +95,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     /** Appends a raw token to the streaming card (starts one if needed). */
     void appendStreamToken(String token) {
+        finishReasoningIfRunning();
         if (streamingCard == null) {
             beginAssistantStream();
         }
@@ -131,6 +133,46 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         }
     }
 
+    // --- Reasoning (thinking) card -------------------------------------------
+
+    /** Appends a streamed reasoning token to the current (or a new) thinking card. */
+    void appendReasoningToken(String token) {
+        if (thinkingCard == null || !thinkingCard.isRunning()) {
+            finishReasoningIfRunning();
+            thinkingCard = new ThinkingCard();
+            thinkingCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+            insertBeforeGlue(thinkingCard);
+        }
+        thinkingCard.appendText(token);
+        relayout(thinkingCard);
+    }
+
+    /** Finishes the current thinking card (auto-collapses it). No-op when none. */
+    void finishReasoning() {
+        finishReasoningIfRunning();
+    }
+
+    /** Adds an already-collapsed thinking card (non-streaming responses). */
+    void addReasoningBlock(String reasoning) {
+        if (reasoning == null || reasoning.isBlank()) {
+            return;
+        }
+        finishReasoningIfRunning();
+        ThinkingCard card = new ThinkingCard();
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        insertBeforeGlue(card);
+        card.appendText(reasoning);
+        card.finish();
+        thinkingCard = card;
+        relayout(card);
+    }
+
+    private void finishReasoningIfRunning() {
+        if (thinkingCard != null && thinkingCard.isRunning()) {
+            thinkingCard.finish();
+        }
+    }
+
     // --- Thinking indicator ---------------------------------------------------
 
     /** Shows the animated "thinking" row at the bottom of the transcript. */
@@ -162,6 +204,10 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         if (activityGroup != null) {
             activityGroup.dispose();
             activityGroup = null;
+        }
+        if (thinkingCard != null) {
+            thinkingCard.dispose();
+            thinkingCard = null;
         }
         streamingCard = null;
         cards.clear();
@@ -233,6 +279,11 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     /** The card at the given index (for tests). */
     MessageCard getCard(int index) {
         return cards.get(index);
+    }
+
+    /** The current thinking card, or null when no reasoning was shown (for tests). */
+    ThinkingCard getThinkingCard() {
+        return thinkingCard;
     }
 
     // --- Internals ---------------------------------------------------------------

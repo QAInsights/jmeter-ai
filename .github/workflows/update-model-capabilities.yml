@@ -1,0 +1,49 @@
+name: Update model capabilities
+
+# Refreshes the vendored models.dev capability file on a schedule and opens a
+# PR with the diff. The vendored file is the reviewable pin - nothing is
+# fetched at runtime.
+on:
+  schedule:
+    # Weekly, Mondays 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refresh vendored capabilities
+        shell: powershell
+        run: ./scripts/Update-ModelCapabilities.ps1
+
+      - name: Check for changes
+        id: changes
+        shell: powershell
+        run: |
+          git add src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json
+          if (git diff --cached --quiet) {
+            "changed=false" | Out-File $env:GITHUB_OUTPUT -Append
+          } else {
+            "changed=true" | Out-File $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $branch = "chore/model-capabilities-$(Get-Date -Format 'yyyy-MM-dd')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b $branch
+          git commit -m "chore: refresh vendored models.dev capabilities"
+          git push -u origin $branch
+          gh pr create --title "chore: refresh vendored models.dev capabilities" --body "Automated weekly refresh of ``src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`` from https://models.dev/api.json (via ``scripts/Update-ModelCapabilities.ps1``).`n`nReview the diff like any dependency bump: new models gain Thinking/effort controls, removed/retired models lose them."

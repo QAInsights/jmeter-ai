@@ -6,9 +6,11 @@ import com.anthropic.core.http.StreamResponse;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.RawMessageStreamEvent;
-import com.anthropic.models.messages.TextDelta;
 import java.util.List;
 import java.util.function.Consumer;
+import org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.usage.AnthropicUsage;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
@@ -30,6 +32,8 @@ public class ClaudeService implements AiService {
     private String systemPrompt;
     private boolean systemPromptInitialized = false;
     private long maxTokens;
+    private ReasoningSettings reasoningSettings;
+    private String lastReasoning;
 
     public ClaudeService() {
         // Default history size of 10, can be configured through jmeter.properties
@@ -135,6 +139,40 @@ public class ClaudeService implements AiService {
         log.info("Max tokens set to: {}", maxTokens);
     }
 
+    @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    /** The reasoning settings injected via {@link #setReasoningSettings} (may be null). */
+    public ReasoningSettings getReasoningSettings() {
+        return reasoningSettings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    /** True when the user enabled thinking and the model supports the toggle. */
+    private boolean thinkingApplies(String model) {
+        return AnthropicThinking.applies(reasoningSettings, model);
+    }
+
+    /**
+     * The thinking budget to request for the current model/settings, or 0 when
+     * thinking does not apply (toggle off, model not thinking-capable, or an
+     * adaptive-thinking model like fable that takes no budget).
+     */
+    private long thinkingBudget(String model) {
+        return AnthropicThinking.applies(reasoningSettings, model)
+            && !AnthropicThinking.isAdaptiveThinkingModel(model)
+            ? ReasoningCapabilities.anthropicBudgetTokens(reasoningSettings.getEffort())
+            : 0;
+    }
+
     /**
      * Resets the system prompt initialization flag.
      * This should be called when starting a new conversation.
@@ -211,12 +249,31 @@ public class ClaudeService implements AiService {
             }
 
             // Build the request parameters
+            boolean thinkingOn = thinkingApplies(currentModelId);
+            long thinkingBudget = thinkingBudget(currentModelId);
             MessageCreateParams.Builder paramsBuilder =
                 MessageCreateParams.builder()
-                    .maxTokens(maxTokens)
+                    .maxTokens(
+                        AnthropicThinking.effectiveMaxTokens(
+                            maxTokens,
+                            thinkingBudget
+                        )
+                    )
                     .model(currentModelId);
 
-            if (!currentModelId.contains("fable")) {
+            if (thinkingOn) {
+                AnthropicThinking.applyTo(
+                    paramsBuilder,
+                    reasoningSettings,
+                    currentModelId
+                );
+                log.info(
+                    "Thinking enabled for {} (budget: {})",
+                    currentModelId,
+                    thinkingBudget > 0 ? thinkingBudget : "adaptive"
+                );
+            } else if (!currentModelId.contains("fable")) {
+                // Extended thinking forbids a custom temperature
                 paramsBuilder.temperature(temperature);
             }
 
@@ -273,10 +330,10 @@ public class ClaudeService implements AiService {
                 estimatedPromptTokens += estimateTokens(systemPrompt);
             }
 
-            // Estimate response tokens
-            String responseText = String.valueOf(
-                message.content().get(0).text().get().text()
-            );
+            // Estimate response tokens. Thinking blocks (when enabled) come
+            // first in the content list, so extract text blocks explicitly.
+            lastReasoning = AnthropicThinking.extractThinking(message);
+            String responseText = AnthropicThinking.extractText(message);
             long estimatedCompletionTokens = estimateTokens(responseText);
 
             // Record the estimated usage
@@ -323,6 +380,25 @@ public class ClaudeService implements AiService {
         Runnable onComplete,
         Consumer<Exception> onError
     ) {
+        return generateStreamResponse(
+            conversation,
+            model,
+            tokenConsumer,
+            reasoning -> {},
+            onComplete,
+            onError
+        );
+    }
+
+    @Override
+    public Runnable generateStreamResponse(
+        List<String> conversation,
+        String model,
+        Consumer<String> tokenConsumer,
+        Consumer<String> reasoningConsumer,
+        Runnable onComplete,
+        Consumer<Exception> onError
+    ) {
         log.info(
             "Generating streaming response with specified model: {}",
             model
@@ -352,12 +428,26 @@ public class ClaudeService implements AiService {
             );
         }
 
+        boolean thinkingOn = thinkingApplies(modelToUse);
+        long thinkingBudget = thinkingBudget(modelToUse);
         MessageCreateParams.Builder paramsBuilder =
             MessageCreateParams.builder()
-                .maxTokens(maxTokens)
+                .maxTokens(
+                    AnthropicThinking.effectiveMaxTokens(
+                        maxTokens,
+                        thinkingBudget
+                    )
+                )
                 .model(modelToUse);
 
-        if (!modelToUse.contains("fable")) {
+        if (thinkingOn) {
+            AnthropicThinking.applyTo(
+                paramsBuilder,
+                reasoningSettings,
+                modelToUse
+            );
+        } else if (!modelToUse.contains("fable")) {
+            // Extended thinking forbids a custom temperature
             paramsBuilder.temperature(temperature);
         }
 
@@ -397,13 +487,18 @@ public class ClaudeService implements AiService {
                 stream
                     .stream()
                     .flatMap(event -> event.contentBlockDelta().stream())
-                    .flatMap(delta -> delta.delta().text().stream())
-                    .map(TextDelta::text)
-                    .forEach(text -> {
-                        fullResponse.append(text);
-                        javax.swing.SwingUtilities.invokeLater(() ->
-                            tokenConsumer.accept(text)
+                    .forEach(blockDelta -> {
+                        blockDelta.delta().thinking().ifPresent(thinking ->
+                            javax.swing.SwingUtilities.invokeLater(() ->
+                                reasoningConsumer.accept(thinking.thinking())
+                            )
                         );
+                        blockDelta.delta().text().ifPresent(text -> {
+                            fullResponse.append(text.text());
+                            javax.swing.SwingUtilities.invokeLater(() ->
+                                tokenConsumer.accept(text.text())
+                            );
+                        });
                     });
 
                 long estimatedCompletionTokens = estimateTokens(

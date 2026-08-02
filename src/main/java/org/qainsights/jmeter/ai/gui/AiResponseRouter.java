@@ -124,48 +124,64 @@ public class AiResponseRouter {
      * @return a cancel handle as a Runnable
      */
     public Runnable generateStreamResponse(String selectedModel, List<String> conversationHistory, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        return generateStreamResponse(selectedModel, conversationHistory, tokenConsumer, token -> {}, onComplete, onError);
+    }
+
+    /**
+     * Generates a streaming AI response with a separate channel for reasoning
+     * (thinking) tokens, using the service corresponding to the selected model ID.
+     *
+     * @param selectedModel       the model ID from the selector
+     * @param conversationHistory the current conversation history
+     * @param tokenConsumer       callback for each answer token chunk
+     * @param reasoningConsumer   callback for each reasoning token chunk
+     * @param onComplete          callback for stream completion
+     * @param onError             callback for stream error
+     * @return a cancel handle as a Runnable
+     */
+    public Runnable generateStreamResponse(String selectedModel, List<String> conversationHistory, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (selectedModel == null) {
             log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
-            return claudeService.generateStreamResponse(conversationHistory, claudeService.getCurrentModel(), tokenConsumer, onComplete, onError);
+            return claudeService.generateStreamResponse(conversationHistory, claudeService.getCurrentModel(), tokenConsumer, reasoningConsumer, onComplete, onError);
         }
 
         log.info("Using model from dropdown for stream: {}", selectedModel);
         if (selectedModel.startsWith("openai:")) {
             String openAiModelId = selectedModel.substring(7);
-            return openAiService.generateStreamResponse(conversationHistory, openAiModelId, tokenConsumer, onComplete, onError);
+            return openAiService.generateStreamResponse(conversationHistory, openAiModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
         } else if (selectedModel.startsWith("ollama:")) {
             String ollamaModelId = selectedModel.substring(7);
-            return ollamaService.generateStreamResponse(conversationHistory, ollamaModelId, tokenConsumer, onComplete, onError);
+            return ollamaService.generateStreamResponse(conversationHistory, ollamaModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
         } else if (selectedModel.startsWith("deepseek:")) {
             String deepseekModelId = selectedModel.substring(9);
-            return deepseekService.generateStreamResponse(conversationHistory, deepseekModelId, tokenConsumer, onComplete, onError);
+            return deepseekService.generateStreamResponse(conversationHistory, deepseekModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
         } else if (selectedModel.startsWith("google:")) {
             String googleModelId = selectedModel.substring(7);
             if (googleService != null) {
-                return googleService.generateStreamResponse(conversationHistory, googleModelId, tokenConsumer, onComplete, onError);
+                return googleService.generateStreamResponse(conversationHistory, googleModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
         } else if (selectedModel.startsWith("grok:")) {
             String grokModelId = selectedModel.substring(5);
             if (grokService != null) {
-                return grokService.generateStreamResponse(conversationHistory, grokModelId, tokenConsumer, onComplete, onError);
+                return grokService.generateStreamResponse(conversationHistory, grokModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
         } else if (selectedModel.startsWith("meta:")) {
             String metaModelId = selectedModel.substring(5);
             if (metaMuseService != null) {
-                return metaMuseService.generateStreamResponse(conversationHistory, metaModelId, tokenConsumer, onComplete, onError);
+                return metaMuseService.generateStreamResponse(conversationHistory, metaModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
         } else if (selectedModel.startsWith("bedrock:")) {
             String bedrockModelId = selectedModel.substring(8);
             if (bedrockService != null) {
-                return bedrockService.generateStreamResponse(conversationHistory, bedrockModelId, tokenConsumer, onComplete, onError);
+                return bedrockService.generateStreamResponse(conversationHistory, bedrockModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
         } else {
             // Anthropic
-            return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, onComplete, onError);
+            return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, reasoningConsumer, onComplete, onError);
         }
     }
 

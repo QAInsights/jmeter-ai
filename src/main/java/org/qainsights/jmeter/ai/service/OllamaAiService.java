@@ -7,7 +7,9 @@ import io.github.ollama4j.models.chat.OllamaChatResult;
 import io.github.ollama4j.models.chat.OllamaChatStreamObserver;
 import io.github.ollama4j.models.request.ThinkMode;
 import io.github.ollama4j.models.response.Model;
+import io.github.ollama4j.models.response.ModelDetail;
 import io.github.ollama4j.utils.OptionsBuilder;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.slf4j.Logger;
@@ -30,6 +32,11 @@ public class OllamaAiService implements AiService {
     private final ThinkMode thinkingMode;
     private final long requestTimeoutSeconds;
     private final String systemPrompt;
+    private ReasoningSettings reasoningSettings;
+    private String lastReasoning;
+    /** Live capability probe results per model name (Ollama /api/show). */
+    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> thinkingCapabilityCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
 
     public OllamaAiService() {
@@ -158,6 +165,97 @@ public class OllamaAiService implements AiService {
     }
 
     @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    /**
+     * The probed thinking capability of an Ollama model, or empty when not yet
+     * resolved. Ollama reports real capabilities per installed model via
+     * {@code /api/show} (e.g. "completion", "tools", "thinking", "vision").
+     */
+    public java.util.Optional<Boolean> probeThinkingCapability(String model) {
+        if (model == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.ofNullable(thinkingCapabilityCache.get(model));
+    }
+
+    /**
+     * Resolves a model's thinking capability in the background (never blocks the
+     * caller), caches the result, and runs {@code onResolved} on the EDT. Safe to
+     * call repeatedly - a cached or in-flight resolution wins.
+     */
+    public void resolveThinkingCapability(String model, Runnable onResolved) {
+        if (model == null || thinkingCapabilityCache.containsKey(model)) {
+            if (onResolved != null) {
+                javax.swing.SwingUtilities.invokeLater(onResolved);
+            }
+            return;
+        }
+        Thread probe = new Thread(() -> {
+            boolean supportsThinking = false;
+            try {
+                String[] capabilities = fetchCapabilities(model);
+                if (capabilities != null) {
+                    for (String capability : capabilities) {
+                        if ("thinking".equalsIgnoreCase(capability)) {
+                            supportsThinking = true;
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Capability probe failed for Ollama model {}: {}", model, e.getMessage());
+            }
+            thinkingCapabilityCache.put(model, supportsThinking);
+            logger.info("Ollama model {} thinking capability: {}", model, supportsThinking);
+            if (onResolved != null) {
+                javax.swing.SwingUtilities.invokeLater(onResolved);
+            }
+        });
+        probe.setDaemon(true);
+        probe.start();
+    }
+
+    /** Seam over the Ollama {@code /api/show} call for tests. */
+    String[] fetchCapabilities(String model) throws Exception {
+        ModelDetail detail = ollamaClient.getModelDetails(model);
+        return detail != null ? detail.getCapabilities() : null;
+    }
+
+    /**
+     * True when thinking should be requested. The UI toggle wins once the user
+     * has flipped it; before that the {@code ollama.thinking.mode} property is
+     * the default (legacy behavior preserved).
+     */
+    boolean isThinkingEnabled() {
+        if (reasoningSettings != null && reasoningSettings.isThinkingToggled()) {
+            return reasoningSettings.isThinkingEnabled();
+        }
+        return isThinkingModeEnabled;
+    }
+
+    /**
+     * The thinking level to request. The UI effort wins once the user has
+     * picked one; before that the {@code ollama.thinking.level} property is
+     * the default.
+     */
+    ThinkMode effectiveThinkingMode() {
+        if (reasoningSettings != null && reasoningSettings.isEffortTouched()) {
+            return parseThinkingMode(reasoningSettings.getEffort());
+        }
+        return thinkingMode;
+    }
+
+    @Override
     public String generateResponse(List<String> messages, String systemPrompt) {
 
         OllamaChatRequest request = OllamaChatRequest.builder();
@@ -198,6 +296,8 @@ public class OllamaAiService implements AiService {
             }
 
             result = ollamaClient.chat(request, null);
+            String thinking = result.getResponseModel().getMessage().getThinking();
+            lastReasoning = (thinking != null && !thinking.isBlank()) ? thinking : null;
             return result.getResponseModel().getMessage().getResponse();
 
         } catch (Exception e) {
@@ -208,6 +308,11 @@ public class OllamaAiService implements AiService {
 
     @Override
     public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, model, tokenConsumer, reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (model != null && !model.isEmpty()) {
             this.model = model;
         }
@@ -243,6 +348,11 @@ public class OllamaAiService implements AiService {
                         tokenConsumer.accept(token);
                     }
                 });
+                observer.setThinkingStreamHandler(token -> {
+                    if (!Thread.currentThread().isInterrupted()) {
+                        reasoningConsumer.accept(token);
+                    }
+                });
 
                 ollamaClient.chat(request, observer);
 
@@ -266,8 +376,8 @@ public class OllamaAiService implements AiService {
 
     private OllamaChatRequest buildOllamaChatRequest(OllamaChatRequest request) {
 
-        if (isThinkingModeEnabled && isThinkingModeValid()) {
-            return request.withThinking(this.thinkingMode)
+        if (isThinkingEnabled() && isThinkingModeValid()) {
+            return request.withThinking(effectiveThinkingMode())
                     .withOptions(new OptionsBuilder().setTemperature(this.temperature).build())
                     .withModel(this.model).build();
         } else {

@@ -6,6 +6,9 @@ import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.models.Model;
+import org.qainsights.jmeter.ai.service.reasoning.DeepSeekReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.GrokReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.ModelUtils;
@@ -34,6 +37,8 @@ public class GrokAiService implements AiService {
     private String model;
     private final float temperature;
     private final long maxTokens;
+    private ReasoningSettings reasoningSettings;
+    private String lastReasoning;
 
     public GrokAiService() {
         String apiKey = AiConfig.getProperty("grok.api.key", "");
@@ -90,6 +95,18 @@ public class GrokAiService implements AiService {
     }
 
     @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    @Override
     public String getName() {
         return "Grok";
     }
@@ -112,6 +129,11 @@ public class GrokAiService implements AiService {
                     .model(modelToUse)
                     .temperature((double) temperature);
 
+            GrokReasoning.effortFor(reasoningSettings, modelToUse).ifPresent(effort -> {
+                paramsBuilder.reasoningEffort(effort);
+                log.info("Reasoning effort set to {} for model {}", effort, modelToUse);
+            });
+
             paramsBuilder.addSystemMessage(systemPrompt);
 
             List<String> cleanHistory = filterErrorMessages(buildLimitedHistory(conversation));
@@ -125,6 +147,8 @@ public class GrokAiService implements AiService {
             ChatCompletion chatCompletion = openAiClient.chat().completions().create(params);
 
             ChatCompletion.Choice choice = chatCompletion.choices().get(0);
+            lastReasoning = DeepSeekReasoning.reasoningContent(
+                    choice.message()._additionalProperties());
             return choice.message().content().orElse("No content available");
 
         } catch (Exception e) {
@@ -138,6 +162,16 @@ public class GrokAiService implements AiService {
                                            Consumer<String> tokenConsumer,
                                            Runnable onComplete,
                                            Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, model, tokenConsumer,
+                reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model,
+                                           Consumer<String> tokenConsumer,
+                                           Consumer<String> reasoningConsumer,
+                                           Runnable onComplete,
+                                           Consumer<Exception> onError) {
         if (openAiClient == null) {
             return () -> {};
         }
@@ -147,6 +181,11 @@ public class GrokAiService implements AiService {
                 .maxCompletionTokens(maxTokens)
                 .model(modelToUse)
                 .temperature((double) temperature);
+
+        GrokReasoning.effortFor(reasoningSettings, modelToUse).ifPresent(effort -> {
+            paramsBuilder.reasoningEffort(effort);
+            log.info("Reasoning effort set to {} for model {}", effort, modelToUse);
+        });
 
         paramsBuilder.addSystemMessage(systemPrompt);
 
@@ -165,10 +204,17 @@ public class GrokAiService implements AiService {
                              openAiClient.chat().completions().createStreaming(params)) {
                     stream.stream()
                             .flatMap(chunk -> chunk.choices().stream())
-                            .flatMap(choice -> choice.delta().content().stream())
-                            .forEach(text ->
+                            .forEach(choice -> {
+                                String reasoning = DeepSeekReasoning.reasoningContent(
+                                        choice.delta()._additionalProperties());
+                                if (reasoning != null && !reasoning.isEmpty()) {
                                     javax.swing.SwingUtilities.invokeLater(
-                                            () -> tokenConsumer.accept(text)));
+                                            () -> reasoningConsumer.accept(reasoning));
+                                }
+                                choice.delta().content().ifPresent(text ->
+                                        javax.swing.SwingUtilities.invokeLater(
+                                                () -> tokenConsumer.accept(text)));
+                            });
                 }
                 javax.swing.SwingUtilities.invokeLater(onComplete);
             } catch (Exception e) {

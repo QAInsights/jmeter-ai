@@ -60,13 +60,25 @@ public final class OpenAiChatModel implements ChatModel {
     public OpenAiChatModel(CompletionService service, OpenAiToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens,
                            List<ChatCompletionMessageParam> seedHistory) {
+        this(service, adapter, specs, systemPrompt, model, maxTokens, seedHistory, null);
+    }
+
+    /**
+     * @param seedHistory       prior conversation turns to prepend before the new user message
+     * @param reasoningSettings the user's reasoning choices (may be null); combined with the
+     *                          tool-calling constraints by {@link OpenAiReasoningPolicy}
+     */
+    public OpenAiChatModel(CompletionService service, OpenAiToolAdapter adapter, List<ToolSpec> specs,
+                           String systemPrompt, String model, long maxTokens,
+                           List<ChatCompletionMessageParam> seedHistory,
+                           org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings reasoningSettings) {
         this.service = service;
         this.adapter = adapter;
         this.specs = new ArrayList<>(specs);
         this.systemPrompt = systemPrompt;
         this.model = model;
         this.maxTokens = maxTokens;
-        this.reasoningEffort = OpenAiReasoningPolicy.forToolCalling(model);
+        this.reasoningEffort = OpenAiReasoningPolicy.forToolCalling(model, reasoningSettings);
         this.history = new ArrayList<>(seedHistory);
     }
 

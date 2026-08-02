@@ -12,6 +12,8 @@ import com.openai.core.http.StreamResponse;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.qainsights.jmeter.ai.service.reasoning.OpenAiReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.usage.OpenAiUsage;
@@ -27,6 +29,7 @@ public class OpenAiService implements AiService {
     private float temperature;
     private String systemPrompt;
     private long maxTokens;
+    private ReasoningSettings reasoningSettings;
 
     public OpenAiService() {
         String API_KEY = AiConfig.getProperty("openai.api.key", "");
@@ -108,6 +111,16 @@ public class OpenAiService implements AiService {
         return maxTokens;
     }
 
+    @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    /** The reasoning settings injected via {@link #setReasoningSettings} (may be null). */
+    public ReasoningSettings getReasoningSettings() {
+        return reasoningSettings;
+    }
+
     /**
      * Resets the system prompt initialization flag.
      * This should be called when starting a new conversation.
@@ -183,6 +196,12 @@ public class OpenAiService implements AiService {
             } else {
                 log.info("Skipping temperature setting for model {} (uses default only)", currentModelId);
             }
+
+            OpenAiReasoning.effortFor(reasoningSettings, currentModelId)
+                    .ifPresent(effort -> {
+                        paramsBuilder.reasoningEffort(effort);
+                        log.info("Reasoning effort set to {} for model {}", effort, currentModelId);
+                    });
 
             // Always include the system prompt
             paramsBuilder.addSystemMessage(systemPrompt);
@@ -377,6 +396,12 @@ public class OpenAiService implements AiService {
         } else {
             log.info("Skipping temperature setting for model {} (uses default only)", modelToUse);
         }
+
+        OpenAiReasoning.effortFor(reasoningSettings, modelToUse)
+                .ifPresent(effort -> {
+                    paramsBuilder.reasoningEffort(effort);
+                    log.info("Reasoning effort set to {} for model {}", effort, modelToUse);
+                });
 
         paramsBuilder.addSystemMessage(systemPrompt);
 

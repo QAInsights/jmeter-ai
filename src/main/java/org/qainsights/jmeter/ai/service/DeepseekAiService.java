@@ -12,6 +12,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import org.qainsights.jmeter.ai.service.reasoning.DeepSeekReasoning;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.ModelUtils;
@@ -35,6 +36,7 @@ public class DeepseekAiService implements AiService {
     private String model;
     private float temperature;
     private long maxTokens;
+    private String lastReasoning;
 
     public DeepseekAiService() {
         String apiKey = AiConfig.getProperty("deepseek.api.key", "");
@@ -113,6 +115,13 @@ public class DeepseekAiService implements AiService {
     }
 
     @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    @Override
     public String getName() {
         return "DeepSeek";
     }
@@ -168,6 +177,8 @@ public class DeepseekAiService implements AiService {
             ChatCompletion chatCompletion = openAiClient.chat().completions().create(params);
 
             ChatCompletion.Choice choice = chatCompletion.choices().get(0);
+            lastReasoning = DeepSeekReasoning.reasoningContent(
+                    choice.message()._additionalProperties());
             return choice.message().content().orElse("No content available");
 
         } catch (Exception e) {
@@ -228,14 +239,19 @@ public class DeepseekAiService implements AiService {
 
     @Override
     public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, model, tokenConsumer, reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (isAnthropicFormat) {
             return generateAnthropicStreamResponse(conversation, model, tokenConsumer, onComplete, onError);
         } else {
-            return generateOpenAiStreamResponse(conversation, model, tokenConsumer, onComplete, onError);
+            return generateOpenAiStreamResponse(conversation, model, tokenConsumer, reasoningConsumer, onComplete, onError);
         }
     }
 
-    private Runnable generateOpenAiStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+    private Runnable generateOpenAiStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (openAiClient == null) {
             return () -> {
             };
@@ -275,9 +291,16 @@ public class DeepseekAiService implements AiService {
                 try (com.openai.core.http.StreamResponse<ChatCompletionChunk> stream = openAiClient.chat().completions().createStreaming(params)) {
                     stream.stream()
                             .flatMap(chunk -> chunk.choices().stream())
-                            .flatMap(choice -> choice.delta().content().stream())
-                            .forEach(text -> {
-                                javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
+                            .forEach(choice -> {
+                                String reasoning = DeepSeekReasoning.reasoningContent(
+                                        choice.delta()._additionalProperties());
+                                if (reasoning != null && !reasoning.isEmpty()) {
+                                    javax.swing.SwingUtilities.invokeLater(
+                                            () -> reasoningConsumer.accept(reasoning));
+                                }
+                                choice.delta().content().ifPresent(text ->
+                                        javax.swing.SwingUtilities.invokeLater(
+                                                () -> tokenConsumer.accept(text)));
                             });
                 }
 

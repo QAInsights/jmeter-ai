@@ -6,6 +6,9 @@ import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.models.Model;
+import org.qainsights.jmeter.ai.service.reasoning.DeepSeekReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.MetaReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.ModelUtils;
@@ -32,6 +35,8 @@ public class MetaMuseAiService implements AiService {
     private String model;
     private final float temperature;
     private final long maxTokens;
+    private ReasoningSettings reasoningSettings;
+    private String lastReasoning;
 
     public MetaMuseAiService() {
         String apiKey = AiConfig.getProperty("meta.api.key", "");
@@ -88,6 +93,18 @@ public class MetaMuseAiService implements AiService {
     }
 
     @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    @Override
     public String getName() {
         return "Meta Muse";
     }
@@ -105,6 +122,8 @@ public class MetaMuseAiService implements AiService {
         try {
             ChatCompletionCreateParams params = buildParams(conversation, model);
             ChatCompletion completion = client.chat().completions().create(params);
+            lastReasoning = DeepSeekReasoning.reasoningContent(
+                    completion.choices().get(0).message()._additionalProperties());
             return completion.choices().get(0).message().content().orElse("No content available");
         } catch (Exception e) {
             log.error("Error generating response from Meta Muse", e);
@@ -117,6 +136,16 @@ public class MetaMuseAiService implements AiService {
                                            Consumer<String> tokenConsumer,
                                            Runnable onComplete,
                                            Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, model, tokenConsumer,
+                reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model,
+                                           Consumer<String> tokenConsumer,
+                                           Consumer<String> reasoningConsumer,
+                                           Runnable onComplete,
+                                           Consumer<Exception> onError) {
         if (client == null) {
             return () -> {};
         }
@@ -127,8 +156,17 @@ public class MetaMuseAiService implements AiService {
                              client.chat().completions().createStreaming(params)) {
                     stream.stream()
                             .flatMap(chunk -> chunk.choices().stream())
-                            .flatMap(choice -> choice.delta().content().stream())
-                            .forEach(text -> javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text)));
+                            .forEach(choice -> {
+                                String reasoning = DeepSeekReasoning.reasoningContent(
+                                        choice.delta()._additionalProperties());
+                                if (reasoning != null && !reasoning.isEmpty()) {
+                                    javax.swing.SwingUtilities.invokeLater(
+                                            () -> reasoningConsumer.accept(reasoning));
+                                }
+                                choice.delta().content().ifPresent(text ->
+                                        javax.swing.SwingUtilities.invokeLater(
+                                                () -> tokenConsumer.accept(text)));
+                            });
                 }
                 javax.swing.SwingUtilities.invokeLater(onComplete);
             } catch (Exception e) {
@@ -154,6 +192,11 @@ public class MetaMuseAiService implements AiService {
                 .model(modelToUse)
                 .temperature((double) temperature)
                 .addSystemMessage(systemPrompt);
+
+        MetaReasoning.effortFor(reasoningSettings, modelToUse).ifPresent(effort -> {
+            builder.reasoningEffort(effort);
+            log.info("Reasoning effort set to {} for model {}", effort, modelToUse);
+        });
 
         List<String> history = filterErrorMessages(buildLimitedHistory(conversation));
         if (history.isEmpty()) {

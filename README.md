@@ -54,6 +54,7 @@
 | 🤖 **Agent Mode** | AI autonomously edits your test plan (add elements, set properties, run tests, correlate dynamic values) through 18 tools. **Claude & OpenAI.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown, no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
+|| 🧠 **Thinking & Effort** | Per-model **Thinking** toggle and effort selector in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
 
 ---
 
@@ -462,6 +463,46 @@ All configured AI services that support streaming provide real-time responses. A
 ```properties
 jmeter.ai.streaming.enabled=false
 ```
+
+## 🧠 Thinking & Effort
+
+Next to the model selector, a **Thinking** toggle and an **effort** dropdown appear automatically when the selected model supports them - models with no reasoning support (e.g. `gpt-4o`) hide both. Reasoning streams into a collapsible **Thoughts** card above the answer, in both plain chat and Agent Mode.
+
+Effort levels shown in the dropdown come straight from the vendored per-model data (models.dev), so newer levels like `xhigh`/`max` appear automatically where supported.
+
+| Model family | Thinking toggle | Effort levels | Notes |
+|---|---|---|---|
+| Claude 4.x (Anthropic, Bedrock) | yes | low / medium / high / max | Thinking budget per level (property-overridable); temperature is dropped and `max_tokens` auto-bumped when thinking is on |
+| Claude 5 (fable) | yes | low / medium / high / xhigh / max | Adaptive thinking + `output_config` effort; summarized thoughts shown in the Thoughts card |
+| OpenAI o1 / o3 / o4 | always on | low / medium / high | `reasoning_effort` |
+| OpenAI gpt-5* | always on | minimal / low / medium / high | `reasoning_effort` |
+| OpenAI gpt-5.x | yes (off -> `none`) | none / low / medium / high | Agent Mode still forces `none` (chat-completions rejects tools + effort) |
+| Gemini 2.5 Flash | yes | low / medium / high | `thinkingBudget`; toggle-off sends budget 0 (thinking disabled) |
+| Gemini 2.5 Pro | always on | low / medium / high | `thinkingBudget` (Pro cannot disable thinking) |
+| Gemini 3 | always on | low / high | `thinkingLevel` |
+| Ollama (thinking models) | yes | low / medium / high | Capability probed live via `/api/show`; UI overrides `ollama.thinking.*` properties |
+| Grok 4.5 | always on | low / medium / high | `reasoning_effort` (cannot be disabled); summarized reasoning shown in the Thoughts card |
+| Meta Muse Spark | always on | minimal / low / medium / high / xhigh | `reasoning_effort`; reasoning shown in the Thoughts card |
+| Bedrock: Claude | yes | low / medium / high / max (+ xhigh on newer) | Thinking JSON in `additionalModelRequestFields` (budget or adaptive) |
+| Bedrock: Nova 2 Lite | yes | low / medium / high | `reasoningConfig.maxReasoningEffort`; off by default; `high` drops temperature per AWS requirement |
+| Bedrock: OpenAI (gpt-oss, gpt-5.x) | gpt-5.x only | low / medium / high (+ none / xhigh / max on gpt-5.x) | `reasoning_effort` (snake_case) |
+| Bedrock: others (deepseek, qwen, glm, kimi, ...) | always on | - | No params sent; reasoning shown in the Thoughts card when streamed |
+| DeepSeek reasoner | always on | - | Reasoning is shown in the Thoughts card |
+
+**Defaults via properties:**
+
+```properties
+jmeter.ai.thinking.enabled=false
+jmeter.ai.thinking.effort=medium
+# Optional Anthropic budget overrides (tokens):
+#anthropic.thinking.budget.low=2048
+#anthropic.thinking.budget.medium=8192
+#anthropic.thinking.budget.high=16384
+```
+
+The `ollama.thinking.mode` / `ollama.thinking.level` properties now act as defaults for the Ollama toolbar controls; the UI choice wins once changed.
+
+**How capability detection works:** whether a model supports reasoning - and exactly which effort values it accepts - comes from a vendored copy of [models.dev](https://models.dev) data (`src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`), refreshed at build time via `scripts/Update-ModelCapabilities.ps1` (review the git diff like any dependency bump). Nothing is fetched at runtime; models absent from the file simply hide the controls, and dated/variant ids from live provider APIs resolve to their family entry. Ollama is the exception: its local `/api/show` endpoint reports real per-model capabilities (`thinking`, `vision`, ...), so the toggle is probed live on selection (optimistically shown until the probe answers).
 
 ## 🔔 Response Chime
 

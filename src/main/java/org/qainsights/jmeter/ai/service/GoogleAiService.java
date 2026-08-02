@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.service;
 
 import com.google.genai.Client;
 import com.google.genai.types.*;
+import org.qainsights.jmeter.ai.service.reasoning.GoogleThinking;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.ModelUtils;
@@ -15,32 +17,60 @@ import java.util.function.Consumer;
 public class GoogleAiService implements AiService {
     private static final Logger log = LoggerFactory.getLogger(GoogleAiService.class);
     private final Client googleClient;
-    private final GenerateContentConfig generateContentConfig;
+    private final float temperature;
+    private final int maxOutputTokens;
+    private final String systemPrompt;
     private final int maxHistorySize;
     private final boolean streamingEnabled;
     private String model;
+    private ReasoningSettings reasoningSettings;
+    private String lastReasoning;
 
     public GoogleAiService(Client googleClient) {
         this.model = AiConfig.getProperty("google.default.model", "gemini-2.5-flash");
-        float temperature = parseTemperature(AiConfig.getProperty("google.temperature", "0.7"));
+        this.temperature = parseTemperature(AiConfig.getProperty("google.temperature", "0.7"));
         this.maxHistorySize = Integer.parseInt(AiConfig.getProperty("google.max.history.size", "10"));
-        long maxTokens = Long.parseLong(AiConfig.getProperty("google.max.tokens", "4096"));
+        this.maxOutputTokens = (int) Long.parseLong(AiConfig.getProperty("google.max.tokens", "4096"));
 
         String configuredPrompt = AiConfig.getProperty("google.system.prompt", "");
-        String systemPrompt = (configuredPrompt != null && !configuredPrompt.isEmpty())
+        this.systemPrompt = (configuredPrompt != null && !configuredPrompt.isEmpty())
                 ? configuredPrompt : Constants.DEFAULT_JMETER_SYSTEM_PROMPT;
 
         this.streamingEnabled = Boolean.parseBoolean(AiConfig.getProperty("google.streaming.enabled", "true"));
         this.googleClient = googleClient;
-        this.generateContentConfig = GenerateContentConfig.builder()
-                .temperature(temperature)
-                .maxOutputTokens((int) maxTokens)
-                .systemInstruction(Content.builder()
-                        .parts(List.of(Part.builder().text(systemPrompt).build()))
-                        .build())
-                .build();
 
         log.info("Initialized Google Gemini service with model: {}, temperature: {}", this.model, temperature);
+    }
+
+    @Override
+    public void setReasoningSettings(ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    /**
+     * Builds the per-request config: static parts (temperature, max tokens,
+     * system instruction) plus a thinking config when the user's reasoning
+     * settings call for one on this model.
+     */
+    private GenerateContentConfig buildConfig(String modelId) {
+        GenerateContentConfig.Builder builder = GenerateContentConfig.builder()
+                .temperature(temperature)
+                .maxOutputTokens(maxOutputTokens)
+                .systemInstruction(Content.builder()
+                        .parts(List.of(Part.builder().text(systemPrompt).build()))
+                        .build());
+        GoogleThinking.configFor(reasoningSettings, modelId).ifPresent(config -> {
+            builder.thinkingConfig(config);
+            log.info("Thinking config applied for model {}: {}", modelId, config);
+        });
+        return builder.build();
     }
 
     private static float parseTemperature(String value) {
@@ -89,8 +119,9 @@ public class GoogleAiService implements AiService {
             GenerateContentResponse response = googleClient.models.generateContent(
                     modelToUse,
                     contents,
-                    generateContentConfig);
+                    buildConfig(modelToUse));
 
+            lastReasoning = extractThoughts(response);
             return response.text();
 
         } catch (Exception e) {
@@ -106,6 +137,11 @@ public class GoogleAiService implements AiService {
 
     @Override
     public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, model, tokenConsumer, reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String model, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         if (googleClient == null || !streamingEnabled) {
             return () -> {
             };
@@ -113,19 +149,19 @@ public class GoogleAiService implements AiService {
 
         String modelToUse = (model != null && !model.isEmpty()) ? model : this.model;
         List<Content> contents = buildContents(conversation);
+        GenerateContentConfig config = buildConfig(modelToUse);
 
         Thread streamThread = new Thread(() -> {
             try {
                 Iterable<GenerateContentResponse> stream = googleClient.models.generateContentStream(
                         modelToUse,
                         contents,
-                        generateContentConfig);
+                        config);
 
                 for (GenerateContentResponse chunk : stream) {
-                    String text = chunk.text();
-                    if (text != null && !text.isEmpty()) {
-                        javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
-                    }
+                    GoogleThinking.routeChunkParts(chunk,
+                            text -> javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text)),
+                            thought -> javax.swing.SwingUtilities.invokeLater(() -> reasoningConsumer.accept(thought)));
                 }
 
                 javax.swing.SwingUtilities.invokeLater(onComplete);
@@ -143,6 +179,17 @@ public class GoogleAiService implements AiService {
                 streamThread.interrupt();
             }
         };
+    }
+
+    /** Concatenated thought-part text from a non-streaming response, or null. */
+    private static String extractThoughts(GenerateContentResponse response) {
+        StringBuilder sb = new StringBuilder();
+        response.candidates().ifPresent(candidates -> candidates.stream()
+                .filter(candidate -> candidate.content().isPresent())
+                .flatMap(candidate -> candidate.content().get().parts().orElse(List.of()).stream())
+                .filter(part -> part.thought().orElse(false))
+                .forEach(part -> part.text().ifPresent(sb::append)));
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     private List<Content> buildContents(List<String> conversation) {

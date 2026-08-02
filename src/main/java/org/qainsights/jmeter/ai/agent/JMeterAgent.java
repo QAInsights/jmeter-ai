@@ -30,6 +30,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import com.anthropic.client.AnthropicClient;
@@ -94,15 +95,51 @@ public final class JMeterAgent {
     /** Builds a factory that wires the Anthropic {@link ClaudeChatModel} for each run. */
     public static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
                                                       long maxTokens) {
+        return claudeFactory(service, model, maxTokens, null);
+    }
+
+    /**
+     * Builds a factory that wires the Anthropic {@link ClaudeChatModel} for each run,
+     * applying the user's reasoning settings (extended thinking on capable models).
+     */
+    public static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
+                                                      long maxTokens, ReasoningSettings reasoningSettings) {
+        Long thinkingBudget = thinkingBudgetFor(reasoningSettings, model);
         return (specs, systemPrompt, priorTurns) -> new ClaudeChatModel(service, new ClaudeToolAdapter(),
-                specs, systemPrompt, model, maxTokens, ClaudeChatModel.toSeedHistory(priorTurns));
+                specs, systemPrompt, model, maxTokens, ClaudeChatModel.toSeedHistory(priorTurns), thinkingBudget);
+    }
+
+    /**
+     * The thinking budget for an agent run, or null when thinking does not
+     * apply. Adaptive-thinking models (fable family) get the marker value 1:
+     * {@link ClaudeChatModel} substitutes the adaptive config and ignores the
+     * number.
+     */
+    private static Long thinkingBudgetFor(ReasoningSettings settings, String model) {
+        if (!org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking.applies(settings, model)) {
+            return null;
+        }
+        if (org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking.isAdaptiveThinkingModel(model)) {
+            return 1L;
+        }
+        return org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities
+                .anthropicBudgetTokens(settings.getEffort());
     }
 
     /** Builds a factory that wires the OpenAI {@link OpenAiChatModel} for each run. */
     public static AgentChatModelFactory openAiFactory(OpenAiChatModel.CompletionService service, String model,
                                                       long maxTokens) {
+        return openAiFactory(service, model, maxTokens, null);
+    }
+
+    /**
+     * Builds a factory that wires the OpenAI {@link OpenAiChatModel} for each run,
+     * applying the user's reasoning settings (subject to the tool-calling policy).
+     */
+    public static AgentChatModelFactory openAiFactory(OpenAiChatModel.CompletionService service, String model,
+                                                      long maxTokens, ReasoningSettings reasoningSettings) {
         return (specs, systemPrompt, priorTurns) -> new OpenAiChatModel(service, new OpenAiToolAdapter(),
-                specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns));
+                specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns), reasoningSettings);
     }
 
     /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */
@@ -122,7 +159,8 @@ public final class JMeterAgent {
         ClaudeChatModel.MessageService service = params -> client.messages().create(params);
         boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
         ToolConfirmationGate gate = confirmDestructive ? new SwingToolConfirmationGate() : null;
-        return new JMeterAgent(service, claude.getCurrentModel(), maxTokens, maxIterations, gate);
+        return new JMeterAgent(claudeFactory(service, claude.getCurrentModel(), maxTokens,
+                claude.getReasoningSettings()), maxIterations, gate);
     }
 
     /**
@@ -135,8 +173,8 @@ public final class JMeterAgent {
         int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
         OpenAIClient client = openAi.getClient();
         OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
-        return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens), maxIterations,
-                destructiveGate());
+        return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens,
+                openAi.getReasoningSettings()), maxIterations, destructiveGate());
     }
 
     /**
@@ -165,15 +203,17 @@ public final class JMeterAgent {
     public static AgentChatModelFactory chatModelFactoryFor(AiService service) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
         if (service instanceof ClaudeService) {
-            AnthropicClient client = ((ClaudeService) service).getClient();
+            ClaudeService claude = (ClaudeService) service;
+            AnthropicClient client = claude.getClient();
             ClaudeChatModel.MessageService messages = params -> client.messages().create(params);
-            return claudeFactory(messages, ((ClaudeService) service).getCurrentModel(), maxTokens);
+            return claudeFactory(messages, claude.getCurrentModel(), maxTokens, claude.getReasoningSettings());
         }
         if (service instanceof OpenAiService) {
-            OpenAIClient client = ((OpenAiService) service).getClient();
+            OpenAiService openAi = (OpenAiService) service;
+            OpenAIClient client = openAi.getClient();
             OpenAiChatModel.CompletionService completions =
                     params -> client.chat().completions().create(params);
-            return openAiFactory(completions, ((OpenAiService) service).getCurrentModel(), maxTokens);
+            return openAiFactory(completions, openAi.getCurrentModel(), maxTokens, openAi.getReasoningSettings());
         }
         return null;
     }

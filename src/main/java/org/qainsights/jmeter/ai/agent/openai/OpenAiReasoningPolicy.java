@@ -5,6 +5,9 @@ import java.util.Optional;
 
 import com.openai.models.ReasoningEffort;
 
+import org.qainsights.jmeter.ai.service.reasoning.OpenAiReasoning;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+
 /**
  * Decides the {@code reasoning_effort} an agent (tool-calling) request must send
  * for a given OpenAI model.
@@ -33,6 +36,26 @@ public final class OpenAiReasoningPolicy {
      */
     public static Optional<ReasoningEffort> forToolCalling(String model) {
         return requiresDisabledReasoning(model) ? Optional.of(ReasoningEffort.NONE) : Optional.empty();
+    }
+
+    /**
+     * Combines the user's reasoning settings with the tool-calling constraints:
+     * the gpt-5.x restriction always wins ({@code none} - the API rejects tools
+     * with any other effort on chat-completions), while unrestricted reasoning
+     * models (o-series, non-dotted gpt-5) honor the user's chosen effort.
+     *
+     * @param model    the bare OpenAI model id (no {@code openai:} prefix)
+     * @param settings the user's reasoning choices (may be null - defaults apply)
+     * @return the effort to send with a tool-calling request, or empty to leave
+     *         the parameter off entirely
+     */
+    public static Optional<ReasoningEffort> forToolCalling(String model, ReasoningSettings settings) {
+        if (requiresDisabledReasoning(model)) {
+            // Policy keeps precedence over the UI: tools + effort != none is
+            // rejected by chat-completions for gpt-5.x models.
+            return Optional.of(ReasoningEffort.NONE);
+        }
+        return OpenAiReasoning.effortFor(settings, model);
     }
 
     /** True for the gpt-5.1+ models that refuse function tools while reasoning. */

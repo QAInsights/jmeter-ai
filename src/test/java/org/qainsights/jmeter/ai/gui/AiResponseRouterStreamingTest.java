@@ -140,6 +140,7 @@ class AiResponseRouterStreamingTest {
                 eq(anthropicModel),
                 any(),
                 any(),
+                any(),
                 any()
         )).thenReturn(expectedHandle);
 
@@ -154,7 +155,7 @@ class AiResponseRouterStreamingTest {
                 "Anthropic model should route to claudeService.generateStreamResponse");
         verify(claudeService).generateStreamResponse(
                 eq(conversation), eq(anthropicModel),
-                any(), any(), any()
+                any(), any(), any(), any()
         );
         verifyNoInteractions(openAiService, ollamaService);
     }
@@ -167,6 +168,7 @@ class AiResponseRouterStreamingTest {
         when(claudeService.generateStreamResponse(
                 eq(conversation),
                 eq("claude-sonnet-4-20250514"),
+                any(),
                 any(),
                 any(),
                 any()
@@ -195,6 +197,7 @@ class AiResponseRouterStreamingTest {
                 eq("gpt-4o"),
                 any(),
                 any(),
+                any(),
                 any()
         )).thenReturn(expectedHandle);
 
@@ -209,7 +212,7 @@ class AiResponseRouterStreamingTest {
                 "OpenAI model (prefixed with 'openai:') should route to openAiService");
         verify(openAiService).generateStreamResponse(
                 eq(conversation), eq("gpt-4o"),
-                any(), any(), any()
+                any(), any(), any(), any()
         );
         verifyNoInteractions(claudeService, ollamaService);
     }
@@ -222,6 +225,7 @@ class AiResponseRouterStreamingTest {
         when(openAiService.generateStreamResponse(
                 eq(conversation),
                 eq("gpt-3.5-turbo"),
+                any(),
                 any(),
                 any(),
                 any()
@@ -237,7 +241,7 @@ class AiResponseRouterStreamingTest {
         assertSame(expectedHandle, result);
         verify(openAiService).generateStreamResponse(
                 eq(conversation), eq("gpt-3.5-turbo"),
-                any(), any(), any()
+                any(), any(), any(), any()
         );
     }
 
@@ -250,6 +254,7 @@ class AiResponseRouterStreamingTest {
         when(openAiService.generateStreamResponse(
                 eq(conversation),
                 eq(expectedModel),
+                any(),
                 any(),
                 any(),
                 any()
@@ -278,6 +283,7 @@ class AiResponseRouterStreamingTest {
                 eq("llama3.1"),
                 any(),
                 any(),
+                any(),
                 any()
         )).thenReturn(expectedHandle);
 
@@ -292,7 +298,7 @@ class AiResponseRouterStreamingTest {
                 "Ollama model (prefixed with 'ollama:') should route to ollamaService");
         verify(ollamaService).generateStreamResponse(
                 eq(conversation), eq("llama3.1"),
-                any(), any(), any()
+                any(), any(), any(), any()
         );
         verifyNoInteractions(claudeService, openAiService);
     }
@@ -306,6 +312,7 @@ class AiResponseRouterStreamingTest {
         when(ollamaService.generateStreamResponse(
                 eq(conversation),
                 eq(expectedModel),
+                any(),
                 any(),
                 any(),
                 any()
@@ -333,7 +340,7 @@ class AiResponseRouterStreamingTest {
 
         when(claudeService.generateStreamResponse(
                 eq(conversation), eq(anthropicModel),
-                eq(tokenConsumer), eq(onComplete), eq(onError)
+                eq(tokenConsumer), any(), eq(onComplete), eq(onError)
         )).thenReturn(() -> {});
 
         router.generateStreamResponse(
@@ -343,7 +350,7 @@ class AiResponseRouterStreamingTest {
 
         verify(claudeService).generateStreamResponse(
                 eq(conversation), eq(anthropicModel),
-                eq(tokenConsumer), eq(onComplete), eq(onError)
+                eq(tokenConsumer), any(), eq(onComplete), eq(onError)
         );
     }
 
@@ -353,7 +360,7 @@ class AiResponseRouterStreamingTest {
     void testGenerateStreamResponse_returnsRunnableCancelHandle_fallbackToClaude() {
         when(claudeService.getCurrentModel()).thenReturn("claude-sonnet-4-20250514");
         when(claudeService.generateStreamResponse(
-                any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any()
         )).thenReturn(() -> {});
 
         Runnable cancelHandle = router.generateStreamResponse(
@@ -400,6 +407,7 @@ class AiResponseRouterStreamingTest {
                 eq("muse-spark-1.1"),
                 any(),
                 any(),
+                any(),
                 any()
         )).thenReturn(expectedHandle);
 
@@ -414,7 +422,7 @@ class AiResponseRouterStreamingTest {
                 "Meta model (prefixed with 'meta:') should route to metaMuseService");
         verify(metaMuseService).generateStreamResponse(
                 eq(conversation), eq("muse-spark-1.1"),
-                any(), any(), any()
+                any(), any(), any(), any()
         );
     }
 }

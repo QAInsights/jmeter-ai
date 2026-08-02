@@ -47,6 +47,8 @@ public class BedrockAiService implements AiService {
     private String model;
     private final float temperature;
     private final long maxTokens;
+    private org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings reasoningSettings;
+    private String lastReasoning;
     private final List<String> modelProviders;
 
     public BedrockAiService() {
@@ -191,6 +193,19 @@ public class BedrockAiService implements AiService {
     }
 
     @Override
+    public void setReasoningSettings(
+            org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings settings) {
+        this.reasoningSettings = settings;
+    }
+
+    @Override
+    public String consumeLastReasoning() {
+        String reasoning = lastReasoning;
+        lastReasoning = null;
+        return reasoning;
+    }
+
+    @Override
     public String generateResponse(List<String> conversation, String modelId) {
         if (runtimeClient == null) {
             return "Error: Bedrock client not initialized. Set bedrock.aws.access.key and bedrock.aws.secret.key in jmeter.properties.";
@@ -198,9 +213,18 @@ public class BedrockAiService implements AiService {
         try {
             String modelToUse = (modelId != null && !modelId.isEmpty()) ? modelId : this.model;
             log.debug("Bedrock Converse request for model: {}", modelToUse);
-            return converseClient.generateResponse(
+            long thinkingBudget = org.qainsights.jmeter.ai.service.reasoning
+                    .BedrockThinking.budgetFor(reasoningSettings, modelToUse);
+            software.amazon.awssdk.core.document.Document thinkingFields =
+                    org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
+                            .additionalFieldsFor(reasoningSettings, modelToUse);
+            BedrockConverseClient.ConverseResult result = converseClient.generateResponseDetailed(
                     buildLimitedHistory(conversation), modelToUse,
-                    systemPrompt, temperature, maxTokens);
+                    systemPrompt, temperature, maxTokens, thinkingBudget, thinkingFields,
+                    org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
+                            .dropsTemperature(reasoningSettings, modelToUse));
+            lastReasoning = result.reasoning;
+            return result.text;
         } catch (Exception e) {
             log.error("Error generating response from Bedrock", e);
             return "Error: " + e.getMessage();
@@ -212,14 +236,32 @@ public class BedrockAiService implements AiService {
                                            Consumer<String> tokenConsumer,
                                            Runnable onComplete,
                                            Consumer<Exception> onError) {
+        return generateStreamResponse(conversation, modelId, tokenConsumer,
+                reasoning -> {}, onComplete, onError);
+    }
+
+    @Override
+    public Runnable generateStreamResponse(List<String> conversation, String modelId,
+                                           Consumer<String> tokenConsumer,
+                                           Consumer<String> reasoningConsumer,
+                                           Runnable onComplete,
+                                           Consumer<Exception> onError) {
         if (asyncClient == null) {
             return () -> {};
         }
         String modelToUse = (modelId != null && !modelId.isEmpty()) ? modelId : this.model;
+        long thinkingBudget = org.qainsights.jmeter.ai.service.reasoning
+                .BedrockThinking.budgetFor(reasoningSettings, modelToUse);
+        software.amazon.awssdk.core.document.Document thinkingFields =
+                org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
+                        .additionalFieldsFor(reasoningSettings, modelToUse);
         return converseClient.generateStreamResponse(
                 buildLimitedHistory(conversation), modelToUse,
                 systemPrompt, temperature, maxTokens,
-                tokenConsumer, onComplete, onError);
+                tokenConsumer, reasoningConsumer, onComplete, onError, thinkingBudget,
+                thinkingFields,
+                org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
+                        .dropsTemperature(reasoningSettings, modelToUse));
     }
 
     /**

@@ -31,6 +31,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
 import org.qainsights.jmeter.ai.utils.VersionUtils;
@@ -76,6 +77,8 @@ public class AiChatPanel
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private GeminiBorderPanel geminiBorderPanel;
+    private final ReasoningSettings reasoningSettings = new ReasoningSettings();
+    private ReasoningControls reasoningControls;
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -122,6 +125,8 @@ public class AiChatPanel
             googleService = new GoogleAiService(googleClient);
         }
 
+        injectReasoningSettings();
+
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(getServiceHolder());
         commandDispatcher = new CommandDispatcher(this);
@@ -155,6 +160,7 @@ public class AiChatPanel
         }
         Font largerFont = defaultFont.deriveFont(defaultFont.getSize2D() + 2f);
 
+        reasoningControls = new ReasoningControls(reasoningSettings);
         initModelSelector();
         add(createChatPanel(largerFont), BorderLayout.CENTER);
         add(createBottomPanel(largerFont), BorderLayout.SOUTH);
@@ -197,8 +203,37 @@ public class AiChatPanel
                 } else {
                     claudeService.setModel(selectedModel);
                 }
+                reasoningControls.updateForModel(selectedModel);
+                if (selectedModel.startsWith("ollama:")) {
+                    // Probe the local model's real capabilities in the background
+                    // and refresh the controls when the answer arrives.
+                    String ollamaModelId = selectedModel.substring(7);
+                    ollamaService.resolveThinkingCapability(ollamaModelId,
+                            () -> reasoningControls.updateForModel(selectedModel));
+                }
             }
         });
+    }
+
+    /**
+     * Shares the user's reasoning (thinking/effort) choices with every service.
+     * Providers without reasoning support ignore the settings via the
+     * {@link AiService#setReasoningSettings} default no-op. Also registers the
+     * live Ollama capability probe with the capability registry.
+     */
+    private void injectReasoningSettings() {
+        claudeService.setReasoningSettings(reasoningSettings);
+        openAiService.setReasoningSettings(reasoningSettings);
+        ollamaService.setReasoningSettings(reasoningSettings);
+        deepseekService.setReasoningSettings(reasoningSettings);
+        grokService.setReasoningSettings(reasoningSettings);
+        metaMuseService.setReasoningSettings(reasoningSettings);
+        bedrockService.setReasoningSettings(reasoningSettings);
+        if (googleService != null) {
+            googleService.setReasoningSettings(reasoningSettings);
+        }
+        org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities
+                .setOllamaThinkingProbe(ollamaService::probeThinkingCapability);
     }
 
     /**
@@ -343,6 +378,7 @@ public class AiChatPanel
         JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         modelPanel.add(new JLabel("Model:"));
         modelPanel.add(modelSelector);
+        modelPanel.add(reasoningControls);
         navigationPanel.add(modelPanel, BorderLayout.WEST);
 
         JPanel navButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
@@ -839,6 +875,7 @@ public class AiChatPanel
             // transcript height (and with it the scrollbar maximum).
             JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
             boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
+            transcript.finishReasoning();
             // Re-render the streamed card with full markdown so code blocks
             // get their styled panel with the Copy button.
             transcript.completeStream(fullResponse);
@@ -874,11 +911,26 @@ public class AiChatPanel
             (String) modelSelector.getSelectedItem(),
             new ArrayList<>(conversationHistory),
             tokenConsumer,
+            this::appendReasoningToken,
             onComplete,
             onError
         );
         currentCancelHandle = cancelHandle;
         return cancelHandle;
+    }
+
+    /** Routes a streamed reasoning token into the transcript's thinking card (on the EDT). */
+    private void appendReasoningToken(String token) {
+        SwingUtilities.invokeLater(() -> {
+            if (!firstTokenReceived) {
+                removeLoadingIndicator();
+                firstTokenReceived = true;
+            }
+            JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
+            boolean wasPinned = ChatScroller.isPinnedToBottom(scrollPane);
+            transcript.appendReasoningToken(token);
+            ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
+        });
     }
 
     @Override
@@ -1077,9 +1129,26 @@ public class AiChatPanel
     @Override
     public void onWorkerSuccess(String response) {
         removeLoadingIndicator();
+        showNonStreamReasoning();
         processAiResponse(response);
         playResponseChime();
         setInputEnabled(true);
+    }
+
+    /**
+     * Renders the reasoning captured by the service from a non-streaming
+     * response (Claude thinking block, Ollama thinking, DeepSeek
+     * reasoning_content) as an already-collapsed thinking card.
+     */
+    private void showNonStreamReasoning() {
+        AiService service = resolveAiService(getSelectedModel());
+        if (service == null) {
+            return;
+        }
+        String reasoning = service.consumeLastReasoning();
+        if (reasoning != null && !reasoning.isBlank()) {
+            runOnEdt(() -> transcript.addReasoningBlock(reasoning));
+        }
     }
 
     /**

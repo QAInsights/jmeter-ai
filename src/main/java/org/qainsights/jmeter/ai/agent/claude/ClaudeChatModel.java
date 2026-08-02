@@ -13,6 +13,8 @@ import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
+import com.anthropic.models.messages.ThinkingConfigAdaptive;
+import com.anthropic.models.messages.ThinkingConfigEnabled;
 
 /**
  * Anthropic-backed {@link ChatModel}. Stateful for a single agent run: it owns
@@ -35,6 +37,7 @@ public final class ClaudeChatModel implements ChatModel {
     private final String systemPrompt;
     private final String model;
     private final long maxTokens;
+    private final Long thinkingBudget;
     private final List<MessageParam> history;
 
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
@@ -49,13 +52,32 @@ public final class ClaudeChatModel implements ChatModel {
      */
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory) {
+        this(service, adapter, specs, systemPrompt, model, maxTokens, seedHistory, null);
+    }
+
+    /**
+     * @param seedHistory    prior conversation turns to prepend before the new user message
+     * @param thinkingBudget extended-thinking budget in tokens, or null to leave thinking
+     *                       off. When set, max_tokens is bumped above the budget as the
+     *                       API requires, and {@link Message#toParam()} keeps the thinking
+     *                       blocks in the history (also required by the API).
+     */
+    public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
+                           String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory,
+                           Long thinkingBudget) {
         this.service = service;
         this.adapter = adapter;
         this.specs = new ArrayList<>(specs);
         this.systemPrompt = systemPrompt;
         this.model = model;
         this.maxTokens = maxTokens;
+        this.thinkingBudget = thinkingBudget;
         this.history = new ArrayList<>(seedHistory);
+    }
+
+    /** The thinking budget this run was created with, or null when thinking is off. */
+    public Long getThinkingBudget() {
+        return thinkingBudget;
     }
 
     /**
@@ -97,11 +119,24 @@ public final class ClaudeChatModel implements ChatModel {
     }
 
     private AssistantTurn send() {
+        boolean thinkingOn = thinkingBudget != null && thinkingBudget > 0;
+        // Adaptive-thinking models (fable family) take no budget and need no
+        // max_tokens bump; a non-null thinkingBudget is just the "on" marker.
+        boolean adaptive = thinkingOn
+                && org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking
+                        .isAdaptiveThinkingModel(model);
         MessageCreateParams.Builder params = MessageCreateParams.builder()
                 .model(model)
-                .maxTokens(maxTokens)
+                .maxTokens(thinkingOn && !adaptive ? Math.max(maxTokens, thinkingBudget + 1024) : maxTokens)
                 .system(systemPrompt)
                 .messages(history);
+        if (adaptive) {
+            params.thinking(ThinkingConfigAdaptive.builder()
+                    .display(ThinkingConfigAdaptive.Display.SUMMARIZED)
+                    .build());
+        } else if (thinkingOn) {
+            params.thinking(ThinkingConfigEnabled.builder().budgetTokens(thinkingBudget).build());
+        }
         for (ToolSpec spec : specs) {
             params.addTool(adapter.toAnthropicTool(spec));
         }
