@@ -9,6 +9,8 @@ import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletion;
@@ -31,6 +33,8 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
  * where {@link OpenAiReasoningPolicy} says tool calling requires it.
  */
 public final class OpenAiChatModel implements ChatModel {
+
+    private static final Logger log = LoggerFactory.getLogger(OpenAiChatModel.class);
 
     /** Seam over {@code client.chat().completions().create(params)} for testability. */
     @FunctionalInterface
@@ -124,6 +128,7 @@ public final class OpenAiChatModel implements ChatModel {
                 .addSystemMessage(systemPrompt);
         if (reasoningEffort.isPresent()) {
             params.reasoningEffort(reasoningEffort.get());
+            log.info("Agent run: reasoning_effort={} for model {}", reasoningEffort.get(), model);
         }
         for (ChatCompletionMessageParam message : history) {
             params.addMessage(message);

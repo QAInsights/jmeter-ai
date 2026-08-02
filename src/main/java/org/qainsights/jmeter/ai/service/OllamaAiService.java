@@ -377,7 +377,12 @@ public class OllamaAiService implements AiService {
     private OllamaChatRequest buildOllamaChatRequest(OllamaChatRequest request) {
 
         if (isThinkingEnabled() && isThinkingModeValid()) {
-            return request.withThinking(effectiveThinkingMode())
+            ThinkMode mode = effectiveThinkingMode();
+            logger.info("Thinking ENABLED for Ollama model {} with level {} (source: {})",
+                    this.model, mode,
+                    reasoningSettings != null && reasoningSettings.isThinkingToggled()
+                            ? "UI toolbar" : "ollama.thinking.* properties");
+            return request.withThinking(mode)
                     .withOptions(new OptionsBuilder().setTemperature(this.temperature).build())
                     .withModel(this.model).build();
         } else {

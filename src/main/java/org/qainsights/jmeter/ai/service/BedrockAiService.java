@@ -218,6 +218,9 @@ public class BedrockAiService implements AiService {
             software.amazon.awssdk.core.document.Document thinkingFields =
                     org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
                             .additionalFieldsFor(reasoningSettings, modelToUse);
+            if (thinkingFields != null) {
+                log.info("Reasoning fields applied for Bedrock model {}: {}", modelToUse, thinkingFields);
+            }
             BedrockConverseClient.ConverseResult result = converseClient.generateResponseDetailed(
                     buildLimitedHistory(conversation), modelToUse,
                     systemPrompt, temperature, maxTokens, thinkingBudget, thinkingFields,
@@ -255,6 +258,9 @@ public class BedrockAiService implements AiService {
         software.amazon.awssdk.core.document.Document thinkingFields =
                 org.qainsights.jmeter.ai.service.reasoning.BedrockThinking
                         .additionalFieldsFor(reasoningSettings, modelToUse);
+        if (thinkingFields != null) {
+            log.info("Reasoning fields applied for Bedrock model {}: {}", modelToUse, thinkingFields);
+        }
         return converseClient.generateStreamResponse(
                 buildLimitedHistory(conversation), modelToUse,
                 systemPrompt, temperature, maxTokens,

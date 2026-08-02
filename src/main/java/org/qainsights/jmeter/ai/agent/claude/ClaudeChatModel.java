@@ -8,6 +8,8 @@ import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.Message;
@@ -24,6 +26,8 @@ import com.anthropic.models.messages.ThinkingConfigEnabled;
  * user turn of tool_result blocks. Create a new instance per run.
  */
 public final class ClaudeChatModel implements ChatModel {
+
+    private static final Logger log = LoggerFactory.getLogger(ClaudeChatModel.class);
 
     /** Seam over {@code client.messages().create(params)} for testability. */
     @FunctionalInterface
@@ -134,8 +138,10 @@ public final class ClaudeChatModel implements ChatModel {
             params.thinking(ThinkingConfigAdaptive.builder()
                     .display(ThinkingConfigAdaptive.Display.SUMMARIZED)
                     .build());
+            log.info("Agent run: adaptive thinking ENABLED for model {}", model);
         } else if (thinkingOn) {
             params.thinking(ThinkingConfigEnabled.builder().budgetTokens(thinkingBudget).build());
+            log.info("Agent run: thinking ENABLED for model {} with budget {} tokens", model, thinkingBudget);
         }
         for (ToolSpec spec : specs) {
             params.addTool(adapter.toAnthropicTool(spec));
