@@ -54,7 +54,7 @@
 | 🤖 **Agent Mode** | AI autonomously edits your test plan (add elements, set properties, run tests, correlate dynamic values) through 18 tools. **Claude & OpenAI.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown, no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
-|| 🧠 **Thinking & Effort** | Per-model **Thinking** toggle and effort selector in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
+| 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
 
 ---
 
