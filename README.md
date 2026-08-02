@@ -466,18 +466,18 @@ jmeter.ai.streaming.enabled=false
 
 ## 🧠 Thinking & Effort
 
-Next to the model selector, a **Thinking** toggle and an **effort** dropdown appear automatically when the selected model supports them - models with no reasoning support (e.g. `gpt-4o`) hide both. Reasoning streams into a collapsible **Thoughts** card above the answer, in both plain chat and Agent Mode.
+Next to the model selector, a **Thinking** checkbox and an **effort** dropdown appear automatically when the selected model supports them - models with no reasoning support (e.g. `gpt-4o`) hide both. Reasoning streams into a collapsible **Thoughts** card above the answer, in both plain chat and Agent Mode.
 
 Effort levels shown in the dropdown come straight from the vendored per-model data (models.dev), so newer levels like `xhigh`/`max` appear automatically where supported.
 
-| Model family | Thinking toggle | Effort levels | Notes |
+| Model family | Thinking checkbox | Effort levels | Notes |
 |---|---|---|---|
 | Claude 4.x (Anthropic, Bedrock) | yes | low / medium / high / max | Thinking budget per level (property-overridable); temperature is dropped and `max_tokens` auto-bumped when thinking is on |
 | Claude 5 (fable) | yes | low / medium / high / xhigh / max | Adaptive thinking + `output_config` effort; summarized thoughts shown in the Thoughts card |
 | OpenAI o1 / o3 / o4 | always on | low / medium / high | `reasoning_effort` |
 | OpenAI gpt-5* | always on | minimal / low / medium / high | `reasoning_effort` |
 | OpenAI gpt-5.x | yes (off -> `none`) | none / low / medium / high | Agent Mode still forces `none` (chat-completions rejects tools + effort) |
-| Gemini 2.5 Flash | yes | low / medium / high | `thinkingBudget`; toggle-off sends budget 0 (thinking disabled) |
+| Gemini 2.5 Flash | yes | low / medium / high | `thinkingBudget`; unchecked sends budget 0 (thinking disabled) |
 | Gemini 2.5 Pro | always on | low / medium / high | `thinkingBudget` (Pro cannot disable thinking) |
 | Gemini 3 | always on | low / high | `thinkingLevel` |
 | Ollama (thinking models) | yes | low / medium / high | Capability probed live via `/api/show`; UI overrides `ollama.thinking.*` properties |
