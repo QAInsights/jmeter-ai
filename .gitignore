@@ -145,6 +145,7 @@ docs/agent-roadmap.md
 # Tool session dirs
 .qwen/
 .commandcode/
+arch/
 
 AGENTS.md
 PAPER.md
