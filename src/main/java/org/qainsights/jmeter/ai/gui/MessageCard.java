@@ -7,6 +7,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Insets;
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -59,6 +60,8 @@ class MessageCard extends JPanel {
     private final JTextPane body;
     private final StringBuilder rawText = new StringBuilder();
     private final MessageProcessor messageProcessor;
+    private final JPanel chipsPanel;
+    private java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> attachmentLookup;
 
     MessageCard(Role role, Font font, MessageProcessor messageProcessor) {
         super(new BorderLayout());
@@ -76,7 +79,15 @@ class MessageCard extends JPanel {
             )
         );
 
-        add(createHeader(), BorderLayout.NORTH);
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.setOpaque(false);
+        top.add(createHeader());
+        chipsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        chipsPanel.setOpaque(false);
+        chipsPanel.setVisible(false);
+        top.add(chipsPanel);
+        add(top, BorderLayout.NORTH);
 
         body = new JTextPane();
         body.setEditable(false);
@@ -85,6 +96,12 @@ class MessageCard extends JPanel {
             body.setFont(font);
         }
         add(body, BorderLayout.CENTER);
+    }
+
+    /** Registers the attachment lookup used to render file chips for {@code [file:<id>]} markers. */
+    void setAttachmentLookup(
+            java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> lookup) {
+        this.attachmentLookup = lookup;
     }
 
     /** Header row: bold sender name on the left, Copy button on the right. */
@@ -176,15 +193,50 @@ class MessageCard extends JPanel {
     void setPlainContent(String text) {
         rawText.setLength(0);
         rawText.append(text);
+        java.util.List<String> markerIds =
+                org.qainsights.jmeter.ai.service.attach.AttachmentMarkerParser.findMarkerIds(text);
+        String displayText = markerIds.isEmpty()
+                ? text
+                : org.qainsights.jmeter.ai.service.attach.AttachmentMarkerParser.stripMarkers(text);
+        renderChips(markerIds);
         try {
             body.setText("");
             StyledDocument doc = body.getStyledDocument();
-            doc.insertString(0, text, new SimpleAttributeSet());
+            doc.insertString(0, displayText, new SimpleAttributeSet());
         } catch (BadLocationException e) {
             log.error("Error rendering plain message", e);
         }
         revalidate();
         repaint();
+    }
+
+    /** Renders one chip per attachment marker (rich label from the registry, id fallback). */
+    private void renderChips(java.util.List<String> markerIds) {
+        chipsPanel.removeAll();
+        chipsPanel.setVisible(false);
+        if (markerIds.isEmpty()) {
+            return;
+        }
+        for (String id : markerIds) {
+            String label = "[file:" + id + "]";
+            if (attachmentLookup != null) {
+                org.qainsights.jmeter.ai.service.attach.Attachment attachment = attachmentLookup.apply(id);
+                if (attachment != null) {
+                    label = attachment.chipLabel();
+                }
+            }
+            // File names come from disk - never render them as HTML.
+            JLabel chip = LabelUtils.plain(label, AttachIcons.document(11), JLabel.LEFT);
+            chip.setFont(chip.getFont().deriveFont(Font.PLAIN, 10f));
+            chip.setForeground(ThemeColors.secondaryText());
+            chipsPanel.add(chip);
+        }
+        chipsPanel.setVisible(true);
+    }
+
+    /** Number of rendered chips (for tests). */
+    int getChipCount() {
+        return chipsPanel.getComponentCount();
     }
 
     /** Applies a new body font (used by the zoom/font-scale feature). */

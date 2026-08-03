@@ -31,6 +31,7 @@ public class AiResponseRouter {
     private final GrokAiService grokService;
     private final MetaMuseAiService metaMuseService;
     private final BedrockAiService bedrockService;
+    private org.qainsights.jmeter.ai.service.attach.AttachmentRegistry attachmentRegistry;
 
     public AiResponseRouter(AiServiceHolder serviceHolder) {
         this.claudeService = serviceHolder.getClaudeService();
@@ -51,7 +52,23 @@ public class AiResponseRouter {
      * @param conversationHistory the current conversation history
      * @return the AI-generated response string
      */
+    /** Registers the attachment registry used to resolve {@code [file:<id>]} markers. */
+    public void setAttachmentRegistry(org.qainsights.jmeter.ai.service.attach.AttachmentRegistry registry) {
+        this.attachmentRegistry = registry;
+    }
+
+    /** Substitutes attachment markers with their prepared content (no-op when no registry). */
+    private List<String> resolveAttachments(List<String> conversation) {
+        if (attachmentRegistry == null || conversation == null) {
+            return conversation;
+        }
+        return conversation.stream()
+                .map(attachmentRegistry::resolveInlineMarkers)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public String getAiResponse(String selectedModel, List<String> conversationHistory) {
+        conversationHistory = resolveAttachments(conversationHistory);
         if (selectedModel == null) {
             log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
             return claudeService.generateResponse(conversationHistory);
@@ -140,6 +157,7 @@ public class AiResponseRouter {
      * @return a cancel handle as a Runnable
      */
     public Runnable generateStreamResponse(String selectedModel, List<String> conversationHistory, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
+        conversationHistory = resolveAttachments(conversationHistory);
         if (selectedModel == null) {
             log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
             return claudeService.generateStreamResponse(conversationHistory, claudeService.getCurrentModel(), tokenConsumer, reasoningConsumer, onComplete, onError);

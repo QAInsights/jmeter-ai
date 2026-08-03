@@ -38,6 +38,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     private ToolActivityGroup activityGroup;
     private ThinkingRow thinkingRow;
     private ThinkingCard thinkingCard;
+    private java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> attachmentLookup;
 
     TranscriptView(Font baseFont) {
         this.baseFont = baseFont;
@@ -48,12 +49,19 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     // --- Messages -----------------------------------------------------------
 
+    /** Registers the attachment lookup used to render file chips in user bubbles. */
+    void setAttachmentLookup(
+            java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> lookup) {
+        this.attachmentLookup = lookup;
+    }
+
     /** Adds a user message bubble (plain text, no markdown parsing). */
     void addUserMessage(String text) {
         finishActivityIfRunning();
         MessageCard card = new MessageCard(
             MessageCard.Role.USER, baseFont, messageProcessor
         );
+        card.setAttachmentLookup(attachmentLookup);
         card.setPlainContent(text);
         addCard(card);
     }

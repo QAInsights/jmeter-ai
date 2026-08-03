@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.Color;
 import java.awt.Font;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -102,6 +103,8 @@ class MarkdownRenderer {
      */
     private void processBasicMarkdown(StyledDocument doc, String text)
         throws BadLocationException {
+        // HTML breaks emitted by some models render as newlines instead of leaking
+        text = replaceHtmlBreaksOutsideCode(text);
         String[] lines = text.split("\n");
 
         SimpleAttributeSet normal = new SimpleAttributeSet();
@@ -129,13 +132,29 @@ class MarkdownRenderer {
             normal, bold, italic, codeStyle, linkStyle
         );
 
-        for (String line : lines) {
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
             // Check for code block placeholder
             if (
                 line.trim().startsWith("[CODE_BLOCK:") &&
                 line.trim().endsWith("]")
             ) {
                 renderPlaceholderCodeBlock(doc, line, normal);
+                continue;
+            }
+
+            // Markdown table: header line, separator, then body rows
+            if (TableBlockRenderer.isTableLine(line) && i + 1 < lines.length
+                    && TableBlockRenderer.isTableSeparator(lines[i + 1])) {
+                List<String> header = TableBlockRenderer.splitRow(line);
+                List<List<String>> rows = new java.util.ArrayList<>();
+                i += 2;
+                while (i < lines.length && TableBlockRenderer.isTableLine(lines[i])) {
+                    rows.add(TableBlockRenderer.splitRow(lines[i]));
+                    i++;
+                }
+                i--; // step back: the for-loop increments past the last row
+                TableBlockRenderer.render(doc, header, rows);
                 continue;
             }
 
@@ -158,6 +177,41 @@ class MarkdownRenderer {
                 processInline(doc, line, styles, true);
             }
         }
+    }
+
+    /**
+     * Replaces {@code <br>} variants with newlines, but only outside inline
+     * code spans - a literal `` `<br>` `` example in backticks must survive.
+     */
+    static String replaceHtmlBreaksOutsideCode(String text) {
+        Pattern br = Pattern.compile("(?i)<br\\s*/?>");
+        java.util.List<int[]> codeSpans = new java.util.ArrayList<>();
+        int open = -1;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '`') {
+                if (open < 0) {
+                    open = i;
+                } else {
+                    codeSpans.add(new int[]{open, i + 1});
+                    open = -1;
+                }
+            }
+        }
+        Matcher matcher = br.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            boolean inCode = false;
+            for (int[] span : codeSpans) {
+                if (matcher.start() >= span[0] && matcher.start() < span[1]) {
+                    inCode = true;
+                    break;
+                }
+            }
+            matcher.appendReplacement(sb,
+                    Matcher.quoteReplacement(inCode ? matcher.group() : "\n"));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     private static SimpleAttributeSet headingOf(SimpleAttributeSet base, int plus) {

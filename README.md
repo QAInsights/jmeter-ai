@@ -31,6 +31,7 @@
 - [Special Commands](#-special-commands)
 - [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
+- [File Attachments](#-file-attachments)
 - [Response Chime](#-response-chime)
 - [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
@@ -55,6 +56,7 @@
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown, no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
+| 📎 **File Attachments** | Attach `jmeter.log`, results (`.jtl`/`.csv`), or any text file via the paperclip, drag-drop, or paste. Smart digests (percentiles, error breakdowns) instead of raw dumps - on every provider. |
 
 ---
 
@@ -505,6 +507,35 @@ jmeter.ai.thinking.effort=medium
 The `ollama.thinking.mode` / `ollama.thinking.level` properties now act as defaults for the Ollama toolbar controls; the UI choice wins once changed.
 
 **How capability detection works:** whether a model supports reasoning - and exactly which effort values it accepts - comes from a vendored copy of [models.dev](https://models.dev) data (`src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`), refreshed at build time via `scripts/Update-ModelCapabilities.ps1` (review the git diff like any dependency bump). Nothing is fetched at runtime; models absent from the file simply hide the controls, and dated/variant ids from live provider APIs resolve to their family entry. Ollama is the exception: its local `/api/show` endpoint reports real per-model capabilities (`thinking`, `vision`, ...), so the toggle is probed live on selection (optimistically shown until the probe answers).
+
+## 📎 File Attachments
+
+Attach files to your chat messages and let the AI analyze them - built for performance-engineering workflows: *"why did p99 spike?"*, *"any errors in this run?"*, *"compare these two result files"*.
+
+**Ways to attach:**
+- **Paperclip menu** (bottom-left of the input box): *Attach file…*, *Attach jmeter.log* (resolved automatically from the JMeter bin directory), or *Attach recent results…* (chooser pre-pointed at bin).
+- **Drag & drop** a file onto the message field.
+- **Paste** a copied file with Ctrl+V.
+
+Pending attachments appear as **chips** above the input (name · size · mode). Click a chip to switch **smart ↔ raw** processing; × removes it. The sent message shows the same chips in the transcript.
+
+**Smart vs. raw processing:**
+
+| Mode | What the model receives |
+|---|---|
+| **smart** (default) | `.jtl`/`.csv` results → compact digest: sample count, error rate, avg/median/p90/p95/p99, throughput, per-label breakdown, slowest + failing samples. Log files → ERROR/WARN lines (capped), counts by logger, exceptions with stack lines, first/last lines. Other text → head + tail excerpt. |
+| **raw** | Head + tail of the file within the character budget, with an explicit truncation marker. |
+
+Attachments are inlined as text at request time, so they work on **every provider** - no vision or document-upload capability needed. Follow-up questions re-include the file automatically until the history window trims it. Each message can carry up to 3 attachments (configurable), files up to 10 MB, and only valid UTF-8 text files are accepted.
+
+```properties
+# Processing mode: smart (default) or raw
+#jmeter.ai.file.mode=smart
+# Character budget for excerpts/digests (default 50000)
+#jmeter.ai.file.max.chars=50000
+# Max attachments per message (default 3)
+#jmeter.ai.file.max.count=3
+```
 
 ## 🔔 Response Chime
 

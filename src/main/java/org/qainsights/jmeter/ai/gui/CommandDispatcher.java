@@ -433,7 +433,7 @@ public class CommandDispatcher {
         // it is prior conversation context to seed the agent with multi-turn memory.
         List<String> history = cb.getConversationHistory();
         List<String> priorTurns = history.size() > 1
-                ? new ArrayList<>(history.subList(0, history.size() - 1))
+                ? cb.resolveAttachmentMarkers(new ArrayList<>(history.subList(0, history.size() - 1)))
                 : Collections.<String>emptyList();
 
         boolean streamFinalText = AiConfig.isStreamingEnabled();
@@ -450,7 +450,8 @@ public class CommandDispatcher {
                     }
                     AgentLoop.AgentResult result;
                     try {
-                        result = agent.run(message, priorTurns,
+                        String resolvedMessage = cb.resolveAttachmentMarkers(List.of(message)).get(0);
+                        result = agent.run(resolvedMessage, priorTurns,
                                 line -> publish(AgentChunk.progress(line)),
                                 call -> glowController.onToolCallStarted(elementIdOf(call)),
                                 reasoning -> cb.appendReasoningToken(reasoning));

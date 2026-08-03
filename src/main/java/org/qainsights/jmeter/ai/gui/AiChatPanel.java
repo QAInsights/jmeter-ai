@@ -31,6 +31,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -79,6 +80,8 @@ public class AiChatPanel
     private GeminiBorderPanel geminiBorderPanel;
     private final ReasoningSettings reasoningSettings = new ReasoningSettings();
     private ReasoningControls reasoningControls;
+    private final AttachmentRegistry attachmentRegistry = new AttachmentRegistry();
+    private AttachmentBar attachmentBar;
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -129,6 +132,7 @@ public class AiChatPanel
 
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(getServiceHolder());
+        aiResponseRouter.setAttachmentRegistry(attachmentRegistry);
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
 
@@ -359,7 +363,12 @@ public class AiChatPanel
         JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 
+        attachmentBar = new AttachmentBar(attachmentRegistry,
+                message -> runOnEdt(() -> transcript.addSystemMessage(message, ThemeColors.warning())));
+        transcript.setAttachmentLookup(attachmentRegistry::find);
+
         bottomPanel.add(createToolbarRow(), BorderLayout.NORTH);
+        bottomPanel.add(attachmentBar, BorderLayout.CENTER);
         bottomPanel.add(createInputPanel(font), BorderLayout.SOUTH);
         return bottomPanel;
     }
@@ -497,15 +506,13 @@ public class AiChatPanel
 
         geminiBorderPanel.add(buttonPanel, BorderLayout.EAST);
 
-        JLabel hintLabel = new JLabel("Enter to send · Shift+Enter for newline");
-        hintLabel.setForeground(ThemeColors.secondaryText());
-        hintLabel.setFont(
-            hintLabel.getFont().deriveFont(hintLabel.getFont().getSize2D() - 2f)
-        );
-        JPanel hintPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        hintPanel.setOpaque(false);
-        hintPanel.add(hintLabel);
-        geminiBorderPanel.add(hintPanel, BorderLayout.SOUTH);
+        messageField.setTransferHandler(new AttachmentTransferHandler(
+                messageField.getTransferHandler(), attachmentBar::addFileAsync));
+
+        // Options row below the text box (paperclip + future input-adjacent
+        // options on the left, keyboard hint on the right).
+        geminiBorderPanel.add(new InputOptionsRow(
+                this, attachmentBar, createStyledButton("", 11)), BorderLayout.SOUTH);
 
         return geminiBorderPanel;
     }
@@ -719,14 +726,23 @@ public class AiChatPanel
         transcript.addAssistantMessage(Constants.WELCOME_MESSAGE);
     }
 
+    /** The session attachment registry (package-private for tests). */
+    AttachmentRegistry attachmentRegistry() {
+        return attachmentRegistry;
+    }
+
     /**
      * Starts a new conversation by clearing the chat area and conversation history.
      */
-    private void startNewConversation() {
+    void startNewConversation() {
         log.info("Starting new conversation");
 
         // Clear the transcript
         transcript.clearTranscript();
+
+        // Clear pending attachments and the registry
+        attachmentBar.clear();
+        attachmentRegistry.clear();
 
         // Clear the conversation history
         conversationHistory.clear();
@@ -742,7 +758,11 @@ public class AiChatPanel
      * Sends the message from the input field to the chat.
      */
     private void sendMessage() {
-        commandDispatcher.dispatch(messageField.getText().trim());
+        String text = messageField.getText().trim();
+        if (attachmentBar.hasAttachments()) {
+            text += attachmentBar.consumeMarkers();
+        }
+        commandDispatcher.dispatch(text);
     }
 
     /**
@@ -978,6 +998,13 @@ public class AiChatPanel
     @Override
     public void addToConversationHistory(String entry) {
         conversationHistory.add(entry);
+    }
+
+    @Override
+    public List<String> resolveAttachmentMarkers(List<String> turns) {
+        return turns.stream()
+                .map(attachmentRegistry::resolveInlineMarkers)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override

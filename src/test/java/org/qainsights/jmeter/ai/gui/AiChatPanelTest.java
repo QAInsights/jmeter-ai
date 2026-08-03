@@ -63,4 +63,38 @@ class AiChatPanelTest {
         assertEquals("User: hello", panel.getConversationHistory().get(0));
         assertEquals("AI: hi", panel.getConversationHistory().get(1));
     }
+
+    @Test
+    void newConversationClearsAttachments() {
+        AiChatPanel panel = new AiChatPanel();
+        panel.attachmentRegistry().register("a.txt", "body",
+                org.qainsights.jmeter.ai.service.attach.FileContentPreparer.Mode.SMART);
+        assertEquals(1, panel.attachmentRegistry().size());
+        assertEquals(1, panel.attachmentRegistry().pendingCount());
+
+        panel.startNewConversation();
+
+        // registry fully cleared - no stale markers can leak into the next conversation
+        assertEquals(0, panel.attachmentRegistry().size());
+        assertEquals(0, panel.attachmentRegistry().pendingCount());
+        java.util.List<String> resolved = panel.resolveAttachmentMarkers(
+                java.util.List.of("User: check [file:f1]"));
+        assertTrue(resolved.get(0).contains("[attachment no longer available]"));
+    }
+
+    @Test
+    void resolveAttachmentMarkersRoutesThroughRegistry() {
+        AiChatPanel panel = new AiChatPanel();
+
+        // marker-free turns pass through untouched
+        java.util.List<String> plain = java.util.List.of("User: hello", "AI: hi");
+        assertEquals(plain, panel.resolveAttachmentMarkers(plain));
+
+        // with nothing attached, a dangling marker resolves to the fallback note
+        // (proves the override actually delegates into the registry)
+        java.util.List<String> resolved = panel.resolveAttachmentMarkers(
+                java.util.List.of("User: check [file:f1]"));
+        assertFalse(resolved.get(0).contains("[file:"));
+        assertTrue(resolved.get(0).contains("[attachment no longer available]"));
+    }
 }

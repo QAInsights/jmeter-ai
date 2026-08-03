@@ -50,6 +50,15 @@ public interface CommandCallback {
         // no reasoning display by default
     }
 
+    /**
+     * Resolves {@code [file:<id>]} attachment markers in conversation turns to
+     * their prepared content (used when seeding the agent with prior turns).
+     * Default returns the turns unchanged.
+     */
+    default List<String> resolveAttachmentMarkers(List<String> turns) {
+        return turns;
+    }
+
     // --- Shared data ---
 
     String getSelectedModel();
