@@ -72,4 +72,21 @@ class InputOptionsRowTest {
         row.addOption(new JButton("mic"));
         assertEquals(2, row.getOptionCount());
     }
+
+    @Test
+    void stopButtonSwapsWithHint() {
+        InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
+        assertFalse(row.isStopShowing(), "hint shows by default");
+
+        java.util.concurrent.atomic.AtomicBoolean stopped = new java.util.concurrent.atomic.AtomicBoolean(false);
+        row.showStop(() -> stopped.set(true));
+        assertTrue(row.isStopShowing(), "stop replaces the hint while processing");
+
+        row.hideStop();
+        assertFalse(row.isStopShowing(), "the hint returns after processing");
+
+        // showing again reuses the same stop button instance with the same action
+        row.showStop(() -> stopped.set(true));
+        assertTrue(row.isStopShowing());
+    }
 }

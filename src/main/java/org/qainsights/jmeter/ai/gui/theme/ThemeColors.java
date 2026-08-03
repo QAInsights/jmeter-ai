@@ -134,7 +134,7 @@ public final class ThemeColors {
     }
 
     /** Linear blend of two colors; {@code ratio} is the weight of {@code a}. */
-    static Color blend(Color a, Color b, float ratio) {
+    public static Color blend(Color a, Color b, float ratio) {
         float inv = 1f - ratio;
         return new Color(
                 clamp(Math.round(a.getRed() * ratio + b.getRed() * inv)),

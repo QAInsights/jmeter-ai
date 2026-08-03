@@ -24,6 +24,7 @@ public final class PetAnimator {
     private int oneShotFramesLeft;
     private boolean dragging;
     private boolean testRunning;
+    private boolean chatBusy;
     private boolean hadFailures;
 
     /**
@@ -74,8 +75,37 @@ public final class PetAnimator {
     /** The test run ended: celebrate a clean run, frown over a failed one. */
     public synchronized void onTestEnded() {
         testRunning = false;
-        baseState = PetState.IDLE;
+        baseState = busyBase();
         playOneShot(hadFailures ? PetState.FAILED : PetState.WAVING);
+    }
+
+    /** The AI chat started processing: a burst of excitement, then deep review mode. */
+    public synchronized void onBusyStarted() {
+        chatBusy = true;
+        baseState = busyBase();
+        playOneShot(PetState.JUMPING);
+    }
+
+    /** The AI chat finished: back to idle unless a test run is still going. */
+    public synchronized void onBusyEnded() {
+        chatBusy = false;
+        baseState = busyBase();
+        enterState(baseState);
+    }
+
+    /**
+     * The base state from the activity flags. Chat-busy alone means REVIEW
+     * (thinking/analyzing, not pacing); a running test takes the stage with
+     * RUNNING (test work dominates chat work); nothing busy means IDLE.
+     */
+    private PetState busyBase() {
+        if (testRunning) {
+            return pickAvailable(PetState.RUNNING, PetState.IDLE);
+        }
+        if (chatBusy) {
+            return pickAvailable(PetState.REVIEW, PetState.RUNNING);
+        }
+        return PetState.IDLE;
     }
 
     /** The user started dragging the pet. */

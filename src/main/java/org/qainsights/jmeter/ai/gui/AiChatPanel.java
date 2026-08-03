@@ -62,8 +62,7 @@ public class AiChatPanel
     // UI components (kept for backward compatibility)
     private TranscriptView transcript;
     private JTextArea messageField;
-    private JButton sendButton;
-    private JButton stopButton;
+    private InputOptionsRow inputOptionsRow;
     private Runnable currentCancelHandle;
     private JComboBox<String> modelSelector;
     private List<String> conversationHistory;
@@ -408,7 +407,7 @@ public class AiChatPanel
     private JPanel createInputPanel(Font font) {
         geminiBorderPanel = new GeminiBorderPanel();
 
-        PlaceholderTextArea input = new PlaceholderTextArea(3, 20);
+        PlaceholderTextArea input = new PlaceholderTextArea(4, 20);
         input.setPlaceholder("Ask about your test plan - type @ for commands");
         messageField = input;
         messageField.setLineWrap(true);
@@ -482,37 +481,15 @@ public class AiChatPanel
         messageScrollPane.getViewport().setOpaque(false);
         geminiBorderPanel.add(messageScrollPane, BorderLayout.CENTER);
 
-        sendButton = createStyledButton("Send", 12);
-        sendButton.setToolTipText("Send message (Enter)");
-        sendButton.addActionListener(e -> sendMessage());
-
-        stopButton = createStyledButton("Stop", 12);
-        stopButton.setToolTipText("Stop the current response");
-        stopButton.setVisible(false);
-        stopButton.addActionListener(e -> {
-            if (currentCancelHandle != null) {
-                currentCancelHandle.run();
-                appendMessageToChat("\n[Stream cancelled]");
-                hideStopButton();
-                setInputEnabled(true);
-                removeLoadingIndicator();
-            }
-        });
-
-        JPanel buttonPanel = new JPanel(new BorderLayout());
-        buttonPanel.setOpaque(false); // Make it non-opaque
-        buttonPanel.add(sendButton, BorderLayout.CENTER);
-        buttonPanel.add(stopButton, BorderLayout.EAST);
-
-        geminiBorderPanel.add(buttonPanel, BorderLayout.EAST);
-
         messageField.setTransferHandler(new AttachmentTransferHandler(
                 messageField.getTransferHandler(), attachmentBar::addFileAsync));
 
         // Options row below the text box (paperclip + future input-adjacent
-        // options on the left, keyboard hint on the right).
-        geminiBorderPanel.add(new InputOptionsRow(
-                this, attachmentBar, createStyledButton("", 11)), BorderLayout.SOUTH);
+        // options on the left, keyboard hint / stop button on the right).
+        // There is no Send button: Enter sends, the stop circle appears
+        // bottom-right while the AI is processing (ChatGPT-style).
+        inputOptionsRow = new InputOptionsRow(this, attachmentBar, createStyledButton("", 11));
+        geminiBorderPanel.add(inputOptionsRow, BorderLayout.SOUTH);
 
         return geminiBorderPanel;
     }
@@ -590,19 +567,7 @@ public class AiChatPanel
      * @return a panel containing the styled donate button
      */
     private JPanel createDonateButtonPanel() {
-        JButton donateButton = createStyledButton("☕ Donate ♥", 13);
-        donateButton.setToolTipText(
-            "Support this project as it takes time, tokens and resources to build and maintain"
-        );
-        donateButton.setBackground(new Color(255, 149, 0));
-        donateButton.setForeground(Color.BLACK);
-        donateButton.setOpaque(true);
-        donateButton.setBorder(
-            BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(210, 105, 0), 2, true),
-                BorderFactory.createEmptyBorder(5, 16, 5, 16)
-            )
-        );
+        JButton donateButton = new DonateButton();
         donateButton.addActionListener(e -> openDonateLink());
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
         panel.setOpaque(false);
@@ -845,7 +810,6 @@ public class AiChatPanel
     @Override
     public void setInputEnabled(boolean enabled) {
         messageField.setEnabled(enabled);
-        sendButton.setEnabled(enabled);
         if (geminiBorderPanel != null) {
             geminiBorderPanel.setThinking(!enabled);
         }
@@ -854,19 +818,38 @@ public class AiChatPanel
         }
     }
 
+    /** Lets the pet know the AI is (or is no longer) thinking; no-op when the pet is off. */
+    private void setPetBusy(boolean busy) {
+        org.qainsights.jmeter.ai.pet.PetAnimator animator =
+                org.qainsights.jmeter.ai.pet.PetBootstrap.animator();
+        if (animator != null) {
+            if (busy) {
+                animator.onBusyStarted();
+            } else {
+                animator.onBusyEnded();
+            }
+        }
+    }
+
     @Override
     public void showStopButton() {
-        SwingUtilities.invokeLater(() -> {
-            stopButton.setVisible(true);
-            sendButton.setEnabled(false);
-        });
+        setPetBusy(true);
+        SwingUtilities.invokeLater(() -> inputOptionsRow.showStop(() -> {
+            if (currentCancelHandle != null) {
+                currentCancelHandle.run();
+                appendMessageToChat("\n[Stream cancelled]");
+                hideStopButton();
+                setInputEnabled(true);
+                removeLoadingIndicator();
+            }
+        }));
     }
 
     @Override
     public void hideStopButton() {
+        setPetBusy(false);
         SwingUtilities.invokeLater(() -> {
-            stopButton.setVisible(false);
-            sendButton.setEnabled(true);
+            inputOptionsRow.hideStop();
             currentCancelHandle = null;
         });
     }

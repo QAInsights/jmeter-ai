@@ -19,6 +19,8 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 class InputOptionsRow extends JPanel {
 
     private final JPanel optionsStrip;
+    private final JPanel hintPanel;
+    private StopButton stopButton;
 
     InputOptionsRow(Component popupParent, AttachmentBar attachmentBar, JButton attachButton) {
         super(new BorderLayout());
@@ -39,10 +41,40 @@ class InputOptionsRow extends JPanel {
         JLabel hintLabel = new JLabel("Enter to send · Shift+Enter for newline");
         hintLabel.setForeground(ThemeColors.secondaryText());
         hintLabel.setFont(hintLabel.getFont().deriveFont(hintLabel.getFont().getSize2D() - 2f));
-        JPanel hintPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        hintPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         hintPanel.setOpaque(false);
         hintPanel.add(hintLabel);
         add(hintPanel, BorderLayout.EAST);
+    }
+
+    /**
+     * Swaps the keyboard hint for the circular stop button (shown while the
+     * AI is processing). The hint returns on {@link #hideStop()}.
+     */
+    void showStop(Runnable onStop) {
+        if (stopButton == null) {
+            stopButton = new StopButton(onStop);
+        }
+        hintPanel.removeAll();
+        hintPanel.add(stopButton);
+        revalidate();
+        repaint();
+    }
+
+    /** Hides the stop button and restores the keyboard hint. */
+    void hideStop() {
+        hintPanel.removeAll();
+        JLabel hintLabel = new JLabel("Enter to send · Shift+Enter for newline");
+        hintLabel.setForeground(ThemeColors.secondaryText());
+        hintLabel.setFont(hintLabel.getFont().deriveFont(hintLabel.getFont().getSize2D() - 2f));
+        hintPanel.add(hintLabel);
+        revalidate();
+        repaint();
+    }
+
+    /** True while the stop button is showing (for tests). */
+    boolean isStopShowing() {
+        return hintPanel.getComponentCount() == 1 && hintPanel.getComponent(0) instanceof StopButton;
     }
 
     /** Adds another input-adjacent option button next to the paperclip. */

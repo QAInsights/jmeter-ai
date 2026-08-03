@@ -6,7 +6,7 @@ import javax.swing.JLayeredPane;
 
 /**
  * Hosts a {@link PetView} on a window's {@link JLayeredPane}, floating above the
- * regular content. The pet stays anchored to the bottom-right corner (with a margin)
+ * regular content. The pet stays anchored to the bottom-left corner (with a margin)
  * across window resizes until the user drags it somewhere, after which its position
  * is only clamped back into view on resize.
  */
@@ -29,7 +29,7 @@ public final class PetOverlay {
         this.view = view;
     }
 
-    /** Adds the pet to the layered pane, anchored bottom-right, and starts animating. */
+    /** Adds the pet to the layered pane, anchored bottom-left, and starts animating. */
     public void install(JLayeredPane pane) {
         if (layeredPane != null) {
             return;
@@ -55,7 +55,7 @@ public final class PetOverlay {
         autoAnchor = true;
     }
 
-    /** Whether the pet is still auto-anchored to the bottom-right corner. */
+    /** Whether the pet is still auto-anchored to the bottom-left corner. */
     boolean isAutoAnchored() {
         return autoAnchor;
     }
@@ -74,8 +74,7 @@ public final class PetOverlay {
         repositioning = true;
         try {
             if (autoAnchor) {
-                view.setLocation(
-                        Math.max(0, layeredPane.getWidth() - view.getWidth() - MARGIN),
+                view.setLocation(MARGIN,
                         Math.max(0, layeredPane.getHeight() - view.getHeight() - MARGIN));
             } else {
                 view.moveWithinParent(view.getX(), view.getY());

@@ -31,14 +31,14 @@ class PetOverlayTest {
     }
 
     @Test
-    void should_anchorBottomRight_when_installed() {
+    void should_anchorBottomLeft_when_installed() {
         PetView view = newView();
         overlay = new PetOverlay(view);
         JLayeredPane pane = newPane(400, 300);
         overlay.install(pane);
 
         assertSame(pane, view.getParent());
-        assertEquals(400 - view.getWidth() - PetOverlay.MARGIN, view.getX());
+        assertEquals(PetOverlay.MARGIN, view.getX());
         assertEquals(300 - view.getHeight() - PetOverlay.MARGIN, view.getY());
         assertTrue(overlay.isAutoAnchored());
     }
@@ -52,7 +52,7 @@ class PetOverlayTest {
         view.getParent().setSize(600, 500);
         overlay.reposition();
 
-        assertEquals(600 - view.getWidth() - PetOverlay.MARGIN, view.getX());
+        assertEquals(PetOverlay.MARGIN, view.getX());
         assertEquals(500 - view.getHeight() - PetOverlay.MARGIN, view.getY());
     }
 

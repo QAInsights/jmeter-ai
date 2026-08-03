@@ -24,8 +24,14 @@ public final class PetBootstrap {
     static final int MAX_INSTALL_ATTEMPTS = 120;
 
     private static boolean initialized;
+    private static PetAnimator sharedAnimator;
 
     private PetBootstrap() {
+    }
+
+    /** The running pet's animator, or null when the pet is disabled/headless. */
+    public static synchronized PetAnimator animator() {
+        return sharedAnimator;
     }
 
     /** Idempotent entry point, called once from the plugin's menu creator. */
@@ -44,6 +50,7 @@ public final class PetBootstrap {
     /** Resets the idempotency guard; test use only. */
     static synchronized void resetForTest() {
         initialized = false;
+        sharedAnimator = null;
     }
 
     /** Loads a pet spritesheet by name; indirection point for tests. */
@@ -71,12 +78,13 @@ public final class PetBootstrap {
             return false;
         }
         PetAnimator animator = new PetAnimator(sheet::frameCount);
+        sharedAnimator = animator;
         PetSampleTap sampleTap = new PetSampleTap(animator::onSampleFailure);
         PetTestMonitor monitor = new PetTestMonitor(animator, sampleTap, PetSampleTap::findListenersInRunTree);
         monitor.register();
         PetView view = new PetView(sheet, animator, config.getScale());
         scheduleInstall(new PetOverlay(view), PetBootstrap::findMainFrameLayeredPane, 0);
-        log.info("Pet '{}' is on its way to the bottom-right corner.", config.getPetName());
+        log.info("Pet '{}' is on its way to the bottom-left corner.", config.getPetName());
         return true;
     }
 
