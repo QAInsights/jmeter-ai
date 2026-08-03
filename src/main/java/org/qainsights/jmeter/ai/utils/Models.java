@@ -61,18 +61,18 @@ public class Models {
                 com.openai.models.models.ModelListPage openAiModels = getOpenAiModels(serviceHolder.getOpenAiService().getClient());
                 if (openAiModels != null && openAiModels.data() != null) {
                     for (Model openAiModel : openAiModels.data()) {
-                        if (openAiModel.id().startsWith("gpt") &&
-                                !openAiModel.id().contains("audio") &&
-                                !openAiModel.id().contains("tts") &&
-                                !openAiModel.id().contains("whisper") &&
-                                !openAiModel.id().contains("davinci") &&
-                                !openAiModel.id().contains("search") &&
-                                !openAiModel.id().contains("transcribe") &&
-                                !openAiModel.id().contains("realtime") &&
-                                !openAiModel.id().contains("instruct")) {
-                            String modelId = "openai:" + openAiModel.id();
+                        String id = openAiModel.id();
+                        if (!id.contains("audio") && // Exclude audio models
+                                !id.contains("tts") && // Exclude text-to-speech models
+                                !id.contains("whisper") && // Exclude whisper models
+                                !id.contains("davinci") && // Exclude Davinci models
+                                !id.contains("search") && // Exclude search models
+                                !id.contains("transcribe") && // Exclude transcribe models
+                                !id.contains("realtime") && // Exclude realtime models
+                                !id.contains("instruct")) { // Exclude instruct models
+                            String modelId = "openai:" + id;
                             allModels.add(modelId);
-                            log.debug("Added OpenAI model to selector: {}", openAiModel.id());
+                            log.debug("Added OpenAI model to selector: {}", id);
                         }
                     }
                     log.info("Added OpenAI models to selector");
@@ -359,6 +359,7 @@ public class Models {
             log.info("Fetching available models from OpenAI API");
             client = OpenAIOkHttpClient.builder()
                     .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
+                    .baseUrl(AiConfig.getProperty("openai.base.url", "https://api.openai.com/v1"))
                     .build();
 
             com.openai.models.models.ModelListPage models = client.models().list();
@@ -383,9 +384,8 @@ public class Models {
     public static List<String> getOpenAiModelIds(OpenAIClient client) {
         com.openai.models.models.ModelListPage models = getOpenAiModels(client);
         if (models != null && models.data() != null) {
-            // Return the list of GPT models only, excluding audio and TTS models
+            // Return all models, excluding audio, TTS, and other non-chat models
             return models.data().stream()
-                    .filter(model -> model.id().startsWith("gpt")) // Include only GPT models
                     .filter(model -> !model.id().contains("audio")) // Exclude audio models
                     .filter(model -> !model.id().contains("tts")) // Exclude text-to-speech models
                     .filter(model -> !model.id().contains("whisper")) // Exclude whisper models
