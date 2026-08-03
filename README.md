@@ -119,6 +119,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | Property | Description | Default |
 |----------|-------------|---------|
 | `openai.api.key` | OpenAI API key | **Required** |
+| `openai.base.url` | Base URL for OpenAI-compatible APIs | `https://api.openai.com/v1` |
 | `openai.default.model` | Default model | `gpt-4o` |
 | `openai.temperature` | Temperature (0.0-1.0) | `0.5` |
 | `openai.max.tokens` | Max response tokens | `1024` |
