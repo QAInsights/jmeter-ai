@@ -47,6 +47,20 @@ public final class RecordingControlPanel extends JPanel {
         });
     }
 
+    /**
+     * Retention sweep: deletes session directories older than
+     * {@code jmeter.ai.record.retention.days} before a new session's artifacts
+     * land. Best-effort - a cleanup failure must never block a recording.
+     */
+    void sweepExpiredArtifacts() {
+        try {
+            artifactStore.cleanExpiredArtifacts();
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(RecordingControlPanel.class)
+                    .warn("Recording artifact cleanup failed: {}", e.toString());
+        }
+    }
+
     private void handleStartSession() {
         Frame mainFrame = GuiPackage.getInstance() != null ? GuiPackage.getInstance().getMainFrame() : null;
         RecordingConfigDialog dialog = new RecordingConfigDialog(mainFrame);
@@ -54,6 +68,7 @@ public final class RecordingControlPanel extends JPanel {
 
         if (dialog.isConfirmed() && dialog.getResultConfig() != null) {
             try {
+                sweepExpiredArtifacts();
                 String sessionId = java.util.UUID.randomUUID().toString();
                 java.nio.file.Path sessionDir = artifactStore.getSessionDirectory(sessionId);
                 controller.startSession(dialog.getResultConfig(), sessionDir.toAbsolutePath().toString());

@@ -537,6 +537,23 @@ Attachments are inlined as text at request time, so they work on **every provide
 #jmeter.ai.file.max.count=3
 ```
 
+## 🎬 Browser Recording
+
+Record a real browser session into a JMeter test plan without leaving the chat. Recording is **off by default**; enabling it adds a recording control panel to the chat panel. Traffic is captured through JMeter's built-in proxy recorder into a *Recording Controller* (the same shape as JMeter's `recording.jmx` template, with its suggested excludes), then finalized into a proper plan - think-time injection and artifact cleanup included.
+
+```properties
+# Master switch (default false) - adds the recording control panel to the chat
+jmeter.ai.record.enabled=true
+
+# Optional knobs (defaults shown):
+#jmeter.ai.record.artifacts.dir=          # empty = java.io.tmpdir/jmeter-ai-recordings
+#jmeter.ai.record.retention.days=7
+#jmeter.ai.record.think_time.scale=1.0    # 1.0 = think time as recorded
+#jmeter.ai.record.think_time.min.ms=0
+#jmeter.ai.record.think_time.max.ms=10000
+#jmeter.ai.record.tool.output.max.chars=  # empty = 8000 (~2000 tokens)
+```
+
 ## 🔔 Response Chime
 
 Get an audible cue when the AI finishes responding so you can multitask across windows.

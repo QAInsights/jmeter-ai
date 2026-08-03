@@ -46,10 +46,28 @@ public final class ThinkTimeInjector {
     }
 
     private long calculateThinkTime(long gapMs) {
-        double scale = Double.parseDouble(AiConfig.getProperty("jmeter.ai.record.think_time.scale", "1.0"));
-        long min = Long.parseLong(AiConfig.getProperty("jmeter.ai.record.think_time.min.ms", "0"));
-        long max = Long.parseLong(AiConfig.getProperty("jmeter.ai.record.think_time.max.ms", "10000"));
+        double scale = parseDouble("jmeter.ai.record.think_time.scale", 1.0);
+        long min = parseLong("jmeter.ai.record.think_time.min.ms", 0);
+        long max = parseLong("jmeter.ai.record.think_time.max.ms", 10000);
         return Math.max(min, Math.min(Math.round(gapMs * scale), max));
+    }
+
+    /** Property parse with fallback - a malformed value must never break plan finalization. */
+    private static double parseDouble(String key, double fallback) {
+        try {
+            return Double.parseDouble(AiConfig.getProperty(key, String.valueOf(fallback)).trim());
+        } catch (RuntimeException e) {
+            return fallback;
+        }
+    }
+
+    /** Property parse with fallback - a malformed value must never break plan finalization. */
+    private static long parseLong(String key, long fallback) {
+        try {
+            return Long.parseLong(AiConfig.getProperty(key, String.valueOf(fallback)).trim());
+        } catch (RuntimeException e) {
+            return fallback;
+        }
     }
 
     private void injectPauseAfter(Document doc, String stepName, long durationMs) {
