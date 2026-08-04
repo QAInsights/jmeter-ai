@@ -24,9 +24,12 @@ import org.slf4j.LoggerFactory;
  * Beyond a plain reasoning boolean, models.dev carries the real per-model
  * reasoning options: the exact effort values a model accepts, whether thinking
  * can be toggled off, and the thinking-budget range - plus input modalities
- * (image/pdf). How those options are put on the wire is decided separately by
- * the provider-scoped shapes in {@link ReasoningCapabilities} and the service
- * helpers. Models absent from the file report no capability.
+ * (image/pdf), context window, and $/Mtok pricing. The trim keeps every model
+ * of the supported providers (not just capable ones) so UI like the model
+ * picker can show metadata for all of them; models absent from the file
+ * report no capability. How reasoning options are put on the wire is decided
+ * separately by the provider-scoped shapes in {@link ReasoningCapabilities}
+ * and the service helpers.
  */
 public final class ModelCapabilityCatalog {
 
@@ -45,9 +48,13 @@ public final class ModelCapabilityCatalog {
         private final long budgetMax;
         private final boolean vision;
         private final boolean pdf;
+        private final long contextWindow;
+        private final double costIn;
+        private final double costOut;
 
         CapabilityInfo(boolean reasoning, boolean toggleable, List<String> effortLevels,
-                       long budgetMin, long budgetMax, boolean vision, boolean pdf) {
+                       long budgetMin, long budgetMax, boolean vision, boolean pdf,
+                       long contextWindow, double costIn, double costOut) {
             this.reasoning = reasoning;
             this.toggleable = toggleable;
             this.effortLevels = effortLevels;
@@ -55,6 +62,9 @@ public final class ModelCapabilityCatalog {
             this.budgetMax = budgetMax;
             this.vision = vision;
             this.pdf = pdf;
+            this.contextWindow = contextWindow;
+            this.costIn = costIn;
+            this.costOut = costOut;
         }
 
         public boolean isReasoning() {
@@ -90,6 +100,26 @@ public final class ModelCapabilityCatalog {
 
         public boolean isPdf() {
             return pdf;
+        }
+
+        /** Total context window in tokens (0 = unknown). */
+        public long getContextWindow() {
+            return contextWindow;
+        }
+
+        /** Input price in $ per million tokens (0 = unknown/free). */
+        public double getCostIn() {
+            return costIn;
+        }
+
+        /** Output price in $ per million tokens (0 = unknown/free). */
+        public double getCostOut() {
+            return costOut;
+        }
+
+        /** True when the vendored data carries pricing for this model. */
+        public boolean hasCost() {
+            return costIn > 0 || costOut > 0;
         }
     }
 
@@ -260,6 +290,9 @@ public final class ModelCapabilityCatalog {
                 node.path("budgetMin").asLong(0),
                 node.path("budgetMax").asLong(0),
                 node.path("vision").asBoolean(false),
-                node.path("pdf").asBoolean(false));
+                node.path("pdf").asBoolean(false),
+                node.path("contextWindow").asLong(0),
+                node.path("costIn").asDouble(0),
+                node.path("costOut").asDouble(0));
     }
 }

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,10 +16,16 @@ import static org.mockito.Mockito.mockStatic;
 @ExtendWith(MockitoExtension.class)
 class AiChatPanelTest {
 
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path tempDir;
+
     private MockedStatic<AiConfig> aiConfigMockedStatic;
 
     @BeforeEach
     void setUp() {
+        // keep the panel's model-selector preferences out of the real user home
+        System.setProperty(ModelSelectorPreferences.PATH_PROPERTY,
+                tempDir.resolve("preferences.json").toString());
         aiConfigMockedStatic = mockStatic(AiConfig.class);
         aiConfigMockedStatic.when(() -> AiConfig.getProperty(anyString(), anyString())).thenAnswer(invocation -> {
             String key = invocation.getArgument(0);

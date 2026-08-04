@@ -32,6 +32,8 @@ import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
+import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
+import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -64,7 +66,7 @@ public class AiChatPanel
     private JTextArea messageField;
     private InputOptionsRow inputOptionsRow;
     private Runnable currentCancelHandle;
-    private JComboBox<String> modelSelector;
+    private ModelSelectorPanel modelSelectorPanel;
     private List<String> conversationHistory;
     private ClaudeService claudeService;
     private OpenAiService openAiService;
@@ -164,7 +166,10 @@ public class AiChatPanel
         Font largerFont = defaultFont.deriveFont(defaultFont.getSize2D() + 2f);
 
         reasoningControls = new ReasoningControls(reasoningSettings);
-        initModelSelector();
+        modelSelectorPanel = new ModelSelectorPanel(
+                ModelSelectorPreferences.load(), ModelCapabilityCatalog.getInstance());
+        modelSelectorPanel.setSelectionListener(this::onModelSelected);
+        loadModelsInBackground();
         add(createChatPanel(largerFont), BorderLayout.CENTER);
         add(createBottomPanel(largerFont), BorderLayout.SOUTH);
 
@@ -173,49 +178,22 @@ public class AiChatPanel
     }
 
     /**
-     * Initialises the model selector combo box, loads models in the background,
-     * and wires up the selection listener.
+     * Routes a model selection from the selector panel into the owning
+     * provider service (via {@link AiResponseRouter#resolveAiService}, which
+     * also sets the bare id on that service), refreshes the reasoning
+     * controls, and (for Ollama) kicks off the live capability probe.
      */
-    private void initModelSelector() {
-        modelSelector = new JComboBox<>();
-        modelSelector.addItem(null); // Add empty item while loading
-        modelSelector.setRenderer(new ModelDisplayRenderer());
-        loadModelsInBackground();
-        modelSelector.addActionListener(e -> {
-            String selectedModel = (String) modelSelector.getSelectedItem();
-            if (selectedModel != null) {
-                log.info("Model selected from dropdown: {}", selectedModel);
-                if (selectedModel.startsWith("openai:")) {
-                    openAiService.setModel(selectedModel.substring(7));
-                } else if (selectedModel.startsWith("ollama:")) {
-                    ollamaService.setModel(selectedModel.substring(7));
-                } else if (selectedModel.startsWith("deepseek:")) {
-                    deepseekService.setModel(selectedModel.substring(9));
-                } else if (selectedModel.startsWith("google:")) {
-                    if (googleService != null) {
-                        googleService.setModel(selectedModel.substring(7));
-                    }
-                } else if (selectedModel.startsWith("grok:")) {
-                    grokService.setModel(selectedModel.substring(5));
-                } else if (selectedModel.startsWith("meta:")) {
-                    metaMuseService.setModel(selectedModel.substring(5));
-                } else if (selectedModel.startsWith("bedrock:")) {
-                    if (bedrockService != null) {
-                        bedrockService.setModel(selectedModel.substring(8));
-                    }
-                } else {
-                    claudeService.setModel(selectedModel);
-                }
-                reasoningControls.updateForModel(selectedModel);
-                if (selectedModel.startsWith("ollama:")) {
-                    // Probe the local model's real capabilities in the background
-                    // and refresh the controls when the answer arrives.
-                    String ollamaModelId = selectedModel.substring(7);
-                    ollamaService.resolveThinkingCapability(ollamaModelId,
-                            () -> reasoningControls.updateForModel(selectedModel));
-                }
-            }
-        });
+    private void onModelSelected(String selectedModel) {
+        log.info("Model selected: {}", selectedModel);
+        resolveAiService(selectedModel);
+        reasoningControls.updateForModel(selectedModel);
+        if (selectedModel.startsWith("ollama:")) {
+            // Probe the local model's real capabilities in the background
+            // and refresh the controls when the answer arrives.
+            String ollamaModelId = selectedModel.substring(7);
+            ollamaService.resolveThinkingCapability(ollamaModelId,
+                    () -> reasoningControls.updateForModel(selectedModel));
+        }
     }
 
     /**
@@ -385,7 +363,7 @@ public class AiChatPanel
 
         JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         modelPanel.add(new JLabel("Model:"));
-        modelPanel.add(modelSelector);
+        modelPanel.add(modelSelectorPanel);
         modelPanel.add(reasoningControls);
         navigationPanel.add(modelPanel, BorderLayout.WEST);
 
@@ -645,36 +623,10 @@ public class AiChatPanel
             protected void done() {
                 try {
                     List<String> models = get();
-                    modelSelector.removeAllItems();
-
                     // Get the default model ID
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
-
-                    String defaultModel = null;
-
-                    for (String model : models) {
-                        modelSelector.addItem(model);
-                        if (model.equals(defaultModelId)) {
-                            defaultModel = model;
-                        }
-                    }
-
-                    // Select the default model if found
-                    if (defaultModel != null) {
-                        modelSelector.setSelectedItem(defaultModel);
-                        log.info("Selected default model: {}", defaultModel);
-                    } else if (modelSelector.getItemCount() > 0) {
-                        // If default model not found, select the first one
-                        modelSelector.setSelectedIndex(0);
-                        String selectedModel =
-                            (String) modelSelector.getSelectedItem();
-                        claudeService.setModel(selectedModel);
-                        log.info(
-                            "Default model not found, selected first available: {}",
-                            selectedModel
-                        );
-                    }
+                    modelSelectorPanel.setModels(models, defaultModelId);
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
                 }
@@ -911,7 +863,7 @@ public class AiChatPanel
     ) {
         firstTokenReceived = false;
         Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
-            (String) modelSelector.getSelectedItem(),
+            modelSelectorPanel.getSelectedModel(),
             new ArrayList<>(conversationHistory),
             tokenConsumer,
             this::appendReasoningToken,
@@ -970,7 +922,7 @@ public class AiChatPanel
 
     @Override
     public String getSelectedModel() {
-        return (String) modelSelector.getSelectedItem();
+        return modelSelectorPanel.getSelectedModel();
     }
 
     @Override
@@ -1015,7 +967,7 @@ public class AiChatPanel
     public String getAiResponse(String message) {
         log.info("Getting AI response for message: {}", message);
         return aiResponseRouter.getAiResponse(
-            (String) modelSelector.getSelectedItem(),
+            modelSelectorPanel.getSelectedModel(),
             new ArrayList<>(conversationHistory)
         );
     }

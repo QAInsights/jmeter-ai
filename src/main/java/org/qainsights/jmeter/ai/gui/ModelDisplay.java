@@ -1,19 +1,14 @@
 package org.qainsights.jmeter.ai.gui;
 
-import java.awt.Component;
-import java.awt.Font;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.JList;
-import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
-
 /**
- * Renders model ids in the selector as friendly labels with a provider
- * suffix, e.g. {@code "gpt-4o · OpenAI"} instead of the raw
- * {@code "openai:gpt-4o"}. Only the <em>display</em> changes - the combo box
- * still stores and returns the original model id strings, so model routing
- * logic is completely unaffected.
+ * Pure display-name utilities for prefixed model ids: splits a raw id into
+ * friendly name and provider ({@code "openai:gpt-4o" -> ["gpt-4o", "OpenAI"]})
+ * and formats the standard label ({@code "gpt-4o  ·  OpenAI"}). Only the
+ * display changes - model routing keys off the original id strings
+ * everywhere. (Successor of the old {@code ModelDisplayRenderer}; the Swing
+ * cell-renderer half died with the combo box.)
  */
-public class ModelDisplayRenderer extends DefaultListCellRenderer {
+final class ModelDisplay {
 
     /** Prefix-to-provider display names, ordered longest-first for matching. */
     private static final String[][] PROVIDERS = {
@@ -28,6 +23,9 @@ public class ModelDisplayRenderer extends DefaultListCellRenderer {
 
     /** Unprefixed model ids route to Claude (see CommandDispatcher). */
     private static final String DEFAULT_PROVIDER = "Anthropic";
+
+    private ModelDisplay() {
+    }
 
     /**
      * Splits a raw model id into display name and provider, e.g.
@@ -49,31 +47,9 @@ public class ModelDisplayRenderer extends DefaultListCellRenderer {
         return new String[] { modelId, DEFAULT_PROVIDER };
     }
 
-    @Override
-    public Component getListCellRendererComponent(
-        JList<?> list,
-        Object value,
-        int index,
-        boolean isSelected,
-        boolean cellHasFocus
-    ) {
-        String[] parts = parse(value == null ? null : value.toString());
-        String display =
-            parts[1].isEmpty()
-                ? parts[0]
-                : parts[0] + "  ·  " + parts[1];
-
-        Component c = super.getListCellRendererComponent(
-            list,
-            display,
-            index,
-            isSelected,
-            cellHasFocus
-        );
-
-        if (value == null) {
-            c.setFont(c.getFont().deriveFont(Font.ITALIC));
-        }
-        return c;
+    /** The standard one-line label: {@code "gpt-4o  ·  OpenAI"}. */
+    static String formatLabel(String modelId) {
+        String[] parts = parse(modelId);
+        return parts[1].isEmpty() ? parts[0] : parts[0] + "  ·  " + parts[1];
     }
 }
