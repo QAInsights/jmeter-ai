@@ -74,7 +74,11 @@ public class ClaudeCodePanel extends JPanel {
         add(createHeaderPanel(), BorderLayout.NORTH);
 
         if (availableClis.isEmpty()) {
-            JLabel noCliLabel = new JLabel("No AI CLIs were detected on your PATH.", SwingConstants.CENTER);
+            JLabel noCliLabel = new JLabel(
+                    "<html><center>No AI CLIs were detected on your PATH.<br>"
+                            + "Install Claude Code, OpenAI Codex, OpenCode, Copilot, Antigravity, or Grok CLI "
+                            + "and ensure it is on your PATH.</center></html>",
+                    SwingConstants.CENTER);
             noCliLabel.setForeground(HEADER_FG_COLOR);
             noCliLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
             add(noCliLabel, BorderLayout.CENTER);
@@ -169,7 +173,7 @@ public class ClaudeCodePanel extends JPanel {
         reloadBtn.addActionListener(e -> reloadTestPlan());
         buttonPanel.add(reloadBtn);
 
-        JButton refreshBtn = createHeaderButton("\u21BB Ctx", "Send test plan context to Claude Code");
+        JButton refreshBtn = createHeaderButton("\u21BB Context", "Send test plan context to Claude Code");
         refreshBtn.addActionListener(e -> sendTestPlanContext());
         buttonPanel.add(refreshBtn);
 
@@ -300,6 +304,7 @@ public class ClaudeCodePanel extends JPanel {
                             terminalWidget.start();
 
                             statusLabel.setText("\u25CF Running");
+                            statusLabel.setToolTipText(null);
                             statusLabel.setForeground(STATUS_RUNNING);
                         });
 
@@ -322,11 +327,18 @@ public class ClaudeCodePanel extends JPanel {
                             statusLabel.setForeground(STATUS_STOPPED);
                         });
                     } else {
-                        log.info("Please enable this feature in properties file.");
+                        String enableKey = selectedCli != null && !selectedCli.enablementProperty().isEmpty()
+                                ? selectedCli.enablementProperty()
+                                : "jmeter.ai.terminal.<cli>.enabled";
+                        log.info("CLI binary not available. Enable the CLI in user.properties "
+                                + "({}=true) and ensure it is on PATH.", enableKey);
                         SwingUtilities.invokeLater(() -> {
                             terminalWidget.setTtyConnector(new DisabledTtyConnector());
                             terminalWidget.start();
                             statusLabel.setText("\u25CF Disabled");
+                            statusLabel.setToolTipText(
+                                    "CLI unavailable. Set " + enableKey + "=true "
+                                            + "in user.properties (or jmeter.properties), install the CLI on PATH, and restart JMeter.");
                             statusLabel.setForeground(STATUS_STOPPED);
                         });
                     }

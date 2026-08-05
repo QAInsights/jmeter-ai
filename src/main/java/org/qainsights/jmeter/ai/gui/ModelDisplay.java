@@ -34,7 +34,7 @@ final class ModelDisplay {
      */
     static String[] parse(String modelId) {
         if (modelId == null || modelId.isEmpty()) {
-            return new String[] { "Loading models...", "" };
+            return new String[] { "Loading available models\u2026", "" };
         }
         for (String[] entry : PROVIDERS) {
             if (modelId.startsWith(entry[0])) {

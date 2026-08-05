@@ -27,6 +27,11 @@ class ClaudeCodeCliAdapterTest {
         assertEquals("Claude Code", new ClaudeCodeCliAdapter().getName());
     }
 
+    @Test
+    void enablementProperty_returnsClaudeCodeKey() {
+        assertEquals("jmeter.ai.terminal.claudecode.enabled", new ClaudeCodeCliAdapter().enablementProperty());
+    }
+
     // ── buildCommand ───────────────────────────────────────────────────────────
 
     @Test

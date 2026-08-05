@@ -4,6 +4,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
 import org.qainsights.jmeter.ai.gui.ComponentFinder;
+import org.qainsights.jmeter.ai.gui.FeatherWandToolbar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,17 +131,14 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
             Component item = toolbarComponents[i];
             if (item instanceof JButton) {
                 JButton btn = (JButton) item;
-                String actionCommand = btn.getModel().getActionCommand();
-                String tooltip = btn.getToolTipText();
 
-                // Find the Feather Wand button
-                if ("toggle_ai_panel".equals(actionCommand) ||
-                        (tooltip != null && tooltip.contains("FeatherWand"))) {
+                // Find the Feather Wand button (action command or brand tooltip)
+                if (FeatherWandToolbar.isFeatherWandButton(btn)) {
                     featherWandPos = i;
                 }
 
                 // Find the start button as a fallback reference
-                if ("start".equals(actionCommand)) {
+                if ("start".equals(btn.getModel().getActionCommand())) {
                     startPos = i;
                 }
             }

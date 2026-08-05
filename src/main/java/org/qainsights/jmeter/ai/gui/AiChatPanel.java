@@ -501,8 +501,8 @@ public class AiChatPanel
         );
         headerPanel.add(titleLabel);
 
+        headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
         if (Boolean.parseBoolean(AiConfig.getProperty("jmeter.ai.record.enabled", "false"))) {
-            headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
             org.qainsights.jmeter.ai.record.RecordingSessionController recController =
                 org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
             org.qainsights.jmeter.ai.record.RecordingArtifactStore recStore =
@@ -511,6 +511,12 @@ public class AiChatPanel
                 new org.qainsights.jmeter.ai.record.RecordingControlPanel(recController, recStore);
             recPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
             headerPanel.add(recPanel);
+        } else {
+            // Discovery-only chip when recording is off; does not start sessions
+            JComponent disabledRecord =
+                org.qainsights.jmeter.ai.record.DisabledRecordChip.create();
+            disabledRecord.setAlignmentY(Component.CENTER_ALIGNMENT);
+            headerPanel.add(disabledRecord);
         }
 
         headerPanel.add(Box.createHorizontalGlue());
@@ -640,7 +646,7 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        transcript.addAssistantMessage(Constants.WELCOME_MESSAGE);
+        transcript.addAssistantMessage(WelcomeMessages.forCurrentConfig());
     }
 
     /** The session attachment registry (package-private for tests). */
@@ -789,7 +795,7 @@ public class AiChatPanel
         SwingUtilities.invokeLater(() -> inputOptionsRow.showStop(() -> {
             if (currentCancelHandle != null) {
                 currentCancelHandle.run();
-                appendMessageToChat("\n[Stream cancelled]");
+                appendMessageToChat("\nResponse stopped.");
                 hideStopButton();
                 setInputEnabled(true);
                 removeLoadingIndicator();
@@ -1077,7 +1083,7 @@ public class AiChatPanel
     private void showWrapRedoNotSupported() {
         runOnEdt(() -> {
             transcript.addSystemMessage(
-                "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
+                "Redo isn't supported for @wrap. Run @wrap again if needed.",
                 ThemeColors.info()
             );
         });

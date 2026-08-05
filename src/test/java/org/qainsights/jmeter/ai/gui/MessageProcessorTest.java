@@ -144,7 +144,7 @@ class MessageProcessorTest {
             }
         });
 
-        assertEquals("Copied!", copyButton.getText());
+        assertEquals("Copied \u2713", copyButton.getText());
     }
 
     @Test

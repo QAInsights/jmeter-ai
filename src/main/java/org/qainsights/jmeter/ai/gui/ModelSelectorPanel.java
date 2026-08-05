@@ -43,7 +43,7 @@ class ModelSelectorPanel extends JPanel {
         this.catalog = catalog;
         setOpaque(false);
 
-        selectorButton = new JButton("Loading models…");
+        selectorButton = new JButton("Loading available models\u2026");
         selectorButton.setIcon(ChevronIcons.down(10));
         selectorButton.setHorizontalTextPosition(SwingConstants.LEFT);
         selectorButton.setIconTextGap(6);

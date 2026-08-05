@@ -16,8 +16,13 @@ public class GrokCliAdapter extends BaseCliAdapter {
     }
 
     @Override
+    public String enablementProperty() {
+        return "jmeter.ai.terminal.grok.enabled";
+    }
+
+    @Override
     public boolean isEnabled() {
-        return AiConfig.getProperty("jmeter.ai.terminal.grok.enabled", "false").equals("true");
+        return AiConfig.getProperty(enablementProperty(), "false").equals("true");
     }
 
     @Override

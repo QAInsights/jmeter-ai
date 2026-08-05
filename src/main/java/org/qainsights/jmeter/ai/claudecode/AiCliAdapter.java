@@ -28,6 +28,15 @@ public interface AiCliAdapter {
     boolean isEnabled();
 
     /**
+     * @return the JMeter property that enables this CLI (for example
+     *         {@code jmeter.ai.terminal.claudecode.enabled}), or an empty
+     *         string when the adapter has no dedicated enablement property
+     */
+    default String enablementProperty() {
+        return "";
+    }
+
+    /**
      * @return the default prompt for the CLI
      */
     String defaultPrompt();

@@ -129,6 +129,10 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         GuiPackage instance = GuiPackage.getInstance();
         if (instance != null) {
             final MainFrame mf = instance.getMainFrame();
+            // Register the global toggle shortcut independently of the toolbar
+            // search below: the busy-wait only exits once JMeterToolBar is found,
+            // and the shortcut must not depend on that.
+            SwingUtilities.invokeLater(() -> registerToggleShortcut(mf));
             final ComponentFinder<JMeterToolBar> finder = new ComponentFinder<>(JMeterToolBar.class);
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
@@ -155,10 +159,24 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
 
     private JButton getToolbarButton() {
         JButton button = new JButton(getButtonIcon(22));
-        button.setToolTipText("Toggle FeatherWand Panel");
+        button.setToolTipText(FeatherWandToolbar.toggleTooltip());
         button.addActionListener(this);
-        button.setActionCommand("toggle_ai_panel");
+        button.setActionCommand(FeatherWandToolbar.TOGGLE_ACTION);
         return button;
+    }
+
+    /**
+     * Registers Ctrl/⌘+Shift+A on the main frame so users can toggle the panel
+     * without hunting for the toolbar icon. The root-pane binding is the only
+     * mechanism used; the menu item keeps its legacy Alt+V accelerator from the
+     * {@code AI} action, so both shortcuts stay live. Safe no-op when the root
+     * pane is missing.
+     */
+    private void registerToggleShortcut(MainFrame mainFrame) {
+        if (mainFrame == null) {
+            return;
+        }
+        FeatherWandToolbar.installToggleBinding(mainFrame.getRootPane(), this::openAiChatPanel);
     }
 
     private int getPositionForIcon(Component[] toolbarComponents) {

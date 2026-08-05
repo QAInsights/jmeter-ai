@@ -20,6 +20,11 @@ class CopilotCliAdapterTest {
     }
 
     @Test
+    void enablementProperty_returnsCopilotKey() {
+        assertEquals("jmeter.ai.terminal.copilot.enabled", new CopilotCliAdapter().enablementProperty());
+    }
+
+    @Test
     void toString_returnsGitHubCopilotCli() {
         assertEquals("GitHub Copilot CLI", new CopilotCliAdapter().toString());
     }

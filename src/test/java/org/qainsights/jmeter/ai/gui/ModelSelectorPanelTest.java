@@ -36,7 +36,7 @@ class ModelSelectorPanelTest {
     void loadingStateShowsPlaceholderAndNoSelection() {
         ModelSelectorPanel panel = panel(prefs());
         assertNull(panel.getSelectedModel());
-        assertEquals("Loading models…", panel.buttonText());
+        assertEquals("Loading available models\u2026", panel.buttonText());
     }
 
     private javax.swing.JToggleButton starButtonOf(ModelSelectorPanel panel) {
@@ -104,7 +104,7 @@ class ModelSelectorPanelTest {
         ModelSelectorPanel panel = panel(prefs());
         panel.setModels(List.of(), "claude-opus-4-8");
         assertNull(panel.getSelectedModel());
-        assertEquals("Loading models…", panel.buttonText());
+        assertEquals("Loading available models\u2026", panel.buttonText());
     }
 
     @Test

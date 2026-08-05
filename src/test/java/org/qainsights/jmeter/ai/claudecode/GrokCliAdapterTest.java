@@ -20,6 +20,11 @@ class GrokCliAdapterTest {
     }
 
     @Test
+    void enablementProperty_returnsGrokKey() {
+        assertEquals("jmeter.ai.terminal.grok.enabled", new GrokCliAdapter().enablementProperty());
+    }
+
+    @Test
     void toString_returnsGrokCli() {
         assertEquals("Grok CLI", new GrokCliAdapter().toString());
     }

@@ -16,8 +16,13 @@ public class OpenAiCodexCliAdapter extends BaseCliAdapter {
     }
 
     @Override
+    public String enablementProperty() {
+        return "jmeter.ai.terminal.codex.enabled";
+    }
+
+    @Override
     public boolean isEnabled() {
-        return AiConfig.getProperty("jmeter.ai.terminal.codex.enabled", "false").equals("true");
+        return AiConfig.getProperty(enablementProperty(), "false").equals("true");
     }
 
     @Override

@@ -37,9 +37,9 @@ class ModelDisplayTest {
 
     @Test
     void nullAndEmptyModelsShowLoadingPlaceholder() {
-        assertArrayEquals(new String[] { "Loading models...", "" },
+        assertArrayEquals(new String[] { "Loading available models\u2026", "" },
             ModelDisplay.parse(null));
-        assertArrayEquals(new String[] { "Loading models...", "" },
+        assertArrayEquals(new String[] { "Loading available models\u2026", "" },
             ModelDisplay.parse(""));
     }
 
@@ -51,6 +51,6 @@ class ModelDisplayTest {
 
     @Test
     void formatLabelFallsBackToNameOnly() {
-        assertEquals("Loading models...", ModelDisplay.formatLabel(null));
+        assertEquals("Loading available models\u2026", ModelDisplay.formatLabel(null));
     }
 }

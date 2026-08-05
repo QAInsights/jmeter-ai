@@ -132,6 +132,41 @@ class AiResponseRouterTest {
         String response = nullGoogleRouter.getAiResponse("google:gemini-1.5", history);
 
         assertTrue(response.contains("Google Gemini service not configured"));
+        assertTrue(response.contains("google.api.key"));
+        assertTrue(response.contains("user.properties"));
+    }
+
+    @Test
+    void testGetAiResponse_Grok_NullService() {
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        AiResponseRouter nullGrokRouter = new AiResponseRouter(holder);
+        String response = nullGrokRouter.getAiResponse("grok:grok-4.5", history);
+
+        assertTrue(response.contains("Grok service not configured"));
+        assertTrue(response.contains("grok.api.key"));
+        assertTrue(response.contains("user.properties"));
+    }
+
+    @Test
+    void testGetAiResponse_Meta_NullService() {
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        AiResponseRouter nullMetaRouter = new AiResponseRouter(holder);
+        String response = nullMetaRouter.getAiResponse("meta:muse-spark-1.1", history);
+
+        assertTrue(response.contains("Meta Muse service not configured"));
+        assertTrue(response.contains("meta.api.key"));
+        assertTrue(response.contains("user.properties"));
+    }
+
+    @Test
+    void notConfiguredMessage_namesPropertyAndUserProperties() {
+        String msg = AiResponseRouter.notConfiguredMessage("Grok", "grok.api.key");
+        assertTrue(msg.contains("Grok service not configured"));
+        assertTrue(msg.contains("grok.api.key"));
+        assertTrue(msg.contains("user.properties"));
+        assertTrue(msg.contains("restart JMeter"));
     }
 
     @Test
@@ -179,6 +214,8 @@ class AiResponseRouterTest {
         String response = nullBedrockRouter.getAiResponse("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0", history);
 
         assertTrue(response.contains("Bedrock service not configured"));
+        assertTrue(response.contains("user.properties"));
+        assertTrue(response.contains("bedrock.api.key") || response.contains("bedrock.aws.access.key"));
     }
 
     @Test

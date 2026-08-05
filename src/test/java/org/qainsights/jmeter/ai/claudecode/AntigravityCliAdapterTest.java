@@ -21,6 +21,11 @@ class AntigravityCliAdapterTest {
         assertEquals("Antigravity CLI", new AntigravityCliAdapter().getName());
     }
 
+    @Test
+    void enablementProperty_returnsAntigravityKey() {
+        assertEquals("jmeter.ai.terminal.antigravity.enabled", new AntigravityCliAdapter().enablementProperty());
+    }
+
     // ── toString ──────────────────────────────────────────────────────────────
 
     @Test

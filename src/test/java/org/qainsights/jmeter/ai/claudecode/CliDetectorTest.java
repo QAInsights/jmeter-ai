@@ -82,6 +82,16 @@ class CliDetectorTest {
         assertEquals("/usr/local/bin/claude", result.get().getBinaryPath());
     }
 
+    // ── interface defaults ─────────────────────────────────────────────────────
+
+    @Test
+    void enablementProperty_defaultIsEmpty() {
+        AiCliAdapter adapter = stub("Codex", true, null, new boolean[1]);
+
+        assertEquals("", adapter.enablementProperty(),
+                "adapters without an override must report no dedicated enablement property");
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────────
 
     /**
