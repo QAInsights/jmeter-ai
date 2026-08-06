@@ -51,6 +51,11 @@ public final class Attachment {
         return preparedContent;
     }
 
+    /** The original file content (preparation re-runs from this on mode change or restore). */
+    public String getRawContent() {
+        return rawContent;
+    }
+
     /** The marker referencing this attachment inside a message string. */
     public String marker() {
         return "[file:" + id + "]";

@@ -32,7 +32,11 @@ import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
+import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
+import org.qainsights.jmeter.ai.service.session.ConversationSession;
+import org.qainsights.jmeter.ai.service.session.ConversationStore;
+import org.qainsights.jmeter.ai.service.session.ConversationTracker;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
@@ -67,7 +71,6 @@ public class AiChatPanel
     private InputOptionsRow inputOptionsRow;
     private Runnable currentCancelHandle;
     private ModelSelectorPanel modelSelectorPanel;
-    private List<String> conversationHistory;
     private ClaudeService claudeService;
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;
@@ -83,6 +86,13 @@ public class AiChatPanel
     private ReasoningControls reasoningControls;
     private final AttachmentRegistry attachmentRegistry = new AttachmentRegistry();
     private AttachmentBar attachmentBar;
+
+    // Conversation persistence (F5): the tracker owns history + session id and
+    // autosaves after every turn; restored on open when jmeter.ai.session.restore=true.
+    private final ConversationStore sessionStore = ConversationStore.open();
+    private final ConversationTracker conversationTracker = new ConversationTracker(sessionStore);
+    /** Model carried by a restored session; reselected once the model list loads. */
+    private String restoredSessionModel;
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -145,8 +155,6 @@ public class AiChatPanel
         // Register for UI refresh events (for zoom functionality)
         UIManager.addPropertyChangeListener(this);
 
-        conversationHistory = new ArrayList<>();
-
         // Set up the panel layout
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(500, 600));
@@ -173,8 +181,63 @@ public class AiChatPanel
         add(createChatPanel(largerFont), BorderLayout.CENTER);
         add(createBottomPanel(largerFont), BorderLayout.SOUTH);
 
-        // Display welcome message
-        displayWelcomeMessage();
+        // Display welcome message (skipped when a previous session is restored)
+        if (!restoreLastSessionIfEnabled()) {
+            displayWelcomeMessage();
+        }
+    }
+
+    /**
+     * Reloads the most recently saved session into history, transcript and the
+     * attachment registry when {@code jmeter.ai.session.restore=true}. The
+     * restored session keeps its id, so autosaves continue the same file.
+     *
+     * @return true when a session was restored (and the welcome message should
+     * be skipped)
+     */
+    private boolean restoreLastSessionIfEnabled() {
+        if (!Boolean.parseBoolean(
+                AiConfig.getProperty(ConversationStore.RESTORE_PROPERTY, "false"))) {
+            return false;
+        }
+        java.util.Optional<ConversationSession> loaded = sessionStore.loadMostRecent();
+        if (loaded.isEmpty()) {
+            return false;
+        }
+        ConversationSession session = loaded.get();
+        log.info("Restoring conversation session {} ({} turns)", session.id(), session.turns().size());
+        conversationTracker.adopt(session);
+        if (!session.model().isEmpty()) {
+            // reselected once the model list arrives in loadModelsInBackground
+            restoredSessionModel = session.model();
+        }
+        for (ConversationSession.AttachmentSnapshot snapshot : session.attachments()) {
+            attachmentRegistry.restore(snapshot.id(), snapshot.fileName(), snapshot.content(),
+                    FileContentPreparer.Mode.parse(snapshot.mode()));
+        }
+        for (ConversationSession.Turn turn : session.turns()) {
+            if ("user".equals(turn.role())) {
+                transcript.addUserMessage(turn.text());
+            } else {
+                transcript.addAssistantMessage(turn.text());
+            }
+        }
+        return true;
+    }
+
+    /** Snapshots the current conversation for saving/exporting (package-private for tests). */
+    ConversationSession buildSession() {
+        return conversationTracker.snapshot(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+    }
+
+    /** The model id carried by a restored session, or null (package-private for tests). */
+    String restoredSessionModel() {
+        return restoredSessionModel;
+    }
+
+    /** The id of the active session (package-private for tests). */
+    String currentSessionId() {
+        return conversationTracker.sessionId();
     }
 
     /**
@@ -527,6 +590,12 @@ public class AiChatPanel
 
         headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
 
+        SessionMenuButton sessionMenu = new SessionMenuButton(this, this::buildSession);
+        sessionMenu.setAlignmentY(Component.CENTER_ALIGNMENT);
+        headerPanel.add(sessionMenu);
+
+        headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
+
         JButton newChatButton = createStyledButton("+", 16);
         newChatButton.setToolTipText("Start a new conversation");
         newChatButton.setMargin(new Insets(0, 8, 0, 8));
@@ -633,6 +702,11 @@ public class AiChatPanel
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
                     modelSelectorPanel.setModels(models, defaultModelId);
+                    // A restored session carries its model; reselect it now that
+                    // the list is available (no-op when the model is gone).
+                    if (restoredSessionModel != null) {
+                        modelSelectorPanel.applyIfAvailable(restoredSessionModel);
+                    }
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
                 }
@@ -660,15 +734,15 @@ public class AiChatPanel
     void startNewConversation() {
         log.info("Starting new conversation");
 
+        // Archive the outgoing session (autosave keeps it current), then start a fresh id
+        conversationTracker.rotate(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+
         // Clear the transcript
         transcript.clearTranscript();
 
         // Clear pending attachments and the registry
         attachmentBar.clear();
         attachmentRegistry.clear();
-
-        // Clear the conversation history
-        conversationHistory.clear();
 
         // Reset the last command type
         lastCommandType = LastCommandType.NONE;
@@ -870,7 +944,7 @@ public class AiChatPanel
         firstTokenReceived = false;
         Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
             modelSelectorPanel.getSelectedModel(),
-            new ArrayList<>(conversationHistory),
+            conversationTracker.historyCopy(),
             tokenConsumer,
             this::appendReasoningToken,
             onComplete,
@@ -933,12 +1007,12 @@ public class AiChatPanel
 
     @Override
     public List<String> getConversationHistory() {
-        return conversationHistory;
+        return conversationTracker.history();
     }
 
     @Override
     public void addToConversationHistory(String entry) {
-        conversationHistory.add(entry);
+        conversationTracker.addTurn(entry, modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
     }
 
     @Override
@@ -974,7 +1048,7 @@ public class AiChatPanel
         log.info("Getting AI response for message: {}", message);
         return aiResponseRouter.getAiResponse(
             modelSelectorPanel.getSelectedModel(),
-            new ArrayList<>(conversationHistory)
+            conversationTracker.historyCopy()
         );
     }
 

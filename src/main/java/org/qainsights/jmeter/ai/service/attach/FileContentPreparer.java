@@ -30,7 +30,8 @@ public final class FileContentPreparer {
         SMART,
         RAW;
 
-        static Mode parse(String value) {
+        /** Parses a mode name (case-insensitive); anything but "raw" yields SMART. */
+        public static Mode parse(String value) {
             return "raw".equalsIgnoreCase(value == null ? "" : value.trim()) ? RAW : SMART;
         }
 

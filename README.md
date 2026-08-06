@@ -32,6 +32,7 @@
 - [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
 - [File Attachments](#-file-attachments)
+- [Conversation Persistence & Export](#-conversation-persistence--export)
 - [Response Chime](#-response-chime)
 - [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
@@ -57,6 +58,7 @@
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
 | 📎 **File Attachments** | Attach `jmeter.log`, results (`.jtl`/`.csv`), or any text file via the paperclip, drag-drop, or paste. Smart digests (percentiles, error breakdowns) instead of raw dumps - on every provider. |
+| 💾 **Conversation Persistence** | Chats autosave to `~/.jmeter-ai/sessions/` and can be restored after a JMeter restart. Export any conversation to Markdown or HTML for your test reports. |
 
 ---
 
@@ -536,6 +538,21 @@ Attachments are inlined as text at request time, so they work on **every provide
 # Max attachments per message (default 3)
 #jmeter.ai.file.max.count=3
 ```
+
+## 💾 Conversation Persistence & Export
+
+Every conversation is **autosaved after each turn** to `~/.jmeter-ai/sessions/` - one JSON file per conversation, including attachment contents, the model in use, and per-turn timestamps. Starting a new chat (the **+** button) archives the current session and begins a fresh one; the directory keeps the 20 most recent sessions.
+
+**Restore on startup** is opt-in: with the property below, reopening the chat panel brings back the last conversation - transcript, history (so follow-ups keep their context), attachments, and the model it used.
+
+```properties
+# Restore the last conversation when the chat panel opens (default false)
+#jmeter.ai.session.restore=true
+```
+
+> ⚠️ Sessions are stored **unencrypted**, including the full text of attached logs/results. Avoid attaching files that contain credentials or secrets.
+
+**Export for reports:** the **Export** menu in the chat header writes the current conversation as **Markdown** (paste into tickets/wikis) or a self-contained styled **HTML** page - file attachments appear by name. Perfect for attaching AI analysis to a test report.
 
 ## 🎬 Browser Recording
 

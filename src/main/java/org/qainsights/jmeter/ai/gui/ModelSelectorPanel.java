@@ -109,6 +109,17 @@ class ModelSelectorPanel extends JPanel {
     }
 
     /**
+     * Applies a model only when it is present in the loaded list - used to
+     * reselect the model carried by a restored session. Like
+     * {@link #setModels}, this is an install, not a user choice: no recents.
+     */
+    void applyIfAvailable(String model) {
+        if (model != null && allModels.contains(model)) {
+            applyModel(model);
+        }
+    }
+
+    /**
      * A deliberate user choice (picker confirm): applies the model and
      * records it in the recently-used history. Package-private for tests.
      */

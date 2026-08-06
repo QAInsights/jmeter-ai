@@ -66,6 +66,24 @@ public class AttachmentRegistry {
         return attachment;
     }
 
+    /**
+     * Re-registers an attachment carried over from a persisted session,
+     * keeping its original id so {@code [file:<id>]} markers in the restored
+     * history resolve again. Restored entries are NOT pending (their message
+     * was already sent) and the id counter advances past them so new
+     * attachments never collide.
+     */
+    public synchronized Attachment restore(String id, String fileName, String rawContent,
+            FileContentPreparer.Mode mode) {
+        Attachment attachment = new Attachment(id, fileName, rawContent, mode);
+        byId.put(attachment.getId(), attachment);
+        if (attachment.getId().matches("f\\d+")) {
+            int restored = Integer.parseInt(attachment.getId().substring(1));
+            counter.updateAndGet(current -> Math.max(current, restored));
+        }
+        return attachment;
+    }
+
     /** The attachment with the given id, or null. */
     public synchronized Attachment find(String id) {
         return byId.get(id);

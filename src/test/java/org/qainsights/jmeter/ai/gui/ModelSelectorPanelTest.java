@@ -64,6 +64,33 @@ class ModelSelectorPanelTest {
     }
 
     @Test
+    void applyIfAvailableAppliesListedModelWithoutDirtyingRecents() {
+        ModelSelectorPreferences prefs = prefs();
+        ModelSelectorPanel panel = panel(prefs);
+        List<String> selections = new ArrayList<>();
+        panel.setSelectionListener(selections::add);
+        panel.setModels(MODELS, "claude-opus-4-8");
+
+        panel.applyIfAvailable("google:gemini-2.5-pro");
+
+        assertEquals("google:gemini-2.5-pro", panel.getSelectedModel());
+        assertEquals(List.of("claude-opus-4-8", "google:gemini-2.5-pro"), selections);
+        assertTrue(prefs.recents().isEmpty());
+    }
+
+    @Test
+    void applyIfAvailableIgnoresUnknownOrNullModel() {
+        ModelSelectorPreferences prefs = prefs();
+        ModelSelectorPanel panel = panel(prefs);
+        panel.setModels(MODELS, "claude-opus-4-8");
+
+        panel.applyIfAvailable("openai:no-such-model");
+        panel.applyIfAvailable(null);
+
+        assertEquals("claude-opus-4-8", panel.getSelectedModel());
+    }
+
+    @Test
     void explicitSelectRecordsUse() {
         ModelSelectorPreferences prefs = prefs();
         ModelSelectorPanel panel = panel(prefs);
