@@ -33,6 +33,26 @@ class AttachmentRegistryTest {
     }
 
     @Test
+    void restoreKeepsIdIsNotPendingAndAdvancesCounter() {
+        AttachmentRegistry registry = new AttachmentRegistry();
+        Attachment restored = registry.restore("f7", "jmeter.log", "body",
+                FileContentPreparer.Mode.SMART);
+
+        assertEquals("f7", restored.getId());
+        assertSame(restored, registry.find("f7"));
+        assertEquals(0, registry.pendingCount());
+
+        // new registrations must not collide with the restored id
+        Attachment next = registry.register("new.txt", "x", FileContentPreparer.Mode.SMART);
+        assertEquals("f8", next.getId());
+
+        // and restored markers resolve again
+        String resolved = registry.resolveInlineMarkers("check [file:f7]");
+        assertTrue(resolved.contains("jmeter.log"));
+        assertFalse(resolved.contains("[file:f7]"));
+    }
+
+    @Test
     void registerAssignsSequentialIds() {
         AttachmentRegistry registry = new AttachmentRegistry();
         Attachment first = registry.register("a.txt", "hello", FileContentPreparer.Mode.SMART);

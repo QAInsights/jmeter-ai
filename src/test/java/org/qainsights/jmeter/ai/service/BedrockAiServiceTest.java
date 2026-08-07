@@ -72,6 +72,19 @@ class BedrockAiServiceTest {
     // ==================== Response Generation (Null Client) ====================
 
     @Test
+    void testSetUsageStats_delegatesAndRecordsNothingOnErrorPath() {
+        org.qainsights.jmeter.ai.service.usage.UsageStats stats =
+                new org.qainsights.jmeter.ai.service.usage.UsageStats();
+        assertDoesNotThrow(() -> bedrockService.setUsageStats(stats),
+                "setUsageStats should store the accumulator and delegate to the converse client");
+        String response = bedrockService.generateResponse(List.of("Hello"));
+        assertTrue(response.startsWith("Error:"),
+                "Should return error when client is null");
+        assertEquals(0, stats.snapshot().calls(),
+                "No usage should be recorded on the error path");
+    }
+
+    @Test
     void testGenerateResponse_withNullClient_returnsError() {
         List<String> conversation = List.of("Hello");
         String response = bedrockService.generateResponse(conversation);

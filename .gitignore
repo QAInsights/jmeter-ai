@@ -134,6 +134,7 @@ replay_pid*
 .DS_Store
 PPA.md
 POLISH.md
+features.md
 
 ollama-src
 *.txt

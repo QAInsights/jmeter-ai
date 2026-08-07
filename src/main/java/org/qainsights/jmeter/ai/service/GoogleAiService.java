@@ -25,6 +25,7 @@ public class GoogleAiService implements AiService {
     private String model;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
 
     public GoogleAiService(Client googleClient) {
         this.model = AiConfig.getProperty("google.default.model", "gemini-2.5-flash");
@@ -52,6 +53,12 @@ public class GoogleAiService implements AiService {
         String reasoning = lastReasoning;
         lastReasoning = null;
         return reasoning;
+    }
+
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
     }
 
     /**
@@ -121,6 +128,13 @@ public class GoogleAiService implements AiService {
                     contents,
                     buildConfig(modelToUse));
 
+            if (usageStats != null) {
+                response.usageMetadata().ifPresent(usage ->
+                        usageStats.record("google:" + modelToUse,
+                                usage.promptTokenCount().orElse(0),
+                                usage.candidatesTokenCount().orElse(0)));
+            }
+
             lastReasoning = extractThoughts(response);
             return response.text();
 
@@ -158,10 +172,18 @@ public class GoogleAiService implements AiService {
                         contents,
                         config);
 
+                GenerateContentResponseUsageMetadata[] lastUsage = new GenerateContentResponseUsageMetadata[1];
                 for (GenerateContentResponse chunk : stream) {
+                    chunk.usageMetadata().ifPresent(usage -> lastUsage[0] = usage);
                     GoogleThinking.routeChunkParts(chunk,
                             text -> javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text)),
                             thought -> javax.swing.SwingUtilities.invokeLater(() -> reasoningConsumer.accept(thought)));
+                }
+
+                if (usageStats != null && lastUsage[0] != null) {
+                    usageStats.record("google:" + modelToUse,
+                            lastUsage[0].promptTokenCount().orElse(0),
+                            lastUsage[0].candidatesTokenCount().orElse(0));
                 }
 
                 javax.swing.SwingUtilities.invokeLater(onComplete);

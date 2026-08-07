@@ -98,7 +98,7 @@ public class AiResponseRouter {
                 googleService.setModel(googleModelId);
                 return googleService.generateResponse(conversationHistory);
             }
-            return "Error: Google Gemini service not configured. Set google.api.key in jmeter.properties.";
+            return notConfiguredMessage("Google Gemini", "google.api.key");
         } else if (selectedModel.startsWith("grok:")) {
             String grokModelId = selectedModel.substring(5);
             log.info("Using Grok model: {}", grokModelId);
@@ -106,7 +106,7 @@ public class AiResponseRouter {
                 grokService.setModel(grokModelId);
                 return grokService.generateResponse(conversationHistory);
             }
-            return "Error: Grok service not configured. Set grok.api.key in jmeter.properties.";
+            return notConfiguredMessage("Grok", "grok.api.key");
         } else if (selectedModel.startsWith("meta:")) {
             String metaModelId = selectedModel.substring(5);
             log.info("Using Meta Muse model: {}", metaModelId);
@@ -114,7 +114,7 @@ public class AiResponseRouter {
                 metaMuseService.setModel(metaModelId);
                 return metaMuseService.generateResponse(conversationHistory);
             }
-            return "Error: Meta Muse service not configured. Set meta.api.key in jmeter.properties.";
+            return notConfiguredMessage("Meta Muse", "meta.api.key");
         } else if (selectedModel.startsWith("bedrock:")) {
             String bedrockModelId = selectedModel.substring(8);
             log.info("Using Bedrock model: {}", bedrockModelId);
@@ -122,7 +122,9 @@ public class AiResponseRouter {
                 bedrockService.setModel(bedrockModelId);
                 return bedrockService.generateResponse(conversationHistory);
             }
-            return "Error: Bedrock service not configured. Set bedrock.aws.access.key and bedrock.aws.secret.key in jmeter.properties.";
+            return "Error: Bedrock service not configured. Set bedrock.api.key or "
+                    + "bedrock.aws.access.key and bedrock.aws.secret.key in user.properties "
+                    + "(or jmeter.properties) and restart JMeter.";
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -201,6 +203,16 @@ public class AiResponseRouter {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, reasoningConsumer, onComplete, onError);
         }
+    }
+
+    /**
+     * User-facing message when a provider service was never constructed (usually a
+     * missing API key). Points at {@code user.properties} first, the usual place
+     * testers edit, and mentions restart so the service can pick the key up.
+     */
+    static String notConfiguredMessage(String providerDisplayName, String propertyKey) {
+        return "Error: " + providerDisplayName + " service not configured. Set "
+                + propertyKey + " in user.properties (or jmeter.properties) and restart JMeter.";
     }
 
     /**

@@ -9,6 +9,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -197,5 +198,19 @@ class GrokAiServiceTest {
         // Calling cancel multiple times should not throw
         cancelHandle.run();
         cancelHandle.run();
+    }
+
+    // ==================== Usage Stats ====================
+
+    @Test
+    void testSetUsageStats_storesValue() throws Exception {
+        org.qainsights.jmeter.ai.service.usage.UsageStats stats =
+                new org.qainsights.jmeter.ai.service.usage.UsageStats();
+        grokService.setUsageStats(stats);
+
+        Field field = GrokAiService.class.getDeclaredField("usageStats");
+        field.setAccessible(true);
+        assertSame(stats, field.get(grokService),
+                "setUsageStats should store the UsageStats instance");
     }
 }

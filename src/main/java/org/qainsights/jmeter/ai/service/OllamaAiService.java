@@ -34,6 +34,7 @@ public class OllamaAiService implements AiService {
     private final String systemPrompt;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
     /** Live capability probe results per model name (Ollama /api/show). */
     private final java.util.concurrent.ConcurrentHashMap<String, Boolean> thinkingCapabilityCache =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -169,6 +170,12 @@ public class OllamaAiService implements AiService {
         this.reasoningSettings = settings;
     }
 
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
+
     @Override
     public String consumeLastReasoning() {
         String reasoning = lastReasoning;
@@ -296,6 +303,13 @@ public class OllamaAiService implements AiService {
             }
 
             result = ollamaClient.chat(request, null);
+            if (usageStats != null) {
+                Integer promptTokens = result.getResponseModel().getPromptEvalCount();
+                Integer outputTokens = result.getResponseModel().getEvalCount();
+                if (promptTokens != null && outputTokens != null) {
+                    usageStats.record("ollama:" + this.model, promptTokens, outputTokens);
+                }
+            }
             String thinking = result.getResponseModel().getMessage().getThinking();
             lastReasoning = (thinking != null && !thinking.isBlank()) ? thinking : null;
             return result.getResponseModel().getMessage().getResponse();
@@ -354,9 +368,19 @@ public class OllamaAiService implements AiService {
                     }
                 });
 
-                ollamaClient.chat(request, observer);
+                // chat() blocks until the stream finishes; the returned result's
+                // final (done=true) response model carries the eval counts.
+                OllamaChatResult streamResult = ollamaClient.chat(request, observer);
 
                 if (!Thread.currentThread().isInterrupted()) {
+                    if (usageStats != null && streamResult != null
+                            && streamResult.getResponseModel() != null) {
+                        Integer promptTokens = streamResult.getResponseModel().getPromptEvalCount();
+                        Integer outputTokens = streamResult.getResponseModel().getEvalCount();
+                        if (promptTokens != null && outputTokens != null) {
+                            usageStats.record("ollama:" + this.model, promptTokens, outputTokens);
+                        }
+                    }
                     onComplete.run();
                 }
             } catch (Exception e) {

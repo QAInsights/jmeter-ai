@@ -30,6 +30,13 @@ public class OpenAiService implements AiService {
     private String systemPrompt;
     private long maxTokens;
     private ReasoningSettings reasoningSettings;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
+
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
 
     public OpenAiService() {
         String API_KEY = AiConfig.getProperty("openai.api.key", "");
@@ -289,6 +296,10 @@ public class OpenAiService implements AiService {
             } catch (Exception ex) {
                 log.error("Failed to record token usage", ex);
             }
+            if (usageStats != null) {
+                chatCompletion.usage().ifPresent(usage -> usageStats.record(
+                        "openai:" + currentModelId, usage.promptTokens(), usage.completionTokens()));
+            }
 
             // Extract the response content using SDK methods
             String responseContent;
@@ -391,7 +402,12 @@ public class OpenAiService implements AiService {
 
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
-                .model(modelToUse);
+                .model(modelToUse)
+                // Ask for a final usage chunk so the context-stats label gets
+                // server-reported numbers instead of estimates.
+                .streamOptions(com.openai.models.chat.completions.ChatCompletionStreamOptions.builder()
+                        .includeUsage(true)
+                        .build());
 
         if (supportsCustomTemperature) {
             paramsBuilder.temperature(temperature);
@@ -442,13 +458,22 @@ public class OpenAiService implements AiService {
 
         Thread streamThread = new Thread(() -> {
             try {
+                java.util.concurrent.atomic.AtomicReference<com.openai.models.completions.CompletionUsage> streamUsage =
+                        new java.util.concurrent.atomic.AtomicReference<>();
                 try (StreamResponse<ChatCompletionChunk> stream = client.chat().completions().createStreaming(params)) {
                     stream.stream()
-                        .flatMap(chunk -> chunk.choices().stream())
-                        .flatMap(choice -> choice.delta().content().stream())
-                        .forEach(text -> {
-                            javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
+                        .forEach(chunk -> {
+                            chunk.usage().ifPresent(streamUsage::set);
+                            chunk.choices().stream()
+                                .flatMap(choice -> choice.delta().content().stream())
+                                .forEach(text ->
+                                    javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text)));
                         });
+                }
+
+                if (usageStats != null && streamUsage.get() != null) {
+                    usageStats.record("openai:" + finalModel,
+                            streamUsage.get().promptTokens(), streamUsage.get().completionTokens());
                 }
 
                 // For OpenAI java SDK 0.31.0, we just assume the response is complete

@@ -41,7 +41,30 @@ class AiMenuCreatorTest {
     }
 
     @Test
-    void testGetMenuItemsAtLocation_Run() {
+    void testGetMenuItemsAtLocation_Run_defaultHidesDevMenus() {
+        // default mock returns property defaults → jmeter.ai.dev.menu=false
+        AiMenuCreator creator = new AiMenuCreator();
+        JMenuItem[] items = creator.getMenuItemsAtLocation(MENU_LOCATION.RUN);
+
+        assertNotNull(items);
+        assertEquals(3, items.length);
+        assertTrue(items[0] instanceof AiMenuItem);
+        assertTrue(items[1] instanceof org.qainsights.jmeter.ai.correlation.CorrelationMenuItem);
+        assertTrue(items[2] instanceof org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem);
+    }
+
+    @Test
+    void testGetMenuItemsAtLocation_Run_devMenusWhenEnabled() {
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty(anyString(), anyString())).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            String defaultValue = invocation.getArgument(1);
+            if (key.equals(AiMenuCreator.DEV_MENU_PROPERTY)) return "true";
+            if (key.equals("jmeter.ai.service.type")) return "openai";
+            if (key.equals("openai.api.key")) return "test-key";
+            if (key.equals("openai.default.model")) return "gpt-4o";
+            return defaultValue;
+        });
+
         AiMenuCreator creator = new AiMenuCreator();
         JMenuItem[] items = creator.getMenuItemsAtLocation(MENU_LOCATION.RUN);
 
@@ -55,6 +78,11 @@ class AiMenuCreatorTest {
         assertTrue(items[5] instanceof org.qainsights.jmeter.ai.agent.dev.DeleteElementDevMenuItem);
         assertTrue(items[6] instanceof org.qainsights.jmeter.ai.agent.dev.ToggleElementDevMenuItem);
         assertTrue(items[7] instanceof org.qainsights.jmeter.ai.agent.dev.MoveElementDevMenuItem);
+    }
+
+    @Test
+    void isDevMenuEnabled_defaultsFalse() {
+        assertFalse(AiMenuCreator.isDevMenuEnabled());
     }
 
     @Test

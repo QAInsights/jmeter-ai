@@ -198,6 +198,14 @@ public class BedrockAiService implements AiService {
         this.reasoningSettings = settings;
     }
 
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        // Usage lives on the Converse/ConverseStream responses, which are owned
+        // by the converse client - delegate so it can record at the source.
+        converseClient.setUsageStats(stats);
+    }
+
     @Override
     public String consumeLastReasoning() {
         String reasoning = lastReasoning;

@@ -32,6 +32,8 @@
 - [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
 - [File Attachments](#-file-attachments)
+- [Conversation Persistence & Export](#-conversation-persistence--export)
+- [Context & Cost Stats](#-context--cost-stats)
 - [Response Chime](#-response-chime)
 - [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
@@ -57,6 +59,8 @@
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
 | 📎 **File Attachments** | Attach `jmeter.log`, results (`.jtl`/`.csv`), or any text file via the paperclip, drag-drop, or paste. Smart digests (percentiles, error breakdowns) instead of raw dumps - on every provider. |
+| 💾 **Conversation Persistence** | Chats autosave to `~/.jmeter-ai/sessions/` and can be restored after a JMeter restart. Export any conversation to Markdown or HTML for your test reports. |
+| 📊 **Context & Cost Stats** | A live readout next to the input box shows how full the model's context window is and the session's estimated cost (server-reported token usage on every provider). |
 
 ---
 
@@ -425,7 +429,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Safety
 
-- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show a **Yes/No confirmation dialog** before executing. Disable with `jmeter.ai.agent.confirm.destructive=false`.
+- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show an **Allow/Deny confirmation dialog** before executing - with an impact preview, not just a tool name: deletes list the subtree (child count + names, force flag), moves show from → to, `open_plan` shows the file and warns about unsaved changes, and correlation lists how many candidates it will touch. Disable with `jmeter.ai.agent.confirm.destructive=false`.
 - **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 8) even if the task isn't complete.
 - **Graceful degradation**: If the agent loop fails (API error, malformed response, etc.), it falls back to a plain-text answer describing what it attempted.
 - **Undo**: All agent mutations fire the same JMeter tree-model events as GUI actions, so they're undoable with Ctrl+Z when `undo.history.size > 0`.
@@ -537,6 +541,30 @@ Attachments are inlined as text at request time, so they work on **every provide
 # Max attachments per message (default 3)
 #jmeter.ai.file.max.count=3
 ```
+
+## 💾 Conversation Persistence & Export
+
+Every conversation is **autosaved after each turn** to `~/.jmeter-ai/sessions/` - one JSON file per conversation, including attachment contents, the model in use, and per-turn timestamps. Starting a new chat (the **+** button) archives the current session and begins a fresh one; the directory keeps the 20 most recent sessions.
+
+**Restore on startup** is opt-in: with the property below, reopening the chat panel brings back the last conversation - transcript, history (so follow-ups keep their context), attachments, and the model it used.
+
+```properties
+# Restore the last conversation when the chat panel opens (default false)
+#jmeter.ai.session.restore=true
+```
+
+> ⚠️ Sessions are stored **unencrypted**, including the full text of attached logs/results. Avoid attaching files that contain credentials or secrets.
+
+**Export for reports:** the **Export** menu in the chat header writes the current conversation as **Markdown** (paste into tickets/wikis) or a self-contained styled **HTML** page - file attachments appear by name. Perfect for attaching AI analysis to a test report.
+
+## 📊 Context & Cost Stats
+
+The input options row (the row with the paperclip) carries a live readout: `ctx 12.3k/400k · $0.04`.
+
+- **Context fill** - how much of the selected model's context window your conversation uses. After each response this is the *server-reported* prompt size (all providers report usage, streaming included); before the first response it falls back to an estimate over the history with attachments inlined, marked with `~`. Attachments are the usual context hogs - watch this number when you attach big logs.
+- **Session cost** - cumulative cost of the conversation, priced per call at [models.dev](https://models.dev) list prices from the vendored catalog (the same daily-refreshed file that powers the model picker's metadata). Hidden when the catalog has no pricing for the model (e.g. some Grok models); local Ollama models never show cost.
+
+Hover the label for the exact breakdown: precise context count and percentage, session input/output tokens over N responses, and the exact estimated cost. The denominator hides for models with unknown context windows (e.g. local Ollama models), and the label resets when you start a new conversation.
 
 ## 🎬 Browser Recording
 

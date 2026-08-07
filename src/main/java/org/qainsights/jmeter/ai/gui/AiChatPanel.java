@@ -32,6 +32,14 @@ import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
+import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
+import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
+import org.qainsights.jmeter.ai.service.session.ConversationSession;
+import org.qainsights.jmeter.ai.service.session.ConversationStore;
+import org.qainsights.jmeter.ai.service.session.ConversationTracker;
+import org.qainsights.jmeter.ai.service.usage.ContextEstimator;
+import org.qainsights.jmeter.ai.service.usage.UsageStats;
+import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
@@ -64,8 +72,7 @@ public class AiChatPanel
     private JTextArea messageField;
     private InputOptionsRow inputOptionsRow;
     private Runnable currentCancelHandle;
-    private JComboBox<String> modelSelector;
-    private List<String> conversationHistory;
+    private ModelSelectorPanel modelSelectorPanel;
     private ClaudeService claudeService;
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;
@@ -81,6 +88,18 @@ public class AiChatPanel
     private ReasoningControls reasoningControls;
     private final AttachmentRegistry attachmentRegistry = new AttachmentRegistry();
     private AttachmentBar attachmentBar;
+
+    // Conversation persistence (F5): the tracker owns history + session id and
+    // autosaves after every turn; restored on open when jmeter.ai.session.restore=true.
+    private final ConversationStore sessionStore = ConversationStore.open();
+    private final ConversationTracker conversationTracker = new ConversationTracker(sessionStore);
+    /** Model carried by a restored session; reselected once the model list loads. */
+    private String restoredSessionModel;
+
+    // Context stats (F9): session token/cost accumulator injected into every
+    // service; the label renders in the input options row.
+    private final UsageStats usageStats = new UsageStats();
+    private final ContextStatsLabel contextStatsLabel = new ContextStatsLabel();
 
     // Store the base font sizes for scaling
     private float baseChatFontSize;
@@ -128,6 +147,7 @@ public class AiChatPanel
         }
 
         injectReasoningSettings();
+        injectUsageStats();
 
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(getServiceHolder());
@@ -142,8 +162,6 @@ public class AiChatPanel
 
         // Register for UI refresh events (for zoom functionality)
         UIManager.addPropertyChangeListener(this);
-
-        conversationHistory = new ArrayList<>();
 
         // Set up the panel layout
         setLayout(new BorderLayout());
@@ -164,58 +182,135 @@ public class AiChatPanel
         Font largerFont = defaultFont.deriveFont(defaultFont.getSize2D() + 2f);
 
         reasoningControls = new ReasoningControls(reasoningSettings);
-        initModelSelector();
+        modelSelectorPanel = new ModelSelectorPanel(
+                ModelSelectorPreferences.load(), ModelCapabilityCatalog.getInstance());
+        modelSelectorPanel.setSelectionListener(this::onModelSelected);
+        loadModelsInBackground();
         add(createChatPanel(largerFont), BorderLayout.CENTER);
         add(createBottomPanel(largerFont), BorderLayout.SOUTH);
 
-        // Display welcome message
-        displayWelcomeMessage();
+        // Display welcome message (skipped when a previous session is restored)
+        if (!restoreLastSessionIfEnabled()) {
+            displayWelcomeMessage();
+        }
     }
 
     /**
-     * Initialises the model selector combo box, loads models in the background,
-     * and wires up the selection listener.
+     * Reloads the most recently saved session into history, transcript and the
+     * attachment registry when {@code jmeter.ai.session.restore=true}. The
+     * restored session keeps its id, so autosaves continue the same file.
+     *
+     * @return true when a session was restored (and the welcome message should
+     * be skipped)
      */
-    private void initModelSelector() {
-        modelSelector = new JComboBox<>();
-        modelSelector.addItem(null); // Add empty item while loading
-        modelSelector.setRenderer(new ModelDisplayRenderer());
-        loadModelsInBackground();
-        modelSelector.addActionListener(e -> {
-            String selectedModel = (String) modelSelector.getSelectedItem();
-            if (selectedModel != null) {
-                log.info("Model selected from dropdown: {}", selectedModel);
-                if (selectedModel.startsWith("openai:")) {
-                    openAiService.setModel(selectedModel.substring(7));
-                } else if (selectedModel.startsWith("ollama:")) {
-                    ollamaService.setModel(selectedModel.substring(7));
-                } else if (selectedModel.startsWith("deepseek:")) {
-                    deepseekService.setModel(selectedModel.substring(9));
-                } else if (selectedModel.startsWith("google:")) {
-                    if (googleService != null) {
-                        googleService.setModel(selectedModel.substring(7));
-                    }
-                } else if (selectedModel.startsWith("grok:")) {
-                    grokService.setModel(selectedModel.substring(5));
-                } else if (selectedModel.startsWith("meta:")) {
-                    metaMuseService.setModel(selectedModel.substring(5));
-                } else if (selectedModel.startsWith("bedrock:")) {
-                    if (bedrockService != null) {
-                        bedrockService.setModel(selectedModel.substring(8));
-                    }
-                } else {
-                    claudeService.setModel(selectedModel);
-                }
-                reasoningControls.updateForModel(selectedModel);
-                if (selectedModel.startsWith("ollama:")) {
-                    // Probe the local model's real capabilities in the background
-                    // and refresh the controls when the answer arrives.
-                    String ollamaModelId = selectedModel.substring(7);
-                    ollamaService.resolveThinkingCapability(ollamaModelId,
-                            () -> reasoningControls.updateForModel(selectedModel));
-                }
+    private boolean restoreLastSessionIfEnabled() {
+        if (!Boolean.parseBoolean(
+                AiConfig.getProperty(ConversationStore.RESTORE_PROPERTY, "false"))) {
+            return false;
+        }
+        java.util.Optional<ConversationSession> loaded = sessionStore.loadMostRecent();
+        if (loaded.isEmpty()) {
+            return false;
+        }
+        ConversationSession session = loaded.get();
+        log.info("Restoring conversation session {} ({} turns)", session.id(), session.turns().size());
+        conversationTracker.adopt(session);
+        if (!session.model().isEmpty()) {
+            // reselected once the model list arrives in loadModelsInBackground
+            restoredSessionModel = session.model();
+        }
+        for (ConversationSession.AttachmentSnapshot snapshot : session.attachments()) {
+            attachmentRegistry.restore(snapshot.id(), snapshot.fileName(), snapshot.content(),
+                    FileContentPreparer.Mode.parse(snapshot.mode()));
+        }
+        for (ConversationSession.Turn turn : session.turns()) {
+            if ("user".equals(turn.role())) {
+                transcript.addUserMessage(turn.text());
+            } else {
+                transcript.addAssistantMessage(turn.text());
             }
+        }
+        // show the estimate for the restored history immediately (no usage
+        // was recorded this process, so the label would otherwise stay blank
+        // until the model list arrives)
+        refreshContextStats();
+        return true;
+    }
+
+    /** Snapshots the current conversation for saving/exporting (package-private for tests). */
+    ConversationSession buildSession() {
+        return conversationTracker.snapshot(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+    }
+
+    /** The model id carried by a restored session, or null (package-private for tests). */
+    String restoredSessionModel() {
+        return restoredSessionModel;
+    }
+
+    /** The id of the active session (package-private for tests). */
+    String currentSessionId() {
+        return conversationTracker.sessionId();
+    }
+
+    /** Shares the session usage accumulator with every service (context-stats label). */
+    private void injectUsageStats() {
+        claudeService.setUsageStats(usageStats);
+        openAiService.setUsageStats(usageStats);
+        ollamaService.setUsageStats(usageStats);
+        deepseekService.setUsageStats(usageStats);
+        grokService.setUsageStats(usageStats);
+        metaMuseService.setUsageStats(usageStats);
+        bedrockService.setUsageStats(usageStats);
+        if (googleService != null) {
+            googleService.setUsageStats(usageStats);
+        }
+    }
+
+    /**
+     * Re-renders the context-stats label. The context numerator is the last
+     * server-reported prompt size when available, else an estimate over the
+     * (attachment-resolved) history marked with {@code ~}. Runs on the EDT.
+     */
+    private void refreshContextStats() {
+        runOnEdt(() -> {
+            UsageStats.Snapshot snapshot = usageStats.snapshot();
+            long contextTokens;
+            boolean estimated;
+            if (snapshot.calls() > 0 && snapshot.lastInputTokens() > 0) {
+                contextTokens = snapshot.lastInputTokens();
+                estimated = false;
+            } else {
+                contextTokens = ContextEstimator.estimateTokens(
+                        resolveAttachmentMarkers(conversationTracker.historyCopy()));
+                estimated = true;
+            }
+            String model = modelSelectorPanel.getSelectedModel();
+            long contextWindow = model == null ? 0 : ModelCapabilityCatalog.getInstance()
+                    .capabilities(model)
+                    .map(ModelCapabilityCatalog.CapabilityInfo::getContextWindow)
+                    .orElse(0L);
+            contextStatsLabel.showStats(contextTokens, estimated, contextWindow, snapshot);
         });
+    }
+
+    /**
+     * Routes a model selection from the selector panel into the owning
+     * provider service (via {@link AiResponseRouter#resolveAiService}, which
+     * also sets the bare id on that service), refreshes the reasoning
+     * controls, and (for Ollama) kicks off the live capability probe.
+     */
+    private void onModelSelected(String selectedModel) {
+        log.info("Model selected: {}", selectedModel);
+        resolveAiService(selectedModel);
+        reasoningControls.updateForModel(selectedModel);
+        refreshContextStats();
+        if (selectedModel.startsWith("ollama:")) {
+            // Probe the local model's real capabilities in the background
+            // and refresh the controls when the answer arrives.
+            String ollamaModelId = selectedModel.substring(7);
+            ollamaService.resolveThinkingCapability(ollamaModelId,
+                    () -> reasoningControls.updateForModel(selectedModel));
+        }
     }
 
     /**
@@ -385,7 +480,7 @@ public class AiChatPanel
 
         JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         modelPanel.add(new JLabel("Model:"));
-        modelPanel.add(modelSelector);
+        modelPanel.add(modelSelectorPanel);
         modelPanel.add(reasoningControls);
         navigationPanel.add(modelPanel, BorderLayout.WEST);
 
@@ -489,6 +584,7 @@ public class AiChatPanel
         // There is no Send button: Enter sends, the stop circle appears
         // bottom-right while the AI is processing (ChatGPT-style).
         inputOptionsRow = new InputOptionsRow(this, attachmentBar, createStyledButton("", 11));
+        inputOptionsRow.setStatsComponent(contextStatsLabel);
         geminiBorderPanel.add(inputOptionsRow, BorderLayout.SOUTH);
 
         return geminiBorderPanel;
@@ -523,8 +619,8 @@ public class AiChatPanel
         );
         headerPanel.add(titleLabel);
 
+        headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
         if (Boolean.parseBoolean(AiConfig.getProperty("jmeter.ai.record.enabled", "false"))) {
-            headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
             org.qainsights.jmeter.ai.record.RecordingSessionController recController =
                 org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
             org.qainsights.jmeter.ai.record.RecordingArtifactStore recStore =
@@ -533,6 +629,12 @@ public class AiChatPanel
                 new org.qainsights.jmeter.ai.record.RecordingControlPanel(recController, recStore);
             recPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
             headerPanel.add(recPanel);
+        } else {
+            // Discovery-only chip when recording is off; does not start sessions
+            JComponent disabledRecord =
+                org.qainsights.jmeter.ai.record.DisabledRecordChip.create();
+            disabledRecord.setAlignmentY(Component.CENTER_ALIGNMENT);
+            headerPanel.add(disabledRecord);
         }
 
         headerPanel.add(Box.createHorizontalGlue());
@@ -540,6 +642,12 @@ public class AiChatPanel
         JPanel donatePanel = createDonateButtonPanel();
         donatePanel.setAlignmentY(Component.CENTER_ALIGNMENT);
         headerPanel.add(donatePanel);
+
+        headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
+
+        SessionMenuButton sessionMenu = new SessionMenuButton(this, this::buildSession);
+        sessionMenu.setAlignmentY(Component.CENTER_ALIGNMENT);
+        headerPanel.add(sessionMenu);
 
         headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
 
@@ -645,35 +753,14 @@ public class AiChatPanel
             protected void done() {
                 try {
                     List<String> models = get();
-                    modelSelector.removeAllItems();
-
                     // Get the default model ID
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
-
-                    String defaultModel = null;
-
-                    for (String model : models) {
-                        modelSelector.addItem(model);
-                        if (model.equals(defaultModelId)) {
-                            defaultModel = model;
-                        }
-                    }
-
-                    // Select the default model if found
-                    if (defaultModel != null) {
-                        modelSelector.setSelectedItem(defaultModel);
-                        log.info("Selected default model: {}", defaultModel);
-                    } else if (modelSelector.getItemCount() > 0) {
-                        // If default model not found, select the first one
-                        modelSelector.setSelectedIndex(0);
-                        String selectedModel =
-                            (String) modelSelector.getSelectedItem();
-                        claudeService.setModel(selectedModel);
-                        log.info(
-                            "Default model not found, selected first available: {}",
-                            selectedModel
-                        );
+                    modelSelectorPanel.setModels(models, defaultModelId);
+                    // A restored session carries its model; reselect it now that
+                    // the list is available (no-op when the model is gone).
+                    if (restoredSessionModel != null) {
+                        modelSelectorPanel.applyIfAvailable(restoredSessionModel);
                     }
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
@@ -688,7 +775,7 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        transcript.addAssistantMessage(Constants.WELCOME_MESSAGE);
+        transcript.addAssistantMessage(WelcomeMessages.forCurrentConfig());
     }
 
     /** The session attachment registry (package-private for tests). */
@@ -702,15 +789,17 @@ public class AiChatPanel
     void startNewConversation() {
         log.info("Starting new conversation");
 
+        // Archive the outgoing session (autosave keeps it current), then start a fresh id
+        conversationTracker.rotate(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+        usageStats.reset();
+        refreshContextStats();
+
         // Clear the transcript
         transcript.clearTranscript();
 
         // Clear pending attachments and the registry
         attachmentBar.clear();
         attachmentRegistry.clear();
-
-        // Clear the conversation history
-        conversationHistory.clear();
 
         // Reset the last command type
         lastCommandType = LastCommandType.NONE;
@@ -799,6 +888,7 @@ public class AiChatPanel
             SwingUtilities.invokeLater(() -> {
                 ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
                 playResponseChime();
+                refreshContextStats();
             });
         });
     }
@@ -837,7 +927,7 @@ public class AiChatPanel
         SwingUtilities.invokeLater(() -> inputOptionsRow.showStop(() -> {
             if (currentCancelHandle != null) {
                 currentCancelHandle.run();
-                appendMessageToChat("\n[Stream cancelled]");
+                appendMessageToChat("\nResponse stopped.");
                 hideStopButton();
                 setInputEnabled(true);
                 removeLoadingIndicator();
@@ -886,6 +976,7 @@ public class AiChatPanel
             firstTokenReceived = false;
             hideStopButton();
             setInputEnabled(true);
+            refreshContextStats();
         });
     }
 
@@ -911,8 +1002,8 @@ public class AiChatPanel
     ) {
         firstTokenReceived = false;
         Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
-            (String) modelSelector.getSelectedItem(),
-            new ArrayList<>(conversationHistory),
+            modelSelectorPanel.getSelectedModel(),
+            conversationTracker.historyCopy(),
             tokenConsumer,
             this::appendReasoningToken,
             onComplete,
@@ -970,17 +1061,18 @@ public class AiChatPanel
 
     @Override
     public String getSelectedModel() {
-        return (String) modelSelector.getSelectedItem();
+        return modelSelectorPanel.getSelectedModel();
     }
 
     @Override
     public List<String> getConversationHistory() {
-        return conversationHistory;
+        return conversationTracker.history();
     }
 
     @Override
     public void addToConversationHistory(String entry) {
-        conversationHistory.add(entry);
+        conversationTracker.addTurn(entry, modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+        refreshContextStats();
     }
 
     @Override
@@ -1015,8 +1107,8 @@ public class AiChatPanel
     public String getAiResponse(String message) {
         log.info("Getting AI response for message: {}", message);
         return aiResponseRouter.getAiResponse(
-            (String) modelSelector.getSelectedItem(),
-            new ArrayList<>(conversationHistory)
+            modelSelectorPanel.getSelectedModel(),
+            conversationTracker.historyCopy()
         );
     }
 
@@ -1125,7 +1217,7 @@ public class AiChatPanel
     private void showWrapRedoNotSupported() {
         runOnEdt(() -> {
             transcript.addSystemMessage(
-                "Redo is not supported for wrap operations. Please use the @wrap command again if needed.",
+                "Redo isn't supported for @wrap. Run @wrap again if needed.",
                 ThemeColors.info()
             );
         });

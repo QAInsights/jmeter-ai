@@ -26,7 +26,7 @@ class ModelCapabilityCatalogTest {
             boolean reasoning, boolean toggleable, List<String> effort,
             long budgetMin, long budgetMax, boolean vision, boolean pdf) {
         return new ModelCapabilityCatalog.CapabilityInfo(
-                reasoning, toggleable, effort, budgetMin, budgetMax, vision, pdf);
+                reasoning, toggleable, effort, budgetMin, budgetMax, vision, pdf, 0, 0, 0);
     }
 
     private static ModelCapabilityCatalog synthetic() {
@@ -79,6 +79,39 @@ class ModelCapabilityCatalogTest {
         assertTrue(caps.hasBudget());
         assertEquals(1024, caps.getBudgetMin());
         assertEquals(0, caps.getBudgetMax());
+    }
+
+    @Test
+    void costAndContextAreExposed() {
+        ModelCapabilityCatalog catalog = new ModelCapabilityCatalog(Map.of(
+                "openai", Map.of(
+                        "gpt-5.1", new ModelCapabilityCatalog.CapabilityInfo(
+                                true, false, List.of("low"), 0, 0, true, false,
+                                400_000, 1.25, 10.0),
+                        "gpt-3.5-turbo", new ModelCapabilityCatalog.CapabilityInfo(
+                                false, false, List.of(), 0, 0, false, false,
+                                16_385, 0.5, 1.5))));
+        ModelCapabilityCatalog.CapabilityInfo gpt51 =
+                catalog.capabilities("openai:gpt-5.1").orElseThrow();
+        assertEquals(400_000, gpt51.getContextWindow());
+        assertEquals(1.25, gpt51.getCostIn(), 0.0001);
+        assertEquals(10.0, gpt51.getCostOut(), 0.0001);
+        assertTrue(gpt51.hasCost());
+
+        ModelCapabilityCatalog.CapabilityInfo legacy =
+                catalog.capabilities("openai:gpt-3.5-turbo").orElseThrow();
+        assertEquals(16_385, legacy.getContextWindow());
+        assertTrue(legacy.hasCost());
+    }
+
+    @Test
+    void entriesWithoutCostOrContextReadAsZero() {
+        ModelCapabilityCatalog.CapabilityInfo caps = synthetic()
+                .capabilities("claude-opus-4-8").orElseThrow();
+        assertEquals(0, caps.getContextWindow());
+        assertEquals(0, caps.getCostIn(), 0.0001);
+        assertEquals(0, caps.getCostOut(), 0.0001);
+        assertFalse(caps.hasCost());
     }
 
     @Test
@@ -137,5 +170,12 @@ class ModelCapabilityCatalogTest {
                 catalog.capabilities("google:gemini-2.5-flash").orElseThrow();
         assertTrue(flash.isToggleable());
         assertTrue(flash.hasBudget());
+        // Cost/context from the real data (regenerated 2026-08-03 trim)
+        assertEquals(400_000, gpt51.getContextWindow());
+        assertEquals(1.25, gpt51.getCostIn(), 0.0001);
+        assertEquals(10.0, gpt51.getCostOut(), 0.0001);
+        assertTrue(gpt51.hasCost());
+        // Models without any capability are kept too (metadata-only entries)
+        assertTrue(catalog.capabilities("google:gemini-2.5-flash-preview-tts").isPresent());
     }
 }

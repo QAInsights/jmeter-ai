@@ -48,8 +48,13 @@ public class ClaudeCodeCliAdapter extends BaseCliAdapter {
     }
 
     @Override
+    public String enablementProperty() {
+        return "jmeter.ai.terminal.claudecode.enabled";
+    }
+
+    @Override
     public boolean isEnabled() {
-        return AiConfig.getProperty("jmeter.ai.terminal.claudecode.enabled", "true").equals("true");
+        return AiConfig.getProperty(enablementProperty(), "true").equals("true");
     }
 
     @Override

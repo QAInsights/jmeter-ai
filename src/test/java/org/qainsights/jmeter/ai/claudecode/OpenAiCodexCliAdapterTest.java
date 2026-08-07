@@ -21,6 +21,11 @@ class OpenAiCodexCliAdapterTest {
         assertEquals("OpenAI Codex CLI", new OpenAiCodexCliAdapter().getName());
     }
 
+    @Test
+    void enablementProperty_returnsCodexKey() {
+        assertEquals("jmeter.ai.terminal.codex.enabled", new OpenAiCodexCliAdapter().enablementProperty());
+    }
+
     // ── toString ──────────────────────────────────────────────────────────────
 
     @Test

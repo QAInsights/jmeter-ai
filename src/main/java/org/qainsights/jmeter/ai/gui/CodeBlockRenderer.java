@@ -103,8 +103,8 @@ final class CodeBlockRenderer {
                         );
 
                     // Provide visual feedback
-                    copyButton.setText("Copied!");
-                    Timer timer = new Timer(1500, event ->
+                    copyButton.setText("Copied \u2713");
+                    Timer timer = new Timer(2000, event ->
                         copyButton.setText("Copy")
                     );
                     timer.setRepeats(false);

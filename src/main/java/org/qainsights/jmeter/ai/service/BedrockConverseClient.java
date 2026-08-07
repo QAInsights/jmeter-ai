@@ -14,11 +14,13 @@ import software.amazon.awssdk.services.bedrockruntime.model.ConversationRole;
 import software.amazon.awssdk.services.bedrockruntime.model.InferenceConfiguration;
 import software.amazon.awssdk.services.bedrockruntime.model.Message;
 import software.amazon.awssdk.services.bedrockruntime.model.SystemContentBlock;
+import software.amazon.awssdk.services.bedrockruntime.model.TokenUsage;
 
 import javax.swing.SwingUtilities;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 final class BedrockConverseClient {
@@ -28,11 +30,17 @@ final class BedrockConverseClient {
 
     private final BedrockRuntimeClient runtimeClient;
     private final BedrockRuntimeAsyncClient asyncClient;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
 
     BedrockConverseClient(BedrockRuntimeClient runtimeClient,
                           BedrockRuntimeAsyncClient asyncClient) {
         this.runtimeClient = runtimeClient;
         this.asyncClient = asyncClient;
+    }
+
+    /** Receives the session usage accumulator (context-stats label). */
+    void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
     }
 
     /** A Converse response split into answer text and reasoning text (may be null). */
@@ -60,6 +68,9 @@ final class BedrockConverseClient {
         ConverseResponse response = runtimeClient.converse(buildRequest(
                 conversation, modelId, systemPrompt, temperature, maxTokens,
                 thinkingBudget, thinkingFields, dropTemperature));
+        if (usageStats != null && response.usage() != null) {
+            usageStats.record("bedrock:" + modelId, response.usage().inputTokens(), response.usage().outputTokens());
+        }
         String text = extractText(response);
         String reasoning = org.qainsights.jmeter.ai.service.reasoning
                 .BedrockThinking.extractReasoning(response);
@@ -87,15 +98,27 @@ final class BedrockConverseClient {
         ConverseStreamRequest request = buildStreamRequest(
                 conversation, modelId, systemPrompt, temperature, maxTokens,
                 thinkingBudget, thinkingFields, dropTemperature);
+        // The terminal metadata event carries the stream's TokenUsage; capture it
+        // so usage can be recorded when the stream completes.
+        AtomicReference<TokenUsage> streamUsage = new AtomicReference<>();
         ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder()
                 .subscriber(ConverseStreamResponseHandler.Visitor.builder()
                         .onContentBlockDelta(event -> {
                             publishText(event, tokenConsumer);
                             publishReasoning(event, reasoningConsumer);
                         })
+                        .onMetadata(event -> streamUsage.set(event.usage()))
                         .build())
                 .onError(error -> publishError(error, onError))
-                .onComplete(() -> SwingUtilities.invokeLater(onComplete))
+                .onComplete(() -> {
+                    if (usageStats != null) {
+                        TokenUsage usage = streamUsage.get();
+                        if (usage != null) {
+                            usageStats.record("bedrock:" + modelId, usage.inputTokens(), usage.outputTokens());
+                        }
+                    }
+                    SwingUtilities.invokeLater(onComplete);
+                })
                 .build();
         CompletableFuture<Void> future = asyncClient.converseStream(request, handler);
         return () -> {

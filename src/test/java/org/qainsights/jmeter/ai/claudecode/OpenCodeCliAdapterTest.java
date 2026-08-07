@@ -21,6 +21,11 @@ class OpenCodeCliAdapterTest {
         assertEquals("OpenCode", new OpenCodeCliAdapter().getName());
     }
 
+    @Test
+    void enablementProperty_returnsOpenCodeKey() {
+        assertEquals("jmeter.ai.terminal.opencode.enabled", new OpenCodeCliAdapter().enablementProperty());
+    }
+
     // ── toString ──────────────────────────────────────────────────────────────
 
     @Test

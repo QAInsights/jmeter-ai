@@ -5,8 +5,9 @@ name: Update model capabilities
 # fetched at runtime.
 on:
   schedule:
-    # Weekly, Mondays 06:00 UTC
-    - cron: "0 6 * * 1"
+    # Daily, 06:00 UTC - provider catalogs move fast (new models gain
+    # Thinking/effort controls and pricing metadata within a day of release)
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -46,4 +47,4 @@ jobs:
           git checkout -b $branch
           git commit -m "chore: refresh vendored models.dev capabilities"
           git push -u origin $branch
-          gh pr create --title "chore: refresh vendored models.dev capabilities" --body "Automated weekly refresh of ``src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`` from https://models.dev/api.json (via ``scripts/Update-ModelCapabilities.ps1``).`n`nReview the diff like any dependency bump: new models gain Thinking/effort controls, removed/retired models lose them."
+          gh pr create --title "chore: refresh vendored models.dev capabilities" --body "Automated daily refresh of ``src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`` from https://models.dev/api.json (via ``scripts/Update-ModelCapabilities.ps1``).`n`nReview the diff like any dependency bump: new models gain Thinking/effort controls, removed/retired models lose them."

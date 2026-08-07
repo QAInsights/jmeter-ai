@@ -20,6 +20,11 @@ import java.util.TreeMap;
  *   effort:    [...]         - reasoning_options {"type":"effort"} values
  *   budgetMin/budgetMax: n   - reasoning_options {"type":"budget_tokens"} range
  *   vision: true / pdf: true - from modalities.input
+ *   contextWindow: n         - from limit.context
+ *   costIn/costOut: n        - $/Mtok from cost.input / cost.output
+ *
+ * Every model of the supported providers is kept (not just capable ones) so
+ * UI like the model picker can show cost/context metadata for all of them.
  */
 public class TrimModelCapabilities {
 
@@ -53,9 +58,7 @@ public class TrimModelCapabilities {
                     continue;
                 }
                 ObjectNode caps = trimModel(entry, mapper);
-                if (caps != null) {
-                    models.put(model.getKey(), caps);
-                }
+                models.put(model.getKey(), caps);
             }
             if (!models.isEmpty()) {
                 ObjectNode providerOut = providersOut.putObject(provider);
@@ -65,10 +68,10 @@ public class TrimModelCapabilities {
         }
 
         mapper.writerWithDefaultPrettyPrinter().writeValue(new File(args[1]), out);
-        System.out.println("Vendored " + total + " capable models -> " + args[1]);
+        System.out.println("Vendored " + total + " models -> " + args[1]);
     }
 
-    /** Null when the model has no capability we consume. */
+    /** Emits the slim capability/metadata object for one model. */
     private static ObjectNode trimModel(JsonNode entry, ObjectMapper mapper) {
         boolean reasoning = entry.path("reasoning").asBoolean(false);
         boolean vision = false;
@@ -80,9 +83,6 @@ public class TrimModelCapabilities {
             if ("pdf".equals(modality.asText())) {
                 pdf = true;
             }
-        }
-        if (!reasoning && !vision && !pdf) {
-            return null;
         }
 
         ObjectNode caps = mapper.createObjectNode();
@@ -112,6 +112,18 @@ public class TrimModelCapabilities {
         }
         if (pdf) {
             caps.put("pdf", true);
+        }
+        long context = entry.path("limit").path("context").asLong(0);
+        if (context > 0) {
+            caps.put("contextWindow", context);
+        }
+        double costIn = entry.path("cost").path("input").asDouble(0);
+        double costOut = entry.path("cost").path("output").asDouble(0);
+        if (costIn > 0) {
+            caps.put("costIn", costIn);
+        }
+        if (costOut > 0) {
+            caps.put("costOut", costOut);
         }
         return caps;
     }

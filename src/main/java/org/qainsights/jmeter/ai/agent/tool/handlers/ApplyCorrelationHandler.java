@@ -23,7 +23,7 @@ import org.qainsights.jmeter.ai.correlation.CorrelationCandidate;
  * the last {@code find_correlation_candidates} call: for each, adds a regex/JSON extractor
  * to the candidate's source sampler and rewrites every reusing sampler's matching value to
  * {@code ${variableName}} - the same mutation {@code CorrelationInjector} performs for the
- * native Correlation Studio dialog's own "Apply Selected" button.
+ * native Correlation Studio dialog's own "Apply Approved" button.
  * <p>
  * Destructive - registered in {@code JMeterAgent.DESTRUCTIVE_TOOLS} and gated behind
  * confirmation, the same as {@code delete_element}/{@code move_element}/{@code open_plan}.

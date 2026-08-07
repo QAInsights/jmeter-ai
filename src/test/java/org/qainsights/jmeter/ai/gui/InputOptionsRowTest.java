@@ -74,6 +74,22 @@ class InputOptionsRowTest {
     }
 
     @Test
+    void statsComponentSurvivesStopButtonSwap() {
+        InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
+        assertNull(row.statsComponent());
+
+        ContextStatsLabel stats = new ContextStatsLabel();
+        row.setStatsComponent(stats);
+        assertSame(stats, row.statsComponent());
+
+        // the stop-button swap wipes only the hint panel, not the stats slot
+        row.showStop(() -> { });
+        assertSame(stats, row.statsComponent());
+        row.hideStop();
+        assertSame(stats, row.statsComponent());
+    }
+
+    @Test
     void stopButtonSwapsWithHint() {
         InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
         assertFalse(row.isStopShowing(), "hint shows by default");

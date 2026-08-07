@@ -178,7 +178,7 @@ public class JSR223ContextMenu {
                 JOptionPane.showMessageDialog(
                         textArea,
                         "No code to format",
-                        "Format Code",
+                        "Nothing to Format",
                         JOptionPane.INFORMATION_MESSAGE);
             }
         });

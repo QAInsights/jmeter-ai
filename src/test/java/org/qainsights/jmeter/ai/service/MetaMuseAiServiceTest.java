@@ -127,6 +127,17 @@ class MetaMuseAiServiceTest {
     }
 
     @Test
+    void testSetUsageStats() {
+        org.qainsights.jmeter.ai.service.usage.UsageStats stats =
+                new org.qainsights.jmeter.ai.service.usage.UsageStats();
+        assertDoesNotThrow(() -> metaService.setUsageStats(stats));
+        // Null client returns an error before any usage can be recorded.
+        String response = metaService.generateResponse(List.of("Hello"));
+        assertTrue(response.startsWith("Error:"));
+        assertEquals(0, stats.snapshot().calls());
+    }
+
+    @Test
     void testListModelsNullClient() {
         List<String> models = metaService.listModels();
         assertNotNull(models);

@@ -47,4 +47,24 @@ class PlaceholderTextAreaTest {
         assertDoesNotThrow(() -> area.paint(g3)); // non-empty: no placeholder
         g3.dispose();
     }
+
+    @Test
+    void shiftEnterInsertsNewline() {
+        PlaceholderTextArea area = new PlaceholderTextArea(3, 20);
+        area.setText("hello");
+        area.setCaretPosition(5);
+
+        javax.swing.KeyStroke shiftEnter = javax.swing.KeyStroke.getKeyStroke(
+            java.awt.event.KeyEvent.VK_ENTER,
+            java.awt.event.KeyEvent.SHIFT_DOWN_MASK
+        );
+        Object actionKey = area.getInputMap().get(shiftEnter);
+        assertEquals("insert-break", actionKey,
+            "Shift+Enter must be bound to the newline action");
+
+        area.getActionMap().get(actionKey).actionPerformed(
+            new java.awt.event.ActionEvent(
+                area, java.awt.event.ActionEvent.ACTION_PERFORMED, "insert-break"));
+        assertEquals("hello\n", area.getText());
+    }
 }

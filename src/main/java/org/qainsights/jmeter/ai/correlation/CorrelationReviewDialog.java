@@ -89,8 +89,8 @@ public class CorrelationReviewDialog extends JDialog {
 
         JPopupMenu rowMenu = new JPopupMenu();
         JMenuItem approveItem = new JMenuItem("Approve");
-        JMenuItem rejectItem = new JMenuItem("Reject");
-        JMenuItem goToItem = new JMenuItem("Go to");
+        JMenuItem rejectItem = new JMenuItem("Mark as Pending");
+        JMenuItem goToItem = new JMenuItem("Go to Sampler");
         approveItem.addActionListener(e -> setRowStatus(CorrelationCandidate.Status.APPROVED));
         rejectItem.addActionListener(e -> setRowStatus(CorrelationCandidate.Status.PENDING));
         goToItem.addActionListener(e -> goToSampler());
@@ -113,7 +113,7 @@ public class CorrelationReviewDialog extends JDialog {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         selectAllBtn = new JButton("Select All");
         deselectAllBtn = new JButton("Deselect All");
-        applyBtn = new JButton("Apply Selected");
+        applyBtn = new JButton("Apply Approved");
 
         selectAllBtn.addActionListener(e -> {
             setAllApproved(true);
@@ -199,7 +199,7 @@ public class CorrelationReviewDialog extends JDialog {
         this.candidates = newCandidates;
         tableModel.setData(newCandidates);
         statusLabel.setText(newCandidates.isEmpty()
-                ? " No correlation candidates found. Try adjusting patterns in jmeter-ai-sample.properties."
+                ? " No dynamic values found. Try a longer test, or adjust correlation patterns in your JMeter properties."
                 : " " + newCandidates.size() + " candidates found. Review and approve, then click 'Apply Approved'.");
     }
 

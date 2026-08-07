@@ -34,6 +34,13 @@ public class ClaudeService implements AiService {
     private long maxTokens;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
+
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
 
     public ClaudeService() {
         // Default history size of 10, can be configured through jmeter.properties
@@ -315,8 +322,9 @@ public class ClaudeService implements AiService {
 
             log.info(message.content().toString());
 
-            // Estimate token usage (Anthropic doesn't provide exact usage in the response)
-            // We can estimate based on characters - this is a rough estimate
+            // Legacy char-based estimate for the @usage command's history view.
+            // (The context-stats label gets the server-reported message.usage()
+            // numbers below; this estimate stays for AnthropicUsage only.)
             long estimatedPromptTokens = 0;
             for (String msg : limitedConversation) {
                 estimatedPromptTokens += estimateTokens(msg);
@@ -351,6 +359,11 @@ public class ClaudeService implements AiService {
                 );
             } catch (Exception e) {
                 log.error("Failed to record token usage", e);
+            }
+            // The context-stats label gets the server-reported usage
+            if (usageStats != null) {
+                usageStats.record(currentModelId,
+                        message.usage().inputTokens(), message.usage().outputTokens());
             }
 
             return responseText;
@@ -484,26 +497,41 @@ public class ClaudeService implements AiService {
                     .createStreaming(params)
             ) {
                 StringBuilder fullResponse = new StringBuilder();
+                // Server-reported usage rides message_start (input) and
+                // message_delta (output) events; -1 = not seen.
+                long[] streamUsage = { -1, -1 };
                 stream
                     .stream()
-                    .flatMap(event -> event.contentBlockDelta().stream())
-                    .forEach(blockDelta -> {
-                        blockDelta.delta().thinking().ifPresent(thinking ->
-                            javax.swing.SwingUtilities.invokeLater(() ->
-                                reasoningConsumer.accept(thinking.thinking())
-                            )
+                    .forEach(event -> {
+                        event.messageStart().ifPresent(start ->
+                            streamUsage[0] = start.message().usage().inputTokens()
                         );
-                        blockDelta.delta().text().ifPresent(text -> {
-                            fullResponse.append(text.text());
-                            javax.swing.SwingUtilities.invokeLater(() ->
-                                tokenConsumer.accept(text.text())
+                        event.messageDelta().ifPresent(delta ->
+                            streamUsage[1] = delta.usage().outputTokens()
+                        );
+                        event.contentBlockDelta().ifPresent(blockDelta -> {
+                            blockDelta.delta().thinking().ifPresent(thinking ->
+                                javax.swing.SwingUtilities.invokeLater(() ->
+                                    reasoningConsumer.accept(thinking.thinking())
+                                )
                             );
+                            blockDelta.delta().text().ifPresent(text -> {
+                                fullResponse.append(text.text());
+                                javax.swing.SwingUtilities.invokeLater(() ->
+                                    tokenConsumer.accept(text.text())
+                                );
+                            });
                         });
                     });
 
                 long estimatedCompletionTokens = estimateTokens(
                     fullResponse.toString()
                 );
+                if (usageStats != null && (streamUsage[0] >= 0 || streamUsage[1] >= 0)) {
+                    usageStats.record(finalModel,
+                            streamUsage[0] >= 0 ? streamUsage[0] : finalPromptTokens,
+                            streamUsage[1] >= 0 ? streamUsage[1] : estimatedCompletionTokens);
+                }
                 try {
                     AnthropicUsage.getInstance().recordUsage(
                         null,

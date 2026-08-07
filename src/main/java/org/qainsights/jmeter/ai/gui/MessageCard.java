@@ -131,8 +131,8 @@ class MessageCard extends JPanel {
                     new java.awt.datatransfer.StringSelection(getText()),
                     null
                 );
-            copy.setText("Copied!");
-            Timer timer = new Timer(1500, ev -> copy.setText("Copy"));
+            copy.setText("Copied \u2713");
+            Timer timer = new Timer(2000, ev -> copy.setText("Copy"));
             timer.setRepeats(false);
             timer.start();
         });
