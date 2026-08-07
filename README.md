@@ -428,7 +428,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Safety
 
-- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show a **Yes/No confirmation dialog** before executing. Disable with `jmeter.ai.agent.confirm.destructive=false`.
+- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show an **Allow/Deny confirmation dialog** before executing - with an impact preview, not just a tool name: deletes list the subtree (child count + names, force flag), moves show from → to, `open_plan` shows the file and warns about unsaved changes, and correlation lists how many candidates it will touch. Disable with `jmeter.ai.agent.confirm.destructive=false`.
 - **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 8) even if the task isn't complete.
 - **Graceful degradation**: If the agent loop fails (API error, malformed response, etc.), it falls back to a plain-text answer describing what it attempted.
 - **Undo**: All agent mutations fire the same JMeter tree-model events as GUI actions, so they're undoable with Ctrl+Z when `undo.history.size > 0`.
