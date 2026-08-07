@@ -39,6 +39,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     private ThinkingRow thinkingRow;
     private ThinkingCard thinkingCard;
     private java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> attachmentLookup;
+    private java.util.function.Consumer<String> savePromptHandler;
 
     TranscriptView(Font baseFont) {
         this.baseFont = baseFont;
@@ -55,6 +56,11 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         this.attachmentLookup = lookup;
     }
 
+    /** Registers the handler behind the user cards' "Save prompt" button. */
+    void setSavePromptHandler(java.util.function.Consumer<String> handler) {
+        this.savePromptHandler = handler;
+    }
+
     /** Adds a user message bubble (plain text, no markdown parsing). */
     void addUserMessage(String text) {
         finishActivityIfRunning();
@@ -62,6 +68,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
             MessageCard.Role.USER, baseFont, messageProcessor
         );
         card.setAttachmentLookup(attachmentLookup);
+        card.setSavePromptHandler(savePromptHandler);
         card.setPlainContent(text);
         addCard(card);
     }

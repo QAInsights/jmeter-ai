@@ -62,6 +62,8 @@ class MessageCard extends JPanel {
     private final MessageProcessor messageProcessor;
     private final JPanel chipsPanel;
     private java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> attachmentLookup;
+    private java.util.function.Consumer<String> savePromptHandler;
+    private JButton savePromptButton;
 
     MessageCard(Role role, Font font, MessageProcessor messageProcessor) {
         super(new BorderLayout());
@@ -104,6 +106,38 @@ class MessageCard extends JPanel {
         this.attachmentLookup = lookup;
     }
 
+    /**
+     * Registers the handler behind the user card's "Save prompt" button,
+     * called with the message text (attachment markers replaced by file
+     * names). The button appears once a handler is set.
+     */
+    void setSavePromptHandler(java.util.function.Consumer<String> handler) {
+        this.savePromptHandler = handler;
+        if (savePromptButton != null) {
+            savePromptButton.setVisible(handler != null);
+        }
+    }
+
+    /**
+     * The message text with attachment markers replaced by their file names
+     * (unknown ids stripped) - what the "Save prompt" action hands to the
+     * prompt library, since session-scoped marker ids are meaningless later.
+     */
+    String textForPrompt() {
+        String text = getText();
+        java.util.regex.Matcher matcher =
+                org.qainsights.jmeter.ai.service.attach.AttachmentMarkerParser.MARKER_PATTERN.matcher(text);
+        StringBuilder out = new StringBuilder();
+        while (matcher.find()) {
+            org.qainsights.jmeter.ai.service.attach.Attachment attachment =
+                    attachmentLookup == null ? null : attachmentLookup.apply(matcher.group(1));
+            matcher.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(
+                    attachment != null ? "[" + attachment.getFileName() + "]" : ""));
+        }
+        matcher.appendTail(out);
+        return out.toString().replaceAll("[ \\t]+", " ").replaceAll(" ?\\n ?", "\n").trim();
+    }
+
     /** Header row: bold sender name on the left, Copy button on the right. */
     private JPanel createHeader() {
         JPanel header = new JPanel(new BorderLayout());
@@ -137,8 +171,23 @@ class MessageCard extends JPanel {
             timer.start();
         });
 
-        JPanel copyWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel copyWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         copyWrap.setOpaque(false);
+        if (role == Role.USER) {
+            savePromptButton = new JButton("Save prompt");
+            savePromptButton.setToolTipText("Save this message as a reusable prompt");
+            savePromptButton.setFont(savePromptButton.getFont().deriveFont(10f));
+            savePromptButton.setMargin(new Insets(1, 6, 1, 6));
+            savePromptButton.setFocusPainted(false);
+            savePromptButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            savePromptButton.setVisible(savePromptHandler != null);
+            savePromptButton.addActionListener(e -> {
+                if (savePromptHandler != null) {
+                    savePromptHandler.accept(textForPrompt());
+                }
+            });
+            copyWrap.add(savePromptButton);
+        }
         copyWrap.add(copy);
         header.add(copyWrap, BorderLayout.EAST);
         return header;

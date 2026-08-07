@@ -69,6 +69,14 @@ public class AiChatPanel
 
     // UI components (kept for backward compatibility)
     private TranscriptView transcript;
+
+    /**
+     * Built on first use rather than in the constructor: it reads
+     * {@code ~/.jmeter-ai/prompts.json}, which tests don't want touched.
+     * Shared by the {@code @prompts} intellisense mode and the MessageCard
+     * "Save prompt" action so both see the same prompts.
+     */
+    private org.qainsights.jmeter.ai.service.prompts.PromptLibrary promptLibrary;
     private JTextArea messageField;
     private InputOptionsRow inputOptionsRow;
     private Runnable currentCancelHandle;
@@ -460,6 +468,9 @@ public class AiChatPanel
         attachmentBar = new AttachmentBar(attachmentRegistry,
                 message -> runOnEdt(() -> transcript.addSystemMessage(message, ThemeColors.warning())));
         transcript.setAttachmentLookup(attachmentRegistry::find);
+        transcript.setSavePromptHandler(body -> PromptEditDialog
+                .forNew(javax.swing.SwingUtilities.getWindowAncestor(this), promptLibrary(), body)
+                .setVisible(true));
 
         bottomPanel.add(createToolbarRow(), BorderLayout.NORTH);
         bottomPanel.add(attachmentBar, BorderLayout.CENTER);
@@ -514,7 +525,8 @@ public class AiChatPanel
         messageField.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         messageField.setOpaque(false); // Make it non-opaque to use GeminiBorderPanel's background
         
-        new InputBoxIntellisense(messageField);
+        InputBoxIntellisense intellisense = new InputBoxIntellisense(messageField);
+        intellisense.setPromptLibrary(promptLibrary());
 
         // -----------------------------------------------------------------------
         // IME (Input Method Editor) awareness – fixes Chinese / Japanese / Korean
@@ -781,6 +793,14 @@ public class AiChatPanel
     /** The session attachment registry (package-private for tests). */
     AttachmentRegistry attachmentRegistry() {
         return attachmentRegistry;
+    }
+
+    /** The shared prompt library, loaded on first use (package-private for tests). */
+    org.qainsights.jmeter.ai.service.prompts.PromptLibrary promptLibrary() {
+        if (promptLibrary == null) {
+            promptLibrary = org.qainsights.jmeter.ai.service.prompts.PromptLibrary.load();
+        }
+        return promptLibrary;
     }
 
     /**

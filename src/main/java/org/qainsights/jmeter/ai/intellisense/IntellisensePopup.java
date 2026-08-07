@@ -13,16 +13,30 @@ public class IntellisensePopup {
     protected final JList<String> suggestionList; // Changed to protected for testing
     private final JScrollPane scrollPane;
 
+    /**
+     * Supplies the one-line description shown under a suggestion. Defaults to
+     * command descriptions; prompt mode swaps in prompt previews. Held as a
+     * field (not captured by the renderer) so mode switches take effect on the
+     * next repaint without rebuilding the renderer.
+     */
+    private java.util.function.Function<String, String> descriptionLookup =
+            CommandIntellisenseProvider::getDescription;
+
     public IntellisensePopup() {
         popupMenu = new JPopupMenu();
         suggestionList = new JList<>();
         suggestionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         suggestionList.setFocusable(false);
-        suggestionList.setCellRenderer(new SuggestionCellRenderer());
+        suggestionList.setCellRenderer(new SuggestionCellRenderer(() -> descriptionLookup));
         scrollPane = new JScrollPane(suggestionList);
         scrollPane.setBorder(null);
         popupMenu.setBorder(BorderFactory.createLineBorder(org.qainsights.jmeter.ai.gui.theme.ThemeColors.border()));
         popupMenu.add(scrollPane);
+    }
+
+    /** Overrides how descriptions under suggestions are resolved (e.g. prompt previews). */
+    public void setDescriptionLookup(java.util.function.Function<String, String> lookup) {
+        this.descriptionLookup = lookup != null ? lookup : CommandIntellisenseProvider::getDescription;
     }
 
     public void show(Component parent, int x, int y, List<String> suggestions) {
@@ -77,12 +91,26 @@ public class IntellisensePopup {
      * description render as a single line.
      */
     static class SuggestionCellRenderer extends DefaultListCellRenderer {
+        private final java.util.function.Supplier<java.util.function.Function<String, String>> descriptionLookup;
+
+        SuggestionCellRenderer() {
+            this(() -> CommandIntellisenseProvider::getDescription);
+        }
+
+        SuggestionCellRenderer(
+                java.util.function.Supplier<java.util.function.Function<String, String>> descriptionLookup) {
+            this.descriptionLookup = descriptionLookup;
+        }
+
         @Override
         public Component getListCellRendererComponent(
                 JList<?> list, Object value, int index,
                 boolean isSelected, boolean cellHasFocus) {
             String command = value == null ? "" : value.toString();
-            String description = CommandIntellisenseProvider.getDescription(command);
+            String description = descriptionLookup.get().apply(command);
+            if (description == null) {
+                description = "";
+            }
 
             JLabel label = (JLabel) super.getListCellRendererComponent(
                     list, command, index, isSelected, cellHasFocus);

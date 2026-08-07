@@ -280,6 +280,17 @@ Type any of these directly in the chat box. All commands are context-aware and w
 | `@wrap` | Group HTTP samplers under Transaction Controllers. | `@wrap` *(select a Thread Group first)* |
 | `@code` | Extract the last AI code block into the JSR223 editor. | `@code` |
 | `@usage` | Show token-usage stats and recent conversation history. | `@usage` |
+| `@prompts` | Browse and insert prompts from the prompt library. | `@prompts analyze` |
+
+### 📚 Prompt Library
+
+Type `@prompts` in the chat input to open the prompt picker — it ships with six built-in starters (*Analyze results*, *Review plan vs best practices*, *Explain errors in jmeter.log*, *Suggest assertions & timers*, *Find correlation candidates*, *Recording brief*) and grows with your own prompts.
+
+- **Insert**: `Enter` puts the prompt text into the input box so you can edit it (fill in the `[bracketed]` placeholders, attach files) before sending.
+- **Save**: click **Save prompt** on any of your own messages to add it to the library (attachment markers become `[file name]` references).
+- **Manage**: in the picker, `Del` deletes one of your prompts (confirmed), `F2` edits/renames it. Built-ins are read-only — `F2` on one offers **Save as copy** so you can adapt it.
+
+User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted — don't save credentials; override the path with `jmeter.ai.prompts.file`).
 
 ### `@lint` Tips
 - Run it after importing a recorded test plan to clean up generic names.
