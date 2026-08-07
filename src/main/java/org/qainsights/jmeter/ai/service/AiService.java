@@ -50,6 +50,16 @@ public interface AiService {
     }
 
     /**
+     * Injects the session's usage accumulator for the context-stats label.
+     * Services call {@code stats.record(model, inputTokens, outputTokens)}
+     * once per completed response where the SDK reports usage; the default is
+     * a no-op so providers without usage reporting don't change.
+     */
+    default void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        // no usage reporting by default
+    }
+
+    /**
      * Returns and clears the reasoning text captured from the last non-streaming
      * response (e.g. a Claude thinking block or a DeepSeek reasoning_content
      * field), or null when there was none. Used by the UI to render the

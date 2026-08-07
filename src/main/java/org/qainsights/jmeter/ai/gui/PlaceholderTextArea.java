@@ -19,6 +19,16 @@ public class PlaceholderTextArea extends JTextArea {
 
     public PlaceholderTextArea(int rows, int columns) {
         super(rows, columns);
+        // Stock JTextArea keymaps bind only plain Enter to insert-break, so
+        // Shift+Enter (the composer's advertised "newline" affordance) did
+        // nothing. Bind it explicitly to the same action.
+        getInputMap().put(
+            javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_ENTER,
+                java.awt.event.KeyEvent.SHIFT_DOWN_MASK
+            ),
+            "insert-break"
+        );
     }
 
     public String getPlaceholder() {

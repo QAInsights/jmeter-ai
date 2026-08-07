@@ -66,6 +66,16 @@ class OllamaAiServiceStreamingTest {
     // ==================== Interface Contract ====================
 
     @Test
+    void testSetUsageStats_doesNotThrowAndRecordsNothing() {
+        org.qainsights.jmeter.ai.service.usage.UsageStats stats =
+                new org.qainsights.jmeter.ai.service.usage.UsageStats();
+        assertDoesNotThrow(() -> ollamaService.setUsageStats(stats),
+                "setUsageStats should store the session accumulator");
+        assertEquals(0, stats.snapshot().calls(),
+                "No usage should be recorded before any response completes");
+    }
+
+    @Test
     void testGenerateStreamResponse_returnsNonNullRunnable() {
         Runnable cancelHandle = ollamaService.generateStreamResponse(
                 Collections.singletonList("Hello"),

@@ -346,4 +346,18 @@ class GoogleAiServiceTest {
         );
         assertNotNull(handle, "Handle should not be null when streaming is enabled");
     }
+
+    // ==================== Usage Stats ====================
+
+    @Test
+    void testSetUsageStats_storesValue() throws Exception {
+        org.qainsights.jmeter.ai.service.usage.UsageStats stats =
+                new org.qainsights.jmeter.ai.service.usage.UsageStats();
+        googleService.setUsageStats(stats);
+
+        Field field = GoogleAiService.class.getDeclaredField("usageStats");
+        field.setAccessible(true);
+        assertSame(stats, field.get(googleService),
+                "setUsageStats should store the UsageStats instance");
+    }
 }

@@ -33,6 +33,7 @@
 - [Streaming](#-streaming-ai-responses)
 - [File Attachments](#-file-attachments)
 - [Conversation Persistence & Export](#-conversation-persistence--export)
+- [Context & Cost Stats](#-context--cost-stats)
 - [Response Chime](#-response-chime)
 - [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
@@ -59,6 +60,7 @@
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
 | 📎 **File Attachments** | Attach `jmeter.log`, results (`.jtl`/`.csv`), or any text file via the paperclip, drag-drop, or paste. Smart digests (percentiles, error breakdowns) instead of raw dumps - on every provider. |
 | 💾 **Conversation Persistence** | Chats autosave to `~/.jmeter-ai/sessions/` and can be restored after a JMeter restart. Export any conversation to Markdown or HTML for your test reports. |
+| 📊 **Context & Cost Stats** | A live readout next to the input box shows how full the model's context window is and the session's estimated cost (server-reported token usage on every provider). |
 
 ---
 
@@ -553,6 +555,15 @@ Every conversation is **autosaved after each turn** to `~/.jmeter-ai/sessions/` 
 > ⚠️ Sessions are stored **unencrypted**, including the full text of attached logs/results. Avoid attaching files that contain credentials or secrets.
 
 **Export for reports:** the **Export** menu in the chat header writes the current conversation as **Markdown** (paste into tickets/wikis) or a self-contained styled **HTML** page - file attachments appear by name. Perfect for attaching AI analysis to a test report.
+
+## 📊 Context & Cost Stats
+
+The input options row (the row with the paperclip) carries a live readout: `ctx 12.3k/400k · $0.04`.
+
+- **Context fill** - how much of the selected model's context window your conversation uses. After each response this is the *server-reported* prompt size (all providers report usage, streaming included); before the first response it falls back to an estimate over the history with attachments inlined, marked with `~`. Attachments are the usual context hogs - watch this number when you attach big logs.
+- **Session cost** - cumulative cost of the conversation, priced per call at [models.dev](https://models.dev) list prices from the vendored catalog (the same daily-refreshed file that powers the model picker's metadata). Hidden when the catalog has no pricing for the model (e.g. some Grok models); local Ollama models never show cost.
+
+Hover the label for the exact breakdown: precise context count and percentage, session input/output tokens over N responses, and the exact estimated cost. The denominator hides for models with unknown context windows (e.g. local Ollama models), and the label resets when you start a new conversation.
 
 ## 🎬 Browser Recording
 

@@ -5,6 +5,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import com.openai.models.models.Model;
 import org.qainsights.jmeter.ai.service.reasoning.DeepSeekReasoning;
 import org.qainsights.jmeter.ai.service.reasoning.GrokReasoning;
@@ -39,6 +40,7 @@ public class GrokAiService implements AiService {
     private final long maxTokens;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
     private final java.util.concurrent.atomic.AtomicBoolean extraFieldsLogged =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -108,6 +110,12 @@ public class GrokAiService implements AiService {
         return reasoning;
     }
 
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
+
     @Override
     public String getName() {
         return "Grok";
@@ -148,6 +156,11 @@ public class GrokAiService implements AiService {
             ChatCompletionCreateParams params = paramsBuilder.build();
             ChatCompletion chatCompletion = openAiClient.chat().completions().create(params);
 
+            if (usageStats != null) {
+                chatCompletion.usage().ifPresent(usage ->
+                        usageStats.record("grok:" + modelToUse, usage.promptTokens(), usage.completionTokens()));
+            }
+
             ChatCompletion.Choice choice = chatCompletion.choices().get(0);
             lastReasoning = DeepSeekReasoning.reasoningContent(
                     choice.message()._additionalProperties());
@@ -182,7 +195,10 @@ public class GrokAiService implements AiService {
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
                 .model(modelToUse)
-                .temperature((double) temperature);
+                .temperature((double) temperature)
+                .streamOptions(ChatCompletionStreamOptions.builder()
+                        .includeUsage(true)
+                        .build());
 
         GrokReasoning.effortFor(reasoningSettings, modelToUse).ifPresent(effort -> {
             paramsBuilder.reasoningEffort(effort);
@@ -202,25 +218,33 @@ public class GrokAiService implements AiService {
 
         Thread streamThread = new Thread(() -> {
             try {
+                java.util.concurrent.atomic.AtomicReference<com.openai.models.completions.CompletionUsage>
+                        streamUsage = new java.util.concurrent.atomic.AtomicReference<>();
                 try (com.openai.core.http.StreamResponse<ChatCompletionChunk> stream =
                              openAiClient.chat().completions().createStreaming(params)) {
                     stream.stream()
-                            .flatMap(chunk -> chunk.choices().stream())
-                            .forEach(choice -> {
-                                java.util.Map<String, com.openai.core.JsonValue> extraFields =
-                                        choice.delta()._additionalProperties();
-                                if (!extraFields.isEmpty() && extraFieldsLogged.compareAndSet(false, true)) {
-                                    log.info("Grok stream extra fields: {}", extraFields.keySet());
-                                }
-                                String reasoning = DeepSeekReasoning.reasoningContent(extraFields);
-                                if (reasoning != null && !reasoning.isEmpty()) {
-                                    javax.swing.SwingUtilities.invokeLater(
-                                            () -> reasoningConsumer.accept(reasoning));
-                                }
-                                choice.delta().content().ifPresent(text ->
+                            .forEach(chunk -> {
+                                chunk.usage().ifPresent(streamUsage::set);
+                                chunk.choices().forEach(choice -> {
+                                    java.util.Map<String, com.openai.core.JsonValue> extraFields =
+                                            choice.delta()._additionalProperties();
+                                    if (!extraFields.isEmpty() && extraFieldsLogged.compareAndSet(false, true)) {
+                                        log.info("Grok stream extra fields: {}", extraFields.keySet());
+                                    }
+                                    String reasoning = DeepSeekReasoning.reasoningContent(extraFields);
+                                    if (reasoning != null && !reasoning.isEmpty()) {
                                         javax.swing.SwingUtilities.invokeLater(
-                                                () -> tokenConsumer.accept(text)));
+                                                () -> reasoningConsumer.accept(reasoning));
+                                    }
+                                    choice.delta().content().ifPresent(text ->
+                                            javax.swing.SwingUtilities.invokeLater(
+                                                    () -> tokenConsumer.accept(text)));
+                                });
                             });
+                }
+                if (usageStats != null && streamUsage.get() != null) {
+                    usageStats.record("grok:" + modelToUse,
+                            streamUsage.get().promptTokens(), streamUsage.get().completionTokens());
                 }
                 javax.swing.SwingUtilities.invokeLater(onComplete);
             } catch (Exception e) {

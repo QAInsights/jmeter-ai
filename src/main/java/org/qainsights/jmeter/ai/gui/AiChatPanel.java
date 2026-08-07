@@ -37,6 +37,8 @@ import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.session.ConversationSession;
 import org.qainsights.jmeter.ai.service.session.ConversationStore;
 import org.qainsights.jmeter.ai.service.session.ConversationTracker;
+import org.qainsights.jmeter.ai.service.usage.ContextEstimator;
+import org.qainsights.jmeter.ai.service.usage.UsageStats;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.Constants;
@@ -94,6 +96,11 @@ public class AiChatPanel
     /** Model carried by a restored session; reselected once the model list loads. */
     private String restoredSessionModel;
 
+    // Context stats (F9): session token/cost accumulator injected into every
+    // service; the label renders in the input options row.
+    private final UsageStats usageStats = new UsageStats();
+    private final ContextStatsLabel contextStatsLabel = new ContextStatsLabel();
+
     // Store the base font sizes for scaling
     private float baseChatFontSize;
     private float baseMessageFontSize;
@@ -140,6 +147,7 @@ public class AiChatPanel
         }
 
         injectReasoningSettings();
+        injectUsageStats();
 
         elementInfoProvider = new ElementInfoProvider();
         aiResponseRouter = new AiResponseRouter(getServiceHolder());
@@ -222,6 +230,10 @@ public class AiChatPanel
                 transcript.addAssistantMessage(turn.text());
             }
         }
+        // show the estimate for the restored history immediately (no usage
+        // was recorded this process, so the label would otherwise stay blank
+        // until the model list arrives)
+        refreshContextStats();
         return true;
     }
 
@@ -240,6 +252,47 @@ public class AiChatPanel
         return conversationTracker.sessionId();
     }
 
+    /** Shares the session usage accumulator with every service (context-stats label). */
+    private void injectUsageStats() {
+        claudeService.setUsageStats(usageStats);
+        openAiService.setUsageStats(usageStats);
+        ollamaService.setUsageStats(usageStats);
+        deepseekService.setUsageStats(usageStats);
+        grokService.setUsageStats(usageStats);
+        metaMuseService.setUsageStats(usageStats);
+        bedrockService.setUsageStats(usageStats);
+        if (googleService != null) {
+            googleService.setUsageStats(usageStats);
+        }
+    }
+
+    /**
+     * Re-renders the context-stats label. The context numerator is the last
+     * server-reported prompt size when available, else an estimate over the
+     * (attachment-resolved) history marked with {@code ~}. Runs on the EDT.
+     */
+    private void refreshContextStats() {
+        runOnEdt(() -> {
+            UsageStats.Snapshot snapshot = usageStats.snapshot();
+            long contextTokens;
+            boolean estimated;
+            if (snapshot.calls() > 0 && snapshot.lastInputTokens() > 0) {
+                contextTokens = snapshot.lastInputTokens();
+                estimated = false;
+            } else {
+                contextTokens = ContextEstimator.estimateTokens(
+                        resolveAttachmentMarkers(conversationTracker.historyCopy()));
+                estimated = true;
+            }
+            String model = modelSelectorPanel.getSelectedModel();
+            long contextWindow = model == null ? 0 : ModelCapabilityCatalog.getInstance()
+                    .capabilities(model)
+                    .map(ModelCapabilityCatalog.CapabilityInfo::getContextWindow)
+                    .orElse(0L);
+            contextStatsLabel.showStats(contextTokens, estimated, contextWindow, snapshot);
+        });
+    }
+
     /**
      * Routes a model selection from the selector panel into the owning
      * provider service (via {@link AiResponseRouter#resolveAiService}, which
@@ -250,6 +303,7 @@ public class AiChatPanel
         log.info("Model selected: {}", selectedModel);
         resolveAiService(selectedModel);
         reasoningControls.updateForModel(selectedModel);
+        refreshContextStats();
         if (selectedModel.startsWith("ollama:")) {
             // Probe the local model's real capabilities in the background
             // and refresh the controls when the answer arrives.
@@ -530,6 +584,7 @@ public class AiChatPanel
         // There is no Send button: Enter sends, the stop circle appears
         // bottom-right while the AI is processing (ChatGPT-style).
         inputOptionsRow = new InputOptionsRow(this, attachmentBar, createStyledButton("", 11));
+        inputOptionsRow.setStatsComponent(contextStatsLabel);
         geminiBorderPanel.add(inputOptionsRow, BorderLayout.SOUTH);
 
         return geminiBorderPanel;
@@ -736,6 +791,8 @@ public class AiChatPanel
 
         // Archive the outgoing session (autosave keeps it current), then start a fresh id
         conversationTracker.rotate(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+        usageStats.reset();
+        refreshContextStats();
 
         // Clear the transcript
         transcript.clearTranscript();
@@ -831,6 +888,7 @@ public class AiChatPanel
             SwingUtilities.invokeLater(() -> {
                 ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
                 playResponseChime();
+                refreshContextStats();
             });
         });
     }
@@ -918,6 +976,7 @@ public class AiChatPanel
             firstTokenReceived = false;
             hideStopButton();
             setInputEnabled(true);
+            refreshContextStats();
         });
     }
 
@@ -1013,6 +1072,7 @@ public class AiChatPanel
     @Override
     public void addToConversationHistory(String entry) {
         conversationTracker.addTurn(entry, modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
+        refreshContextStats();
     }
 
     @Override

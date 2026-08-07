@@ -20,6 +20,7 @@ class InputOptionsRow extends JPanel {
 
     private final JPanel optionsStrip;
     private final JPanel hintPanel;
+    private final JPanel statsPanel;
     private StopButton stopButton;
 
     InputOptionsRow(Component popupParent, AttachmentBar attachmentBar, JButton attachButton) {
@@ -37,6 +38,12 @@ class InputOptionsRow extends JPanel {
         optionsStrip.setOpaque(false);
         optionsStrip.add(attachButton);
         add(optionsStrip, BorderLayout.WEST);
+
+        // Context/cost stats sit just left of the hint. A dedicated CENTER
+        // slot, NOT the hint panel: showStop/hideStop wipe the hint panel.
+        statsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        statsPanel.setOpaque(false);
+        add(statsPanel, BorderLayout.CENTER);
 
         JLabel hintLabel = new JLabel("Enter to send · Shift+Enter for newline");
         hintLabel.setForeground(ThemeColors.secondaryText());
@@ -81,6 +88,20 @@ class InputOptionsRow extends JPanel {
     void addOption(JComponent component) {
         optionsStrip.add(component);
         revalidate();
+    }
+
+    /** Installs the context-stats label between the options strip and the hint. */
+    void setStatsComponent(JComponent component) {
+        statsPanel.removeAll();
+        statsPanel.add(component);
+        revalidate();
+    }
+
+    /** The stats component, or null when none was installed (for tests). */
+    JComponent statsComponent() {
+        return statsPanel.getComponentCount() == 0
+                ? null
+                : (JComponent) statsPanel.getComponent(0);
     }
 
     /** Number of option buttons currently in the strip (for tests). */

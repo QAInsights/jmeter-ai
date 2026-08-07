@@ -199,6 +199,48 @@ class AiChatPanelTest {
         assertTrue(second.getConversationHistory().isEmpty());
     }
 
+    // --- F9: context stats ---------------------------------------------------
+
+    @Test
+    void contextStatsLabelIsInstalledInOptionsRow() {
+        AiChatPanel panel = new AiChatPanel();
+        ContextStatsLabel found = findContextStatsLabel(panel);
+        assertNotNull(found, "the input options row should carry the context-stats label");
+    }
+
+    @Test
+    void contextStatsResetOnNewConversation() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("hello");
+        flushEdt();
+        ContextStatsLabel label = findContextStatsLabel(panel);
+        assertNotNull(label);
+        assertTrue(label.getText().startsWith("ctx ~"), "estimate shows after a user turn: " + label.getText());
+
+        panel.startNewConversation();
+        flushEdt();
+        assertEquals("", label.getText(), "label clears for the new conversation");
+    }
+
+    private static ContextStatsLabel findContextStatsLabel(java.awt.Container root) {
+        for (java.awt.Component c : root.getComponents()) {
+            if (c instanceof ContextStatsLabel) {
+                return (ContextStatsLabel) c;
+            }
+            if (c instanceof java.awt.Container) {
+                ContextStatsLabel found = findContextStatsLabel((java.awt.Container) c);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void flushEdt() throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+    }
+
     @Test
     void buildSessionCapturesModelHistoryAndAttachments() {
         AiChatPanel panel = new AiChatPanel();

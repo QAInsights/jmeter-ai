@@ -47,6 +47,7 @@ public class MetaMuseAiService implements AiService {
     private final long maxTokens;
     private ReasoningSettings reasoningSettings;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
 
     public MetaMuseAiService() {
         String apiKey = AiConfig.getProperty("meta.api.key", "");
@@ -107,6 +108,12 @@ public class MetaMuseAiService implements AiService {
         this.reasoningSettings = settings;
     }
 
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
+
     @Override
     public String consumeLastReasoning() {
         String reasoning = lastReasoning;
@@ -130,8 +137,13 @@ public class MetaMuseAiService implements AiService {
             return "Error: Meta Muse client not initialized. Set meta.api.key in jmeter.properties.";
         }
         try {
-            Response response = client.responses().create(buildResponsesParams(conversation, model));
+            String modelToUse = (model != null && !model.isEmpty()) ? model : this.model;
+            Response response = client.responses().create(buildResponsesParams(conversation, modelToUse));
             lastReasoning = extractReasoningSummary(response);
+            if (usageStats != null) {
+                response.usage().ifPresent(usage ->
+                        usageStats.record("meta:" + modelToUse, usage.inputTokens(), usage.outputTokens()));
+            }
             return extractOutputText(response);
         } catch (Exception e) {
             log.error("Error generating response from Meta Muse", e);
@@ -157,12 +169,19 @@ public class MetaMuseAiService implements AiService {
         if (client == null) {
             return () -> {};
         }
-        ResponseCreateParams params = buildResponsesParams(conversation, model);
+        String modelToUse = (model != null && !model.isEmpty()) ? model : this.model;
+        ResponseCreateParams params = buildResponsesParams(conversation, modelToUse);
         Thread streamThread = new Thread(() -> {
+            // The terminal response.completed event carries the full Response
+            // (including usage); capture it so usage can be recorded after the loop.
+            java.util.concurrent.atomic.AtomicReference<Response> completedResponse =
+                    new java.util.concurrent.atomic.AtomicReference<>();
             try {
                 try (com.openai.core.http.StreamResponse<ResponseStreamEvent> stream =
                              client.responses().createStreaming(params)) {
                     stream.stream().forEach(event -> {
+                        event.completed().ifPresent(completed ->
+                                completedResponse.set(completed.response()));
                         event.reasoningSummaryTextDelta().ifPresent(delta ->
                                 javax.swing.SwingUtilities.invokeLater(
                                         () -> reasoningConsumer.accept(delta.delta())));
@@ -170,6 +189,13 @@ public class MetaMuseAiService implements AiService {
                                 javax.swing.SwingUtilities.invokeLater(
                                         () -> tokenConsumer.accept(delta.delta())));
                     });
+                }
+                if (usageStats != null) {
+                    Response completed = completedResponse.get();
+                    if (completed != null) {
+                        completed.usage().ifPresent(usage ->
+                                usageStats.record("meta:" + modelToUse, usage.inputTokens(), usage.outputTokens()));
+                    }
                 }
                 javax.swing.SwingUtilities.invokeLater(onComplete);
             } catch (Exception e) {

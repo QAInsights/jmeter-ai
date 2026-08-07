@@ -12,6 +12,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionChunk;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.chat.completions.ChatCompletionStreamOptions;
 import org.qainsights.jmeter.ai.service.reasoning.DeepSeekReasoning;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
@@ -37,6 +38,7 @@ public class DeepseekAiService implements AiService {
     private float temperature;
     private long maxTokens;
     private String lastReasoning;
+    private org.qainsights.jmeter.ai.service.usage.UsageStats usageStats;
     private final java.util.concurrent.atomic.AtomicBoolean extraFieldsLogged =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -123,6 +125,12 @@ public class DeepseekAiService implements AiService {
         return reasoning;
     }
 
+    /** Receives the session usage accumulator (context-stats label). */
+    @Override
+    public void setUsageStats(org.qainsights.jmeter.ai.service.usage.UsageStats stats) {
+        this.usageStats = stats;
+    }
+
     @Override
     public String getName() {
         return "DeepSeek";
@@ -178,6 +186,11 @@ public class DeepseekAiService implements AiService {
             ChatCompletionCreateParams params = paramsBuilder.build();
             ChatCompletion chatCompletion = openAiClient.chat().completions().create(params);
 
+            if (usageStats != null) {
+                chatCompletion.usage().ifPresent(usage ->
+                        usageStats.record("deepseek:" + modelToUse, usage.promptTokens(), usage.completionTokens()));
+            }
+
             ChatCompletion.Choice choice = chatCompletion.choices().get(0);
             lastReasoning = DeepSeekReasoning.reasoningContent(
                     choice.message()._additionalProperties());
@@ -225,6 +238,11 @@ public class DeepseekAiService implements AiService {
             MessageCreateParams params = paramsBuilder.build();
             Message message = anthropicClient.messages().create(params);
 
+            if (usageStats != null) {
+                usageStats.record("deepseek:" + modelToUse,
+                        message.usage().inputTokens(), message.usage().outputTokens());
+            }
+
             StringBuilder sb = new StringBuilder();
             for (com.anthropic.models.messages.ContentBlock block : message.content()) {
                 if (block.text().isPresent()) {
@@ -263,7 +281,10 @@ public class DeepseekAiService implements AiService {
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
                 .model(modelToUse)
-                .temperature((double) temperature);
+                .temperature((double) temperature)
+                .streamOptions(ChatCompletionStreamOptions.builder()
+                        .includeUsage(true)
+                        .build());
 
         paramsBuilder.addSystemMessage(systemPrompt);
 
@@ -290,24 +311,32 @@ public class DeepseekAiService implements AiService {
 
         Thread streamThread = new Thread(() -> {
             try {
+                java.util.concurrent.atomic.AtomicReference<com.openai.models.completions.CompletionUsage>
+                        streamUsage = new java.util.concurrent.atomic.AtomicReference<>();
                 try (com.openai.core.http.StreamResponse<ChatCompletionChunk> stream = openAiClient.chat().completions().createStreaming(params)) {
                     stream.stream()
-                            .flatMap(chunk -> chunk.choices().stream())
-                            .forEach(choice -> {
-                                java.util.Map<String, com.openai.core.JsonValue> extraFields =
-                                        choice.delta()._additionalProperties();
-                                if (!extraFields.isEmpty() && extraFieldsLogged.compareAndSet(false, true)) {
-                                    log.info("DeepSeek stream extra fields: {}", extraFields.keySet());
-                                }
-                                String reasoning = DeepSeekReasoning.reasoningContent(extraFields);
-                                if (reasoning != null && !reasoning.isEmpty()) {
-                                    javax.swing.SwingUtilities.invokeLater(
-                                            () -> reasoningConsumer.accept(reasoning));
-                                }
-                                choice.delta().content().ifPresent(text ->
+                            .forEach(chunk -> {
+                                chunk.usage().ifPresent(streamUsage::set);
+                                chunk.choices().forEach(choice -> {
+                                    java.util.Map<String, com.openai.core.JsonValue> extraFields =
+                                            choice.delta()._additionalProperties();
+                                    if (!extraFields.isEmpty() && extraFieldsLogged.compareAndSet(false, true)) {
+                                        log.info("DeepSeek stream extra fields: {}", extraFields.keySet());
+                                    }
+                                    String reasoning = DeepSeekReasoning.reasoningContent(extraFields);
+                                    if (reasoning != null && !reasoning.isEmpty()) {
                                         javax.swing.SwingUtilities.invokeLater(
-                                                () -> tokenConsumer.accept(text)));
+                                                () -> reasoningConsumer.accept(reasoning));
+                                    }
+                                    choice.delta().content().ifPresent(text ->
+                                            javax.swing.SwingUtilities.invokeLater(
+                                                    () -> tokenConsumer.accept(text)));
+                                });
                             });
+                }
+                if (usageStats != null && streamUsage.get() != null) {
+                    usageStats.record("deepseek:" + modelToUse,
+                            streamUsage.get().promptTokens(), streamUsage.get().completionTokens());
                 }
 
                 javax.swing.SwingUtilities.invokeLater(onComplete);
@@ -364,14 +393,26 @@ public class DeepseekAiService implements AiService {
 
         Thread streamThread = new Thread(() -> {
             try {
+                // Server-reported usage rides message_start (input) and
+                // message_delta (output) events; -1 = not seen.
+                long[] streamUsage = { -1, -1 };
                 try (StreamResponse<RawMessageStreamEvent> stream = anthropicClient.messages().createStreaming(params)) {
                     stream.stream()
-                            .flatMap(event -> event.contentBlockDelta().stream())
-                            .flatMap(delta -> delta.delta().text().stream())
-                            .map(TextDelta::text)
-                            .forEach(text -> {
-                                javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text));
+                            .forEach(event -> {
+                                event.messageStart().ifPresent(start ->
+                                        streamUsage[0] = start.message().usage().inputTokens());
+                                event.messageDelta().ifPresent(delta ->
+                                        streamUsage[1] = delta.usage().outputTokens());
+                                event.contentBlockDelta().stream()
+                                        .flatMap(delta -> delta.delta().text().stream())
+                                        .map(TextDelta::text)
+                                        .forEach(text ->
+                                                javax.swing.SwingUtilities.invokeLater(() -> tokenConsumer.accept(text)));
                             });
+                }
+                if (usageStats != null && (streamUsage[0] >= 0 || streamUsage[1] >= 0)) {
+                    usageStats.record("deepseek:" + modelToUse,
+                            Math.max(streamUsage[0], 0), Math.max(streamUsage[1], 0));
                 }
 
                 javax.swing.SwingUtilities.invokeLater(onComplete);
