@@ -39,16 +39,20 @@ public class OpenAiService implements AiService {
     }
 
     public OpenAiService() {
-        String API_KEY = AiConfig.getProperty("openai.api.key", "");
-        String BASE_URL = AiConfig.getProperty("openai.base.url", "https://api.openai.com/v1");
+        String apiKey = AiConfig.getProperty("openai.api.key", "");
+        String baseUrl = AiConfig.getProperty("openai.base.url", Constants.DEFAULT_OPENAI_BASE_URL);
         String loggingLevel = AiConfig.getProperty("openai.log.level", "");
         if (!loggingLevel.isEmpty()) {
             // Set the environment variable for the OpenAI client logging
             System.setProperty("OPENAI_LOG", loggingLevel);
             log.info("Enabled OpenAI client logging with level: {}", loggingLevel);
         }
-        this.client = new OpenAIOkHttpClient.Builder().apiKey(API_KEY).baseUrl(BASE_URL).build();
-        log.info("Initialized OpenAI client with baseUrl: {}", BASE_URL);
+        OpenAIOkHttpClient.Builder clientBuilder = new OpenAIOkHttpClient.Builder().apiKey(apiKey);
+        if (baseUrl != null && !baseUrl.trim().isEmpty()) {
+            clientBuilder.baseUrl(baseUrl);
+        }
+        this.client = clientBuilder.build();
+        log.info("Initialized OpenAI client with baseUrl: {}", baseUrl);
 
         // Set the client in the OpenAiUsage singleton for token usage tracking
         try {

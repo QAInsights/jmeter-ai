@@ -1,12 +1,10 @@
 package org.qainsights.jmeter.ai.utils;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.models.ModelInfo;
 import com.anthropic.models.models.ModelListPage;
 import com.anthropic.models.models.ModelListParams;
 import com.openai.client.OpenAIClient;
-import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
@@ -62,14 +60,7 @@ public class Models {
                 if (openAiModels != null && openAiModels.data() != null) {
                     for (Model openAiModel : openAiModels.data()) {
                         String id = openAiModel.id();
-                        if (!id.contains("audio") && // Exclude audio models
-                                !id.contains("tts") && // Exclude text-to-speech models
-                                !id.contains("whisper") && // Exclude whisper models
-                                !id.contains("davinci") && // Exclude Davinci models
-                                !id.contains("search") && // Exclude search models
-                                !id.contains("transcribe") && // Exclude transcribe models
-                                !id.contains("realtime") && // Exclude realtime models
-                                !id.contains("instruct")) { // Exclude instruct models
+                        if (!isNonChatModel(id)) {
                             String modelId = "openai:" + id;
                             allModels.add(modelId);
                             log.debug("Added OpenAI model to selector: {}", id);
@@ -314,9 +305,6 @@ public class Models {
     public static ModelListPage getAnthropicModels(AnthropicClient client) {
         try {
             log.info("Fetching available models from Anthropic API");
-            client = AnthropicOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("anthropic.api.key", "YOUR_API_KEY"))
-                    .build();
 
             ModelListParams modelListParams = ModelListParams.builder().build();
             ModelListPage models = client.models().list(modelListParams);
@@ -357,10 +345,6 @@ public class Models {
     public static com.openai.models.models.ModelListPage getOpenAiModels(OpenAIClient client) {
         try {
             log.info("Fetching available models from OpenAI API");
-            client = OpenAIOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
-                    .baseUrl(AiConfig.getProperty("openai.base.url", "https://api.openai.com/v1"))
-                    .build();
 
             com.openai.models.models.ModelListPage models = client.models().list();
 
@@ -384,16 +368,9 @@ public class Models {
     public static List<String> getOpenAiModelIds(OpenAIClient client) {
         com.openai.models.models.ModelListPage models = getOpenAiModels(client);
         if (models != null && models.data() != null) {
-            // Return all models, excluding audio, TTS, and other non-chat models
+            // Return all models, excluding non-chat models
             return models.data().stream()
-                    .filter(model -> !model.id().contains("audio")) // Exclude audio models
-                    .filter(model -> !model.id().contains("tts")) // Exclude text-to-speech models
-                    .filter(model -> !model.id().contains("whisper")) // Exclude whisper models
-                    .filter(model -> !model.id().contains("davinci")) // Exclude Davinci models
-                    .filter(model -> !model.id().contains("search")) // Exclude search models
-                    .filter(model -> !model.id().contains("transcribe")) // Exclude transcribe models
-                    .filter(model -> !model.id().contains("realtime")) // Exclude realtime models
-                    .filter(model -> !model.id().contains("instruct")) // Exclude instruct models
+                    .filter(model -> !isNonChatModel(model.id()))
                     .map(Model::id)
                     .collect(Collectors.toList());
         }
@@ -430,6 +407,33 @@ public class Models {
             log.error("Error fetching models from DeepSeek API: {}", e.getMessage(), e);
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * Determines whether an OpenAI model ID represents a non-chat model that should
+     * be excluded from the chat model selector.
+     *
+     * @param modelId the OpenAI model identifier (e.g. {@code "text-embedding-3-small"})
+     * @return {@code true} if the model is not suitable for chat completions
+     */
+    static boolean isNonChatModel(String modelId) {
+        if (modelId == null || modelId.isBlank()) {
+            return true;
+        }
+        String lower = modelId.toLowerCase();
+        return lower.contains("audio")
+                || lower.contains("tts")
+                || lower.contains("whisper")
+                || lower.contains("davinci")
+                || lower.contains("search")
+                || lower.contains("transcribe")
+                || lower.contains("realtime")
+                || lower.contains("instruct")
+                || lower.contains("embedding")
+                || lower.contains("moderation")
+                || lower.contains("computer-use")
+                || lower.contains("dall-e")
+                || lower.contains("image");
     }
 
 
