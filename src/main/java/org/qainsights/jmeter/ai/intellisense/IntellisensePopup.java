@@ -39,13 +39,38 @@ public class IntellisensePopup {
         this.descriptionLookup = lookup != null ? lookup : CommandIntellisenseProvider::getDescription;
     }
 
-    public void show(Component parent, int x, int y, List<String> suggestions) {
+    /**
+     * Shows the popup docked above the anchor, stretched to the anchor's
+     * width - same placement rule as the model picker. The input box sits at
+     * the bottom of the chat panel, so opening upward keeps the suggestions
+     * on screen and off the text being typed.
+     */
+    public void showAbove(Component parent, int x, int y, List<String> suggestions) {
+        prepare(suggestions);
+        if (parent.getWidth() > 0) {
+            Dimension preferred = scrollPane.getPreferredSize();
+            scrollPane.setPreferredSize(new Dimension(parent.getWidth(), preferred.height));
+        }
+        popupMenu.pack();
+        popupMenu.show(parent, x, aboveY(y, popupMenu.getPreferredSize().height));
+        parent.requestFocusInWindow();
+    }
+
+    private void prepare(List<String> suggestions) {
         suggestionList.setListData(suggestions.toArray(new String[0]));
         suggestionList.setSelectedIndex(0);
         suggestionList.setVisibleRowCount(Math.min(5, suggestions.size()));
-        popupMenu.pack();
-        popupMenu.show(parent, x, y);
-        parent.requestFocusInWindow();
+    }
+
+    /**
+     * Y for an upward-opening popup: the anchor minus its height. This is
+     * negative when the anchor is the input's top edge - legal for
+     * {@code JPopupMenu.show}, which auto-adjusts to keep the popup on
+     * screen. Clamping here would pin the popup's top to the anchor and
+     * make it extend downward over the input instead.
+     */
+    static int aboveY(int anchorY, int popupHeight) {
+        return anchorY - popupHeight;
     }
 
     public void hide() {
@@ -70,6 +95,8 @@ public class IntellisensePopup {
 
     public void setSelectedIndex(int index) {
         suggestionList.setSelectedIndex(index);
+        // keep the selection in view when arrowing past the visible rows
+        suggestionList.ensureIndexIsVisible(index);
     }
 
     public int getSuggestionCount() {
@@ -116,17 +143,41 @@ public class IntellisensePopup {
                     list, command, index, isSelected, cellHasFocus);
 
             if (description.isEmpty()) {
-                label.setText(command);
+                // Swing renders any label text starting with "<html" as HTML,
+                // so a user-saved prompt name must not reach setText raw.
+                label.setText(isHtml(command) ? "<html>" + escapeHtml(command) + "</html>" : command);
                 label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
             } else {
                 Color secondary = org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText();
-                label.setText("<html><b>" + command + "</b><br>"
+                label.setText("<html><b>" + escapeHtml(command) + "</b><br>"
                         + "<span style='color:rgb(" + secondary.getRed() + ","
                         + secondary.getGreen() + "," + secondary.getBlue()
-                        + ");font-size:9px;'>" + description + "</span></html>");
+                        + ");font-size:9px;'>" + escapeHtml(description) + "</span></html>");
                 label.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
             }
             return label;
+        }
+
+        /** True when Swing would interpret the text as HTML rather than plain text. */
+        private static boolean isHtml(String text) {
+            return text.regionMatches(true, 0, "<html", 0, 5);
+        }
+
+        /** Escapes user-controlled text for safe injection into a Swing HTML cell. */
+        static String escapeHtml(String text) {
+            StringBuilder sb = new StringBuilder(text.length());
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                switch (c) {
+                    case '&' -> sb.append("&amp;");
+                    case '<' -> sb.append("&lt;");
+                    case '>' -> sb.append("&gt;");
+                    case '"' -> sb.append("&quot;");
+                    case '\'' -> sb.append("&#39;");
+                    default -> sb.append(c);
+                }
+            }
+            return sb.toString();
         }
     }
 }

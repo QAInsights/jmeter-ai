@@ -83,6 +83,28 @@ public class IntellisensePopupTest {
     }
     
     @Test
+    public void testSetSelectedIndexScrollsSelectionIntoView() {
+        // More rows than the visible window: setSelectedIndex must not
+        // throw and must update the selection. (The actual viewport scroll
+        // is verified by a live Robot harness; headless layout can't
+        // compute pixel positions reliably enough to assert it here.)
+        String[] items = new String[10];
+        for (int i = 0; i < items.length; i++) {
+            items[i] = "item " + i;
+        }
+        popup.suggestionList.setListData(items);
+        popup.suggestionList.setVisibleRowCount(3);
+
+        popup.setSelectedIndex(9);
+        assertEquals(9, popup.getSelectedIndex());
+        assertEquals("item 9", popup.getSelectedValue());
+
+        popup.setSelectedIndex(0);
+        assertEquals(0, popup.getSelectedIndex());
+        assertEquals("item 0", popup.getSelectedValue());
+    }
+
+    @Test
     public void testAddSuggestionClickListener() {
         // Create a flag to track if listener was called
         final boolean[] listenerCalled = {false};

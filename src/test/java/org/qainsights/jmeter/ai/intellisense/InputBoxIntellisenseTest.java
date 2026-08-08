@@ -76,4 +76,13 @@ public class InputBoxIntellisenseTest {
         // or adding specific test hooks, but the class should handle this scenario
         assertNotNull(intellisense);
     }
+
+    @Test
+    public void anchorForUsesViewportWhenTextAreaIsScrolled() {
+        JTextArea textArea = new JTextArea();
+        assertSame(textArea, InputBoxIntellisense.anchorFor(textArea));
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        assertSame(scrollPane.getViewport(), InputBoxIntellisense.anchorFor(textArea));
+    }
 }

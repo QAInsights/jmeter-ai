@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.intellisense;
 
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Point;
 import java.awt.event.InputMethodEvent;
 import java.awt.event.InputMethodListener;
@@ -7,10 +9,11 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.geom.Rectangle2D;
 import java.text.AttributedCharacterIterator;
 import java.util.List;
 import javax.swing.JTextArea;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 
 /**
  * Manages intellisense functionality for the input text area in the AI Chat Panel.
@@ -101,65 +104,64 @@ public class InputBoxIntellisense {
             }
         );
 
+        // -----------------------------------------------------------------------
+        // Picker keys go through a global KeyEventDispatcher, not the text
+        // area's key listener: the suggestion popup opens in its own
+        // heavy-weight window above the input, so when it appears focus can
+        // transiently (or in the JMeter main window, persistently) leave the
+        // text area. While the picker is visible its keys - arrows, Enter,
+        // Tab, Esc, and the prompt-manage keys - must work regardless of
+        // which component holds focus. Returning true consumes the event, so
+        // the text area never double-handles them.
+        // -----------------------------------------------------------------------
+        java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(e -> {
+            if (imeComposing
+                    || e.getID() != KeyEvent.KEY_PRESSED
+                    || !intellisensePopup.isVisible()) {
+                return false;
+            }
+            switch (e.getKeyCode()) {
+                case KeyEvent.VK_ENTER, KeyEvent.VK_TAB -> {
+                    insertSelectedCommand();
+                    // re-evaluate: "@prompts " drops straight into the
+                    // picker, anything else leaves no @ token and hides it
+                    updateIntellisense();
+                    return true;
+                }
+                case KeyEvent.VK_DOWN -> {
+                    moveSelection(1);
+                    return true;
+                }
+                case KeyEvent.VK_UP -> {
+                    moveSelection(-1);
+                    return true;
+                }
+                case KeyEvent.VK_ESCAPE -> {
+                    intellisensePopup.hide();
+                    return true;
+                }
+                case KeyEvent.VK_DELETE -> {
+                    if (!promptMatches.isEmpty()) {
+                        deleteSelectedPrompt();
+                        return true;
+                    }
+                    return false;
+                }
+                case KeyEvent.VK_F2 -> {
+                    if (!promptMatches.isEmpty()) {
+                        editSelectedPrompt();
+                        return true;
+                    }
+                    return false;
+                }
+                default -> {
+                    return false;
+                }
+            }
+        });
+
         textArea.addKeyListener(
             new KeyAdapter() {
-                @Override
-                public void keyPressed(KeyEvent e) {
-                    // When IME is composing do NOT intercept any key so that the
-                    // native candidate-selection flow works correctly.
-                    if (imeComposing) {
-                        return;
-                    }
-
-                    // Handle Enter or Tab for intellisense selection
-                    if (intellisensePopup.isVisible()) {
-                        if (
-                            e.getKeyCode() == KeyEvent.VK_ENTER ||
-                            e.getKeyCode() == KeyEvent.VK_TAB
-                        ) {
-                            e.consume();
-                            insertSelectedCommand();
-                            return;
-                        } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
-                            int curr = intellisensePopup.getSelectedIndex();
-                            int next =
-                                (curr + 1) %
-                                intellisensePopup.getSuggestionCount();
-                            intellisensePopup.setSelectedIndex(next);
-                            e.consume();
-                            return;
-                        } else if (e.getKeyCode() == KeyEvent.VK_UP) {
-                            int curr = intellisensePopup.getSelectedIndex();
-                            int prev =
-                                (curr -
-                                    1 +
-                                    intellisensePopup.getSuggestionCount()) %
-                                intellisensePopup.getSuggestionCount();
-                            intellisensePopup.setSelectedIndex(prev);
-                            e.consume();
-                            return;
-                        } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-                            intellisensePopup.hide();
-                            e.consume();
-                            return;
-                        } else if (
-                            e.getKeyCode() == KeyEvent.VK_DELETE &&
-                            !promptMatches.isEmpty()
-                        ) {
-                            deleteSelectedPrompt();
-                            e.consume();
-                            return;
-                        } else if (
-                            e.getKeyCode() == KeyEvent.VK_F2 &&
-                            !promptMatches.isEmpty()
-                        ) {
-                            editSelectedPrompt();
-                            e.consume();
-                            return;
-                        }
-                    }
-                }
-
                 @Override
                 public void keyReleased(KeyEvent e) {
                     // Skip intellisense updates while IME is composing to avoid
@@ -237,6 +239,19 @@ public class InputBoxIntellisense {
     }
 
     /**
+     * Moves the popup selection by delta with wrap-around. Package-private
+     * for tests.
+     */
+    void moveSelection(int delta) {
+        int count = intellisensePopup.getSuggestionCount();
+        if (count == 0) {
+            return;
+        }
+        int curr = intellisensePopup.getSelectedIndex();
+        intellisensePopup.setSelectedIndex(Math.floorMod(curr + delta, count));
+    }
+
+    /**
      * Updates the intellisense popup based on the current text and caret position.
      */
     private void updateIntellisense() {
@@ -259,7 +274,7 @@ public class InputBoxIntellisense {
             }
 
             if (!suggestions.isEmpty()) {
-                showAt(atIdx, suggestions);
+                showAt(suggestions);
             } else {
                 intellisensePopup.hide();
             }
@@ -269,19 +284,27 @@ public class InputBoxIntellisense {
         }
     }
 
-    /** Shows the popup anchored at the @ token's position in the text area. */
-    private void showAt(int atIdx, List<String> suggestions) {
-        Point pt;
-        try {
-            Rectangle2D rect = textArea.modelToView2D(atIdx);
-            pt = new Point(
-                (int) rect.getX(),
-                (int) (rect.getY() + rect.getHeight())
-            );
-        } catch (Exception ex) {
-            pt = new Point(0, textArea.getHeight());
-        }
-        intellisensePopup.show(textArea, pt.x, pt.y, suggestions);
+    /**
+     * Shows the popup docked above the chat input, full-width like the model
+     * picker - independent of where the @ token sits in the text. The dock
+     * point is the input's visible top edge (the viewport's) converted into
+     * the text area's coordinate space: the text area stays the popup
+     * invoker so it keeps keyboard focus (a viewport invoker would swallow
+     * the arrow keys and further typing).
+     */
+    private void showAt(List<String> suggestions) {
+        Point topLeft = SwingUtilities.convertPoint(anchorFor(textArea), 0, 0, textArea);
+        intellisensePopup.showAbove(textArea, topLeft.x, topLeft.y, suggestions);
+    }
+
+    /**
+     * The component the popup docks to: the input's viewport when the text
+     * area is scrolled (its top edge is always visible), else the text area
+     * itself. Package-private for tests.
+     */
+    static Component anchorFor(JTextArea textArea) {
+        Container viewport = SwingUtilities.getAncestorOfClass(JViewport.class, textArea);
+        return viewport != null ? viewport : textArea;
     }
 
     /** The suggestion popup (package-private for tests). */
@@ -322,8 +345,7 @@ public class InputBoxIntellisense {
             exitPromptMode();
             intellisensePopup.hide();
         } else {
-            int atIdx = text.lastIndexOf("@", caret - 1);
-            showAt(atIdx, names);
+            showAt(names);
         }
     }
 

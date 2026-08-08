@@ -131,6 +131,22 @@ public final class PromptEditDialog extends JDialog {
         return candidate;
     }
 
+    /**
+     * Persists the edit: saves under the (possibly new) name first and drops
+     * the original only after the save succeeded, so a failed write during a
+     * rename can never lose the existing prompt. Returns false when the save
+     * did not persist; the original is always kept in that case.
+     */
+    static boolean persistEdit(PromptLibrary library, String name, String body, String editingOriginal) {
+        if (!library.save(name, body)) {
+            return false;
+        }
+        if (editingOriginal != null && !editingOriginal.equals(name)) {
+            library.delete(editingOriginal);
+        }
+        return true;
+    }
+
     private void onSave() {
         String name = nameField.getText().trim();
         String body = bodyArea.getText().trim();
@@ -146,12 +162,11 @@ public final class PromptEditDialog extends JDialog {
                         JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) {
             return;
         }
-        if (editingOriginal != null && !editingOriginal.equals(name)) {
-            library.delete(editingOriginal);
+        if (!persistEdit(library, name, body, editingOriginal)) {
+            errorLabel.setText("Could not save the prompt to disk - check the log and try again.");
+            return;
         }
-        if (library.save(name, body)) {
-            saved = true;
-            dispose();
-        }
+        saved = true;
+        dispose();
     }
 }

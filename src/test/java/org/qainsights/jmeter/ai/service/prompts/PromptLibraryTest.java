@@ -189,4 +189,50 @@ class PromptLibraryTest {
         assertTrue(Files.exists(nested));
         assertEquals("body", PromptLibrary.load(nested).find("Nested").orElseThrow().body());
     }
+
+    /** Blocks persistence by occupying the temp-file path with a directory. */
+    private void blockPersist() throws Exception {
+        Files.createDirectory(tempDir.resolve("prompts.json.tmp"));
+    }
+
+    @Test
+    void saveReturnsFalseAndRollsBackWhenPersistFails() throws Exception {
+        blockPersist();
+        PromptLibrary library = PromptLibrary.load(libraryFile());
+        java.util.concurrent.atomic.AtomicInteger notifications = new java.util.concurrent.atomic.AtomicInteger();
+        library.addChangeListener(notifications::incrementAndGet);
+
+        assertFalse(library.save("Mine", "body"));
+        assertTrue(library.find("Mine").isEmpty());
+        assertEquals(6, library.all().size());
+        assertEquals(0, notifications.get());
+        assertFalse(Files.exists(libraryFile()));
+    }
+
+    @Test
+    void saveKeepsPreviousVersionWhenOverwritePersistFails() throws Exception {
+        PromptLibrary library = PromptLibrary.load(libraryFile());
+        library.save("Mine", "v1");
+        blockPersist();
+
+        assertFalse(library.save("Mine", "v2"));
+        assertEquals("v1", library.find("Mine").orElseThrow().body());
+        // the file still holds the persisted v1
+        assertEquals("v1", PromptLibrary.load(libraryFile()).find("Mine").orElseThrow().body());
+    }
+
+    @Test
+    void deleteReturnsFalseAndKeepsPromptWhenPersistFails() throws Exception {
+        PromptLibrary library = PromptLibrary.load(libraryFile());
+        library.save("Mine", "body");
+        blockPersist();
+        java.util.concurrent.atomic.AtomicInteger notifications = new java.util.concurrent.atomic.AtomicInteger();
+        library.addChangeListener(notifications::incrementAndGet);
+
+        assertFalse(library.delete("Mine"));
+        assertTrue(library.find("Mine").isPresent());
+        assertEquals(0, notifications.get());
+        // the prompt is still on disk too
+        assertTrue(PromptLibrary.load(libraryFile()).find("Mine").isPresent());
+    }
 }

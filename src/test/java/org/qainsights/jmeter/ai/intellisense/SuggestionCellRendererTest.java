@@ -32,6 +32,49 @@ class SuggestionCellRendererTest {
     }
 
     @Test
+    void userControlledNameAndDescriptionAreHtmlEscaped() {
+        IntellisensePopup.SuggestionCellRenderer renderer =
+                new IntellisensePopup.SuggestionCellRenderer(() -> name -> "<script>alert(1)</script>");
+        JLabel label = (JLabel) renderer.getListCellRendererComponent(
+                new JList<>(), "<b>evil</b> & \"co\"", 0, false, false);
+        String text = label.getText();
+        assertFalse(text.contains("<b>evil</b>"));
+        assertFalse(text.contains("<script>"));
+        assertTrue(text.contains("&lt;b&gt;evil&lt;/b&gt;"));
+        assertTrue(text.contains("&lt;script&gt;"));
+        assertTrue(text.contains("&amp;"));
+        assertTrue(text.contains("&quot;co&quot;"));
+    }
+
+    @Test
+    void htmlPrefixedNameWithoutDescriptionIsNotRenderedAsHtml() {
+        IntellisensePopup.SuggestionCellRenderer renderer =
+                new IntellisensePopup.SuggestionCellRenderer(() -> name -> null);
+        JLabel label = (JLabel) renderer.getListCellRendererComponent(
+                new JList<>(), "<html><b>evil</b>", 0, false, false);
+        String text = label.getText();
+        assertFalse(text.contains("<b>evil</b>"));
+        assertTrue(text.contains("&lt;html&gt;&lt;b&gt;evil&lt;/b&gt;"));
+    }
+
+    @Test
+    void escapeHtmlEscapesAllSpecialCharacters() {
+        assertEquals("&lt;&gt;&amp;&quot;&#39;",
+                IntellisensePopup.SuggestionCellRenderer.escapeHtml("<>&\"'"));
+        assertEquals("plain text",
+                IntellisensePopup.SuggestionCellRenderer.escapeHtml("plain text"));
+    }
+
+    @Test
+    void aboveYOpensUpwardAndMayGoNegative() {
+        assertEquals(80, IntellisensePopup.aboveY(200, 120));
+        // docking above the input's top edge needs a negative y so the popup
+        // rises over the transcript instead of extending down over the input
+        assertEquals(-70, IntellisensePopup.aboveY(50, 120));
+        assertEquals(-120, IntellisensePopup.aboveY(0, 120));
+    }
+
+    @Test
     void providerReturnsDescriptionsForAllCommands() {
         for (String cmd : new String[]{"@code", "@wrap", "@lint", "@usage", "@optimize", "@this", "@testplan"}) {
             assertFalse(CommandIntellisenseProvider.getDescription(cmd).isEmpty(), cmd);

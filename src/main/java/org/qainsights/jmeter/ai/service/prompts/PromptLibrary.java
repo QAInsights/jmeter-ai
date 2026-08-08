@@ -171,22 +171,31 @@ public final class PromptLibrary {
 
     /**
      * Saves a user prompt, replacing any existing user prompt with the same
-     * name. Returns false (no-op) for blank names/bodies and for names owned
-     * by a built-in. Persists immediately.
+     * name. Returns false (no-op) for blank names/bodies, for names owned by
+     * a built-in, and when persisting to disk fails (the in-memory change is
+     * rolled back so the library stays consistent with the file). Listeners
+     * are notified only after a successful persist.
      */
     public synchronized boolean save(String name, String body) {
         if (name == null || name.isBlank() || body == null || body.isBlank() || isBuiltinName(name)) {
             return false;
         }
+        List<Prompt> snapshot = new ArrayList<>(userPrompts);
         findByName(userPrompts, name).ifPresent(userPrompts::remove);
         userPrompts.add(new Prompt(name, body, false));
-        persist();
+        if (!persist()) {
+            userPrompts.clear();
+            userPrompts.addAll(snapshot);
+            return false;
+        }
+        notifyChange();
         return true;
     }
 
     /**
-     * Deletes a user prompt by name. Returns false for unknown names and for
-     * built-ins. Persists immediately.
+     * Deletes a user prompt by name. Returns false for unknown names, for
+     * built-ins, and when persisting to disk fails (the prompt is kept in
+     * that case). Listeners are notified only after a successful persist.
      */
     public synchronized boolean delete(String name) {
         if (name == null || isBuiltinName(name)) {
@@ -196,8 +205,13 @@ public final class PromptLibrary {
         if (existing.isEmpty()) {
             return false;
         }
-        userPrompts.remove(existing.get());
-        persist();
+        int index = userPrompts.indexOf(existing.get());
+        userPrompts.remove(index);
+        if (!persist()) {
+            userPrompts.add(index, existing.get());
+            return false;
+        }
+        notifyChange();
         return true;
     }
 
@@ -205,7 +219,8 @@ public final class PromptLibrary {
         return prompts.stream().filter(p -> p.name().equals(name)).findFirst();
     }
 
-    private void persist() {
+    /** Writes the library to disk. Returns false when the write fails. */
+    private boolean persist() {
         try {
             if (path.getParent() != null) {
                 Files.createDirectories(path.getParent());
@@ -220,9 +235,14 @@ public final class PromptLibrary {
             Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
             MAPPER.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), root);
             moveReplacing(tmp, path);
+            return true;
         } catch (IOException e) {
             log.warn("Could not save prompt library to {}", path, e);
+            return false;
         }
+    }
+
+    private void notifyChange() {
         for (Runnable listener : changeListeners) {
             listener.run();
         }

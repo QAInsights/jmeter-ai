@@ -160,6 +160,27 @@ class PromptModeIntellisenseTest {
     }
 
     @Test
+    void moveSelectionWrapsAroundBothEnds() {
+        intellisense.popup().suggestionList.setListData(new String[]{"a", "b", "c"});
+        intellisense.popup().setSelectedIndex(0);
+
+        intellisense.moveSelection(1);
+        assertEquals(1, intellisense.popup().getSelectedIndex());
+        intellisense.moveSelection(-1);
+        intellisense.moveSelection(-1);
+        assertEquals(2, intellisense.popup().getSelectedIndex());
+        intellisense.moveSelection(1);
+        assertEquals(0, intellisense.popup().getSelectedIndex());
+    }
+
+    @Test
+    void moveSelectionIsNoOpWithNoSuggestions() {
+        intellisense.popup().suggestionList.setListData(new String[0]);
+        intellisense.moveSelection(1);
+        assertEquals(-1, intellisense.popup().getSelectedIndex());
+    }
+
+    @Test
     void rendererToleratesNullDescriptionsFromLookup() {
         IntellisensePopup.SuggestionCellRenderer renderer =
                 new IntellisensePopup.SuggestionCellRenderer(() -> name -> null);

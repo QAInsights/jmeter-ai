@@ -68,4 +68,40 @@ class PromptEditDialogTest {
         assertEquals("Analyze results (copy 3)",
                 PromptEditDialog.suggestedCopyName(library, "Analyze results"));
     }
+
+    @Test
+    void persistEditSavesNewPromptWithoutTouchingOriginalWhenNotRenaming() {
+        PromptLibrary library = library();
+        library.save("Mine", "v1");
+
+        assertTrue(PromptEditDialog.persistEdit(library, "Mine", "v2", "Mine"));
+        assertEquals("v2", library.find("Mine").orElseThrow().body());
+        assertEquals(7, library.all().size());
+    }
+
+    @Test
+    void persistEditRenameDeletesOriginalOnlyAfterSaveSucceeds() {
+        PromptLibrary library = library();
+        library.save("Old", "v1");
+
+        assertTrue(PromptEditDialog.persistEdit(library, "New", "v2", "Old"));
+        assertTrue(library.find("Old").isEmpty());
+        assertEquals("v2", library.find("New").orElseThrow().body());
+    }
+
+    @Test
+    void persistEditKeepsOriginalWhenSaveFails() throws Exception {
+        PromptLibrary library = library();
+        library.save("Old", "v1");
+        // block persistence by occupying the temp-file path with a directory
+        java.nio.file.Files.createDirectory(tempDir.resolve("prompts.json.tmp"));
+
+        assertFalse(PromptEditDialog.persistEdit(library, "New", "v2", "Old"));
+        assertTrue(library.find("Old").isPresent());
+        assertTrue(library.find("New").isEmpty());
+        // on disk, still only the original
+        PromptLibrary reloaded = PromptLibrary.load(tempDir.resolve("prompts.json"));
+        assertTrue(reloaded.find("Old").isPresent());
+        assertTrue(reloaded.find("New").isEmpty());
+    }
 }
