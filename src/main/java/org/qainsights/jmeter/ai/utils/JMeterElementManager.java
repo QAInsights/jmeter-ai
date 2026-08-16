@@ -421,6 +421,26 @@ public class JMeterElementManager {
     }
 
     /**
+     * Gives a freshly created Thread Group the same defaults JMeter's own "Add" action
+     * gives it: a Loop Controller (1 loop), 1 thread and a 1-second ramp-up. Without the
+     * latter two, {@code ThreadGroup.num_threads}/{@code ramp_time} are left unset, which
+     * {@code ThreadGroupGui} renders as blank "Number of Threads"/"Ramp-Up Period" fields
+     * instead of a sensible default.
+     */
+    static void initializeThreadGroupDefaults(org.apache.jmeter.threads.ThreadGroup threadGroup) {
+        org.apache.jmeter.control.LoopController loopController = new org.apache.jmeter.control.LoopController();
+        loopController.setLoops(1);
+        loopController.setFirst(true);
+        loopController.setProperty(TestElement.TEST_CLASS,
+                org.apache.jmeter.control.LoopController.class.getName());
+        loopController.setProperty(TestElement.GUI_CLASS,
+                org.apache.jmeter.control.gui.LoopControlPanel.class.getName());
+        threadGroup.setSamplerController(loopController);
+        threadGroup.setNumThreads(1);
+        threadGroup.setRampUp(1);
+    }
+
+    /**
      * Adds a JMeter element to the currently selected node in the test plan.
      *
      * @param elementType The type of element to add (case-insensitive, spaces
@@ -470,19 +490,7 @@ public class JMeterElementManager {
                 // This is necessary because JMeter requires a loop controller for Thread Groups
                 if (normalizedType.equals("threadgroup")) {
                     log.info("Initializing Thread Group with a Loop Controller");
-                    org.apache.jmeter.threads.ThreadGroup threadGroup = (org.apache.jmeter.threads.ThreadGroup) newElement;
-
-                    // Create and initialize a LoopController
-                    org.apache.jmeter.control.LoopController loopController = new org.apache.jmeter.control.LoopController();
-                    loopController.setLoops(1);
-                    loopController.setFirst(true);
-                    loopController.setProperty(TestElement.TEST_CLASS,
-                            org.apache.jmeter.control.LoopController.class.getName());
-                    loopController.setProperty(TestElement.GUI_CLASS,
-                            org.apache.jmeter.control.gui.LoopControlPanel.class.getName());
-
-                    // Set the controller on the Thread Group
-                    threadGroup.setSamplerController(loopController);
+                    initializeThreadGroupDefaults((org.apache.jmeter.threads.ThreadGroup) newElement);
                     log.info("Loop Controller initialized for Thread Group");
                 }
 
