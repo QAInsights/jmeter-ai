@@ -11,57 +11,72 @@ import java.awt.RenderingHints;
 import java.awt.geom.GeneralPath;
 import javax.swing.Icon;
 import javax.swing.JButton;
-import javax.swing.UIManager;
+import javax.swing.Timer;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
 /**
- * The header "Donate" button: a soft pill with a hand-drawn coffee icon.
- * Replaces the old flat-orange emoji button - the ☕/♥ glyphs render as tofu
- * on fonts without emoji coverage, and the harsh #FF9500 fill plus 2px border
- * clashed with every theme. The warm identity stays, but as a theme-blended
- * tint that deepens on hover. Extracted from {@link AiChatPanel} to keep it
- * within the project's line limit.
+ * The header "Donate" button: a regular button (native look and feel, like
+ * every other header button) with a hand-drawn coffee icon and a rotating
+ * Gemini-style gradient outline. Replaces the old custom warm-tinted pill,
+ * which clashed with every theme - the CTA now stands out via the same
+ * animated gradient stroke used elsewhere in the app ({@link AnimatedGradientPainter},
+ * shared with {@link GeminiBorderPanel}'s "thinking" border and the JMeter
+ * tree's agent-activity glow) rather than a bespoke fill. Extracted from
+ * {@link AiChatPanel} to keep it within the project's line limit.
  */
 class DonateButton extends JButton {
 
     private static final Color WARM = new Color(255, 149, 0);
-    private static final int ARC = 16;
+    private static final float STROKE_WIDTH = 2.0f;
+    private static final int ARC_RADIUS = 10;
+    private static final int PAINT_INSET = 1;
+
+    private int rotationAngle = 0;
+    private final Timer animationTimer;
 
     DonateButton() {
         super("Donate");
         setIcon(new CoffeeIcon(14));
         setIconTextGap(6);
         setToolTipText("Support this project as it takes time, tokens and resources to build and maintain");
-        setContentAreaFilled(false);
-        setBorderPainted(false);
         setFocusPainted(false);
-        setOpaque(false);
-        setForeground(ThemeColors.foreground());
         setFont(getFont().deriveFont(Font.BOLD, 12f));
         setMargin(new Insets(5, 14, 5, 14));
         setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // Always-on rotating gradient outline (same painter as GeminiBorderPanel/
+        // AgentGlowBorder) - this is a persistent call-to-action rather than a
+        // transient state, so it animates continuously for as long as it's showing.
+        animationTimer = new Timer(30, e -> {
+            rotationAngle = (rotationAngle + 4) % 360;
+            repaint();
+        });
     }
 
     @Override
-    protected void paintComponent(Graphics g) {
+    public void addNotify() {
+        super.addNotify();
+        animationTimer.start();
+    }
+
+    @Override
+    public void removeNotify() {
+        animationTimer.stop();
+        super.removeNotify();
+    }
+
+    @Override
+    public void paint(Graphics g) {
+        super.paint(g);
         Graphics2D g2 = (Graphics2D) g.create();
         try {
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON);
-            Color panelBg = UIManager.getColor("Panel.background");
-            if (panelBg == null) {
-                panelBg = getBackground();
-            }
-            float tint = getModel().isRollover() ? 0.30f : 0.16f;
-            g2.setColor(ThemeColors.blend(WARM, panelBg, tint));
-            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, ARC, ARC);
-            g2.setColor(ThemeColors.blend(WARM, panelBg, 0.55f));
-            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, ARC, ARC);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            AnimatedGradientPainter.paintRotatingBorder(g2, getWidth(), getHeight(), rotationAngle,
+                    STROKE_WIDTH, ARC_RADIUS, PAINT_INSET, 1f);
         } finally {
             g2.dispose();
         }
-        super.paintComponent(g);
     }
 
     /** Hand-drawn coffee cup with steam, stroked in the warm accent color. */
