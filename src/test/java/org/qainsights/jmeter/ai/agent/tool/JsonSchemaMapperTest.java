@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Unit tests for {@link JsonSchemaMapper}, shared by the Claude and OpenAI tool adapters. */
+/** Unit tests for {@link JsonSchemaMapper}, shared by the Claude, OpenAI and Google tool adapters. */
 class JsonSchemaMapperTest {
 
     private static ToolSpec spec() {

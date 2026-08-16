@@ -11,6 +11,8 @@ import java.util.function.Consumer;
 import org.apache.jmeter.gui.UndoHistory;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
+import org.qainsights.jmeter.ai.agent.google.GoogleChatModel;
+import org.qainsights.jmeter.ai.agent.google.GoogleToolAdapter;
 import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
@@ -29,16 +31,18 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import com.anthropic.client.AnthropicClient;
+import com.google.genai.Client;
 import com.openai.client.OpenAIClient;
 
 /**
  * Façade that wires the tool registry, executor, schema-grounded system prompt
- * and a provider {@link ChatModel} (Claude or OpenAI, via
+ * and a provider {@link ChatModel} (Claude, OpenAI or Google Gemini, via
  * {@link AgentChatModelFactory}) into a runnable {@link AgentLoop}. This is the
  * single entry point the chat UI calls to run an agentic request.
  */
@@ -160,6 +164,38 @@ public final class JMeterAgent {
                 specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns), reasoningSettings);
     }
 
+    /** Builds a factory that wires the Google Gemini {@link GoogleChatModel} for each run. */
+    public static AgentChatModelFactory googleFactory(GoogleChatModel.GenerateService service, String model,
+                                                      long maxTokens) {
+        return googleFactory(service, model, maxTokens, null);
+    }
+
+    /**
+     * Builds a factory that wires the Google Gemini {@link GoogleChatModel} for each run,
+     * applying the user's reasoning settings (thinking on capable Gemini models). The effort
+     * comes from {@code jmeter.ai.agent.thinking.effort} when set, otherwise from the
+     * toolbar selection - same precedence as {@link #claudeFactory}.
+     */
+    public static AgentChatModelFactory googleFactory(GoogleChatModel.GenerateService service, String model,
+                                                      long maxTokens, ReasoningSettings reasoningSettings) {
+        ReasoningSettings effectiveSettings = pinAgentEffort(reasoningSettings);
+        return (specs, systemPrompt, priorTurns) -> new GoogleChatModel(service, new GoogleToolAdapter(),
+                specs, systemPrompt, model, maxTokens, GoogleChatModel.toSeedHistory(priorTurns),
+                effectiveSettings);
+    }
+
+    /**
+     * Applies the {@code jmeter.ai.agent.thinking.effort} pin to a copy of the toolbar's
+     * reasoning settings (thinking-enabled flag untouched), for providers - Gemini - whose
+     * {@link ChatModel} takes a whole {@link ReasoningSettings} rather than a resolved
+     * budget/effort pair (contrast Claude's factory, which calls
+     * {@link #effectiveAgentEffort} directly).
+     */
+    private static ReasoningSettings pinAgentEffort(ReasoningSettings settings) {
+        boolean enabled = settings != null && settings.isThinkingEnabled();
+        return new ReasoningSettings(enabled, effectiveAgentEffort(settings));
+    }
+
     /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */
     public static boolean isEnabled() {
         return Boolean.parseBoolean(AiConfig.getProperty(ENABLED_KEY, "false"));
@@ -196,6 +232,21 @@ public final class JMeterAgent {
     }
 
     /**
+     * Wires an agent against an existing {@link GoogleAiService}'s client and model, using the
+     * same tool registry, system prompt, limits and destructive-tool confirmation as
+     * {@link #forClaude(ClaudeService)}.
+     */
+    public static JMeterAgent forGoogle(GoogleAiService google) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        Client client = google.getClient();
+        GoogleChatModel.GenerateService service = (model, contents, config) ->
+                client.models.generateContent(model, contents, config);
+        return new JMeterAgent(googleFactory(service, google.getCurrentModel(), maxTokens,
+                google.getReasoningSettings()), maxIterations, destructiveGate());
+    }
+
+    /**
      * Wires an agent for whichever provider backs {@code service}, or returns {@code null}
      * if that provider has no tool-calling adapter yet (the caller then falls back to the
      * plain, non-agentic chat path).
@@ -206,6 +257,9 @@ public final class JMeterAgent {
         }
         if (service instanceof OpenAiService) {
             return forOpenAi((OpenAiService) service);
+        }
+        if (service instanceof GoogleAiService) {
+            return forGoogle((GoogleAiService) service);
         }
         return null;
     }
@@ -232,6 +286,13 @@ public final class JMeterAgent {
             OpenAiChatModel.CompletionService completions =
                     params -> client.chat().completions().create(params);
             return openAiFactory(completions, openAi.getCurrentModel(), maxTokens, openAi.getReasoningSettings());
+        }
+        if (service instanceof GoogleAiService) {
+            GoogleAiService google = (GoogleAiService) service;
+            Client client = google.getClient();
+            GoogleChatModel.GenerateService generate = (model, contents, config) ->
+                    client.models.generateContent(model, contents, config);
+            return googleFactory(generate, google.getCurrentModel(), maxTokens, google.getReasoningSettings());
         }
         return null;
     }

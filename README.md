@@ -54,7 +54,7 @@
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan (add elements, set properties, run tests, correlate dynamic values) through 18 tools. **Claude & OpenAI.** |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan (add elements, set properties, run tests, correlate dynamic values) through 18 tools. **Claude, OpenAI & Google Gemini.** |
 | 🔧 **Model Filtering** | Only chat-compatible models appear in the dropdown, no audio/TTS clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, timeouts, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -138,7 +138,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | Property | Description | Default |
 |----------|-------------|---------|
 | `google.api.key` | Google AI API key | **Required** |
-| `google.default.model` | Default model | `gemini-2.5-flash` |
+| `google.default.model` | Default model | `gemini-3.5-flash` |
 | `google.temperature` | Temperature (0.0-1.0) | `0.7` |
 | `google.max.tokens` | Max response tokens | `4096` |
 | `google.max.history.size` | Conversation history size | `10` |
@@ -304,7 +304,7 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted — don't save cre
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done, all inside the existing chat panel.
 
-> ⚠️ **Claude & OpenAI only.** Agent Mode currently works with **Anthropic Claude** and **OpenAI** models. Gemini, DeepSeek, Ollama, Grok, and Bedrock are not supported; they fall back to plain chat. Support for additional providers is planned.
+> ⚠️ **Claude, OpenAI & Google Gemini only.** Agent Mode currently works with **Anthropic Claude**, **OpenAI**, and **Google Gemini** models. DeepSeek, Ollama, Grok, Meta Muse, and Bedrock are not supported yet; they fall back to plain chat. Support for additional providers is planned.
 
 <div align="center">
 
@@ -321,37 +321,38 @@ Agent Mode is **off by default**. To turn it on:
 jmeter.ai.agent.enabled=true
 ```
 
-Select a **Claude** or **OpenAI** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
+Select a **Claude**, **OpenAI**, or **Google Gemini** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
 
 > If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
 
-Both providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls`).
+All three providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls` vs. Gemini `functionCall`/`functionResponse` parts).
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
-> 💡 **Thinking in Agent Mode (Claude)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration — keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
+> 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration — keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
 
-### Claude vs. OpenAI: How the Adapters Differ
+### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
-Both providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical to both; only the wire format differs:
+All three providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
 
-| Aspect | Anthropic Claude (`anthropic-java`) | OpenAI (`openai-java`) |
-|--------|--------------------------------------|--------------------------|
-| Tool definition | `Tool` (native tool schema) | `ChatCompletionFunctionTool` (function-type only; non-function "custom" tool calls are ignored) |
-| System prompt | Top-level `system` string, separate from `messages` | A message inside the rolling `messages` list |
-| Message roles | `user` / `assistant` only (tool outcomes ride back as a `user` turn of `tool_result` content blocks) | `system` / `user` / `assistant` / **`tool`** |
-| Tool-call arguments | Already a `JsonValue` → converted to a `Map` directly | A JSON **string** → parsed with Jackson (tolerates malformed JSON) |
-| Tool-result error signaling | Native `is_error` boolean | No native error flag; errors are conveyed via an `ERROR [...]` prefix in the content |
-| Model-specific quirks | None needed | `reasoning_effort=none` forced for gpt-5.1+ (else tool calls 400); temperature never sent (o1/o3/o4/gpt-5 reject non-default values) |
+| Aspect | Anthropic Claude (`anthropic-java`) | OpenAI (`openai-java`) | Google Gemini (`google-genai`) |
+|--------|--------------------------------------|--------------------------|----------------------------------|
+| Tool definition | `Tool` (native tool schema) | `ChatCompletionFunctionTool` (function-type only; non-function "custom" tool calls are ignored) | `FunctionDeclaration` inside a `Tool` |
+| System prompt | Top-level `system` string, separate from `messages` | A message inside the rolling `messages` list | `systemInstruction` on the request config, separate from `contents` |
+| Message roles | `user` / `assistant` only (tool outcomes ride back as a `user` turn of `tool_result` content blocks) | `system` / `user` / `assistant` / **`tool`** | `user` / `model` only (tool outcomes ride back as a `user` turn of `functionResponse` parts) |
+| Tool-call arguments | Already a `JsonValue` → converted to a `Map` directly | A JSON **string** → parsed with Jackson (tolerates malformed JSON) | Already a `Map<String, Object>` - no parsing needed |
+| Tool-result error signaling | Native `is_error` boolean | No native error flag; errors are conveyed via an `ERROR [...]` prefix in the content | No native error flag either; the same `ERROR [...]` prefix is also placed under an `error` response key |
+| Model-specific quirks | None needed | `reasoning_effort=none` forced for gpt-5.1+ (else tool calls 400); temperature never sent (o1/o3/o4/gpt-5 reject non-default values) | JSON-Schema `type` keywords are upper-cased (`string` → `STRING`) to match Gemini's `Type` enum; `FunctionCall.id()` is rarely populated outside the Live API, so calls fall back to a positional id |
 
 ### Provider Support Roadmap
 
-Feather Wand already talks to more providers than Agent Mode currently supports; most of the gap is *wiring*, not feasibility, since several already share Claude's or OpenAI's SDK under the hood:
+Feather Wand already talks to more providers than Agent Mode currently supports; most of the remaining gap is *wiring*, not feasibility, since several already share Claude's or OpenAI's SDK under the hood:
 
 | Provider | Already in Feather Wand? | Tool-calling on the wire? | Adapter effort |
 |----------|---------------------------|----------------------------|-----------------|
 | **Anthropic Claude** | ✅ Agent Mode | Native `tool_use` | Done |
 | **OpenAI** | ✅ Agent Mode | Native `tool_calls` | Done |
+| **Google Gemini** | ✅ Agent Mode | Native `FunctionDeclaration`/`functionCall` via the official `google-genai` SDK | Done |
 | **DeepSeek** | Plain chat only | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | 🟢 Trivial (already uses `openai-java`/`anthropic-java` pointed at `api.deepseek.com`) |
 | **Grok (xAI)** | Plain chat only | Yes: OpenAI-style function tools | 🟢 Trivial (already uses `openai-java` pointed at `api.x.ai`) |
 | **Meta "Muse"** | Plain chat only | Likely yes (OpenAI-compatible endpoint) | 🟢 Trivial, pending confirmation (already uses `openai-java` pointed at `api.meta.ai`) |
@@ -360,7 +361,6 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Mistral AI** | Not yet added | Yes: native function-calling, OpenAI-similar shape | 🟢 Trivial (same pattern) |
 | **Alibaba Qwen** | Not yet added | Yes: OpenAI-compatible DashScope endpoint | 🟢 Trivial (same pattern) |
 | **Zhipu GLM** | Not yet added | Yes: OpenAI-compatible tool calling | 🟢 Trivial (same pattern) |
-| **Google Gemini** | Plain chat only | Yes: `FunctionDeclaration`/`Tool` via the official `google-genai` SDK | 🟡 Medium (new adapter mapping `ToolSpec` → `FunctionDeclaration` and function-call parts → `AssistantTurn`). **Next up.** |
 | **Ollama (local)** | Plain chat only | Yes: `ollama4j` has native `Tools.Tool` registration for tool-capable local models (Llama 3.1+, Qwen, Mistral, ...) | 🟡 Medium (new adapter; also gated by which local model is pulled) |
 | **AWS Bedrock** | Plain chat only | Yes: the `Converse`/`ConverseStream` API's `toolConfig` is provider-agnostic across every model family Bedrock hosts (Anthropic, Meta Llama, Mistral, Amazon Nova, Cohere, AI21) | 🟡 Medium, high leverage (one `BedrockToolAdapter` unlocks tool-calling for every Bedrock-hosted model at once) |
 | **Cohere (Command R+)** | Not yet added | Yes, but its own (non-OpenAI-shaped) tool-use API | 🔴 Bespoke adapter needed |
@@ -446,7 +446,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Examples
 
-Try these in the chat box with Agent Mode enabled and a Claude or OpenAI model selected:
+Try these in the chat box with Agent Mode enabled and a Claude, OpenAI or Google Gemini model selected:
 
 | Request | What the agent does |
 |---------|-------------------|
@@ -705,7 +705,7 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 - **Grok**: shows only `grok-*` chat models.
 - **AWS Bedrock**: shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
 
-Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-2.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
+Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
 ---
 

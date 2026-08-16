@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link CommandDispatcher#isAgentCapableModel(String)}.
- * Agent mode supports the two providers with tool-calling adapters - Anthropic
- * Claude (non-prefixed ids) and OpenAI ({@code openai:} prefix); everything else
- * falls back to the plain chat path.
+ * Agent mode supports the three providers with tool-calling adapters - Anthropic
+ * Claude (non-prefixed ids), OpenAI ({@code openai:} prefix) and Google Gemini
+ * ({@code google:} prefix); everything else falls back to the plain chat path.
  */
 class CommandDispatcherIsAgentCapableModelTest {
 
@@ -51,8 +51,9 @@ class CommandDispatcherIsAgentCapableModelTest {
     }
 
     @Test
-    void testGoogleModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("google:gemini-1.5"));
+    void testGoogleModel_returnsTrue() {
+        assertTrue(CommandDispatcher.isAgentCapableModel("google:gemini-2.5-flash"),
+                "Google Gemini now has a tool-calling adapter");
     }
 
     @Test

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Unit tests for {@link JMeterAgent}'s provider selection and factory validation. */
 class JMeterAgentProviderWiringTest {
 
-    /** A provider with no tool-calling adapter (e.g. Ollama, Gemini, Bedrock). */
+    /** A provider with no tool-calling adapter (e.g. Ollama, Bedrock, DeepSeek, Grok). */
     private static final class UnsupportedService implements AiService {
         @Override
         public String generateResponse(List<String> conversation) {
@@ -58,6 +58,16 @@ class JMeterAgentProviderWiringTest {
         AgentChatModelFactory factory = JMeterAgent.openAiFactory(params -> {
             throw new IllegalStateException("not called");
         }, "gpt-4o", 1024);
+
+        assertNotNull(factory.create(java.util.Collections.emptyList(), "system",
+                java.util.Collections.emptyList()));
+    }
+
+    @Test
+    void googleFactory_buildsAChatModelPerRun() {
+        AgentChatModelFactory factory = JMeterAgent.googleFactory((model, contents, config) -> {
+            throw new IllegalStateException("not called");
+        }, "gemini-2.5-flash", 1024);
 
         assertNotNull(factory.create(java.util.Collections.emptyList(), "system",
                 java.util.Collections.emptyList()));

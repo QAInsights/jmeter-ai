@@ -102,7 +102,7 @@ public class CommandDispatcher {
                 break;
         }
 
-        // Tier 2: agentic tool-calling loop (feature-flagged; Claude and OpenAI).
+        // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI and Google Gemini).
         if (JMeterAgent.isEnabled() && isAgentCapableModel(cb.getSelectedModel())) {
             handleAgentCommand(message);
             return;
@@ -445,7 +445,7 @@ public class CommandDispatcher {
                     AiService service = cb.resolveAiService(cb.getSelectedModel());
                     JMeterAgent agent = JMeterAgent.forService(service);
                     if (agent == null) {
-                        return finish("Agent mode currently supports Claude and OpenAI models only. "
+                        return finish("Agent mode currently supports Claude, OpenAI and Google Gemini models only. "
                                 + "Select one of those and retry.");
                     }
                     AgentLoop.AgentResult result;
@@ -519,11 +519,13 @@ public class CommandDispatcher {
 
     /**
      * True when the selected model routes to a provider with a tool-calling adapter,
-     * i.e. Anthropic Claude or OpenAI. Every other provider falls back to plain chat.
+     * i.e. Anthropic Claude, OpenAI or Google Gemini. Every other provider falls back
+     * to plain chat.
      */
     static boolean isAgentCapableModel(String selectedModel) {
         return isClaudeModel(selectedModel)
-                || (selectedModel != null && selectedModel.startsWith("openai:"));
+                || (selectedModel != null && selectedModel.startsWith("openai:"))
+                || (selectedModel != null && selectedModel.startsWith("google:"));
     }
 
     /** True when the selected model routes to Claude (non-prefixed model ids). */

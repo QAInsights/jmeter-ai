@@ -48,6 +48,16 @@ public class GoogleAiService implements AiService {
         this.reasoningSettings = settings;
     }
 
+    /** The reasoning settings injected via {@link #setReasoningSettings} (may be null). */
+    public ReasoningSettings getReasoningSettings() {
+        return reasoningSettings;
+    }
+
+    /** The underlying Google Gen AI client, e.g. for wiring agent mode ({@code JMeterAgent}). */
+    public Client getClient() {
+        return googleClient;
+    }
+
     @Override
     public String consumeLastReasoning() {
         String reasoning = lastReasoning;
