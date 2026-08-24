@@ -21,6 +21,7 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JDialog;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
@@ -171,7 +172,7 @@ class ModelPickerPopup extends JDialog {
         modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(modelScroll, BorderLayout.CENTER);
         if (!cliProviders.isEmpty()) {
-            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::useCustomModel),
+            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::promptForCustomModel),
                     BorderLayout.SOUTH);
         }
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
@@ -199,6 +200,25 @@ class ModelPickerPopup extends JDialog {
 
         refresh();
         selectVisible(currentModel);
+    }
+
+    /**
+     * Asks for a model id for {@code provider}. The prompt is parented on this
+     * popup's owner and the popup is hidden first: a dialog owned by the popup
+     * would be disposed together with it the moment it took focus, so the
+     * dialog would never appear.
+     */
+    private void promptForCustomModel(SubscriptionCliProvider provider) {
+        Window owner = getOwner();
+        setVisible(false);
+        String id = JOptionPane.showInputDialog(owner,
+                "Model id to send to the " + provider.displayName() + " CLI:",
+                provider.displayName() + " custom model", JOptionPane.PLAIN_MESSAGE);
+        if (id == null || id.isBlank()) {
+            dispose();
+            return;
+        }
+        useCustomModel(provider.modelPrefix() + id.trim());
     }
 
     /**

@@ -8,7 +8,6 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingWorker;
 
@@ -26,21 +25,24 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
  * <p>
  * Each row also offers "Custom model…": these CLIs expose no model list, so a
  * newly released id can be typed in here and used immediately instead of
- * editing a properties file and restarting JMeter.
+ * editing a properties file and restarting JMeter. Asking for that id is left
+ * to the owner of this panel - a dialog parented here would be owned by the
+ * picker popup, which disposes itself on focus loss and would take the prompt
+ * down with it.
  */
 class CliProviderStatusPanel extends JPanel {
 
     private final List<SubscriptionCliProvider> providers;
 
     CliProviderStatusPanel(List<SubscriptionCliProvider> providers,
-                           Consumer<String> onCustomModel) {
+                           Consumer<SubscriptionCliProvider> onCustomModelRequest) {
         super();
         this.providers = providers;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
         setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, 0, 0, 0));
         for (SubscriptionCliProvider provider : providers) {
-            add(new ProviderRow(provider, onCustomModel));
+            add(new ProviderRow(provider, onCustomModelRequest));
         }
     }
 
@@ -60,7 +62,8 @@ class CliProviderStatusPanel extends JPanel {
         private final JButton customModelButton =
                 new QuietButton("Custom model…", QuietButton.Kind.GHOST).compact();
 
-        ProviderRow(SubscriptionCliProvider provider, Consumer<String> onCustomModel) {
+        ProviderRow(SubscriptionCliProvider provider,
+                    Consumer<SubscriptionCliProvider> onCustomModelRequest) {
             // Stacked: the label line above the actions line, so a long
             // "Sign in with ..." button can never collide with the status text.
             super();
@@ -82,7 +85,7 @@ class CliProviderStatusPanel extends JPanel {
             refreshButton.addActionListener(e -> run(provider::getAuthStatus, "Checking\u2026"));
             customModelButton.setToolTipText("Use a " + provider.displayName()
                     + " model id the CLI does not advertise; remembered for next time");
-            customModelButton.addActionListener(e -> promptForCustomModel(onCustomModel));
+            customModelButton.addActionListener(e -> onCustomModelRequest.accept(provider));
             actions.add(signInButton);
             actions.add(signOutButton);
             actions.add(refreshButton);
@@ -100,20 +103,6 @@ class CliProviderStatusPanel extends JPanel {
             add(actions);
 
             run(provider::getAuthStatus, "Checking\u2026");
-        }
-
-        /**
-         * Asks for a model id and hands the prefixed selector id back to the
-         * picker, which stores it and selects it right away.
-         */
-        private void promptForCustomModel(Consumer<String> onCustomModel) {
-            String id = JOptionPane.showInputDialog(this,
-                    "Model id to send to the " + provider.displayName() + " CLI:",
-                    provider.displayName() + " custom model", JOptionPane.PLAIN_MESSAGE);
-            if (id == null || id.isBlank()) {
-                return;
-            }
-            onCustomModel.accept(provider.modelPrefix() + id.trim());
         }
 
         /** Runs a blocking CLI call off the EDT and renders the resulting state. */
