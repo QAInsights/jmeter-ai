@@ -8,6 +8,8 @@ import com.anthropic.models.models.ModelListParams;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
+import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
+import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
@@ -177,6 +179,33 @@ public class Models {
             }
         } catch (Exception e) {
             log.error("Error adding Bedrock models: {}", e.getMessage(), e);
+        }
+
+        // Add subscription CLI models (no API call: the CLI owns its model list)
+        try {
+            if (serviceHolder.getCodexService() != null
+                    && serviceHolder.getCodexService().getCodexProvider().isEnabled()
+                    && serviceHolder.getCodexService().getCodexProvider().isInstalled()) {
+                for (String modelId : serviceHolder.getCodexService().getCodexProvider().listModels()) {
+                    allModels.add(CodexCliProvider.MODEL_PREFIX + modelId);
+                }
+                log.info("Added Codex CLI models to selector");
+            }
+        } catch (Exception e) {
+            log.error("Error adding Codex CLI models: {}", e.getMessage(), e);
+        }
+
+        try {
+            if (serviceHolder.getClaudeCodeService() != null
+                    && serviceHolder.getClaudeCodeService().getClaudeCodeProvider().isEnabled()
+                    && serviceHolder.getClaudeCodeService().getClaudeCodeProvider().isInstalled()) {
+                for (String modelId : serviceHolder.getClaudeCodeService().getClaudeCodeProvider().listModels()) {
+                    allModels.add(ClaudeCodeCliProvider.MODEL_PREFIX + modelId);
+                }
+                log.info("Added Claude Code CLI models to selector");
+            }
+        } catch (Exception e) {
+            log.error("Error adding Claude Code CLI models: {}", e.getMessage(), e);
         }
 
         return allModels;

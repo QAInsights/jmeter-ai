@@ -34,6 +34,10 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
+import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
+import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
+import org.qainsights.jmeter.ai.service.CodexAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -92,6 +96,8 @@ public class AiChatPanel
     private GrokAiService grokService;
     private MetaMuseAiService metaMuseService;
     private BedrockAiService bedrockService;
+    private CodexAiService codexService;
+    private ClaudeCodeAiService claudeCodeService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private JPanel headerPanel;
@@ -158,6 +164,8 @@ public class AiChatPanel
         grokService = new GrokAiService();
         metaMuseService = new MetaMuseAiService();
         bedrockService = new BedrockAiService();
+        codexService = new CodexAiService();
+        claudeCodeService = new ClaudeCodeAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
@@ -205,6 +213,7 @@ public class AiChatPanel
         modelSelectorPanel = new ModelSelectorPanel(
                 ModelSelectorPreferences.load(), ModelCapabilityCatalog.getInstance());
         modelSelectorPanel.setSelectionListener(this::onModelSelected);
+        modelSelectorPanel.setCliProviders(enabledCliProviders());
         loadModelsInBackground();
         add(createChatPanel(largerFont), BorderLayout.CENTER);
         add(createBottomPanel(largerFont), BorderLayout.SOUTH);
@@ -772,6 +781,8 @@ public class AiChatPanel
         holder.setGrokService(grokService);
         holder.setMetaMuseService(metaMuseService);
         holder.setBedrockService(bedrockService);
+        holder.setCodexService(codexService);
+        holder.setClaudeCodeService(claudeCodeService);
         return holder;
     }
 
@@ -804,6 +815,20 @@ public class AiChatPanel
             }
         }
             .execute();
+    }
+
+    /**
+     * The subscription CLI providers offered in the model picker footer. A
+     * provider that is switched off in the properties is hidden entirely.
+     */
+    private List<SubscriptionCliProvider> enabledCliProviders() {
+        List<SubscriptionCliProvider> providers = new ArrayList<>();
+        for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService)) {
+            if (service.getProvider().isEnabled()) {
+                providers.add(service.getProvider());
+            }
+        }
+        return providers;
     }
 
     /**

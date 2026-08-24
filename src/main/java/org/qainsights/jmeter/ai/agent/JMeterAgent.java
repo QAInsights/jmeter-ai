@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 import org.apache.jmeter.gui.UndoHistory;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
+import org.qainsights.jmeter.ai.agent.cli.CliAgentChatModel;
 import org.qainsights.jmeter.ai.agent.google.GoogleChatModel;
 import org.qainsights.jmeter.ai.agent.google.GoogleToolAdapter;
 import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
@@ -29,8 +30,10 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
@@ -42,8 +45,8 @@ import com.openai.client.OpenAIClient;
 
 /**
  * Façade that wires the tool registry, executor, schema-grounded system prompt
- * and a provider {@link ChatModel} (Claude, OpenAI or Google Gemini, via
- * {@link AgentChatModelFactory}) into a runnable {@link AgentLoop}. This is the
+ * and a provider {@link ChatModel} (Claude, OpenAI, Google Gemini or a
+ * subscription CLI, via {@link AgentChatModelFactory}) into a runnable {@link AgentLoop}. This is the
  * single entry point the chat UI calls to run an agentic request.
  */
 public final class JMeterAgent {
@@ -196,6 +199,17 @@ public final class JMeterAgent {
         return new ReasoningSettings(enabled, effectiveAgentEffort(settings));
     }
 
+    /**
+     * Builds a factory that wires a CLI-backed {@link CliAgentChatModel} (Codex,
+     * Claude Code) for each run. Those CLIs have no tool-calling API, so tools
+     * travel in the prompt via {@link org.qainsights.jmeter.ai.agent.cli.CliToolProtocol};
+     * reasoning settings do not apply - the CLI owns its own thinking budget.
+     */
+    public static AgentChatModelFactory cliFactory(SubscriptionCliProvider provider) {
+        return (specs, systemPrompt, priorTurns) ->
+                new CliAgentChatModel(provider, specs, systemPrompt, priorTurns);
+    }
+
     /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */
     public static boolean isEnabled() {
         return Boolean.parseBoolean(AiConfig.getProperty(ENABLED_KEY, "false"));
@@ -261,7 +275,20 @@ public final class JMeterAgent {
         if (service instanceof GoogleAiService) {
             return forGoogle((GoogleAiService) service);
         }
+        if (service instanceof CliSubscriptionAiService) {
+            return forCli((CliSubscriptionAiService) service);
+        }
         return null;
+    }
+
+    /**
+     * Wires an agent against a CLI-backed provider (Codex, Claude Code), reusing the
+     * same tool registry, system prompt, limits and destructive-tool confirmation as
+     * {@link #forClaude(ClaudeService)}.
+     */
+    public static JMeterAgent forCli(CliSubscriptionAiService service) {
+        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        return new JMeterAgent(cliFactory(service.getProvider()), maxIterations, destructiveGate());
     }
 
     /**
@@ -293,6 +320,9 @@ public final class JMeterAgent {
             GoogleChatModel.GenerateService generate = (model, contents, config) ->
                     client.models.generateContent(model, contents, config);
             return googleFactory(generate, google.getCurrentModel(), maxTokens, google.getReasoningSettings());
+        }
+        if (service instanceof CliSubscriptionAiService) {
+            return cliFactory(((CliSubscriptionAiService) service).getProvider());
         }
         return null;
     }

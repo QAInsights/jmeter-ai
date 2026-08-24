@@ -10,6 +10,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
@@ -36,6 +37,7 @@ class ModelSelectorPanel extends JPanel {
     private final ModelSelectorPreferences prefs;
     private final ModelCapabilityCatalog catalog;
     private List<String> allModels = List.of();
+    private List<SubscriptionCliProvider> cliProviders = List.of();
     private Consumer<String> selectionListener = model -> { };
     private String currentModel;
 
@@ -71,6 +73,14 @@ class ModelSelectorPanel extends JPanel {
         prefs.addChangeListener(this::syncStar);
 
         add(selectorButton, BorderLayout.CENTER);
+    }
+
+    /**
+     * Registers the subscription CLI providers (Codex, Claude Code) whose sign-in
+     * state and actions are shown in the picker's footer.
+     */
+    void setCliProviders(List<SubscriptionCliProvider> providers) {
+        this.cliProviders = providers == null ? List.of() : List.copyOf(providers);
     }
 
     /** Registers the callback fired with the prefixed id whenever the effective model changes. */
@@ -149,11 +159,12 @@ class ModelSelectorPanel extends JPanel {
     }
 
     private void openPopup() {
-        if (allModels.isEmpty()) {
+        if (allModels.isEmpty() && cliProviders.isEmpty()) {
             return;
         }
         java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
-        ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog);
+        ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog,
+                cliProviders);
         popup.showFor(selectorButton, this::select);
     }
 

@@ -29,6 +29,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -70,6 +71,17 @@ class ModelPickerPopup extends JDialog {
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
+        this(owner, models, currentModel, prefs, catalog, List.of());
+    }
+
+    /**
+     * @param cliProviders subscription CLI providers (Codex, Claude Code) whose
+     *                     sign-in state and actions are shown in the footer;
+     *                     empty hides the footer entirely
+     */
+    ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
+                     ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
+                     List<SubscriptionCliProvider> cliProviders) {
         super(owner); // owned, so it stays out of the taskbar and shares the owner's focus cycle
         setUndecorated(true);
         setFocusableWindowState(true);
@@ -157,6 +169,9 @@ class ModelPickerPopup extends JDialog {
         modelScroll.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
         modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(modelScroll, BorderLayout.CENTER);
+        if (!cliProviders.isEmpty()) {
+            getContentPane().add(new CliProviderStatusPanel(cliProviders), BorderLayout.SOUTH);
+        }
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(ThemeColors.separator()),
                 BorderFactory.createEmptyBorder(

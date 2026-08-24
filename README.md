@@ -28,6 +28,7 @@
 - [Features](#-features)
 - [Installation](#-installation)
 - [Configuration](#-configuration)
+- [ChatGPT / Codex & Claude Code subscriptions](#-using-feather-wand-with-chatgpt--codex)
 - [Special Commands](#-special-commands)
 - [Agent Mode](#-agent-mode)
 - [Streaming](#-streaming-ai-responses)
@@ -129,6 +130,39 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `openai.max.history.size` | Conversation history size | `10` |
 | `openai.system.prompt` | System prompt | See sample file |
 | `openai.log.level` | Logging (`INFO`/`DEBUG`) | *(empty)* |
+
+</details>
+
+<details>
+<summary><b>ChatGPT / Codex (subscription, no API key)</b></summary>
+
+Uses your local [Codex CLI](https://github.com/openai/codex) login instead of `openai.api.key`. See [Using Feather Wand with ChatGPT / Codex](#-using-feather-wand-with-chatgpt--codex).
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.codex.enabled` | Show `ChatGPT / Codex` in the model picker | `false` |
+| `jmeter.ai.codex.executable` | Full path to the `codex` binary | *(PATH auto-detect)* |
+| `jmeter.ai.codex.timeout.seconds` | Timeout for one prompt | `120` |
+| `jmeter.ai.codex.login.timeout.seconds` | Timeout for the browser login flow | `300` |
+| `jmeter.ai.codex.models` | Comma-separated model ids offered in the picker | *(empty = CLI default)* |
+| `jmeter.ai.codex.sandbox` | Sandbox mode passed to `codex exec` | `read-only` |
+
+</details>
+
+<details>
+<summary><b>Claude Code (subscription, no API key)</b></summary>
+
+Uses your local [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) login instead of `anthropic.api.key`. See [Using Feather Wand with Claude Code](#-using-feather-wand-with-claude-code).
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.claudecode.provider.enabled` | Show `Claude Code` in the model picker | `false` |
+| `jmeter.ai.claudecode.executable` | Full path to the `claude` binary | *(PATH auto-detect)* |
+| `jmeter.ai.claudecode.timeout.seconds` | Timeout for one prompt | `120` |
+| `jmeter.ai.claudecode.login.timeout.seconds` | Timeout for the browser login flow | `300` |
+| `jmeter.ai.claudecode.models` | Comma-separated model ids offered in the picker | *(empty = CLI default)* |
+
+> These are **not** the `jmeter.ai.terminal.*` properties, which only control the embedded CLI terminal tab.
 
 </details>
 
@@ -267,6 +301,40 @@ The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk
 
 Each service supports its own `*.system.prompt` property; tweak them in your properties file to focus the AI on specific JMeter topics or team conventions.
 
+## 🔐 Using Feather Wand with ChatGPT / Codex
+
+Feather Wand can talk to OpenAI through **your own ChatGPT subscription** by driving the locally installed Codex CLI — no `openai.api.key` needed.
+
+1. Install the CLI: `npm install -g @openai/codex` (see the [Codex repo](https://github.com/openai/codex)).
+2. Add `jmeter.ai.codex.enabled=true` to `user.properties` and restart JMeter.
+3. Open the model picker in the Feather Wand chat panel. The footer shows a **ChatGPT / Codex** row with its status.
+4. Click **Sign in with ChatGPT** (or run `codex login` yourself) and finish the login in the browser Codex opens. Feather Wand never shows a ChatGPT login form and never touches `~/.codex/auth.json` or any token.
+5. Pick **ChatGPT / Codex** as the model. Prompts run through `codex exec` under the session the CLI manages; **Sign out** and **Refresh** are next to the status.
+
+Statuses you may see: `✓ Signed in`, `Signed in using API key`, `Not signed in`, `Codex CLI not installed`, `Unable to determine status`. When the CLI is missing, the row shows install guidance — Feather Wand never installs software for you.
+
+## 🔐 Using Feather Wand with Claude Code
+
+The same flow works for a **Claude Pro/Max subscription** via the Claude Code CLI, with no `anthropic.api.key`.
+
+1. Install the CLI: `npm install -g @anthropic-ai/claude-code` (see the [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code)).
+2. Add `jmeter.ai.claudecode.provider.enabled=true` to `user.properties` and restart JMeter.
+3. In the model picker footer, click **Sign in with Claude** (or run `claude auth login --claudeai`) and finish the browser login.
+4. Pick **Claude Code** as the model. Prompts run through `claude -p` using the CLI's own session.
+
+### Provider modes are separate
+
+| Mode | Credential | Billing |
+|------|------------|---------|
+| **OpenAI API** (`openai:*`) | `openai.api.key` | OpenAI API usage |
+| **ChatGPT / Codex** (`codex:*`) | Session managed by the Codex CLI | Your ChatGPT subscription |
+| **Anthropic API** (Claude models) | `anthropic.api.key` | Anthropic API usage |
+| **Claude Code** (`claude-code:*`) | Session managed by the Claude Code CLI | Your Claude subscription |
+
+Selecting a subscription provider never reads, rewrites, or removes your API keys, and switching back to an API provider behaves exactly as before. Agent Mode works with both CLI providers: because the CLIs expose no native tool-calling API, tools are driven through a JSON protocol in the prompt, and a reply that ignores the protocol is treated as the final answer instead of failing the run.
+
+> **Terms of use**: these modes require *your own* Codex / Claude Code CLI login on your own machine, and your use remains subject to OpenAI's and Anthropic's terms for the subscription you sign in with. Don't use Feather Wand to share one subscription across users or to work around provider limits. Both providers are opt-in and disabled by default.
+
 ## 🔍 Special Commands
 
 Type any of these directly in the chat box. All commands are context-aware and work with the currently selected test-plan element.
@@ -353,6 +421,8 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Anthropic Claude** | ✅ Agent Mode | Native `tool_use` | Done |
 | **OpenAI** | ✅ Agent Mode | Native `tool_calls` | Done |
 | **Google Gemini** | ✅ Agent Mode | Native `FunctionDeclaration`/`functionCall` via the official `google-genai` SDK | Done |
+| **ChatGPT / Codex CLI** | ✅ Agent Mode | No native tool API; driven through a JSON tool protocol in the prompt over `codex exec` | Done |
+| **Claude Code CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `claude -p` | Done |
 | **DeepSeek** | Plain chat only | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | 🟢 Trivial (already uses `openai-java`/`anthropic-java` pointed at `api.deepseek.com`) |
 | **Grok (xAI)** | Plain chat only | Yes: OpenAI-style function tools | 🟢 Trivial (already uses `openai-java` pointed at `api.x.ai`) |
 | **Meta "Muse"** | Plain chat only | Likely yes (OpenAI-compatible endpoint) | 🟢 Trivial, pending confirmation (already uses `openai-java` pointed at `api.meta.ai`) |

@@ -1,8 +1,14 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
+import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
+import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
+import org.qainsights.jmeter.ai.service.CodexAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
@@ -31,6 +37,8 @@ public class AiResponseRouter {
     private final GrokAiService grokService;
     private final MetaMuseAiService metaMuseService;
     private final BedrockAiService bedrockService;
+    private final CodexAiService codexService;
+    private final ClaudeCodeAiService claudeCodeService;
     private org.qainsights.jmeter.ai.service.attach.AttachmentRegistry attachmentRegistry;
 
     public AiResponseRouter(AiServiceHolder serviceHolder) {
@@ -42,6 +50,8 @@ public class AiResponseRouter {
         this.grokService = serviceHolder.getGrokService();
         this.metaMuseService = serviceHolder.getMetaMuseService();
         this.bedrockService = serviceHolder.getBedrockService();
+        this.codexService = serviceHolder.getCodexService();
+        this.claudeCodeService = serviceHolder.getClaudeCodeService();
     }
 
     /**
@@ -125,6 +135,14 @@ public class AiResponseRouter {
             return "Error: Bedrock service not configured. Set bedrock.api.key or "
                     + "bedrock.aws.access.key and bedrock.aws.secret.key in user.properties "
                     + "(or jmeter.properties) and restart JMeter.";
+        } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
+            String codexModelId = selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length());
+            log.info("Using Codex CLI model: {}", codexModelId);
+            return generateWithCli(codexService, codexModelId, conversationHistory, "ChatGPT / Codex");
+        } else if (selectedModel.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)) {
+            String claudeCodeModelId = selectedModel.substring(ClaudeCodeCliProvider.MODEL_PREFIX.length());
+            log.info("Using Claude Code CLI model: {}", claudeCodeModelId);
+            return generateWithCli(claudeCodeService, claudeCodeModelId, conversationHistory, "Claude Code");
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -199,6 +217,18 @@ public class AiResponseRouter {
                 return bedrockService.generateStreamResponse(conversationHistory, bedrockModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
+        } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
+            String codexModelId = selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length());
+            if (codexService != null) {
+                return codexService.generateStreamResponse(conversationHistory, codexModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
+            }
+            return () -> {};
+        } else if (selectedModel.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)) {
+            String claudeCodeModelId = selectedModel.substring(ClaudeCodeCliProvider.MODEL_PREFIX.length());
+            if (claudeCodeService != null) {
+                return claudeCodeService.generateStreamResponse(conversationHistory, claudeCodeModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, reasoningConsumer, onComplete, onError);
@@ -210,6 +240,23 @@ public class AiResponseRouter {
      * missing API key). Points at {@code user.properties} first, the usual place
      * testers edit, and mentions restart so the service can pick the key up.
      */
+    /**
+     * Runs a CLI-backed provider, turning its user-facing failures (CLI missing,
+     * not signed in, timeout) into chat text instead of a stack trace.
+     */
+    private String generateWithCli(CliSubscriptionAiService service, String modelId,
+                                   List<String> conversationHistory, String providerDisplayName) {
+        if (service == null) {
+            return "Error: " + providerDisplayName + " is not available in this session.";
+        }
+        try {
+            return service.generateResponse(conversationHistory, modelId);
+        } catch (CliProviderException e) {
+            log.warn("{} request failed: {}", providerDisplayName, e.getMessage());
+            return "Error: " + e.getMessage();
+        }
+    }
+
     static String notConfiguredMessage(String providerDisplayName, String propertyKey) {
         return "Error: " + providerDisplayName + " service not configured. Set "
                 + propertyKey + " in user.properties (or jmeter.properties) and restart JMeter.";
@@ -261,6 +308,16 @@ public class AiResponseRouter {
                 bedrockService.setModel(bedrockModelId);
             }
             return bedrockService;
+        } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
+            if (codexService != null) {
+                codexService.setModel(selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length()));
+            }
+            return codexService;
+        } else if (selectedModel.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)) {
+            if (claudeCodeService != null) {
+                claudeCodeService.setModel(selectedModel.substring(ClaudeCodeCliProvider.MODEL_PREFIX.length()));
+            }
+            return claudeCodeService;
         } else {
             claudeService.setModel(selectedModel);
             return claudeService;
