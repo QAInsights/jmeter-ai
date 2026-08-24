@@ -1,6 +1,5 @@
 package org.qainsights.jmeter.ai.gui;
 
-import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.util.List;
 import javax.swing.BorderFactory;
@@ -53,7 +52,10 @@ class CliProviderStatusPanel extends JPanel {
         private final JButton refreshButton = new QuietButton("Refresh", QuietButton.Kind.GHOST).compact();
 
         ProviderRow(SubscriptionCliProvider provider) {
-            super(new BorderLayout(UiTokens.SPACE_2, 0));
+            // Stacked: the label line above the actions line, so a long
+            // "Sign in with ..." button can never collide with the status text.
+            super();
+            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
             this.provider = provider;
             this.signInButton = new QuietButton(provider.signInActionLabel(),
                     QuietButton.Kind.OUTLINED).compact();
@@ -62,7 +64,7 @@ class CliProviderStatusPanel extends JPanel {
             JLabel name = new JLabel(provider.displayName());
             statusLabel.setForeground(ThemeColors.secondaryText());
 
-            JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
+            JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
             actions.setOpaque(false);
             signInButton.setToolTipText("Runs the " + provider.displayName()
                     + " CLI login in your browser; Feather Wand never sees your credentials");
@@ -79,8 +81,10 @@ class CliProviderStatusPanel extends JPanel {
             left.add(Box.createHorizontalStrut(UiTokens.SPACE_1));
             left.add(statusLabel);
 
-            add(left, BorderLayout.WEST);
-            add(actions, BorderLayout.EAST);
+            left.setAlignmentX(LEFT_ALIGNMENT);
+            actions.setAlignmentX(LEFT_ALIGNMENT);
+            add(left);
+            add(actions);
 
             run(provider::getAuthStatus, "Checking\u2026");
         }

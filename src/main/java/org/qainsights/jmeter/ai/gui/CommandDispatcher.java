@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -465,6 +466,12 @@ public class CommandDispatcher {
                                 + "[Agent stopped after reaching the step limit.]";
                     }
                     return finish(summary.isEmpty() ? "Done." : summary);
+                } catch (CliProviderException cliError) {
+                    // The provider itself is unusable (CLI missing, not signed in,
+                    // timed out): retrying as plain chat would just pay for the same
+                    // failure twice, so surface the message the provider wrote.
+                    log.warn("Agent run aborted: {}", cliError.getMessage());
+                    return finish("Error: " + cliError.getMessage());
                 } catch (RuntimeException agentError) {
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
                     publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
