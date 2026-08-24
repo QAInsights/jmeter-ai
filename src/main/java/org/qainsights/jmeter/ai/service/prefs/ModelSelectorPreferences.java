@@ -47,6 +47,7 @@ public final class ModelSelectorPreferences {
     private final Path path;
     private final List<String> pinned = new ArrayList<>();
     private final List<String> recents = new ArrayList<>();
+    private final List<String> customModels = new ArrayList<>();
     private final List<Runnable> changeListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private ModelSelectorPreferences(Path path) {
@@ -80,6 +81,7 @@ public final class ModelSelectorPreferences {
             JsonNode root = MAPPER.readTree(path.toFile());
             readIds(root.path("pinned"), prefs.pinned);
             readIds(root.path("recents"), prefs.recents);
+            readIds(root.path("customModels"), prefs.customModels);
             trimRecents(prefs.recents);
         } catch (Exception e) {
             log.warn("Could not read model selector preferences at {} - starting fresh", path);
@@ -104,6 +106,32 @@ public final class ModelSelectorPreferences {
     /** Recently used model ids, most-recent first (capped at {@link #MAX_RECENTS}). */
     public synchronized List<String> recents() {
         return Collections.unmodifiableList(new ArrayList<>(recents));
+    }
+
+    /**
+     * Model ids the user typed in themselves, in the order they were added.
+     * Only the subscription CLI providers need these: their CLIs expose no
+     * model list, so a new id would otherwise mean editing a properties file
+     * and restarting JMeter.
+     */
+    public synchronized List<String> customModels() {
+        return Collections.unmodifiableList(new ArrayList<>(customModels));
+    }
+
+    /** Remembers a user-entered model id (no-op when already known). Persists immediately. */
+    public synchronized void addCustomModel(String modelId) {
+        if (modelId == null || modelId.isBlank() || customModels.contains(modelId)) {
+            return;
+        }
+        customModels.add(modelId);
+        save();
+    }
+
+    /** Forgets a user-entered model id. Persists immediately. */
+    public synchronized void removeCustomModel(String modelId) {
+        if (customModels.remove(modelId)) {
+            save();
+        }
     }
 
     public synchronized boolean isPinned(String modelId) {
@@ -152,6 +180,8 @@ public final class ModelSelectorPreferences {
             pinned.forEach(pinnedNode::add);
             ArrayNode recentsNode = root.putArray("recents");
             recents.forEach(recentsNode::add);
+            ArrayNode customNode = root.putArray("customModels");
+            customModels.forEach(customNode::add);
             Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
             MAPPER.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), root);
             Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

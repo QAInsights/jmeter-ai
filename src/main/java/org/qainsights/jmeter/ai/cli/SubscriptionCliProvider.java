@@ -44,6 +44,9 @@ public interface SubscriptionCliProvider {
     /** Label for the sign-in action, e.g. {@code "Sign in with ChatGPT"}. */
     String signInActionLabel();
 
+    /** Selector-id prefix identifying this provider, e.g. {@code "codex:"}. */
+    String modelPrefix();
+
     /** The model id the provider sends to the CLI, or empty for the CLI's own default. */
     String getModel();
 

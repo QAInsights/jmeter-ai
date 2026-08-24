@@ -82,6 +82,11 @@ public final class CodexCliProvider implements CodexProvider {
     }
 
     @Override
+    public String modelPrefix() {
+        return MODEL_PREFIX;
+    }
+
+    @Override
     public String getModel() {
         return model;
     }

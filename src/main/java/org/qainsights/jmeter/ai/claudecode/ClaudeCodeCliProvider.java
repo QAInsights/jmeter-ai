@@ -78,6 +78,11 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
     }
 
     @Override
+    public String modelPrefix() {
+        return MODEL_PREFIX;
+    }
+
+    @Override
     public String getModel() {
         return model;
     }

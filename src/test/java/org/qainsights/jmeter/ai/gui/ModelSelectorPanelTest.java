@@ -52,6 +52,70 @@ class ModelSelectorPanelTest {
         return panel.favoriteButton();
     }
 
+    /** Minimal provider: only its selector prefix matters to the panel. */
+    private record FakeCliProvider(String prefix)
+            implements org.qainsights.jmeter.ai.cli.SubscriptionCliProvider {
+
+        @Override
+        public String displayName() {
+            return "Fake CLI";
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return true;
+        }
+
+        @Override
+        public boolean isInstalled() {
+            return true;
+        }
+
+        @Override
+        public org.qainsights.jmeter.ai.cli.CliAuthState getAuthStatus() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public org.qainsights.jmeter.ai.cli.CliAuthState login() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public org.qainsights.jmeter.ai.cli.CliAuthState logout() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String execute(String prompt) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String installHint() {
+            return "install it";
+        }
+
+        @Override
+        public String signInActionLabel() {
+            return "Sign in";
+        }
+
+        @Override
+        public String modelPrefix() {
+            return prefix;
+        }
+
+        @Override
+        public String getModel() {
+            return "";
+        }
+
+        @Override
+        public void setModel(String model) {
+        }
+    }
+
     @Test
     void setModelsAppliesDefaultAndFiresListenerWithoutDirtyingRecents() {
         ModelSelectorPreferences prefs = prefs();
@@ -163,6 +227,38 @@ class ModelSelectorPanelTest {
         assertEquals(280, selector.getWidth());
         assertEquals("gemini-2.5-pro", selector.getText());
         assertEquals(QuietButton.Kind.OUTLINED, selector.kind());
+    }
+
+    @Test
+    void remembersCustomCliModelsForRegisteredProvidersOnly() {
+        ModelSelectorPreferences prefs = prefs();
+        prefs.addCustomModel("codex:gpt-5.6-sol");
+        prefs.addCustomModel("claude-code:opus-4.6"); // provider not registered
+        ModelSelectorPanel panel = panel(prefs);
+        panel.setCliProviders(List.of(new FakeCliProvider("codex:")));
+
+        List<String> selections = new ArrayList<>();
+        panel.setSelectionListener(selections::add);
+        panel.setModels(MODELS, "claude-opus-4-8");
+
+        panel.applyIfAvailable("codex:gpt-5.6-sol");
+        assertEquals("codex:gpt-5.6-sol", panel.getSelectedModel());
+
+        panel.applyIfAvailable("claude-code:opus-4.6");
+        assertEquals("codex:gpt-5.6-sol", panel.getSelectedModel());
+    }
+
+    @Test
+    void selectingAFreshlyTypedModelKeepsItAvailable() {
+        ModelSelectorPanel panel = panel(prefs());
+        panel.setModels(MODELS, "claude-opus-4-8");
+
+        panel.select("codex:gpt-5.6-terra");
+        assertEquals("codex:gpt-5.6-terra", panel.getSelectedModel());
+
+        panel.applyIfAvailable("claude-opus-4-8");
+        panel.applyIfAvailable("codex:gpt-5.6-terra");
+        assertEquals("codex:gpt-5.6-terra", panel.getSelectedModel());
     }
 
     @Test

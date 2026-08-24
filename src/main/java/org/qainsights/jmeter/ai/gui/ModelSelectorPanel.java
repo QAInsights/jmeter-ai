@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -36,7 +37,7 @@ class ModelSelectorPanel extends JPanel {
     private final JToggleButton starButton;
     private final ModelSelectorPreferences prefs;
     private final ModelCapabilityCatalog catalog;
-    private List<String> allModels = List.of();
+    private List<String> allModels = new ArrayList<>();
     private List<SubscriptionCliProvider> cliProviders = List.of();
     private Consumer<String> selectionListener = model -> { };
     private String currentModel;
@@ -109,7 +110,12 @@ class ModelSelectorPanel extends JPanel {
      * the recents history.
      */
     void setModels(List<String> models, String defaultModel) {
-        allModels = List.copyOf(models);
+        allModels = new ArrayList<>(models);
+        for (String custom : customCliModels()) {
+            if (!allModels.contains(custom)) {
+                allModels.add(custom);
+            }
+        }
         selectorButton.setEnabled(!allModels.isEmpty());
         String toSelect = defaultModel != null && allModels.contains(defaultModel)
                 ? defaultModel
@@ -150,8 +156,28 @@ class ModelSelectorPanel extends JPanel {
      */
     void select(String model) {
         log.info("Selected model: {}", model);
+        if (!allModels.contains(model)) {
+            allModels.add(model); // a model id just typed into the picker footer
+        }
         applyModel(model);
         prefs.recordUse(model);
+    }
+
+    /**
+     * User-entered ids belonging to a registered CLI provider. Those CLIs
+     * publish no model list, so remembered ids are the only way a new model
+     * shows up in the picker without a properties edit and restart.
+     */
+    private List<String> customCliModels() {
+        List<String> custom = new ArrayList<>();
+        for (String id : prefs.customModels()) {
+            for (SubscriptionCliProvider provider : cliProviders) {
+                if (id.startsWith(provider.modelPrefix()) && !custom.contains(id)) {
+                    custom.add(id);
+                }
+            }
+        }
+        return custom;
     }
 
     private void syncStar() {

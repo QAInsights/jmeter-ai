@@ -331,6 +331,10 @@ The same flow works for a **Claude Pro/Max subscription** via the Claude Code CL
 | **Anthropic API** (Claude models) | `anthropic.api.key` | Anthropic API usage |
 | **Claude Code** (`claude-code:*`) | Session managed by the Claude Code CLI | Your Claude subscription |
 
+### Picking a subscription model
+
+The CLIs publish no model list, so the picker offers `codex:default` / `claude-code:default` (let the CLI decide) plus anything in `jmeter.ai.codex.models` / `jmeter.ai.claudecode.models`. For an id that isn't listed, click **Custom model…** in the picker footer, type the raw id (e.g. `gpt-5.6-sol`) and it is used immediately — no properties edit, no restart — and remembered for future sessions. The raw id is passed as `--model` to the CLI, so an id your plan can't use comes back as a CLI error rather than a silent fallback. API-key providers keep listing their models from the vendor API.
+
 Selecting a subscription provider never reads, rewrites, or removes your API keys, and switching back to an API provider behaves exactly as before. Agent Mode works with both CLI providers: because the CLIs expose no native tool-calling API, tools are driven through a JSON protocol in the prompt, and a reply that ignores the protocol is treated as the final answer instead of failing the run.
 
 > **Terms of use**: these modes require *your own* Codex / Claude Code CLI login on your own machine, and your use remains subject to OpenAI's and Anthropic's terms for the subscription you sign in with. Don't use Feather Wand to share one subscription across users or to work around provider limits. Both providers are opt-in and disabled by default.

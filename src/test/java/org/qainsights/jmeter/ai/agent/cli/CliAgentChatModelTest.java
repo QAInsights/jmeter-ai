@@ -144,6 +144,11 @@ class CliAgentChatModelTest {
         }
 
         @Override
+        public String modelPrefix() {
+            return "fake:";
+        }
+
+        @Override
         public String getModel() {
             return "";
         }

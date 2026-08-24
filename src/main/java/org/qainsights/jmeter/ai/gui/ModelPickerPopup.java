@@ -60,6 +60,7 @@ class ModelPickerPopup extends JDialog {
     static final int HEIGHT = 360;
 
     private final List<String> allModels;
+    private String pendingCustomModel;
     private final ModelSelectorPreferences prefs;
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> modelList;
@@ -85,7 +86,7 @@ class ModelPickerPopup extends JDialog {
         super(owner); // owned, so it stays out of the taskbar and shares the owner's focus cycle
         setUndecorated(true);
         setFocusableWindowState(true);
-        this.allModels = List.copyOf(models);
+        this.allModels = new ArrayList<>(models);
         this.prefs = prefs;
 
         filterField = new JTextField();
@@ -170,7 +171,8 @@ class ModelPickerPopup extends JDialog {
         modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(modelScroll, BorderLayout.CENTER);
         if (!cliProviders.isEmpty()) {
-            getContentPane().add(new CliProviderStatusPanel(cliProviders), BorderLayout.SOUTH);
+            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::useCustomModel),
+                    BorderLayout.SOUTH);
         }
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(ThemeColors.separator()),
@@ -197,6 +199,28 @@ class ModelPickerPopup extends JDialog {
 
         refresh();
         selectVisible(currentModel);
+    }
+
+    /**
+     * Adopts a model id typed into the footer: it is remembered in the
+     * preferences (so it survives restarts and shows up in the list next time)
+     * and selected straight away.
+     */
+    void useCustomModel(String modelId) {
+        prefs.addCustomModel(modelId);
+        if (!allModels.contains(modelId)) {
+            allModels.add(modelId);
+        }
+        pendingCustomModel = modelId;
+        filterField.setText("");
+        refresh();
+        selectVisible(modelId);
+        confirm();
+    }
+
+    /** The id adopted by the last "Custom model…" action (visible for tests). */
+    String lastCustomModel() {
+        return pendingCustomModel;
     }
 
     /**

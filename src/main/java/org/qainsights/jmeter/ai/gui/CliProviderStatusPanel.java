@@ -2,11 +2,13 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.FlowLayout;
 import java.util.List;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingWorker;
 
@@ -21,19 +23,24 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
  * CLI call runs in a {@link SwingWorker}, so neither status checks nor the
  * browser login flow block the EDT. Sign-in always ends by re-reading the state
  * from the CLI rather than trusting the exit code.
+ * <p>
+ * Each row also offers "Custom model…": these CLIs expose no model list, so a
+ * newly released id can be typed in here and used immediately instead of
+ * editing a properties file and restarting JMeter.
  */
 class CliProviderStatusPanel extends JPanel {
 
     private final List<SubscriptionCliProvider> providers;
 
-    CliProviderStatusPanel(List<SubscriptionCliProvider> providers) {
+    CliProviderStatusPanel(List<SubscriptionCliProvider> providers,
+                           Consumer<String> onCustomModel) {
         super();
         this.providers = providers;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
         setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, 0, 0, 0));
         for (SubscriptionCliProvider provider : providers) {
-            add(new ProviderRow(provider));
+            add(new ProviderRow(provider, onCustomModel));
         }
     }
 
@@ -50,8 +57,10 @@ class CliProviderStatusPanel extends JPanel {
         private final JButton signInButton;
         private final JButton signOutButton = new QuietButton("Sign out", QuietButton.Kind.GHOST).compact();
         private final JButton refreshButton = new QuietButton("Refresh", QuietButton.Kind.GHOST).compact();
+        private final JButton customModelButton =
+                new QuietButton("Custom model…", QuietButton.Kind.GHOST).compact();
 
-        ProviderRow(SubscriptionCliProvider provider) {
+        ProviderRow(SubscriptionCliProvider provider, Consumer<String> onCustomModel) {
             // Stacked: the label line above the actions line, so a long
             // "Sign in with ..." button can never collide with the status text.
             super();
@@ -71,9 +80,13 @@ class CliProviderStatusPanel extends JPanel {
             signInButton.addActionListener(e -> run(provider::login, "Signing in\u2026"));
             signOutButton.addActionListener(e -> run(provider::logout, "Signing out\u2026"));
             refreshButton.addActionListener(e -> run(provider::getAuthStatus, "Checking\u2026"));
+            customModelButton.setToolTipText("Use a " + provider.displayName()
+                    + " model id the CLI does not advertise; remembered for next time");
+            customModelButton.addActionListener(e -> promptForCustomModel(onCustomModel));
             actions.add(signInButton);
             actions.add(signOutButton);
             actions.add(refreshButton);
+            actions.add(customModelButton);
 
             JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_2, 0));
             left.setOpaque(false);
@@ -87,6 +100,20 @@ class CliProviderStatusPanel extends JPanel {
             add(actions);
 
             run(provider::getAuthStatus, "Checking\u2026");
+        }
+
+        /**
+         * Asks for a model id and hands the prefixed selector id back to the
+         * picker, which stores it and selects it right away.
+         */
+        private void promptForCustomModel(Consumer<String> onCustomModel) {
+            String id = JOptionPane.showInputDialog(this,
+                    "Model id to send to the " + provider.displayName() + " CLI:",
+                    provider.displayName() + " custom model", JOptionPane.PLAIN_MESSAGE);
+            if (id == null || id.isBlank()) {
+                return;
+            }
+            onCustomModel.accept(provider.modelPrefix() + id.trim());
         }
 
         /** Runs a blocking CLI call off the EDT and renders the resulting state. */
