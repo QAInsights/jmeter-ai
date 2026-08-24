@@ -1,13 +1,17 @@
 package org.qainsights.jmeter.ai.gui;
 
-import java.awt.FlowLayout;
-import java.awt.Font;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Insets;
 import java.util.List;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JPanel;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 
@@ -30,13 +34,15 @@ class ReasoningControls extends JPanel {
     private boolean updating;
 
     ReasoningControls(ReasoningSettings settings) {
-        super(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
         setOpaque(false);
         this.settings = settings;
 
         thinkingToggle = new JCheckBox("Thinking");
         thinkingToggle.setOpaque(false);
-        thinkingToggle.setFont(thinkingToggle.getFont().deriveFont(Font.PLAIN, 11f));
+        thinkingToggle.setMargin(new Insets(0, 1, 0, 1));
+        thinkingToggle.setAlignmentY(Component.CENTER_ALIGNMENT);
+        thinkingToggle.setFont(UiTokens.caption(thinkingToggle.getFont()));
         thinkingToggle.setForeground(ThemeColors.foreground());
         thinkingToggle.setToolTipText("Let the model think step by step before answering");
         thinkingToggle.setSelected(settings.isThinkingEnabled());
@@ -46,9 +52,19 @@ class ReasoningControls extends JPanel {
             }
         });
         add(thinkingToggle);
+        add(Box.createHorizontalStrut(UiTokens.REASONING_CONTROL_GAP));
 
         effortCombo = new JComboBox<>();
-        effortCombo.setFont(effortCombo.getFont().deriveFont(Font.PLAIN, 11f));
+        effortCombo.setFont(UiTokens.caption(effortCombo.getFont()));
+        effortCombo.setPrototypeDisplayValue("medium");
+        Dimension effortPreferred = effortCombo.getPreferredSize();
+        Dimension effortSize = new Dimension(
+                Math.max(UiTokens.EFFORT_MIN_WIDTH, effortPreferred.width),
+                Math.max(UiTokens.EFFORT_MIN_HEIGHT, effortPreferred.height));
+        effortCombo.setPreferredSize(effortSize);
+        effortCombo.setMinimumSize(effortSize);
+        effortCombo.setMaximumSize(effortSize);
+        effortCombo.setAlignmentY(Component.CENTER_ALIGNMENT);
         effortCombo.setToolTipText("Reasoning effort");
         effortCombo.addActionListener(e -> {
             if (!updating) {
@@ -137,6 +153,11 @@ class ReasoningControls extends JPanel {
                     : level.trim().toLowerCase(java.util.Locale.ROOT);
         }
         return settings.getEffort();
+    }
+
+    void applyTheme() {
+        thinkingToggle.setForeground(ThemeColors.foreground());
+        repaint();
     }
 
     /** The thinking checkbox (for tests). */

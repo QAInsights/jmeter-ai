@@ -14,6 +14,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.Timer;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
  * The chat transcript as a vertical list of message cards, replacing the
@@ -40,15 +41,39 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     private ThinkingCard thinkingCard;
     private java.util.function.Function<String, org.qainsights.jmeter.ai.service.attach.Attachment> attachmentLookup;
     private java.util.function.Consumer<String> savePromptHandler;
+    private WelcomePanel welcomePanel;
 
     TranscriptView(Font baseFont) {
         this.baseFont = baseFont;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
+        setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_1, UiTokens.SPACE_2, UiTokens.SPACE_1));
         add(glue);
     }
 
     // --- Messages -----------------------------------------------------------
+
+    void showWelcome(String markdown) {
+        dismissWelcome();
+        welcomePanel = new WelcomePanel(markdown, baseFont);
+        welcomePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        insertBeforeGlue(welcomePanel);
+    }
+
+    boolean isWelcomeShowing() {
+        return welcomePanel != null;
+    }
+
+    private void dismissWelcome() {
+        if (welcomePanel == null) {
+            return;
+        }
+        remove(welcomePanel);
+        welcomePanel = null;
+        revalidate();
+        repaint();
+    }
 
     /** Registers the attachment lookup used to render file chips in user bubbles. */
     void setAttachmentLookup(
@@ -85,13 +110,21 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     /** Adds a small colored system note (errors, cancellations, status). */
     void addSystemMessage(String text, Color color) {
+        dismissWelcome();
         JTextArea note = new JTextArea(text);
         note.setEditable(false);
-        note.setOpaque(false);
+        note.setOpaque(true);
         note.setLineWrap(true);
         note.setWrapStyleWord(true);
-        note.setForeground(color != null ? color : ThemeColors.secondaryText());
-        note.setBorder(BorderFactory.createEmptyBorder(2, 16, 2, 16));
+        Color tone = color != null ? color : ThemeColors.secondaryText();
+        note.setForeground(tone);
+        note.setBackground(ThemeColors.subtleSurface());
+        note.setFont(UiTokens.caption(note.getFont()));
+        note.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 3, 0, 0, tone),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_2, UiTokens.SPACE_3,
+                        UiTokens.SPACE_2, UiTokens.SPACE_3)));
         note.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(note);
         relayout(note);
@@ -133,6 +166,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     /** Routes a tool-activity line into the current (or a new) group. */
     void addToolActivity(String line) {
+        dismissWelcome();
         if (activityGroup == null || !activityGroup.isRunning()) {
             activityGroup = new ToolActivityGroup();
             activityGroup.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -152,6 +186,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     /** Appends a streamed reasoning token to the current (or a new) thinking card. */
     void appendReasoningToken(String token) {
+        dismissWelcome();
         if (thinkingCard == null || !thinkingCard.isRunning()) {
             finishReasoningIfRunning();
             thinkingCard = new ThinkingCard();
@@ -172,6 +207,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         if (reasoning == null || reasoning.isBlank()) {
             return;
         }
+        dismissWelcome();
         finishReasoningIfRunning();
         ThinkingCard card = new ThinkingCard();
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -195,6 +231,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         if (thinkingRow != null) {
             return;
         }
+        dismissWelcome();
         thinkingRow = new ThinkingRow();
         insertBeforeGlue(thinkingRow);
         relayout(thinkingRow);
@@ -225,6 +262,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
             thinkingCard = null;
         }
         streamingCard = null;
+        welcomePanel = null;
         cards.clear();
         removeAll();
         add(glue);
@@ -238,12 +276,27 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         for (MessageCard card : cards) {
             card.applyFont(font);
         }
+        if (welcomePanel != null) {
+            welcomePanel.applyFont(font);
+        }
     }
 
     /** Re-applies theme-derived colors on look-and-feel changes. */
     void refreshTheme() {
         for (MessageCard card : cards) {
             card.applyTheme();
+        }
+        if (welcomePanel != null) {
+            welcomePanel.applyTheme();
+        }
+        if (activityGroup != null) {
+            activityGroup.applyTheme();
+        }
+        if (thinkingCard != null) {
+            thinkingCard.applyTheme();
+        }
+        if (thinkingRow != null) {
+            thinkingRow.applyTheme();
         }
     }
 
@@ -304,6 +357,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     // --- Internals ---------------------------------------------------------------
 
     private void addCard(MessageCard card) {
+        dismissWelcome();
         cards.add(card);
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(card);
@@ -344,9 +398,11 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
             setOpaque(false);
             setAlignmentX(Component.LEFT_ALIGNMENT);
             label = new JLabel("Feather Wand is thinking");
-            label.setFont(label.getFont().deriveFont(Font.ITALIC));
-            label.setForeground(ThemeColors.secondaryText());
-            label.setBorder(BorderFactory.createEmptyBorder(2, 16, 2, 16));
+            label.setFont(UiTokens.caption(label.getFont()).deriveFont(Font.ITALIC));
+            label.setForeground(ThemeColors.accent());
+            label.setBorder(BorderFactory.createEmptyBorder(
+                    UiTokens.SPACE_2, UiTokens.SPACE_3,
+                    UiTokens.SPACE_2, UiTokens.SPACE_3));
             add(label);
             timer = new Timer(400, e -> {
                 dots = (dots + 1) % 4;
@@ -355,6 +411,11 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
                 );
             });
             timer.start();
+        }
+
+        void applyTheme() {
+            label.setForeground(ThemeColors.accent());
+            repaint();
         }
 
         void dispose() {

@@ -2,12 +2,15 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.Component;
 import java.io.File;
+import javax.swing.BorderFactory;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.apache.jmeter.util.JMeterUtils;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +29,12 @@ class AttachMenu extends JPopupMenu {
     AttachMenu(Component parent, AttachmentBar attachmentBar) {
         this.parent = parent;
         this.attachmentBar = attachmentBar;
+        setBackground(ThemeColors.elevatedSurface());
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ThemeColors.separator()),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_1, UiTokens.SPACE_1,
+                        UiTokens.SPACE_1, UiTokens.SPACE_1)));
 
         JMenuItem browse = new JMenuItem("Attach file…");
         browse.addActionListener(e -> browseForFile(null));

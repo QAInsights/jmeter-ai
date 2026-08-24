@@ -95,6 +95,40 @@ class ModelPickerPopupTest {
     }
 
     @Test
+    void mouseMovementNeverDismissesThePopup() {
+        javax.swing.JPanel popupRoot = new javax.swing.JPanel();
+        javax.swing.JButton outside = new javax.swing.JButton();
+        java.awt.event.MouseEvent movement = new java.awt.event.MouseEvent(
+                outside, java.awt.event.MouseEvent.MOUSE_MOVED,
+                System.currentTimeMillis(), 0, 4, 4, 0, false);
+        assertFalse(ModelPickerPopup.shouldDismissForMouseEvent(movement, popupRoot));
+    }
+
+    @Test
+    void onlyMousePressOutsideThePopupDismissesIt() {
+        javax.swing.JPanel popupRoot = new javax.swing.JPanel();
+        javax.swing.JButton inside = new javax.swing.JButton();
+        javax.swing.JButton outside = new javax.swing.JButton();
+        popupRoot.add(inside);
+
+        java.awt.event.MouseEvent insidePress = new java.awt.event.MouseEvent(
+                inside, java.awt.event.MouseEvent.MOUSE_PRESSED,
+                System.currentTimeMillis(), 0, 4, 4, 1, false);
+        java.awt.event.MouseEvent outsidePress = new java.awt.event.MouseEvent(
+                outside, java.awt.event.MouseEvent.MOUSE_PRESSED,
+                System.currentTimeMillis(), 0, 4, 4, 1, false);
+        assertFalse(ModelPickerPopup.shouldDismissForMouseEvent(insidePress, popupRoot));
+        assertTrue(ModelPickerPopup.shouldDismissForMouseEvent(outsidePress, popupRoot));
+    }
+
+    @Test
+    void popupWidthIsCompactAndCappedToTheScreen() {
+        assertEquals(340, ModelPickerPopup.popupWidth(120, 1920));
+        assertEquals(500, ModelPickerPopup.popupWidth(500, 1920));
+        assertEquals(300, ModelPickerPopup.popupWidth(120, 300));
+    }
+
+    @Test
     void opensAboveWhenMoreRoomAbove() {
         // button at the bottom of a 1080p screen: 1040px above, 8px below
         ModelPickerPopup.Placement p = ModelPickerPopup.verticalPlacement(
@@ -141,6 +175,10 @@ class ModelPickerPopupTest {
             assertEquals(4, popup.visibleModelCount());
             assertEquals("google:gemini-2.5-pro", popup.selectedVisibleModel());
             assertEquals("", popup.filterText());
+            assertEquals(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
+                    popup.horizontalScrollBarPolicy());
+            assertTrue(popup.modelListTracksViewportWidth());
+            assertEquals(-1, popup.modelListFixedCellHeight());
         } finally {
             popup.dispose();
             owner.dispose();

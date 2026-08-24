@@ -11,6 +11,7 @@ import javax.swing.DefaultListCellRenderer;
 import javax.swing.JList;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 
@@ -104,16 +105,22 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
 
         // every row paints a star so the pin affordance is visible (the left
         // zone is clickable in every row, not just pinned ones)
-        Color starColor = pinned ? ThemeColors.accent() : ThemeColors.secondaryText();
-        Color secondary = ThemeColors.secondaryText();
+        Color primary = ThemeColors.foreground();
+        Color secondary = isSelected ? primary : ThemeColors.secondaryText();
+        Color starColor = pinned
+                ? ThemeColors.accent()
+                : isSelected ? primary : ThemeColors.secondaryText();
         StringBuilder html = new StringBuilder("<html>");
         html.append("<span style='color:rgb(").append(starColor.getRed()).append(',')
                 .append(starColor.getGreen()).append(',').append(starColor.getBlue())
                 .append(");'>★</span> ");
-        html.append("<b>").append(escapeHtml(parts[0])).append("</b>");
+        html.append("<span style='color:rgb(").append(primary.getRed()).append(',')
+                .append(primary.getGreen()).append(',').append(primary.getBlue())
+                .append(");'><b>").append(escapeHtml(parts[0])).append("</b>");
         if (!parts[1].isEmpty()) {
             html.append(" · ").append(escapeHtml(parts[1]));
         }
+        html.append("</span>");
         if (!metadata.isEmpty()) {
             html.append("<br><span style='color:rgb(").append(secondary.getRed()).append(',')
                     .append(secondary.getGreen()).append(',').append(secondary.getBlue())
@@ -121,7 +128,12 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
         }
         html.append("</html>");
         label.setText(html.toString());
-        label.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+        label.setOpaque(true);
+        label.setBackground(isSelected
+                ? ThemeColors.selectedBackground() : ThemeColors.elevatedSurface());
+        label.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_3,
+                UiTokens.SPACE_2, UiTokens.SPACE_3));
         return label;
     }
 }

@@ -17,6 +17,17 @@ class TranscriptViewTest {
     }
 
     @Test
+    void welcomeStateDismissesWhenConversationStarts() {
+        TranscriptView view = view();
+        view.showWelcome("# Welcome\n\nAsk anything.");
+        assertTrue(view.isWelcomeShowing());
+
+        view.addUserMessage("hello");
+        org.junit.jupiter.api.Assertions.assertFalse(view.isWelcomeShowing());
+        assertEquals(1, view.getCardCount());
+    }
+
+    @Test
     void userAndAssistantMessagesBecomeCards() {
         TranscriptView view = view();
         view.addUserMessage("hello");

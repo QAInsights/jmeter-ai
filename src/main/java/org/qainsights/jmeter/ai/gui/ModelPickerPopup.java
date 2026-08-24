@@ -1,8 +1,12 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.AWTEvent;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.Window;
+import java.awt.event.AWTEventListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -19,11 +23,14 @@ import javax.swing.JDialog;
 import javax.swing.JList;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 
@@ -46,7 +53,7 @@ class ModelPickerPopup extends JDialog {
     /** Width of the clickable star zone at the left of each row (pixels). */
     static final int STAR_ZONE_WIDTH = 26;
 
-    private static final int MIN_WIDTH = 420;
+    private static final int MIN_WIDTH = 340;
 
     /** Desired popup height before capping to available space (visible for tests). */
     static final int HEIGHT = 360;
@@ -55,8 +62,11 @@ class ModelPickerPopup extends JDialog {
     private final ModelSelectorPreferences prefs;
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> modelList;
+    private final JScrollPane modelScroll;
     private final JTextField filterField;
+    private final AWTEventListener outsideClickListener = this::handleAwtEvent;
     private Consumer<String> onSelect = model -> { };
+    private boolean outsideClickListenerInstalled;
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
@@ -67,8 +77,13 @@ class ModelPickerPopup extends JDialog {
         this.prefs = prefs;
 
         filterField = new JTextField();
+        filterField.putClientProperty("JTextField.placeholderText", "Search models and providers");
+        filterField.getAccessibleContext().setAccessibleName("Search models and providers");
         filterField.setBorder(BorderFactory.createCompoundBorder(
-                filterField.getBorder(), BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+                BorderFactory.createLineBorder(ThemeColors.separator(), 1, true),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_2, UiTokens.SPACE_3,
+                        UiTokens.SPACE_2, UiTokens.SPACE_3)));
         filterField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -98,8 +113,15 @@ class ModelPickerPopup extends JDialog {
             }
         });
 
-        modelList = new JList<>(listModel);
+        modelList = new JList<>(listModel) {
+            @Override
+            public boolean getScrollableTracksViewportWidth() {
+                return true;
+            }
+        };
         modelList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        modelList.setSelectionBackground(ThemeColors.selectedBackground());
+        modelList.setSelectionForeground(ThemeColors.foreground());
         modelList.setCellRenderer(new ModelPickerRenderer(prefs, catalog));
         modelList.addKeyListener(new KeyAdapter() {
             @Override
@@ -127,12 +149,19 @@ class ModelPickerPopup extends JDialog {
             }
         });
 
-        getContentPane().setLayout(new BorderLayout(0, 6));
+        getContentPane().setLayout(new BorderLayout(0, UiTokens.SPACE_2));
+        getContentPane().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(filterField, BorderLayout.NORTH);
-        getContentPane().add(new JScrollPane(modelList), BorderLayout.CENTER);
+        modelScroll = new JScrollPane(modelList);
+        modelScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        modelScroll.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
+        modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
+        getContentPane().add(modelScroll, BorderLayout.CENTER);
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeColors.border()),
-                BorderFactory.createEmptyBorder(6, 6, 6, 6)));
+                BorderFactory.createLineBorder(ThemeColors.separator()),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_2, UiTokens.SPACE_2,
+                        UiTokens.SPACE_2, UiTokens.SPACE_2)));
 
         addWindowFocusListener(new WindowFocusListener() {
             @Override
@@ -141,7 +170,13 @@ class ModelPickerPopup extends JDialog {
 
             @Override
             public void windowLostFocus(WindowEvent e) {
-                dispose(); // clicked elsewhere / alt-tabbed away
+                SwingUtilities.invokeLater(() -> {
+                    Window ownerWindow = getOwner();
+                    if (isDisplayable() && !isActive()
+                            && (ownerWindow == null || !ownerWindow.isActive())) {
+                        dispose();
+                    }
+                });
             }
         });
 
@@ -215,6 +250,10 @@ class ModelPickerPopup extends JDialog {
                 : new Placement(anchorY + anchorHeight, height, false);
     }
 
+    static int popupWidth(int anchorWidth, int availableWidth) {
+        return Math.min(Math.max(anchorWidth, MIN_WIDTH), Math.max(1, availableWidth));
+    }
+
     /** Shows the popup docked to the anchor; {@code onSelect} fires on confirm. */
     void showFor(Component anchor, Consumer<String> onSelect) {
         this.onSelect = onSelect != null ? onSelect : model -> { };
@@ -228,12 +267,52 @@ class ModelPickerPopup extends JDialog {
                 : new java.awt.Insets(0, 0, 0, 0);
         Placement placement = verticalPlacement(location.y, anchor.getHeight(), HEIGHT,
                 screen.y + insets.top, screen.y + screen.height - insets.bottom);
-        setBounds(location.x, placement.y(),
-                Math.max(anchor.getWidth(), MIN_WIDTH), placement.height());
+        int screenLeft = screen.x + insets.left;
+        int screenRight = screen.x + screen.width - insets.right;
+        int popupWidth = popupWidth(anchor.getWidth(), screenRight - screenLeft);
+        int popupX = Math.max(screenLeft, Math.min(location.x, screenRight - popupWidth));
+        setBounds(popupX, placement.y(), popupWidth, placement.height());
         setVisible(true);
+        installOutsideClickListener();
         // after the showing event cycle completes, or the button that opened
         // us reclaims focus and typing goes to the main window
-        javax.swing.SwingUtilities.invokeLater(() -> filterField.requestFocusInWindow());
+        SwingUtilities.invokeLater(() -> filterField.requestFocusInWindow());
+    }
+
+    private void installOutsideClickListener() {
+        if (!outsideClickListenerInstalled) {
+            Toolkit.getDefaultToolkit().addAWTEventListener(
+                    outsideClickListener, AWTEvent.MOUSE_EVENT_MASK);
+            outsideClickListenerInstalled = true;
+        }
+    }
+
+    private void uninstallOutsideClickListener() {
+        if (outsideClickListenerInstalled) {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(outsideClickListener);
+            outsideClickListenerInstalled = false;
+        }
+    }
+
+    private void handleAwtEvent(AWTEvent event) {
+        if (isShowing() && shouldDismissForMouseEvent(event, getRootPane())) {
+            dispose();
+        }
+    }
+
+    static boolean shouldDismissForMouseEvent(AWTEvent event, Component popupRoot) {
+        if (!(event instanceof MouseEvent mouseEvent)
+                || mouseEvent.getID() != MouseEvent.MOUSE_PRESSED
+                || !(mouseEvent.getSource() instanceof Component source)) {
+            return false;
+        }
+        return source != popupRoot && !SwingUtilities.isDescendingFrom(source, popupRoot);
+    }
+
+    @Override
+    public void dispose() {
+        uninstallOutsideClickListener();
+        super.dispose();
     }
 
     /** Number of models currently passing the filter (visible for tests). */
@@ -249,6 +328,18 @@ class ModelPickerPopup extends JDialog {
     /** The text in the filter field (visible for tests). */
     String filterText() {
         return filterField.getText();
+    }
+
+    int horizontalScrollBarPolicy() {
+        return modelScroll.getHorizontalScrollBarPolicy();
+    }
+
+    boolean modelListTracksViewportWidth() {
+        return modelList.getScrollableTracksViewportWidth();
+    }
+
+    int modelListFixedCellHeight() {
+        return modelList.getFixedCellHeight();
     }
 
     private void refresh() {

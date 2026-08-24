@@ -5,13 +5,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.function.Supplier;
 
-import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.session.ConversationExporter;
 import org.qainsights.jmeter.ai.service.session.ConversationSession;
 import org.slf4j.Logger;
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * rename) hang off the same popup. The heavy lifting lives in
  * {@link ConversationExporter} - this class is dialog plumbing only.
  */
-class SessionMenuButton extends JButton {
+class SessionMenuButton extends QuietButton {
 
     private static final Logger log = LoggerFactory.getLogger(SessionMenuButton.class);
 
@@ -32,12 +32,13 @@ class SessionMenuButton extends JButton {
     private final JPopupMenu menu;
 
     SessionMenuButton(Component dialogParent, Supplier<ConversationSession> sessionSupplier) {
-        super("Export");
+        super("");
         this.dialogParent = dialogParent;
         this.sessionSupplier = sessionSupplier;
-        setIcon(ChevronIcons.down(10));
-        setToolTipText("Conversation actions (export and more)");
-        setFocusPainted(false);
+        iconOnly(UiTokens.HEADER_CONTROL_HEIGHT);
+        setIcon(ActionIcons.more(16));
+        setToolTipText("Conversation actions and export");
+        getAccessibleContext().setAccessibleName("Conversation actions and export");
 
         menu = new JPopupMenu();
         menu.add(exportItem("Export chat as Markdown…", ConversationExporter.Format.MARKDOWN));

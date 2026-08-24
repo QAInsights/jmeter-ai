@@ -1,7 +1,7 @@
 package org.qainsights.jmeter.ai.record;
 
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JLabel;
+import javax.swing.JToggleButton;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -18,12 +18,20 @@ class RecordingControlPanelTest {
 
         RecordingControlPanel panel = new RecordingControlPanel(controller, store);
         JLabel statusLabel = null;
+        JToggleButton recordButton = null;
         for (java.awt.Component comp : panel.getComponents()) {
             if (comp instanceof JLabel) {
                 statusLabel = (JLabel) comp;
+            } else if (comp instanceof JToggleButton) {
+                recordButton = (JToggleButton) comp;
             }
         }
 
+        assertNotNull(recordButton);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH,
+                recordButton.getPreferredSize().width);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                recordButton.getPreferredSize().height);
         assertNotNull(statusLabel);
         assertEquals("🔴 OFF", statusLabel.getText());
 

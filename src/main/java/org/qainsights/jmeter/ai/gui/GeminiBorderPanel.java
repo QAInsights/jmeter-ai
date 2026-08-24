@@ -1,17 +1,25 @@
 package org.qainsights.jmeter.ai.gui;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import javax.swing.BorderFactory;
+import javax.swing.JPanel;
+import javax.swing.Timer;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
- * A custom Swing panel that provides a rotating, shiny Google Gemini-style
- * gradient border around the chat input area and Send button when in thinking mode.
+ * A custom Swing panel that provides a quiet elevated composer surface and a
+ * restrained Google-style gradient border while the model is processing.
  */
 public class GeminiBorderPanel extends JPanel {
 
     private boolean isThinking = false;
+    private boolean focused = false;
     private int rotationAngle = 0;
     private final Timer animationTimer;
 
@@ -19,23 +27,39 @@ public class GeminiBorderPanel extends JPanel {
         super(new BorderLayout());
 
         // Add padding to leave room for the animated border
-        setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-
+        setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_1, UiTokens.SPACE_2));
+        setOpaque(false);
         applyThemeBackground();
 
         // Set up the animation timer (updates angle and repaints)
-        animationTimer = new Timer(30, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                rotationAngle = (rotationAngle + 4) % 360;
-                repaint();
-            }
+        animationTimer = new Timer(45, e -> {
+            rotationAngle = (rotationAngle + 2) % 360;
+            repaint();
         });
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (isThinking) {
+            animationTimer.start();
+        }
+    }
+
+    @Override
+    public void removeNotify() {
+        animationTimer.stop();
+        super.removeNotify();
+    }
+
+    boolean isAnimationRunning() {
+        return animationTimer.isRunning();
     }
 
     /**
      * Toggles the thinking mode and starts/stops the rotating gradient border animation.
-     * 
+     *
      * @param thinking true to display the rotating Gemini border, false for subtle static border
      */
     public void setThinking(boolean thinking) {
@@ -44,7 +68,9 @@ public class GeminiBorderPanel extends JPanel {
         }
         this.isThinking = thinking;
         if (thinking) {
-            animationTimer.start();
+            if (isDisplayable()) {
+                animationTimer.start();
+            }
         } else {
             animationTimer.stop();
             rotationAngle = 0;
@@ -54,6 +80,17 @@ public class GeminiBorderPanel extends JPanel {
 
     public boolean isThinking() {
         return isThinking;
+    }
+
+    public void setFocused(boolean focused) {
+        if (this.focused != focused) {
+            this.focused = focused;
+            repaint();
+        }
+    }
+
+    boolean isFocused() {
+        return focused;
     }
 
     /**
@@ -68,40 +105,43 @@ public class GeminiBorderPanel extends JPanel {
     }
 
     /**
-     * Applies the default text area background for a unified look. Reads the
+     * Applies the elevated composer surface for the active theme. Reads the
      * color from the current theme on every call rather than caching it.
      */
     public void applyThemeBackground() {
-        Color bg = UIManager.getColor("TextArea.background");
-        if (bg == null) {
-            bg = Color.WHITE;
-        }
-        setBackground(bg);
+        setBackground(ThemeColors.elevatedSurface());
+        repaint();
     }
 
     @Override
-    public void paint(Graphics g) {
-        super.paint(g);
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        
-        int width = getWidth();
-        int height = getHeight();
+    protected void paintComponent(Graphics graphics) {
+        super.paintComponent(graphics);
+        Graphics2D g2 = (Graphics2D) graphics.create();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int width = getWidth();
+            int height = getHeight();
+            int inset = 2;
+            int arc = UiTokens.RADIUS_LARGE * 2;
+            int paintedWidth = Math.max(0, width - inset * 2 - 1);
+            int paintedHeight = Math.max(0, height - inset * 2 - 2);
 
-        if (isThinking) {
-            // Rotating multi-color gradient stroke - shared with the JMeter tree's
-            // agent-activity glow (see AgentGlowBorder) via AnimatedGradientPainter.
-            AnimatedGradientPainter.paintRotatingBorder(g2d, width, height, rotationAngle, 3.0f, 12, 2, 1f);
-        } else {
-            // Paint a subtle default border
-            Color borderColor = UIManager.getColor("Component.borderColor");
-            if (borderColor == null) {
-                borderColor = Color.LIGHT_GRAY;
+            g2.setColor(ThemeColors.shadow());
+            g2.fillRoundRect(inset, inset + 2, paintedWidth, paintedHeight, arc, arc);
+            g2.setColor(getBackground());
+            g2.fillRoundRect(inset, inset, paintedWidth, paintedHeight, arc, arc);
+
+            if (isThinking) {
+                AnimatedGradientPainter.paintRotatingBorder(
+                        g2, width, height, rotationAngle, 2.0f, arc, inset, 0.68f);
+            } else {
+                Color border = focused ? ThemeColors.focusRing() : ThemeColors.separator();
+                g2.setColor(border);
+                g2.setStroke(new BasicStroke(focused ? 1.6f : 1f));
+                g2.drawRoundRect(inset, inset, paintedWidth, paintedHeight, arc, arc);
             }
-            g2d.setColor(borderColor);
-            g2d.setStroke(new BasicStroke(1.0f));
-            g2d.drawRoundRect(1, 1, width - 2, height - 2, 12, 12);
+        } finally {
+            g2.dispose();
         }
-        g2d.dispose();
     }
 }

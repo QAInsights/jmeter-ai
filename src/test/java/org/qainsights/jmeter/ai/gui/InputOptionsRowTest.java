@@ -51,18 +51,8 @@ class InputOptionsRowTest {
     @Test
     void hintLabelPresent() {
         InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
-        boolean found = false;
-        for (java.awt.Component area : row.getComponents()) {
-            if (area instanceof javax.swing.JPanel) {
-                for (java.awt.Component inner : ((javax.swing.JPanel) area).getComponents()) {
-                    if (inner instanceof JLabel
-                            && ((JLabel) inner).getText().contains("Enter to send")) {
-                        found = true;
-                    }
-                }
-            }
-        }
-        assertTrue(found, "the keyboard hint label must be present");
+        assertTrue(containsLabel(row, "Enter to send"),
+                "the keyboard hint label must be present");
     }
 
     @Test
@@ -90,19 +80,63 @@ class InputOptionsRowTest {
     }
 
     @Test
-    void stopButtonSwapsWithHint() {
+    void sendActionLivesInComposerAndRunsCallback() {
+        java.util.concurrent.atomic.AtomicBoolean sent = new java.util.concurrent.atomic.AtomicBoolean(false);
+        InputOptionsRow row = new InputOptionsRow(
+                null, attachmentBar, new JButton(), () -> sent.set(true));
+
+        assertTrue(row.sendButton() instanceof QuietButton);
+        assertEquals(QuietButton.Kind.PRIMARY, ((QuietButton) row.sendButton()).kind());
+        assertEquals("Send message", row.sendButton().getToolTipText());
+        row.sendButton().doClick();
+        assertTrue(sent.get());
+    }
+
+    @Test
+    void keyboardHintYieldsSpaceOnNarrowPanels() {
         InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
-        assertFalse(row.isStopShowing(), "hint shows by default");
+        row.updateHintVisibility(360);
+        assertFalse(row.isHintVisible());
+
+        row.updateHintVisibility(500);
+        assertTrue(row.isHintVisible());
+    }
+
+    @Test
+    void modelRowIsInstalledInsideComposerOptions() {
+        InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
+        javax.swing.JPanel modelRow = new javax.swing.JPanel();
+        row.setModelRow(modelRow);
+        assertTrue(javax.swing.SwingUtilities.isDescendingFrom(modelRow, row));
+    }
+
+    @Test
+    void stopButtonSwapsWithSendAction() {
+        InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
+        assertFalse(row.isStopShowing(), "send action shows by default");
 
         java.util.concurrent.atomic.AtomicBoolean stopped = new java.util.concurrent.atomic.AtomicBoolean(false);
         row.showStop(() -> stopped.set(true));
-        assertTrue(row.isStopShowing(), "stop replaces the hint while processing");
+        assertTrue(row.isStopShowing(), "stop replaces send while processing");
 
         row.hideStop();
-        assertFalse(row.isStopShowing(), "the hint returns after processing");
+        assertFalse(row.isStopShowing(), "send returns after processing");
 
         // showing again reuses the same stop button instance with the same action
         row.showStop(() -> stopped.set(true));
         assertTrue(row.isStopShowing());
+    }
+
+    private static boolean containsLabel(java.awt.Container root, String text) {
+        for (java.awt.Component component : root.getComponents()) {
+            if (component instanceof JLabel label && label.getText().contains(text)) {
+                return true;
+            }
+            if (component instanceof java.awt.Container container
+                    && containsLabel(container, text)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -51,7 +51,55 @@ public final class ThemeColors {
 
     /** Brand accent (Gemini blue family), slightly lightened on dark themes. */
     public static Color accent() {
-        return isDark() ? new Color(0x6F, 0xA8, 0xF8) : new Color(0x2A, 0x6A, 0xD4);
+        return isDark() ? new Color(0x8A, 0xB4, 0xF8) : new Color(0x1A, 0x73, 0xE8);
+    }
+
+    public static Color canvas() {
+        return themeColor("TextPane.background",
+                themeColor("Panel.background", Color.WHITE));
+    }
+
+    public static Color surface() {
+        return blend(themeColor("Panel.background", canvas()), canvas(), 0.72f);
+    }
+
+    public static Color elevatedSurface() {
+        Color base = canvas();
+        return isDark() ? shift(base, 10) : blend(Color.WHITE, base, 0.82f);
+    }
+
+    public static Color subtleSurface() {
+        Color base = canvas();
+        return isDark() ? shift(base, 7) : shift(base, -5);
+    }
+
+    public static Color accentSoft() {
+        return blend(accent(), canvas(), isDark() ? 0.20f : 0.10f);
+    }
+
+    public static Color accentHover() {
+        return blend(accent(), canvas(), isDark() ? 0.30f : 0.17f);
+    }
+
+    public static Color selectedBackground() {
+        return blend(accent(), canvas(), isDark() ? 0.28f : 0.14f);
+    }
+
+    public static Color onAccent() {
+        return contrastRatio(Color.WHITE, accent()) >= contrastRatio(Color.BLACK, accent())
+                ? Color.WHITE : Color.BLACK;
+    }
+
+    public static Color focusRing() {
+        return accent();
+    }
+
+    public static Color separator() {
+        return blend(border(), canvas(), isDark() ? 0.62f : 0.48f);
+    }
+
+    public static Color shadow() {
+        return new Color(0, 0, 0, isDark() ? 72 : 28);
     }
 
     /** De-emphasized text (hints, placeholders, status lines). */
@@ -86,29 +134,21 @@ public final class ThemeColors {
      * on dark themes and slightly darker on light themes.
      */
     public static Color codeBackground() {
-        Color panelBg = UIManager.getColor("Panel.background");
-        if (panelBg == null) {
-            return new Color(240, 240, 240);
-        }
-        return luminance(panelBg) < 0.5 ? shift(panelBg, 20) : shift(panelBg, -15);
+        return subtleSurface();
     }
 
     /** Subtle hover background for flat buttons, derived from the panel background. */
     public static Color hoverBackground() {
-        Color panelBg = themeColor("Panel.background", Color.WHITE);
-        return luminance(panelBg) < 0.5 ? shift(panelBg, 18) : shift(panelBg, -12);
+        Color base = surface();
+        return isDark() ? shift(base, 12) : shift(base, -7);
     }
 
     /**
-     * Background for the user's chat bubble: a professional light grey
-     * (#DEDEDE) on light themes; on dark themes the panel background lifted
-     * slightly so the bubble reads as a card without glaring.
+     * Background for the user's chat bubble: a restrained accent tint derived
+     * from the active canvas so it remains quiet and readable in either theme.
      */
     public static Color userBubbleBackground() {
-        if (!isDark()) {
-            return new Color(0xDE, 0xDE, 0xDE);
-        }
-        return shift(themeColor("Panel.background", new Color(43, 43, 43)), 24);
+        return accentSoft();
     }
 
     /**
@@ -140,6 +180,25 @@ public final class ThemeColors {
                 clamp(Math.round(a.getRed() * ratio + b.getRed() * inv)),
                 clamp(Math.round(a.getGreen() * ratio + b.getGreen() * inv)),
                 clamp(Math.round(a.getBlue() * ratio + b.getBlue() * inv)));
+    }
+
+    static double contrastRatio(Color a, Color b) {
+        double lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
+        double darker = Math.min(relativeLuminance(a), relativeLuminance(b));
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    private static double relativeLuminance(Color color) {
+        double red = linearChannel(color.getRed() / 255.0);
+        double green = linearChannel(color.getGreen() / 255.0);
+        double blue = linearChannel(color.getBlue() / 255.0);
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    }
+
+    private static double linearChannel(double channel) {
+        return channel <= 0.04045
+                ? channel / 12.92
+                : Math.pow((channel + 0.055) / 1.055, 2.4);
     }
 
     private static int clamp(int v) {

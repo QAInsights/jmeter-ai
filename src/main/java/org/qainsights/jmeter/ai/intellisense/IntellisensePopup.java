@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
  * Popup panel for displaying intellisense suggestions below the input box.
@@ -27,10 +28,19 @@ public class IntellisensePopup {
         suggestionList = new JList<>();
         suggestionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         suggestionList.setFocusable(false);
+        suggestionList.setSelectionBackground(
+                org.qainsights.jmeter.ai.gui.theme.ThemeColors.selectedBackground());
+        suggestionList.setSelectionForeground(
+                org.qainsights.jmeter.ai.gui.theme.ThemeColors.foreground());
+        suggestionList.setFixedCellHeight(UiTokens.SUGGESTION_ROW_HEIGHT);
         suggestionList.setCellRenderer(new SuggestionCellRenderer(() -> descriptionLookup));
         scrollPane = new JScrollPane(suggestionList);
         scrollPane.setBorder(null);
-        popupMenu.setBorder(BorderFactory.createLineBorder(org.qainsights.jmeter.ai.gui.theme.ThemeColors.border()));
+        popupMenu.setBackground(org.qainsights.jmeter.ai.gui.theme.ThemeColors.elevatedSurface());
+        popupMenu.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        org.qainsights.jmeter.ai.gui.theme.ThemeColors.separator()),
+                BorderFactory.createEmptyBorder(4, 4, 4, 4)));
         popupMenu.add(scrollPane);
     }
 
@@ -146,15 +156,19 @@ public class IntellisensePopup {
                 // Swing renders any label text starting with "<html" as HTML,
                 // so a user-saved prompt name must not reach setText raw.
                 label.setText(isHtml(command) ? "<html>" + escapeHtml(command) + "</html>" : command);
-                label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+                label.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
             } else {
                 Color secondary = org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText();
                 label.setText("<html><b>" + escapeHtml(command) + "</b><br>"
                         + "<span style='color:rgb(" + secondary.getRed() + ","
                         + secondary.getGreen() + "," + secondary.getBlue()
                         + ");font-size:9px;'>" + escapeHtml(description) + "</span></html>");
-                label.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+                label.setBorder(BorderFactory.createEmptyBorder(5, 12, 5, 12));
             }
+            label.setOpaque(true);
+            label.setBackground(isSelected
+                    ? org.qainsights.jmeter.ai.gui.theme.ThemeColors.selectedBackground()
+                    : org.qainsights.jmeter.ai.gui.theme.ThemeColors.elevatedSurface());
             return label;
         }
 

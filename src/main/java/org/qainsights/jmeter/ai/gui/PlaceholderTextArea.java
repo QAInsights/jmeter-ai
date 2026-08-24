@@ -53,7 +53,7 @@ public class PlaceholderTextArea extends JTextArea {
                 RenderingHints.VALUE_TEXT_ANTIALIAS_ON
             );
             g2.setColor(ThemeColors.secondaryText());
-            g2.setFont(getFont().deriveFont(java.awt.Font.ITALIC));
+            g2.setFont(getFont().deriveFont(java.awt.Font.PLAIN));
             Insets insets = getInsets();
             var fm = g2.getFontMetrics();
             g2.drawString(

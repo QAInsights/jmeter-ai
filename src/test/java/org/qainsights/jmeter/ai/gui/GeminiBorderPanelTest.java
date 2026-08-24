@@ -24,34 +24,63 @@ class GeminiBorderPanelTest {
         // Disable thinking mode
         panel.setThinking(false);
         assertFalse(panel.isThinking());
+
+        panel.setFocused(true);
+        assertTrue(panel.isFocused());
+        panel.setFocused(false);
+        assertFalse(panel.isFocused());
+    }
+
+    @Test
+    void animationStopsWhenComposerLeavesComponentHierarchy() {
+        GeminiBorderPanel panel = new GeminiBorderPanel();
+        panel.setThinking(true);
+        assertFalse(panel.isAnimationRunning());
+
+        panel.addNotify();
+        try {
+            assertTrue(panel.isAnimationRunning());
+        } finally {
+            panel.removeNotify();
+        }
+        assertFalse(panel.isAnimationRunning());
     }
 
     @Test
     void testApplyThemeBackgroundFollowsThemeChange() {
-        Color original = UIManager.getColor("TextArea.background");
+        Color originalPanel = UIManager.getColor("Panel.background");
+        Color originalCanvas = UIManager.getColor("TextPane.background");
         try {
-            UIManager.put("TextArea.background", new Color(30, 30, 30));
+            UIManager.put("Panel.background", new Color(30, 30, 30));
+            UIManager.put("TextPane.background", new Color(25, 25, 25));
             GeminiBorderPanel panel = new GeminiBorderPanel();
-            assertEquals(new Color(30, 30, 30), panel.getBackground());
+            assertEquals(org.qainsights.jmeter.ai.gui.theme.ThemeColors.elevatedSurface(),
+                    panel.getBackground());
 
             // Simulate a theme switch to a light background
-            UIManager.put("TextArea.background", new Color(245, 245, 245));
+            UIManager.put("Panel.background", new Color(245, 245, 245));
+            UIManager.put("TextPane.background", Color.WHITE);
             panel.applyThemeBackground();
-            assertEquals(new Color(245, 245, 245), panel.getBackground());
+            assertEquals(org.qainsights.jmeter.ai.gui.theme.ThemeColors.elevatedSurface(),
+                    panel.getBackground());
         } finally {
-            UIManager.put("TextArea.background", original);
+            UIManager.put("Panel.background", originalPanel);
+            UIManager.put("TextPane.background", originalCanvas);
         }
     }
 
     @Test
     void testApplyThemeBackgroundFallsBackToWhite() {
-        Color original = UIManager.getColor("TextArea.background");
+        Color originalPanel = UIManager.getColor("Panel.background");
+        Color originalCanvas = UIManager.getColor("TextPane.background");
         try {
-            UIManager.put("TextArea.background", null);
+            UIManager.put("Panel.background", null);
+            UIManager.put("TextPane.background", null);
             GeminiBorderPanel panel = new GeminiBorderPanel();
             assertEquals(Color.WHITE, panel.getBackground());
         } finally {
-            UIManager.put("TextArea.background", original);
+            UIManager.put("Panel.background", originalPanel);
+            UIManager.put("TextPane.background", originalCanvas);
         }
     }
 

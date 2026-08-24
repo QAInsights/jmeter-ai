@@ -24,6 +24,21 @@ class PromptEditDialogTest {
     }
 
     @Test
+    @org.junit.jupiter.api.condition.DisabledIfSystemProperty(
+            named = "java.awt.headless", matches = "true")
+    void dialogPacksAtOrAboveItsMinimumSize() {
+        PromptEditDialog dialog = PromptEditDialog.forNew(null, library(), "body");
+        try {
+            assertTrue(dialog.getWidth()
+                    >= org.qainsights.jmeter.ai.gui.theme.UiTokens.PROMPT_DIALOG_MIN_WIDTH);
+            assertTrue(dialog.getHeight()
+                    >= org.qainsights.jmeter.ai.gui.theme.UiTokens.PROMPT_DIALOG_MIN_HEIGHT);
+        } finally {
+            dialog.dispose();
+        }
+    }
+
+    @Test
     void validationRejectsBlankNameAndBody() {
         assertEquals("Name is required.", PromptEditDialog.validationError("  ", "body"));
         assertEquals("Name is required.", PromptEditDialog.validationError(null, "body"));

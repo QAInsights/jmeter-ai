@@ -101,6 +101,21 @@ class ModelPickerRendererTest {
     }
 
     @Test
+    void selectedCellUsesExplicitReadableForeground() {
+        ModelPickerRenderer renderer =
+                new ModelPickerRenderer(prefs(), ModelCapabilityCatalog.getInstance());
+        JLabel label = (JLabel) renderer.getListCellRendererComponent(
+                new JList<>(), "openai:gpt-5.1", 0, true, false);
+        String foreground = rgb(
+                org.qainsights.jmeter.ai.gui.theme.ThemeColors.foreground());
+
+        assertTrue(label.getText().contains(foreground));
+        assertTrue(label.getText().contains("<b>gpt-5.1</b>"));
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.ThemeColors.selectedBackground(),
+                label.getBackground());
+    }
+
+    @Test
     void cellRendersTwoLinesWithDisplayNameAndMetadata() {
         ModelPickerRenderer renderer =
                 new ModelPickerRenderer(prefs(), ModelCapabilityCatalog.getInstance());

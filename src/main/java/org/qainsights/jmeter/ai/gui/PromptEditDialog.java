@@ -15,6 +15,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prompts.PromptLibrary;
 
 /**
@@ -40,35 +41,69 @@ public final class PromptEditDialog extends JDialog {
         this.library = library;
         this.editingOriginal = editingOriginal;
 
-        JPanel form = new JPanel(new BorderLayout(6, 6));
-        form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JPanel form = new JPanel(new BorderLayout(UiTokens.SPACE_3, UiTokens.SPACE_3));
+        form.setBackground(ThemeColors.surface());
+        form.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_4, UiTokens.SPACE_4,
+                UiTokens.SPACE_4, UiTokens.SPACE_4));
 
+        JPanel heading = new JPanel();
+        heading.setLayout(new javax.swing.BoxLayout(heading, javax.swing.BoxLayout.Y_AXIS));
+        heading.setOpaque(false);
+        JLabel headingLabel = new JLabel(title);
+        headingLabel.setFont(UiTokens.title(headingLabel.getFont()));
+        headingLabel.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        JLabel subtitle = new JLabel("Name the prompt and refine the text before saving it.");
+        subtitle.setFont(UiTokens.caption(subtitle.getFont()));
+        subtitle.setForeground(ThemeColors.secondaryText());
+        subtitle.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        heading.add(headingLabel);
+        heading.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_1));
+        heading.add(subtitle);
+        form.add(heading, BorderLayout.NORTH);
+
+        JPanel editor = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
+        editor.setOpaque(false);
         nameField = new JTextField(initialName, 24);
-        JPanel nameRow = new JPanel(new BorderLayout(6, 0));
-        nameRow.add(new JLabel("Name:"), BorderLayout.WEST);
+        JPanel nameRow = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
+        nameRow.setOpaque(false);
+        JLabel nameLabel = new JLabel("Name");
+        nameLabel.setFont(UiTokens.label(nameLabel.getFont()));
+        nameRow.add(nameLabel, BorderLayout.WEST);
         nameRow.add(nameField, BorderLayout.CENTER);
-        form.add(nameRow, BorderLayout.NORTH);
+        editor.add(nameRow, BorderLayout.NORTH);
 
         bodyArea = new JTextArea(initialBody, 8, 40);
         bodyArea.setLineWrap(true);
         bodyArea.setWrapStyleWord(true);
-        form.add(new JScrollPane(bodyArea), BorderLayout.CENTER);
+        bodyArea.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_2,
+                UiTokens.SPACE_2, UiTokens.SPACE_2));
+        JScrollPane bodyScroll = new JScrollPane(bodyArea);
+        bodyScroll.setBorder(BorderFactory.createLineBorder(ThemeColors.separator(), 1, true));
+        editor.add(bodyScroll, BorderLayout.CENTER);
+        form.add(editor, BorderLayout.CENTER);
 
         errorLabel = new JLabel(" ");
         errorLabel.setForeground(ThemeColors.error());
-        JPanel south = new JPanel(new BorderLayout());
+        errorLabel.setFont(UiTokens.caption(errorLabel.getFont()));
+        JPanel south = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
+        south.setOpaque(false);
         south.add(errorLabel, BorderLayout.CENTER);
-        JButton save = new JButton("Save");
-        JButton cancel = new JButton("Cancel");
+        JButton save = new QuietButton("Save", QuietButton.Kind.PRIMARY);
+        JButton cancel = new QuietButton("Cancel");
         save.addActionListener(e -> onSave());
         cancel.addActionListener(e -> dispose());
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
+        buttons.setOpaque(false);
         buttons.add(cancel);
         buttons.add(save);
         south.add(buttons, BorderLayout.EAST);
         form.add(south, BorderLayout.SOUTH);
 
         setContentPane(form);
+        setMinimumSize(new java.awt.Dimension(
+                UiTokens.PROMPT_DIALOG_MIN_WIDTH, UiTokens.PROMPT_DIALOG_MIN_HEIGHT));
         pack();
         setLocationRelativeTo(owner);
         getRootPane().setDefaultButton(save);

@@ -15,23 +15,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ThemeColorsTest {
 
     private Color originalPanelBackground;
+    private Color originalTextPaneBackground;
 
     @BeforeEach
     void saveTheme() {
         originalPanelBackground = UIManager.getColor("Panel.background");
+        originalTextPaneBackground = UIManager.getColor("TextPane.background");
     }
 
     @AfterEach
     void restoreTheme() {
         UIManager.put("Panel.background", originalPanelBackground);
+        UIManager.put("TextPane.background", originalTextPaneBackground);
     }
 
     private void forceDarkTheme() {
         UIManager.put("Panel.background", new Color(43, 43, 43));
+        UIManager.put("TextPane.background", new Color(32, 33, 36));
     }
 
     private void forceLightTheme() {
         UIManager.put("Panel.background", new Color(242, 242, 242));
+        UIManager.put("TextPane.background", Color.WHITE);
     }
 
     @Test
@@ -56,6 +61,17 @@ class ThemeColorsTest {
             assertNotNull(ThemeColors.warning());
             assertNotNull(ThemeColors.info());
             assertNotNull(ThemeColors.accent());
+            assertNotNull(ThemeColors.canvas());
+            assertNotNull(ThemeColors.surface());
+            assertNotNull(ThemeColors.elevatedSurface());
+            assertNotNull(ThemeColors.subtleSurface());
+            assertNotNull(ThemeColors.accentSoft());
+            assertNotNull(ThemeColors.accentHover());
+            assertNotNull(ThemeColors.selectedBackground());
+            assertNotNull(ThemeColors.onAccent());
+            assertNotNull(ThemeColors.focusRing());
+            assertNotNull(ThemeColors.separator());
+            assertNotNull(ThemeColors.shadow());
             assertNotNull(ThemeColors.secondaryText());
             assertNotNull(ThemeColors.border());
             assertNotNull(ThemeColors.foreground());
@@ -63,6 +79,14 @@ class ThemeColorsTest {
             assertNotNull(ThemeColors.hoverBackground());
             assertNotNull(ThemeColors.userBubbleBackground());
         }
+    }
+
+    @Test
+    void accentForegroundMeetsTextContrastInBothThemes() {
+        forceDarkTheme();
+        assertTrue(ThemeColors.contrastRatio(ThemeColors.onAccent(), ThemeColors.accent()) >= 4.5);
+        forceLightTheme();
+        assertTrue(ThemeColors.contrastRatio(ThemeColors.onAccent(), ThemeColors.accent()) >= 4.5);
     }
 
     @Test
@@ -92,25 +116,27 @@ class ThemeColorsTest {
     }
 
     @Test
-    void userBubbleIsLightGreyOnLightThemeAndLiftedPanelOnDark() {
+    void userBubbleUsesAQuietAccentTintInBothThemes() {
         forceLightTheme();
-        assertEquals(new Color(0xDE, 0xDE, 0xDE), ThemeColors.userBubbleBackground());
+        assertEquals(ThemeColors.accentSoft(), ThemeColors.userBubbleBackground());
+        assertTrue(ThemeColors.luminance(ThemeColors.userBubbleBackground())
+                < ThemeColors.luminance(ThemeColors.canvas()));
 
         forceDarkTheme();
-        Color panel = UIManager.getColor("Panel.background");
+        assertEquals(ThemeColors.accentSoft(), ThemeColors.userBubbleBackground());
         assertTrue(ThemeColors.luminance(ThemeColors.userBubbleBackground())
-                > ThemeColors.luminance(panel));
+                > ThemeColors.luminance(ThemeColors.canvas()));
     }
 
     @Test
-    void codeBackgroundIsLighterThanPanelOnDarkAndDarkerOnLight() {
+    void codeBackgroundSeparatesFromCanvasInBothThemes() {
         forceDarkTheme();
-        Color panel = UIManager.getColor("Panel.background");
-        assertTrue(ThemeColors.luminance(ThemeColors.codeBackground()) > ThemeColors.luminance(panel));
+        assertTrue(ThemeColors.luminance(ThemeColors.codeBackground())
+                > ThemeColors.luminance(ThemeColors.canvas()));
 
         forceLightTheme();
-        panel = UIManager.getColor("Panel.background");
-        assertTrue(ThemeColors.luminance(ThemeColors.codeBackground()) < ThemeColors.luminance(panel));
+        assertTrue(ThemeColors.luminance(ThemeColors.codeBackground())
+                < ThemeColors.luminance(ThemeColors.canvas()));
     }
 
     @Test

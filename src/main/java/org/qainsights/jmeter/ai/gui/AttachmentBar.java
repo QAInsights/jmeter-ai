@@ -14,6 +14,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.attach.Attachment;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
@@ -39,11 +40,11 @@ class AttachmentBar extends JPanel {
     private final List<JPanel> chips = new ArrayList<>();
 
     AttachmentBar(AttachmentRegistry registry, Consumer<String> systemMessage) {
-        super(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        super(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, UiTokens.SPACE_1));
         this.registry = registry;
         this.systemMessage = systemMessage;
         setOpaque(false);
-        setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        setBorder(BorderFactory.createEmptyBorder(0, UiTokens.SPACE_1, 0, UiTokens.SPACE_1));
         setVisible(false);
     }
 
@@ -174,22 +175,45 @@ class AttachmentBar extends JPanel {
         repaint();
     }
 
+    void applyTheme() {
+        for (JPanel chip : chips) {
+            chip.setBackground(ThemeColors.subtleSurface());
+        }
+        repaint();
+    }
+
     /** Number of visible chips (for tests). */
     int getChipCount() {
         return chips.size();
     }
 
     void addChip(Attachment attachment) {
-        JPanel chip = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
-        chip.setOpaque(true);
-        chip.setBackground(ThemeColors.codeBackground());
-        chip.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeColors.border(), 1, true),
-                BorderFactory.createEmptyBorder(1, 6, 1, 4)));
+        JPanel chip = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 2)) {
+            @Override
+            protected void paintComponent(java.awt.Graphics graphics) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) graphics.create();
+                try {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    int arc = UiTokens.RADIUS_MEDIUM * 2;
+                    g2.setColor(getBackground());
+                    g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arc, arc);
+                    g2.setColor(ThemeColors.separator());
+                    g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, arc, arc);
+                } finally {
+                    g2.dispose();
+                }
+                super.paintComponent(graphics);
+            }
+        };
+        chip.setOpaque(false);
+        chip.setBackground(ThemeColors.subtleSurface());
+        chip.setBorder(BorderFactory.createEmptyBorder(
+                2, UiTokens.SPACE_2, 2, UiTokens.SPACE_1));
 
         // File names come from disk - never render them as HTML.
         JLabel label = LabelUtils.plain(attachment.chipLabel(), AttachIcons.document(12), JLabel.LEFT);
-        label.setFont(label.getFont().deriveFont(Font.PLAIN, 11f));
+        label.setFont(UiTokens.caption(label.getFont()));
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         label.setToolTipText("Click to switch smart/raw processing");
         label.addMouseListener(new java.awt.event.MouseAdapter() {

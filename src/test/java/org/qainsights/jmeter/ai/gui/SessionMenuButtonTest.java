@@ -21,7 +21,12 @@ class SessionMenuButtonTest {
         SessionMenuButton button = new SessionMenuButton(null, () -> session);
 
         assertEquals(2, button.menuItemCount());
-        assertEquals("Export", button.getText());
+        assertEquals("", button.getText());
         assertNotNull(button.getIcon());
+        assertTrue(button.getToolTipText().contains("export"));
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                button.getPreferredSize().width);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                button.getPreferredSize().height);
     }
 }

@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.InputMethodEvent;
 import java.awt.event.InputMethodListener;
 import java.awt.event.KeyAdapter;
@@ -18,6 +20,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jorphan.gui.JMeterUIDefaults;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -91,6 +94,14 @@ public class AiChatPanel
     private BedrockAiService bedrockService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
+    private JPanel headerPanel;
+    private JPanel bottomPanel;
+    private JPanel titleStack;
+    private JLabel versionLabel;
+    private JSeparator headerSeparator;
+    private JComponent recordingControl;
+    private boolean recordingEnabled;
+    private DonateButton donateButton;
     private GeminiBorderPanel geminiBorderPanel;
     private final ReasoningSettings reasoningSettings = new ReasoningSettings();
     private ReasoningControls reasoningControls;
@@ -175,7 +186,8 @@ public class AiChatPanel
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(500, 600));
         setMinimumSize(new Dimension(350, 400));
-        setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
+        setBorder(BorderFactory.createEmptyBorder());
+        setBackground(ThemeColors.canvas());
 
         // Compute shared font once - used by both chat area and message field.
         // Use deriveFont() instead of new Font(family, ...) so that the JVM's
@@ -350,26 +362,22 @@ public class AiChatPanel
      */
     private JPanel createChatPanel(Font font) {
         JPanel chatPanel = new JPanel(new BorderLayout());
-        Color borderColor = ThemeColors.border();
-        chatPanel.setBorder(
-            BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)
-        );
+        chatPanel.setBorder(BorderFactory.createEmptyBorder());
+        chatPanel.setBackground(ThemeColors.canvas());
         chatPanel.add(createHeaderPanel(), BorderLayout.NORTH);
 
         transcript = new TranscriptView(font);
         baseChatFontSize = font.getSize2D();
-        transcript.setBackground(
-            getThemeColor("TextPane.background", Color.WHITE)
-        );
+        transcript.setBackground(ThemeColors.canvas());
         transcript.setOpaque(true);
 
         registerUndoRedoKeyBindings();
 
         JScrollPane scrollPane = new JScrollPane(transcript);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        scrollPane.getViewport().setBackground(
-            getThemeColor("TextPane.background", Color.WHITE)
-        );
+        scrollPane.setBorder(BorderFactory.createEmptyBorder(
+                0, UiTokens.SPACE_2, 0, UiTokens.SPACE_2));
+        scrollPane.getViewport().setBackground(ThemeColors.canvas());
+        scrollPane.getVerticalScrollBar().setUnitIncrement(UiTokens.SPACE_4);
         chatPanel.add(scrollPane, BorderLayout.CENTER);
         return chatPanel;
     }
@@ -462,8 +470,10 @@ public class AiChatPanel
      * @return the assembled bottom panel
      */
     private JPanel createBottomPanel(Font font) {
-        JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        bottomPanel = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+        bottomPanel.setBackground(ThemeColors.canvas());
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_3, UiTokens.SPACE_3, UiTokens.SPACE_3));
 
         attachmentBar = new AttachmentBar(attachmentRegistry,
                 message -> runOnEdt(() -> transcript.addSystemMessage(message, ThemeColors.warning())));
@@ -472,33 +482,31 @@ public class AiChatPanel
                 .forNew(javax.swing.SwingUtilities.getWindowAncestor(this), promptLibrary(), body)
                 .setVisible(true));
 
-        bottomPanel.add(createToolbarRow(), BorderLayout.NORTH);
-        bottomPanel.add(attachmentBar, BorderLayout.CENTER);
-        bottomPanel.add(createInputPanel(font), BorderLayout.SOUTH);
+        bottomPanel.add(attachmentBar, BorderLayout.NORTH);
+        bottomPanel.add(createInputPanel(font), BorderLayout.CENTER);
         return bottomPanel;
     }
 
     /**
-     * Creates the slim toolbar row: model selector on the left and the tree
-     * navigation icons flush right - replacing the old fixed-height
-     * "Navigation" titled block and freeing vertical space for the chat.
+     * Creates the slim model row kept directly inside the composer, replacing
+     * the old fixed-height "Navigation" block and avoiding pointer travel.
      *
      * @return the assembled toolbar row
      */
     private JPanel createToolbarRow() {
-        navigationPanel = new JPanel(new BorderLayout(5, 0));
-        navigationPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+        navigationPanel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
+        navigationPanel.setOpaque(false);
+        navigationPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, UiTokens.SPACE_1, 0));
 
-        JPanel modelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        modelPanel.add(new JLabel("Model:"));
-        modelPanel.add(modelSelectorPanel);
-        modelPanel.add(reasoningControls);
-        navigationPanel.add(modelPanel, BorderLayout.WEST);
+        navigationPanel.add(modelSelectorPanel, BorderLayout.CENTER);
 
-        JPanel navButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        navButtons.add(treeNavigationButtons.getUpButton());
-        navButtons.add(treeNavigationButtons.getDownButton());
-        navigationPanel.add(navButtons, BorderLayout.EAST);
+        JPanel modelActions = new JPanel();
+        modelActions.setLayout(new BoxLayout(modelActions, BoxLayout.X_AXIS));
+        modelActions.setOpaque(false);
+        modelActions.add(reasoningControls);
+        modelActions.add(Box.createHorizontalStrut(UiTokens.SPACE_1));
+        modelActions.add(modelSelectorPanel.favoriteButton());
+        navigationPanel.add(modelActions, BorderLayout.EAST);
 
         navigationPanel.setVisible(true);
         return navigationPanel;
@@ -514,7 +522,7 @@ public class AiChatPanel
         geminiBorderPanel = new GeminiBorderPanel();
 
         PlaceholderTextArea input = new PlaceholderTextArea(4, 20);
-        input.setPlaceholder("Ask about your test plan - type @ for commands");
+        input.setPlaceholder("Ask Feather Wand about your test plan");
         messageField = input;
         messageField.setLineWrap(true);
         messageField.setWrapStyleWord(true);
@@ -522,8 +530,20 @@ public class AiChatPanel
         baseMessageFontSize = font.getSize2D();
         
         // Remove line border and set empty border for messageField
-        messageField.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        messageField.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_3, UiTokens.SPACE_3, UiTokens.SPACE_2, UiTokens.SPACE_3));
         messageField.setOpaque(false); // Make it non-opaque to use GeminiBorderPanel's background
+        messageField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent event) {
+                geminiBorderPanel.setFocused(true);
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent event) {
+                geminiBorderPanel.setFocused(false);
+            }
+        });
         
         InputBoxIntellisense intellisense = new InputBoxIntellisense(messageField);
         intellisense.setPromptLibrary(promptLibrary());
@@ -584,6 +604,8 @@ public class AiChatPanel
 
         JScrollPane messageScrollPane = new JScrollPane(messageField);
         messageScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        messageScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        messageScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
         messageScrollPane.setOpaque(false);
         messageScrollPane.getViewport().setOpaque(false);
         geminiBorderPanel.add(messageScrollPane, BorderLayout.CENTER);
@@ -591,11 +613,15 @@ public class AiChatPanel
         messageField.setTransferHandler(new AttachmentTransferHandler(
                 messageField.getTransferHandler(), attachmentBar::addFileAsync));
 
-        // Options row below the text box (paperclip + future input-adjacent
-        // options on the left, keyboard hint / stop button on the right).
-        // There is no Send button: Enter sends, the stop circle appears
-        // bottom-right while the AI is processing (ChatGPT-style).
-        inputOptionsRow = new InputOptionsRow(this, attachmentBar, createStyledButton("", 11));
+        // Options area below the text box keeps model selection and reasoning
+        // beside the composer, with input actions and status on the final row.
+        // The trailing Send button swaps to Stop while the AI is processing.
+        QuietButton attachButton = new QuietButton("").iconOnly();
+        inputOptionsRow = new InputOptionsRow(
+                this, attachmentBar, attachButton, this::sendMessage);
+        inputOptionsRow.setModelRow(createToolbarRow());
+        inputOptionsRow.addOption(treeNavigationButtons.getUpButton());
+        inputOptionsRow.addOption(treeNavigationButtons.getDownButton());
         inputOptionsRow.setStatsComponent(contextStatsLabel);
         geminiBorderPanel.add(inputOptionsRow, BorderLayout.SOUTH);
 
@@ -608,68 +634,68 @@ public class AiChatPanel
      * @return The header panel
      */
     private JPanel createHeaderPanel() {
-        JPanel headerPanel = new JPanel();
-        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.X_AXIS));
-        Color headerBorderColor = ThemeColors.border();
-        headerPanel.setBorder(
-            BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 1, 0, headerBorderColor),
-                BorderFactory.createEmptyBorder(10, 12, 10, 12)
-            )
-        );
-        headerPanel.setBackground(UIManager.getColor("Panel.background"));
+        headerPanel = new JPanel(new BorderLayout());
+        headerPanel.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                updateHeaderDensity(headerPanel.getWidth());
+            }
+        });
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_3, 0, UiTokens.SPACE_3));
+        headerPanel.setBackground(ThemeColors.surface());
 
-        JLabel titleLabel = new JLabel(
-            Constants.APP_NAME + " v" + VersionUtils.getVersion()
-        );
-        titleLabel.setFont(
-            new Font(titleLabel.getFont().getName(), Font.BOLD, 14)
-        );
-        titleLabel.setAlignmentY(Component.CENTER_ALIGNMENT);
-        titleLabel.setMinimumSize(
-            new Dimension(0, titleLabel.getPreferredSize().height)
-        );
-        headerPanel.add(titleLabel);
+        JPanel titleRow = new JPanel(new BorderLayout(UiTokens.SPACE_3, 0));
+        titleRow.setOpaque(false);
+        titleRow.setBorder(BorderFactory.createEmptyBorder(0, 0, UiTokens.SPACE_2, 0));
 
-        headerPanel.add(Box.createRigidArea(new Dimension(10, 0)));
-        if (Boolean.parseBoolean(AiConfig.getProperty("jmeter.ai.record.enabled", "false"))) {
+        JPanel identityPanel = new JPanel();
+        identityPanel.setLayout(new BoxLayout(identityPanel, BoxLayout.X_AXIS));
+        identityPanel.setOpaque(false);
+        URL markResource = AiChatPanel.class.getResource(
+                "/org/qainsights/jmeter/ai/featherwand-22x22.png");
+        JLabel mark = new JLabel(markResource == null ? null : new ImageIcon(markResource));
+        mark.setAlignmentY(Component.CENTER_ALIGNMENT);
+        mark.getAccessibleContext().setAccessibleName("Feather Wand");
+        identityPanel.add(mark);
+        identityPanel.add(Box.createRigidArea(new Dimension(UiTokens.SPACE_2, 0)));
+
+        titleStack = new JPanel();
+        titleStack.setLayout(new BoxLayout(titleStack, BoxLayout.Y_AXIS));
+        titleStack.setOpaque(false);
+        JLabel titleLabel = new JLabel("Feather Wand");
+        titleLabel.setFont(UiTokens.title(titleLabel.getFont()));
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        versionLabel = new JLabel("JMeter Agent · v" + VersionUtils.getVersion());
+        versionLabel.setFont(UiTokens.caption(versionLabel.getFont()));
+        versionLabel.setForeground(ThemeColors.secondaryText());
+        versionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleStack.add(titleLabel);
+        titleStack.add(versionLabel);
+        titleStack.setAlignmentY(Component.CENTER_ALIGNMENT);
+        identityPanel.add(titleStack);
+        titleRow.add(identityPanel, BorderLayout.WEST);
+        recordingEnabled = Boolean.parseBoolean(
+                AiConfig.getProperty("jmeter.ai.record.enabled", "false"));
+        if (recordingEnabled) {
             org.qainsights.jmeter.ai.record.RecordingSessionController recController =
                 org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance();
             org.qainsights.jmeter.ai.record.RecordingArtifactStore recStore =
                 new org.qainsights.jmeter.ai.record.RecordingArtifactStore();
-            org.qainsights.jmeter.ai.record.RecordingControlPanel recPanel =
+            recordingControl =
                 new org.qainsights.jmeter.ai.record.RecordingControlPanel(recController, recStore);
-            recPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
-            headerPanel.add(recPanel);
         } else {
             // Discovery-only chip when recording is off; does not start sessions
-            JComponent disabledRecord =
-                org.qainsights.jmeter.ai.record.DisabledRecordChip.create();
-            disabledRecord.setAlignmentY(Component.CENTER_ALIGNMENT);
-            headerPanel.add(disabledRecord);
+            recordingControl = org.qainsights.jmeter.ai.record.DisabledRecordChip.create();
         }
 
-        headerPanel.add(Box.createHorizontalGlue());
+        JPanel headerActions = createHeaderActionsPanel();
+        titleRow.add(headerActions, BorderLayout.EAST);
 
-        JPanel donatePanel = createDonateButtonPanel();
-        donatePanel.setAlignmentY(Component.CENTER_ALIGNMENT);
-        headerPanel.add(donatePanel);
-
-        headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
-
-        SessionMenuButton sessionMenu = new SessionMenuButton(this, this::buildSession);
-        sessionMenu.setAlignmentY(Component.CENTER_ALIGNMENT);
-        headerPanel.add(sessionMenu);
-
-        headerPanel.add(Box.createRigidArea(new Dimension(6, 0)));
-
-        JButton newChatButton = createStyledButton("+", 16);
-        newChatButton.setToolTipText("Start a new conversation");
-        newChatButton.setMargin(new Insets(0, 8, 0, 8));
-        newChatButton.setAlignmentY(Component.CENTER_ALIGNMENT);
-        newChatButton.addActionListener(e -> startNewConversation());
-        headerPanel.add(newChatButton);
-
+        headerPanel.add(titleRow, BorderLayout.CENTER);
+        headerSeparator = new JSeparator();
+        headerSeparator.setForeground(ThemeColors.separator());
+        headerPanel.add(headerSeparator, BorderLayout.SOUTH);
         return headerPanel;
     }
 
@@ -681,60 +707,58 @@ public class AiChatPanel
         }
     }
 
-    /**
-     * Creates the donate button wrapped in a centred panel.
-     *
-     * @return a panel containing the styled donate button
-     */
-    private JPanel createDonateButtonPanel() {
-        JButton donateButton = new DonateButton();
-        donateButton.addActionListener(e -> openDonateLink());
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+    private JPanel createHeaderActionsPanel() {
+        JPanel panel = new JPanel(new FlowLayout(
+                FlowLayout.RIGHT, UiTokens.HEADER_ACTION_GAP, 0));
         panel.setOpaque(false);
+        panel.add(recordingControl);
+
+        donateButton = new DonateButton();
+        donateButton.addActionListener(e -> openDonateLink());
         panel.add(donateButton);
+
+        SessionMenuButton sessionMenu = new SessionMenuButton(this, this::buildSession);
+        panel.add(sessionMenu);
+
+        QuietButton newChatButton = createStyledButton("", 16);
+        newChatButton.iconOnly(UiTokens.HEADER_CONTROL_HEIGHT);
+        newChatButton.setIcon(ActionIcons.plus(16));
+        newChatButton.setToolTipText("Start a new conversation");
+        newChatButton.getAccessibleContext().setAccessibleName("Start a new conversation");
+        newChatButton.addActionListener(e -> startNewConversation());
+        panel.add(newChatButton);
         return panel;
     }
 
+    private void updateHeaderDensity(int width) {
+        if (donateButton == null) {
+            return;
+        }
+        boolean narrow = width < UiTokens.HEADER_COMPACT_WIDTH;
+        if (recordingControl != null) {
+            recordingControl.setVisible(!narrow || recordingEnabled);
+        }
+        if (titleStack != null) {
+            titleStack.setVisible(!narrow || !recordingEnabled);
+        }
+    }
+
     /**
-     * Creates a styled button with bold font and a rounded compound border.
+     * Creates a quiet rounded button with the requested label size.
      *
      * @param text     the button label
      * @param fontSize the bold font size
      * @return the configured JButton
      */
-    private JButton createStyledButton(String text, int fontSize) {
-        JButton button = new JButton(text);
-        button.setFont(
-            new Font(button.getFont().getName(), Font.BOLD, fontSize)
-        );
-        button.setFocusPainted(false);
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        Color borderColor = ThemeColors.border();
-        button.setBorder(
-            BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(borderColor, 1, true),
-                BorderFactory.createEmptyBorder(2, 8, 2, 8)
-            )
-        );
+    private QuietButton createStyledButton(String text, int fontSize) {
+        QuietButton button = new QuietButton(text);
+        button.setFont(button.getFont().deriveFont(Font.BOLD, fontSize));
+        if (text == null || text.isEmpty()) {
+            button.iconOnly();
+        }
 
-        // Subtle theme-aware hover tint; restores the original background
-        // (which may be a custom brand color, e.g. the donate button) on exit.
-        Color baseBackground = button.getBackground();
-        button.addMouseListener(
-            new java.awt.event.MouseAdapter() {
-                @Override
-                public void mouseEntered(java.awt.event.MouseEvent e) {
-                    if (button.isEnabled()) {
-                        button.setBackground(ThemeColors.hoverBackground());
-                    }
-                }
-
-                @Override
-                public void mouseExited(java.awt.event.MouseEvent e) {
-                    button.setBackground(baseBackground);
-                }
-            }
-        );
+        // Subtle theme-aware hover tint and focus treatment are supplied
+        // by the shared quiet button primitive for every look-and-feel.
         return button;
     }
 
@@ -787,7 +811,7 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        transcript.addAssistantMessage(WelcomeMessages.forCurrentConfig());
+        transcript.showWelcome(WelcomeMessages.forCurrentConfig());
     }
 
     /** The session attachment registry (package-private for tests). */
@@ -920,6 +944,9 @@ public class AiChatPanel
     @Override
     public void setInputEnabled(boolean enabled) {
         messageField.setEnabled(enabled);
+        if (inputOptionsRow != null) {
+            inputOptionsRow.setSendEnabled(enabled);
+        }
         if (geminiBorderPanel != null) {
             geminiBorderPanel.setThinking(!enabled);
         }
@@ -1333,8 +1360,21 @@ public class AiChatPanel
     }
 
     private void refreshChatColors() {
-        Color newBg = getThemeColor("TextPane.background", Color.WHITE);
+        Color newBg = ThemeColors.canvas();
+        setBackground(newBg);
         transcript.setBackground(newBg);
+        if (bottomPanel != null) {
+            bottomPanel.setBackground(newBg);
+        }
+        if (headerPanel != null) {
+            headerPanel.setBackground(ThemeColors.surface());
+        }
+        if (versionLabel != null) {
+            versionLabel.setForeground(ThemeColors.secondaryText());
+        }
+        if (headerSeparator != null) {
+            headerSeparator.setForeground(ThemeColors.separator());
+        }
         JScrollPane scrollPane = ChatScroller.scrollPaneOf(transcript);
         if (scrollPane != null) {
             scrollPane.getViewport().setBackground(newBg);
@@ -1347,16 +1387,20 @@ public class AiChatPanel
         if (geminiBorderPanel != null) {
             geminiBorderPanel.applyThemeBackground();
         }
+        if (inputOptionsRow != null) {
+            inputOptionsRow.applyTheme();
+        }
+        if (reasoningControls != null) {
+            reasoningControls.applyTheme();
+        }
+        if (attachmentBar != null) {
+            attachmentBar.applyTheme();
+        }
         if (messageField != null) {
-            messageField.setBackground(
-                getThemeColor("TextArea.background", Color.WHITE)
-            );
-            messageField.setForeground(
-                getThemeColor("TextArea.foreground", Color.BLACK)
-            );
-            messageField.setCaretColor(
-                getThemeColor("TextArea.foreground", Color.BLACK)
-            );
+            messageField.setBackground(ThemeColors.elevatedSurface());
+            Color textColor = getThemeColor("TextArea.foreground", ThemeColors.foreground());
+            messageField.setForeground(textColor);
+            messageField.setCaretColor(textColor);
         }
     }
 

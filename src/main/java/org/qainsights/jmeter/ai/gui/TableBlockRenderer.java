@@ -12,6 +12,7 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
  * Renders GitHub-flavored markdown tables into a {@link StyledDocument} as an
@@ -89,7 +90,7 @@ final class TableBlockRenderer {
             throws BadLocationException {
         int columns = Math.max(1, header.size());
         JPanel grid = new JPanel(new GridLayout(0, columns, 0, 0));
-        grid.setBorder(BorderFactory.createLineBorder(ThemeColors.border()));
+        grid.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
         grid.setOpaque(false);
 
         for (int col = 0; col < columns; col++) {
@@ -121,8 +122,10 @@ final class TableBlockRenderer {
             label.setOpaque(false);
         }
         label.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 1, ThemeColors.border()),
-                BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+                BorderFactory.createMatteBorder(0, 0, 1, 1, ThemeColors.separator()),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_1, UiTokens.SPACE_2,
+                        UiTokens.SPACE_1, UiTokens.SPACE_2)));
         return label;
     }
 }

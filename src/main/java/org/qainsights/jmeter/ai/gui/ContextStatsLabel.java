@@ -4,6 +4,7 @@ import java.util.Locale;
 import javax.swing.JLabel;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.usage.UsageStats;
 
 /**
@@ -20,7 +21,8 @@ class ContextStatsLabel extends JLabel {
 
     ContextStatsLabel() {
         setForeground(ThemeColors.secondaryText());
-        setFont(getFont().deriveFont(getFont().getSize2D() - 2f));
+        setFont(UiTokens.caption(getFont()));
+        getAccessibleContext().setAccessibleName("Context and session cost");
         setText("");
     }
 

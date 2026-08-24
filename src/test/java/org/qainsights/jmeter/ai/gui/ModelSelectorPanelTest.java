@@ -39,13 +39,17 @@ class ModelSelectorPanelTest {
         assertEquals("Loading available models\u2026", panel.buttonText());
     }
 
-    private javax.swing.JToggleButton starButtonOf(ModelSelectorPanel panel) {
-        for (java.awt.Component c : panel.getComponents()) {
-            if (c instanceof javax.swing.JToggleButton) {
-                return (javax.swing.JToggleButton) c;
+    private QuietButton selectorButtonOf(ModelSelectorPanel panel) {
+        for (java.awt.Component component : panel.getComponents()) {
+            if (component instanceof QuietButton button) {
+                return button;
             }
         }
-        throw new AssertionError("no star button found");
+        throw new AssertionError("no selector button found");
+    }
+
+    private javax.swing.JToggleButton starButtonOf(ModelSelectorPanel panel) {
+        return panel.favoriteButton();
     }
 
     @Test
@@ -135,17 +139,30 @@ class ModelSelectorPanelTest {
     }
 
     @Test
-    void buttonShowsDisplayNameAndProvider() {
+    void buttonPrioritizesTheModelName() {
         ModelSelectorPanel panel = panel(prefs());
         panel.setModels(MODELS, "openai:gpt-5.1");
-        assertEquals("gpt-5.1  ·  OpenAI", panel.buttonText());
+        assertEquals("gpt-5.1", panel.buttonText());
     }
 
     @Test
-    void bareModelShowsAnthropicProvider() {
+    void bareModelKeepsItsFullName() {
         ModelSelectorPanel panel = panel(prefs());
         panel.setModels(MODELS, "claude-opus-4-8");
-        assertEquals("claude-opus-4-8  ·  Anthropic", panel.buttonText());
+        assertEquals("claude-opus-4-8", panel.buttonText());
+    }
+
+    @Test
+    void selectorUsesAllAvailableWidth() {
+        ModelSelectorPanel panel = panel(prefs());
+        panel.setModels(MODELS, "google:gemini-2.5-pro");
+        panel.setSize(280, 32);
+        panel.doLayout();
+
+        QuietButton selector = selectorButtonOf(panel);
+        assertEquals(280, selector.getWidth());
+        assertEquals("gemini-2.5-pro", selector.getText());
+        assertEquals(QuietButton.Kind.OUTLINED, selector.kind());
     }
 
     @Test

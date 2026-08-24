@@ -17,6 +17,10 @@ class DisabledRecordChipTest {
         assertEquals("Record", button.getText());
         assertFalse(button.isEnabled());
         assertFalse(button.isSelected());
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH,
+                button.getPreferredSize().width);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                button.getPreferredSize().height);
         assertEquals(DisabledRecordChip.TOOLTIP, button.getToolTipText());
         assertTrue(button.getToolTipText().contains("jmeter.ai.record.enabled=true"));
     }

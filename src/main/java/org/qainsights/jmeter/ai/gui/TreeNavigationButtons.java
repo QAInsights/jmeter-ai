@@ -1,7 +1,6 @@
 package org.qainsights.jmeter.ai.gui;
 
 import javax.swing.JButton;
-import javax.swing.ImageIcon;
 import javax.swing.SwingConstants;
 import java.awt.Dimension;
 import java.awt.Insets;
@@ -17,33 +16,16 @@ import org.slf4j.LoggerFactory;
 public class TreeNavigationButtons {
 
     private static final Logger log = LoggerFactory.getLogger(TreeNavigationButtons.class);
-    private JButton upButton;
-    private JButton downButton;
+    private final JButton upButton;
+    private final JButton downButton;
 
     public TreeNavigationButtons() {
-        try {
-            // Load PNG icons
-            ImageIcon upIcon = new ImageIcon(getClass().getResource("/org/qainsights/jmeter/ai/icons/up.png"));
-            ImageIcon downIcon = new ImageIcon(getClass().getResource("/org/qainsights/jmeter/ai/icons/down.png"));
-            
-            // Initialize buttons with icons
-            upButton = new JButton(upIcon);
-            downButton = new JButton(downIcon);
-            
-            // Configure buttons
-            configureButton(upButton, "Navigate Up");
-            configureButton(downButton, "Navigate Down");
-        } catch (Exception e) {
-            log.error("Error loading PNG icons", e);
-            // Fallback to text buttons
-            upButton = new JButton("↑");
-            downButton = new JButton("↓");
-            
-            // Configure buttons
-            configureButton(upButton, "Navigate Up");
-            configureButton(downButton, "Navigate Down");
-        }
-        
+        upButton = new QuietButton("").iconOnly();
+        downButton = new QuietButton("").iconOnly();
+        upButton.setIcon(ActionIcons.chevronUp(15));
+        downButton.setIcon(ActionIcons.chevronDown(15));
+        configureButton(upButton, "Navigate Up");
+        configureButton(downButton, "Navigate Down");
         log.info("TreeNavigationButtons initialized");
     }
     
@@ -57,21 +39,23 @@ public class TreeNavigationButtons {
         button.setToolTipText(tooltip);
         
         // Set consistent size
-        // button.setPreferredSize(new Dimension(36, 36));
+        button.setPreferredSize(new Dimension(32, 32));
         
         // Center the text
         button.setHorizontalAlignment(SwingConstants.CENTER);
         button.setVerticalAlignment(SwingConstants.CENTER);
         
         // Set padding
-        button.setMargin(new Insets(2, 2, 2, 2));
+        button.setMargin(new Insets(0, 0, 0, 0));
         
         // No need to set font for icon buttons
+        button.getAccessibleContext().setAccessibleName(tooltip);
         
         // Improve appearance
         button.setFocusPainted(false);
-        button.setBorderPainted(true);
-        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setOpaque(false);
         button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
     }
 

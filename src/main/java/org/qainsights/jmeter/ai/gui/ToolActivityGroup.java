@@ -9,6 +9,7 @@ import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.Timer;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
  * Collapsible container for agent tool-call activity in the transcript,
@@ -37,13 +38,17 @@ class ToolActivityGroup extends JPanel {
     ToolActivityGroup() {
         super(new BorderLayout());
         setOpaque(false);
-        setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_1, UiTokens.SPACE_2,
+                UiTokens.SPACE_1, UiTokens.SPACE_2));
 
         headerLabel = new JLabel();
-        headerLabel.setFont(headerLabel.getFont().deriveFont(Font.BOLD, 11f));
+        headerLabel.setFont(UiTokens.label(headerLabel.getFont()));
         headerLabel.setForeground(ThemeColors.secondaryText());
         headerLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        headerLabel.setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
+        headerLabel.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_3,
+                UiTokens.SPACE_2, UiTokens.SPACE_3));
         headerLabel.addMouseListener(
             new java.awt.event.MouseAdapter() {
                 @Override
@@ -57,9 +62,12 @@ class ToolActivityGroup extends JPanel {
         bodyArea = new JTextArea();
         bodyArea.setEditable(false);
         bodyArea.setOpaque(false);
+        bodyArea.setLineWrap(true);
+        bodyArea.setWrapStyleWord(false);
         bodyArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         bodyArea.setForeground(ThemeColors.secondaryText());
-        bodyArea.setBorder(BorderFactory.createEmptyBorder(0, 20, 2, 10));
+        bodyArea.setBorder(BorderFactory.createEmptyBorder(
+                0, UiTokens.SPACE_4, UiTokens.SPACE_3, UiTokens.SPACE_3));
 
         bodyWrapper = new JPanel(new BorderLayout());
         bodyWrapper.setOpaque(false);
@@ -125,13 +133,40 @@ class ToolActivityGroup extends JPanel {
         return bodyArea.getText();
     }
 
+    void applyTheme() {
+        bodyArea.setForeground(ThemeColors.secondaryText());
+        updateHeader();
+        repaint();
+    }
+
     /** Stops the spinner timer; call when discarding the group. */
     void dispose() {
         spinnerTimer.stop();
     }
 
+    @Override
+    protected void paintComponent(java.awt.Graphics graphics) {
+        java.awt.Graphics2D g2 = (java.awt.Graphics2D) graphics.create();
+        try {
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                    java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            int x = UiTokens.SPACE_2;
+            int width = Math.max(0, getWidth() - UiTokens.SPACE_4 - 1);
+            int height = Math.max(0, getHeight() - UiTokens.SPACE_2 - 1);
+            int arc = UiTokens.RADIUS_MEDIUM * 2;
+            g2.setColor(ThemeColors.subtleSurface());
+            g2.fillRoundRect(x, UiTokens.SPACE_1, width, height, arc, arc);
+            g2.setColor(ThemeColors.separator());
+            g2.drawRoundRect(x, UiTokens.SPACE_1, width, height, arc, arc);
+        } finally {
+            g2.dispose();
+        }
+        super.paintComponent(graphics);
+    }
+
     private void updateHeader() {
         String chevron = collapsed ? "▸ " : "▾ ";
+        headerLabel.setForeground(running ? ThemeColors.accent() : ThemeColors.secondaryText());
         if (running) {
             headerLabel.setText(
                 chevron + SPINNER_FRAMES[spinnerFrame] + " Agent activity"

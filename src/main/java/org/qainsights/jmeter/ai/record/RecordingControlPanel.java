@@ -5,6 +5,7 @@ import java.io.File;
 import javax.swing.*;
 import org.apache.jmeter.gui.GuiPackage;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 /**
@@ -21,12 +22,11 @@ public final class RecordingControlPanel extends JPanel {
         this.controller = controller;
         this.artifactStore = artifactStore;
         
-        setLayout(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        setLayout(new FlowLayout(FlowLayout.LEFT, UiTokens.HEADER_ACTION_GAP, 0));
         setOpaque(false);
 
         setupToggleBtn();
         add(toggleBtn);
-        add(Box.createHorizontalStrut(5));
         add(statusLabel);
 
         controller.addListener(this::updateUiFromState);
@@ -34,6 +34,11 @@ public final class RecordingControlPanel extends JPanel {
 
     private void setupToggleBtn() {
         toggleBtn.setMargin(new Insets(2, 6, 2, 6));
+        Dimension size = new Dimension(
+                UiTokens.HEADER_TEXT_BUTTON_WIDTH, UiTokens.HEADER_CONTROL_HEIGHT);
+        toggleBtn.setPreferredSize(size);
+        toggleBtn.setMinimumSize(size);
+        toggleBtn.setMaximumSize(size);
         toggleBtn.addActionListener(e -> {
             if (toggleBtn.isSelected()) {
                 handleStartSession();

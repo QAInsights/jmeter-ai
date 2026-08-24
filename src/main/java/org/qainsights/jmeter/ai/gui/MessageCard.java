@@ -9,6 +9,7 @@ import java.awt.Insets;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
@@ -19,6 +20,7 @@ import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,10 +56,11 @@ class MessageCard extends JPanel {
     }
 
     /** Corner radius (px) for the user bubble's rounded background. */
-    static final int BUBBLE_ARC = 14;
+    static final int BUBBLE_ARC = UiTokens.RADIUS_LARGE * 2;
 
     private final Role role;
     private final JTextPane body;
+    private JLabel senderLabel;
     private final StringBuilder rawText = new StringBuilder();
     private final MessageProcessor messageProcessor;
     private final JPanel chipsPanel;
@@ -76,8 +79,12 @@ class MessageCard extends JPanel {
         applyTheme();
         setBorder(
             BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(4, 6, 4, 6),
-                BorderFactory.createEmptyBorder(6, 10, 8, 10)
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_1, UiTokens.SPACE_2,
+                        UiTokens.SPACE_1, UiTokens.SPACE_2),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_2, UiTokens.SPACE_3,
+                        UiTokens.SPACE_3, UiTokens.SPACE_3)
             )
         );
 
@@ -143,20 +150,24 @@ class MessageCard extends JPanel {
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
 
-        JLabel sender = new JLabel(role.displayName());
-        sender.setFont(sender.getFont().deriveFont(Font.BOLD));
-        sender.setForeground(
-            role == Role.USER
-                ? ThemeColors.secondaryText()
-                : ThemeColors.accent()
-        );
-        header.add(sender, BorderLayout.WEST);
+        senderLabel = new JLabel(role.displayName());
+        senderLabel.setFont(UiTokens.label(senderLabel.getFont()));
+        if (role == Role.ASSISTANT) {
+            java.net.URL mark = MessageCard.class.getResource(
+                    "/org/qainsights/jmeter/ai/featherwand-13x13.png");
+            if (mark != null) {
+                senderLabel.setIcon(new ImageIcon(mark));
+                senderLabel.setIconTextGap(UiTokens.SPACE_1);
+            }
+        }
+        applySenderTheme();
+        header.add(senderLabel, BorderLayout.WEST);
 
-        JButton copy = new JButton("Copy");
+        JButton copy = new QuietButton("Copy");
+        copy.setIcon(ActionIcons.copy(12));
+        copy.setIconTextGap(UiTokens.SPACE_1);
         copy.setToolTipText("Copy this message");
-        copy.setFont(copy.getFont().deriveFont(10f));
-        copy.setMargin(new Insets(1, 6, 1, 6));
-        copy.setFocusPainted(false);
+        copy.setFont(UiTokens.caption(copy.getFont()));
         copy.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         copy.addActionListener(e -> {
             java.awt.Toolkit.getDefaultToolkit()
@@ -174,11 +185,9 @@ class MessageCard extends JPanel {
         JPanel copyWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         copyWrap.setOpaque(false);
         if (role == Role.USER) {
-            savePromptButton = new JButton("Save prompt");
+            savePromptButton = new QuietButton("Save prompt");
             savePromptButton.setToolTipText("Save this message as a reusable prompt");
-            savePromptButton.setFont(savePromptButton.getFont().deriveFont(10f));
-            savePromptButton.setMargin(new Insets(1, 6, 1, 6));
-            savePromptButton.setFocusPainted(false);
+            savePromptButton.setFont(UiTokens.caption(savePromptButton.getFont()));
             savePromptButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             savePromptButton.setVisible(savePromptHandler != null);
             savePromptButton.addActionListener(e -> {
@@ -300,6 +309,18 @@ class MessageCard extends JPanel {
         if (role == Role.USER) {
             setBackground(ThemeColors.userBubbleBackground());
         }
+        applySenderTheme();
+        if (body != null) {
+            body.setForeground(ThemeColors.foreground());
+        }
+        repaint();
+    }
+
+    private void applySenderTheme() {
+        if (senderLabel != null) {
+            senderLabel.setForeground(
+                    role == Role.USER ? ThemeColors.secondaryText() : ThemeColors.accent());
+        }
     }
 
     /**
@@ -316,14 +337,17 @@ class MessageCard extends JPanel {
                     java.awt.RenderingHints.KEY_ANTIALIASING,
                     java.awt.RenderingHints.VALUE_ANTIALIAS_ON
                 );
-                Insets outer = new Insets(4, 6, 4, 6);
+                Insets outer = new Insets(
+                        UiTokens.SPACE_1, UiTokens.SPACE_2,
+                        UiTokens.SPACE_1, UiTokens.SPACE_2);
                 int x = outer.left;
                 int y = outer.top;
                 int w = getWidth() - outer.left - outer.right - 1;
                 int h = getHeight() - outer.top - outer.bottom - 1;
                 g2.setColor(getBackground());
                 g2.fillRoundRect(x, y, w, h, BUBBLE_ARC, BUBBLE_ARC);
-                g2.setColor(ThemeColors.border());
+                g2.setColor(ThemeColors.blend(
+                        ThemeColors.accent(), ThemeColors.separator(), 0.22f));
                 g2.drawRoundRect(x, y, w, h, BUBBLE_ARC, BUBBLE_ARC);
             } finally {
                 g2.dispose();

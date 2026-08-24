@@ -19,6 +19,7 @@ import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
  * Renders a fenced code block as an embedded panel inside the chat transcript:
@@ -50,8 +51,10 @@ final class CodeBlockRenderer {
         codePanel.setBackground(codeBg);
         codePanel.setBorder(
             BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeColors.border(), 1, true),
-                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                BorderFactory.createLineBorder(ThemeColors.separator(), 1, true),
+                BorderFactory.createEmptyBorder(
+                        UiTokens.SPACE_1, UiTokens.SPACE_1,
+                        UiTokens.SPACE_1, UiTokens.SPACE_1)
             )
         );
 
@@ -73,23 +76,23 @@ final class CodeBlockRenderer {
     private static JPanel createHeader(String code, String language, Color codeBg) {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(codeBg);
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 6));
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_1, UiTokens.SPACE_2,
+                UiTokens.SPACE_1, UiTokens.SPACE_1));
 
         JLabel languageLabel = new JLabel(
             language.isEmpty() ? "code" : language.toLowerCase()
         );
-        languageLabel.setFont(
-            languageLabel.getFont().deriveFont(Font.BOLD, 11f)
-        );
+        languageLabel.setFont(UiTokens.label(languageLabel.getFont()));
         languageLabel.setForeground(ThemeColors.secondaryText());
         headerPanel.add(languageLabel, BorderLayout.WEST);
 
-        JButton copyButton = new JButton("Copy");
+        JButton copyButton = new QuietButton("Copy");
+        copyButton.setIcon(ActionIcons.copy(12));
+        copyButton.setIconTextGap(UiTokens.SPACE_1);
         copyButton.setToolTipText("Copy code to clipboard");
-        copyButton.setFont(copyButton.getFont().deriveFont(11f));
-        copyButton.setFocusPainted(false);
+        copyButton.setFont(UiTokens.caption(copyButton.getFont()));
         copyButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        copyButton.setMargin(new java.awt.Insets(2, 8, 2, 8));
         copyButton.addActionListener(
             new ActionListener() {
                 @Override
@@ -126,7 +129,9 @@ final class CodeBlockRenderer {
         codeArea.setEditable(false);
         codeArea.setBackground(codeBg);
         codeArea.setForeground(ThemeColors.themeColor("TextArea.foreground", ThemeColors.foreground()));
-        codeArea.setBorder(BorderFactory.createEmptyBorder(2, 10, 6, 10));
+        codeArea.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_1, UiTokens.SPACE_2,
+                UiTokens.SPACE_2, UiTokens.SPACE_2));
         return codeArea;
     }
 }

@@ -60,6 +60,24 @@ class ReasoningControlsTest {
     }
 
     @Test
+    void thinkingAndEffortHaveDistinctSpacingAndReadableWidth() {
+        controls.updateForModel("claude-sonnet-4-6");
+        controls.setSize(controls.getPreferredSize());
+        controls.doLayout();
+
+        int gap = controls.getEffortCombo().getX()
+                - controls.getThinkingToggle().getX()
+                - controls.getThinkingToggle().getWidth();
+        assertEquals("Thinking", controls.getThinkingToggle().getText());
+        assertTrue(gap
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.REASONING_CONTROL_GAP);
+        assertTrue(controls.getEffortCombo().getPreferredSize().width
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.EFFORT_MIN_WIDTH);
+        assertTrue(controls.getEffortCombo().getMinimumSize().width
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.EFFORT_MIN_WIDTH);
+    }
+
+    @Test
     void alwaysReasoningModelShowsEffortOnly() {
         controls.updateForModel("openai:o3");
         assertTrue(controls.isVisible());

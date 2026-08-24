@@ -202,6 +202,108 @@ class AiChatPanelTest {
     // --- F9: context stats ---------------------------------------------------
 
     @Test
+    void modelSelectorAndSendActionStayInsideComposer() {
+        AiChatPanel panel = new AiChatPanel();
+        GeminiBorderPanel composer = findComponent(panel, GeminiBorderPanel.class);
+        ModelSelectorPanel selector = findComponent(panel, ModelSelectorPanel.class);
+        InputOptionsRow options = findComponent(panel, InputOptionsRow.class);
+
+        assertNotNull(composer);
+        assertNotNull(selector);
+        assertNotNull(options);
+        assertTrue(javax.swing.SwingUtilities.isDescendingFrom(selector, composer));
+        assertTrue(javax.swing.SwingUtilities.isDescendingFrom(options.sendButton(), composer));
+    }
+
+    @Test
+    void modelThinkingEffortAndFavoriteShareOneRow() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        ModelSelectorPanel selector = findComponent(panel, ModelSelectorPanel.class);
+        ReasoningControls reasoning = findComponent(panel, ReasoningControls.class);
+        assertNotNull(selector);
+        assertNotNull(reasoning);
+        selector.setModels(java.util.List.of("claude-sonnet-4-6"), "claude-sonnet-4-6");
+        flushEdt();
+        panel.setSize(500, 760);
+        layoutRecursively(panel);
+
+        javax.swing.JToggleButton favorite = selector.favoriteButton();
+        java.awt.Point selectorPoint = javax.swing.SwingUtilities.convertPoint(selector, 0, 0, panel);
+        java.awt.Point reasoningPoint = javax.swing.SwingUtilities.convertPoint(reasoning, 0, 0, panel);
+        java.awt.Point favoritePoint = javax.swing.SwingUtilities.convertPoint(favorite, 0, 0, panel);
+        int selectorCenter = selectorPoint.y + selector.getHeight() / 2;
+        int reasoningCenter = reasoningPoint.y + reasoning.getHeight() / 2;
+        int favoriteCenter = favoritePoint.y + favorite.getHeight() / 2;
+
+        assertTrue(reasoning.getThinkingToggle().isVisible());
+        assertTrue(reasoning.getEffortCombo().isVisible());
+        assertTrue(Math.abs(selectorCenter - reasoningCenter) <= 2);
+        assertTrue(Math.abs(selectorCenter - favoriteCenter) <= 2);
+        assertTrue(favoritePoint.x > reasoningPoint.x);
+    }
+
+    @Test
+    void headerControlsShareHeightAlignmentAndSpacing() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.setSize(500, 760);
+        layoutRecursively(panel);
+        flushEdt();
+        layoutRecursively(panel);
+
+        javax.swing.AbstractButton record = findButtonByText(panel, "Record");
+        javax.swing.AbstractButton donate = findButtonByText(panel, "Donate");
+        javax.swing.JButton overflow = findButton(panel, "Conversation actions and export");
+        javax.swing.JButton newConversation = findButton(panel, "Start a new conversation");
+        assertNotNull(record);
+        assertNotNull(donate);
+        assertNotNull(overflow);
+        assertNotNull(newConversation);
+
+        for (javax.swing.AbstractButton button : java.util.List.of(
+                record, donate, overflow, newConversation)) {
+            assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                    button.getHeight());
+        }
+        assertEquals(record.getWidth(), donate.getWidth());
+
+        java.awt.Point recordPoint = javax.swing.SwingUtilities.convertPoint(record, 0, 0, panel);
+        java.awt.Point donatePoint = javax.swing.SwingUtilities.convertPoint(donate, 0, 0, panel);
+        java.awt.Point overflowPoint = javax.swing.SwingUtilities.convertPoint(overflow, 0, 0, panel);
+        java.awt.Point newPoint = javax.swing.SwingUtilities.convertPoint(newConversation, 0, 0, panel);
+        int recordCenter = recordPoint.y + record.getHeight() / 2;
+        assertEquals(recordCenter, donatePoint.y + donate.getHeight() / 2);
+        assertEquals(recordCenter, overflowPoint.y + overflow.getHeight() / 2);
+        assertEquals(recordCenter, newPoint.y + newConversation.getHeight() / 2);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_ACTION_GAP,
+                overflowPoint.x - donatePoint.x - donate.getWidth());
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_ACTION_GAP,
+                newPoint.x - overflowPoint.x - overflow.getWidth());
+    }
+
+    @Test
+    void narrowHeaderKeepsNewConversationActionVisible() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.setSize(350, 700);
+        layoutRecursively(panel);
+        flushEdt();
+        layoutRecursively(panel);
+        javax.swing.JButton newConversation = findButton(
+                panel, "Start a new conversation");
+
+        assertNotNull(newConversation);
+        java.awt.Point location = javax.swing.SwingUtilities.convertPoint(
+                newConversation, 0, 0, panel);
+        assertTrue(location.x >= 0);
+        assertTrue(location.x + newConversation.getWidth() <= panel.getWidth());
+    }
+
+    @Test
+    void freshConversationUsesDedicatedWelcomeState() {
+        AiChatPanel panel = new AiChatPanel();
+        assertNotNull(findComponent(panel, WelcomePanel.class));
+    }
+
+    @Test
     void contextStatsLabelIsInstalledInOptionsRow() {
         AiChatPanel panel = new AiChatPanel();
         ContextStatsLabel found = findContextStatsLabel(panel);
@@ -220,6 +322,65 @@ class AiChatPanelTest {
         panel.startNewConversation();
         flushEdt();
         assertEquals("", label.getText(), "label clears for the new conversation");
+    }
+
+    private static void layoutRecursively(java.awt.Container root) {
+        root.doLayout();
+        for (java.awt.Component component : root.getComponents()) {
+            if (component instanceof java.awt.Container container) {
+                layoutRecursively(container);
+            }
+        }
+    }
+
+    private static javax.swing.AbstractButton findButtonByText(
+            java.awt.Container root, String text) {
+        for (java.awt.Component component : root.getComponents()) {
+            if (component instanceof javax.swing.AbstractButton button
+                    && text.equals(button.getText())) {
+                return button;
+            }
+            if (component instanceof java.awt.Container container) {
+                javax.swing.AbstractButton found = findButtonByText(container, text);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static javax.swing.JButton findButton(
+            java.awt.Container root, String tooltip) {
+        for (java.awt.Component component : root.getComponents()) {
+            if (component instanceof javax.swing.JButton button
+                    && tooltip.equals(button.getToolTipText())) {
+                return button;
+            }
+            if (component instanceof java.awt.Container container) {
+                javax.swing.JButton found = findButton(container, tooltip);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static <T extends java.awt.Component> T findComponent(
+            java.awt.Container root, Class<T> type) {
+        for (java.awt.Component component : root.getComponents()) {
+            if (type.isInstance(component)) {
+                return type.cast(component);
+            }
+            if (component instanceof java.awt.Container container) {
+                T found = findComponent(container, type);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private static ContextStatsLabel findContextStatsLabel(java.awt.Container root) {

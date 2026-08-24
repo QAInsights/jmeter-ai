@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
-import java.awt.FlowLayout;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -9,6 +10,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.slf4j.Logger;
@@ -38,30 +40,37 @@ class ModelSelectorPanel extends JPanel {
     private String currentModel;
 
     ModelSelectorPanel(ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
-        super(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        super(new BorderLayout(UiTokens.SPACE_1, 0));
         this.prefs = prefs;
         this.catalog = catalog;
         setOpaque(false);
 
-        selectorButton = new JButton("Loading available models\u2026");
+        selectorButton = new QuietButton(
+                "Loading available models\u2026", QuietButton.Kind.OUTLINED).compact();
         selectorButton.setIcon(ChevronIcons.down(10));
         selectorButton.setHorizontalTextPosition(SwingConstants.LEFT);
-        selectorButton.setIconTextGap(6);
+        selectorButton.setHorizontalAlignment(SwingConstants.LEFT);
+        selectorButton.setIconTextGap(UiTokens.MODEL_SELECTOR_ICON_GAP);
         selectorButton.setToolTipText("Change model - type to search");
+        selectorButton.getAccessibleContext().setAccessibleName("Selected AI model");
         selectorButton.setEnabled(false); // until the model list arrives
         selectorButton.addActionListener(e -> openPopup());
 
         starButton = new JToggleButton(StarIcons.outline(14));
         starButton.setSelectedIcon(StarIcons.filled(14));
         starButton.setToolTipText("Pin this model to keep it at the top of the list");
-        starButton.setFocusable(false);
+        starButton.getAccessibleContext().setAccessibleName("Pin selected model");
+        starButton.setContentAreaFilled(false);
+        starButton.setBorderPainted(false);
+        starButton.setFocusPainted(true);
+        starButton.setPreferredSize(new Dimension(
+                UiTokens.FAVORITE_WIDTH, UiTokens.FAVORITE_HEIGHT));
         starButton.setEnabled(false);
         starButton.addActionListener(e -> onStarToggled());
         // keeps the toolbar star in sync when the picker's star zones change pins
         prefs.addChangeListener(this::syncStar);
 
-        add(selectorButton);
-        add(starButton);
+        add(selectorButton, BorderLayout.CENTER);
     }
 
     /** Registers the callback fired with the prefixed id whenever the effective model changes. */
@@ -77,6 +86,10 @@ class ModelSelectorPanel extends JPanel {
     /** The selector button's label (visible for tests). */
     String buttonText() {
         return selectorButton.getText();
+    }
+
+    JToggleButton favoriteButton() {
+        return starButton;
     }
 
     /**
@@ -102,7 +115,9 @@ class ModelSelectorPanel extends JPanel {
      */
     private void applyModel(String model) {
         currentModel = model;
-        selectorButton.setText(ModelDisplay.formatLabel(model));
+        selectorButton.setText(ModelDisplay.parse(model)[0]);
+        selectorButton.setToolTipText("Selected model: " + ModelDisplay.formatLabel(model)
+                + " - click to change");
         starButton.setEnabled(true);
         syncStar();
         selectionListener.accept(model);

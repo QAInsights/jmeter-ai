@@ -19,8 +19,8 @@ class StopButtonTest {
         assertEquals("Stop the current response", button.getToolTipText());
         assertFalse(button.isContentAreaFilled(), "the disc must be painted by paintComponent");
         assertFalse(button.isBorderPainted());
-        assertEquals(24, button.getPreferredSize().width);
-        assertEquals(24, button.getPreferredSize().height);
+        assertEquals(32, button.getPreferredSize().width);
+        assertEquals(32, button.getPreferredSize().height);
     }
 
     @Test
@@ -34,14 +34,14 @@ class StopButtonTest {
     @Test
     void paintsInNormalAndHoverStates() {
         StopButton button = new StopButton(() -> {});
-        button.setSize(24, 24);
+        button.setSize(32, 32);
 
-        BufferedImage normal = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage normal = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
         button.paint(normal.getGraphics());
         assertTrue(hasVisiblePixels(normal), "normal state must paint");
 
         button.getModel().setRollover(true);
-        BufferedImage hover = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage hover = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
         button.paint(hover.getGraphics());
         assertTrue(hasVisiblePixels(hover), "hover state must paint");
         button.getModel().setRollover(false);
