@@ -203,6 +203,32 @@ class ModelPickerPopupTest {
     @Test
     @org.junit.jupiter.api.condition.DisabledIfSystemProperty(
             named = "java.awt.headless", matches = "true")
+    void customModelIsRememberedAndSelectedImmediately() {
+        // the CLI providers publish no model list, so a typed id has to work
+        // without a properties edit and a JMeter restart
+        ModelSelectorPreferences prefs = prefs();
+        javax.swing.JFrame owner = new javax.swing.JFrame();
+        owner.setSize(200, 40);
+        owner.setVisible(true);
+        ModelPickerPopup popup = new ModelPickerPopup(owner, MODELS,
+                "claude-opus-4-8", prefs, ModelCapabilityCatalog.getInstance());
+        java.util.List<String> selected = new java.util.ArrayList<>();
+        try {
+            popup.showFor(owner, selected::add);
+            popup.useCustomModel("codex:gpt-5.6-sol");
+
+            assertEquals(java.util.List.of("codex:gpt-5.6-sol"), selected);
+            assertEquals("codex:gpt-5.6-sol", popup.lastCustomModel());
+            assertEquals(java.util.List.of("codex:gpt-5.6-sol"), prefs.customModels());
+        } finally {
+            popup.dispose();
+            owner.dispose();
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.condition.DisabledIfSystemProperty(
+            named = "java.awt.headless", matches = "true")
     void popupWindowIsOwnedAndFocusable() {
         // regression: an ownerless JWindow cannot take keyboard focus on
         // Windows, leaving the search field untypable. The JDK only considers

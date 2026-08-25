@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -445,7 +446,8 @@ public class CommandDispatcher {
                     AiService service = cb.resolveAiService(cb.getSelectedModel());
                     JMeterAgent agent = JMeterAgent.forService(service);
                     if (agent == null) {
-                        return finish("Agent mode currently supports Claude, OpenAI and Google Gemini models only. "
+                        return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, "
+                                + "Codex and Claude Code models only. "
                                 + "Select one of those and retry.");
                     }
                     AgentLoop.AgentResult result;
@@ -464,6 +466,12 @@ public class CommandDispatcher {
                                 + "[Agent stopped after reaching the step limit.]";
                     }
                     return finish(summary.isEmpty() ? "Done." : summary);
+                } catch (CliProviderException cliError) {
+                    // The provider itself is unusable (CLI missing, not signed in,
+                    // timed out): retrying as plain chat would just pay for the same
+                    // failure twice, so surface the message the provider wrote.
+                    log.warn("Agent run aborted: {}", cliError.getMessage());
+                    return finish("Error: " + cliError.getMessage());
                 } catch (RuntimeException agentError) {
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
                     publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
@@ -518,14 +526,17 @@ public class CommandDispatcher {
     }
 
     /**
-     * True when the selected model routes to a provider with a tool-calling adapter,
-     * i.e. Anthropic Claude, OpenAI or Google Gemini. Every other provider falls back
-     * to plain chat.
+     * True when the selected model routes to a provider the agent can drive: the
+     * tool-calling adapters (Anthropic Claude, OpenAI, Google Gemini) plus the
+     * subscription CLIs (Codex, Claude Code), which get their tools through the
+     * prompt-level protocol. Every other provider falls back to plain chat.
      */
     static boolean isAgentCapableModel(String selectedModel) {
         return isClaudeModel(selectedModel)
                 || (selectedModel != null && selectedModel.startsWith("openai:"))
-                || (selectedModel != null && selectedModel.startsWith("google:"));
+                || (selectedModel != null && selectedModel.startsWith("google:"))
+                || (selectedModel != null && selectedModel.startsWith("codex:"))
+                || (selectedModel != null && selectedModel.startsWith("claude-code:"));
     }
 
     /** True when the selected model routes to Claude (non-prefixed model ids). */
@@ -539,7 +550,9 @@ public class CommandDispatcher {
                 && !selectedModel.startsWith("google:")
                 && !selectedModel.startsWith("grok:")
                 && !selectedModel.startsWith("meta:")
-                && !selectedModel.startsWith("bedrock:");
+                && !selectedModel.startsWith("bedrock:")
+                && !selectedModel.startsWith("codex:")
+                && !selectedModel.startsWith("claude-code:");
     }
 
     /**

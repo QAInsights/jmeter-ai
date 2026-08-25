@@ -19,6 +19,8 @@ final class ModelDisplay {
         { "grok:", "Grok" },
         { "meta:", "Meta" },
         { "bedrock:", "AWS Bedrock" },
+        { "codex:", "ChatGPT / Codex" },
+        { "claude-code:", "Claude Code" },
     };
 
     /** Unprefixed model ids route to Claude (see CommandDispatcher). */

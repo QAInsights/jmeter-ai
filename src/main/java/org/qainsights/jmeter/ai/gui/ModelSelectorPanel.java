@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -10,6 +11,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
@@ -35,7 +37,8 @@ class ModelSelectorPanel extends JPanel {
     private final JToggleButton starButton;
     private final ModelSelectorPreferences prefs;
     private final ModelCapabilityCatalog catalog;
-    private List<String> allModels = List.of();
+    private List<String> allModels = new ArrayList<>();
+    private List<SubscriptionCliProvider> cliProviders = List.of();
     private Consumer<String> selectionListener = model -> { };
     private String currentModel;
 
@@ -73,6 +76,15 @@ class ModelSelectorPanel extends JPanel {
         add(selectorButton, BorderLayout.CENTER);
     }
 
+    /**
+     * Registers the subscription CLI providers (Codex, Claude Code) whose sign-in
+     * state and actions are shown in the picker's footer.
+     */
+    void setCliProviders(List<SubscriptionCliProvider> providers) {
+        this.cliProviders = providers == null ? List.of() : List.copyOf(providers);
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
+    }
+
     /** Registers the callback fired with the prefixed id whenever the effective model changes. */
     void setSelectionListener(Consumer<String> listener) {
         this.selectionListener = listener != null ? listener : model -> { };
@@ -99,8 +111,13 @@ class ModelSelectorPanel extends JPanel {
      * the recents history.
      */
     void setModels(List<String> models, String defaultModel) {
-        allModels = List.copyOf(models);
-        selectorButton.setEnabled(!allModels.isEmpty());
+        allModels = new ArrayList<>(models);
+        for (String custom : customCliModels()) {
+            if (!allModels.contains(custom)) {
+                allModels.add(custom);
+            }
+        }
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
         String toSelect = defaultModel != null && allModels.contains(defaultModel)
                 ? defaultModel
                 : allModels.isEmpty() ? null : allModels.get(0);
@@ -140,20 +157,50 @@ class ModelSelectorPanel extends JPanel {
      */
     void select(String model) {
         log.info("Selected model: {}", model);
+        if (!allModels.contains(model)) {
+            allModels.add(model); // a model id just typed into the picker footer
+        }
         applyModel(model);
         prefs.recordUse(model);
+    }
+
+    /**
+     * User-entered ids belonging to a registered CLI provider. Those CLIs
+     * publish no model list, so remembered ids are the only way a new model
+     * shows up in the picker without a properties edit and restart.
+     */
+    private List<String> customCliModels() {
+        List<String> custom = new ArrayList<>();
+        for (String id : prefs.customModels()) {
+            for (SubscriptionCliProvider provider : cliProviders) {
+                if (id.startsWith(provider.modelPrefix()) && !custom.contains(id)) {
+                    custom.add(id);
+                }
+            }
+        }
+        return custom;
     }
 
     private void syncStar() {
         starButton.setSelected(currentModel != null && prefs.isPinned(currentModel));
     }
 
+    private void addModels(List<String> models) {
+        for (String model : models) {
+            if (!allModels.contains(model)) {
+                allModels.add(model);
+            }
+        }
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
+    }
+
     private void openPopup() {
-        if (allModels.isEmpty()) {
+        if (allModels.isEmpty() && cliProviders.isEmpty()) {
             return;
         }
         java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
-        ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog);
+        ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog,
+                cliProviders, this::addModels);
         popup.showFor(selectorButton, this::select);
     }
 

@@ -21,6 +21,7 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JDialog;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
@@ -29,6 +30,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -59,22 +61,43 @@ class ModelPickerPopup extends JDialog {
     static final int HEIGHT = 360;
 
     private final List<String> allModels;
+    private String pendingCustomModel;
     private final ModelSelectorPreferences prefs;
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> modelList;
     private final JScrollPane modelScroll;
     private final JTextField filterField;
+    private final Consumer<List<String>> onModelsDiscovered;
     private final AWTEventListener outsideClickListener = this::handleAwtEvent;
     private Consumer<String> onSelect = model -> { };
     private boolean outsideClickListenerInstalled;
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
+        this(owner, models, currentModel, prefs, catalog, List.of());
+    }
+
+    /**
+     * @param cliProviders subscription CLI providers (Codex, Claude Code) whose
+     *                     sign-in state and actions are shown in the footer;
+     *                     empty hides the footer entirely
+     */
+    ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
+                     ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
+                     List<SubscriptionCliProvider> cliProviders) {
+        this(owner, models, currentModel, prefs, catalog, cliProviders, discovered -> { });
+    }
+
+    ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
+                     ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
+                     List<SubscriptionCliProvider> cliProviders,
+                     Consumer<List<String>> onModelsDiscovered) {
         super(owner); // owned, so it stays out of the taskbar and shares the owner's focus cycle
         setUndecorated(true);
         setFocusableWindowState(true);
-        this.allModels = List.copyOf(models);
+        this.allModels = new ArrayList<>(models);
         this.prefs = prefs;
+        this.onModelsDiscovered = onModelsDiscovered;
 
         filterField = new JTextField();
         filterField.putClientProperty("JTextField.placeholderText", "Search models and providers");
@@ -157,6 +180,10 @@ class ModelPickerPopup extends JDialog {
         modelScroll.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
         modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(modelScroll, BorderLayout.CENTER);
+        if (!cliProviders.isEmpty()) {
+            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::promptForCustomModel,
+                    this::providerRefreshed), BorderLayout.SOUTH);
+        }
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(ThemeColors.separator()),
                 BorderFactory.createEmptyBorder(
@@ -182,6 +209,64 @@ class ModelPickerPopup extends JDialog {
 
         refresh();
         selectVisible(currentModel);
+    }
+
+    private void providerRefreshed(SubscriptionCliProvider provider) {
+        List<String> discovered = new ArrayList<>();
+        boolean changed = false;
+        for (String model : provider.listModels()) {
+            String selectorId = provider.modelPrefix() + model;
+            discovered.add(selectorId);
+            if (!allModels.contains(selectorId)) {
+                allModels.add(selectorId);
+                changed = true;
+            }
+        }
+        if (changed) {
+            refresh();
+        }
+        onModelsDiscovered.accept(discovered);
+    }
+
+    /**
+     * Asks for a model id for {@code provider}. The prompt is parented on this
+     * popup's owner and the popup is hidden first: a dialog owned by the popup
+     * would be disposed together with it the moment it took focus, so the
+     * dialog would never appear.
+     */
+    private void promptForCustomModel(SubscriptionCliProvider provider) {
+        Window owner = getOwner();
+        setVisible(false);
+        String id = JOptionPane.showInputDialog(owner,
+                "Model id to send to the " + provider.displayName() + " CLI:",
+                provider.displayName() + " custom model", JOptionPane.PLAIN_MESSAGE);
+        if (id == null || id.isBlank()) {
+            dispose();
+            return;
+        }
+        useCustomModel(provider.modelPrefix() + id.trim());
+    }
+
+    /**
+     * Adopts a model id typed into the footer: it is remembered in the
+     * preferences (so it survives restarts and shows up in the list next time)
+     * and selected straight away.
+     */
+    void useCustomModel(String modelId) {
+        prefs.addCustomModel(modelId);
+        if (!allModels.contains(modelId)) {
+            allModels.add(modelId);
+        }
+        pendingCustomModel = modelId;
+        filterField.setText("");
+        refresh();
+        selectVisible(modelId);
+        confirm();
+    }
+
+    /** The id adopted by the last "Custom model…" action (visible for tests). */
+    String lastCustomModel() {
+        return pendingCustomModel;
     }
 
     /**

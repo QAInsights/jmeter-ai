@@ -150,6 +150,29 @@ class ModelSelectorPreferencesTest {
     }
 
     @Test
+    void customModelsRoundTripAndDedup() {
+        ModelSelectorPreferences prefs = ModelSelectorPreferences.load(prefsFile());
+        prefs.addCustomModel("codex:gpt-5.6-sol");
+        prefs.addCustomModel("codex:gpt-5.6-sol");
+        prefs.addCustomModel("claude-code:opus-4.6");
+        prefs.addCustomModel("  ");
+        prefs.addCustomModel(null);
+
+        assertEquals(List.of("codex:gpt-5.6-sol", "claude-code:opus-4.6"), prefs.customModels());
+        assertEquals(List.of("codex:gpt-5.6-sol", "claude-code:opus-4.6"),
+                ModelSelectorPreferences.load(prefsFile()).customModels());
+    }
+
+    @Test
+    void removeCustomModelForgetsTheId() {
+        ModelSelectorPreferences prefs = ModelSelectorPreferences.load(prefsFile());
+        prefs.addCustomModel("codex:gpt-5.6-sol");
+        prefs.removeCustomModel("codex:gpt-5.6-sol");
+        assertTrue(prefs.customModels().isEmpty());
+        assertTrue(ModelSelectorPreferences.load(prefsFile()).customModels().isEmpty());
+    }
+
+    @Test
     void saveWritesIntoMissingParentDirectory() {
         Path nested = tempDir.resolve("no/such/dir/preferences.json");
         ModelSelectorPreferences prefs = ModelSelectorPreferences.load(nested);

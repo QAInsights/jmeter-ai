@@ -13,6 +13,8 @@ public class AiServiceHolder {
     private GrokAiService grokService;
     private MetaMuseAiService metaMuseService;
     private BedrockAiService bedrockService;
+    private CodexAiService codexService;
+    private ClaudeCodeAiService claudeCodeService;
 
     public ClaudeService getClaudeService() {
         return claudeService;
@@ -76,5 +78,21 @@ public class AiServiceHolder {
 
     public void setBedrockService(BedrockAiService bedrockService) {
         this.bedrockService = bedrockService;
+    }
+
+    public CodexAiService getCodexService() {
+        return codexService;
+    }
+
+    public void setCodexService(CodexAiService codexService) {
+        this.codexService = codexService;
+    }
+
+    public ClaudeCodeAiService getClaudeCodeService() {
+        return claudeCodeService;
+    }
+
+    public void setClaudeCodeService(ClaudeCodeAiService claudeCodeService) {
+        this.claudeCodeService = claudeCodeService;
     }
 }
