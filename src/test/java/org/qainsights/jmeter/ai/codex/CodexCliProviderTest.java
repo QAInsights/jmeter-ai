@@ -12,6 +12,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -58,6 +64,40 @@ class CodexCliProviderTest {
         CodexCliProvider provider = provider(null);
         assertFalse(provider.isInstalled());
         assertEquals(CodexAuthStatus.CODEX_NOT_INSTALLED, provider.getAuthStatus());
+    }
+
+    @Test
+    void concurrentDetectionWaitsForTheSharedResult() throws Exception {
+        BlockingAdapter adapter = new BlockingAdapter("codex");
+        CodexCliProvider provider = new CodexCliProvider(adapter, runner);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> first = executor.submit(provider::executable);
+            assertTrue(adapter.started.await(2, TimeUnit.SECONDS));
+            Future<String> second = executor.submit(provider::executable);
+            try {
+                assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+            } finally {
+                adapter.release.countDown();
+            }
+            assertEquals("codex", first.get(2, TimeUnit.SECONDS));
+            assertEquals("codex", second.get(2, TimeUnit.SECONDS));
+        } finally {
+            adapter.release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void refreshRedetectsANewlyInstalledBinary() {
+        FakeAdapter adapter = new FakeAdapter(null);
+        CodexCliProvider provider = new CodexCliProvider(adapter, runner);
+        assertFalse(provider.isInstalled());
+
+        adapter.setBinary("codex");
+        provider.refresh();
+
+        assertTrue(provider.isInstalled());
     }
 
     @Test
@@ -122,6 +162,19 @@ class CodexCliProviderTest {
     }
 
     @Test
+    void requestModelDoesNotMutateSharedSelection() {
+        CodexCliProvider provider = provider("codex");
+        provider.setModel("selected-model");
+        runner.queue(CliProcessResult.of(0, "ok"));
+
+        provider.execute("hi", "request-model");
+
+        List<String> command = runner.commands.get(0);
+        assertEquals("request-model", command.get(command.indexOf("--model") + 1));
+        assertEquals("selected-model", provider.getModel());
+    }
+
+    @Test
     void theDefaultSelectorEntryLeavesTheModelToTheCli() {
         CodexCliProvider provider = provider("codex");
         provider.setModel(CodexCliProvider.DEFAULT_MODEL);
@@ -179,9 +232,13 @@ class CodexCliProviderTest {
     /** Adapter stand-in: reports the binary the test wants (or none at all). */
     private static final class FakeAdapter extends OpenAiCodexCliAdapter {
 
-        private final String binary;
+        private String binary;
 
         FakeAdapter(String binary) {
+            this.binary = binary;
+        }
+
+        void setBinary(String binary) {
             this.binary = binary;
         }
 
@@ -189,6 +246,30 @@ class CodexCliProviderTest {
         public boolean detect() {
             detectedPath = binary;
             return binary != null;
+        }
+    }
+
+    private static final class BlockingAdapter extends OpenAiCodexCliAdapter {
+
+        private final String binary;
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        BlockingAdapter(String binary) {
+            this.binary = binary;
+        }
+
+        @Override
+        public boolean detect() {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            detectedPath = binary;
+            return true;
         }
     }
 

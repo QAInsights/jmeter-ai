@@ -67,6 +67,7 @@ class ModelPickerPopup extends JDialog {
     private final JList<String> modelList;
     private final JScrollPane modelScroll;
     private final JTextField filterField;
+    private final Consumer<List<String>> onModelsDiscovered;
     private final AWTEventListener outsideClickListener = this::handleAwtEvent;
     private Consumer<String> onSelect = model -> { };
     private boolean outsideClickListenerInstalled;
@@ -84,11 +85,19 @@ class ModelPickerPopup extends JDialog {
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
                      List<SubscriptionCliProvider> cliProviders) {
+        this(owner, models, currentModel, prefs, catalog, cliProviders, discovered -> { });
+    }
+
+    ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
+                     ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
+                     List<SubscriptionCliProvider> cliProviders,
+                     Consumer<List<String>> onModelsDiscovered) {
         super(owner); // owned, so it stays out of the taskbar and shares the owner's focus cycle
         setUndecorated(true);
         setFocusableWindowState(true);
         this.allModels = new ArrayList<>(models);
         this.prefs = prefs;
+        this.onModelsDiscovered = onModelsDiscovered;
 
         filterField = new JTextField();
         filterField.putClientProperty("JTextField.placeholderText", "Search models and providers");
@@ -172,8 +181,8 @@ class ModelPickerPopup extends JDialog {
         modelScroll.getViewport().setBackground(ThemeColors.elevatedSurface());
         getContentPane().add(modelScroll, BorderLayout.CENTER);
         if (!cliProviders.isEmpty()) {
-            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::promptForCustomModel),
-                    BorderLayout.SOUTH);
+            getContentPane().add(new CliProviderStatusPanel(cliProviders, this::promptForCustomModel,
+                    this::providerRefreshed), BorderLayout.SOUTH);
         }
         getRootPane().setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(ThemeColors.separator()),
@@ -200,6 +209,23 @@ class ModelPickerPopup extends JDialog {
 
         refresh();
         selectVisible(currentModel);
+    }
+
+    private void providerRefreshed(SubscriptionCliProvider provider) {
+        List<String> discovered = new ArrayList<>();
+        boolean changed = false;
+        for (String model : provider.listModels()) {
+            String selectorId = provider.modelPrefix() + model;
+            discovered.add(selectorId);
+            if (!allModels.contains(selectorId)) {
+                allModels.add(selectorId);
+                changed = true;
+            }
+        }
+        if (changed) {
+            refresh();
+        }
+        onModelsDiscovered.accept(discovered);
     }
 
     /**

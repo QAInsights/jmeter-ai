@@ -56,10 +56,7 @@ public abstract class CliSubscriptionAiService implements AiService {
 
     @Override
     public String generateResponse(List<String> conversation, String model) {
-        if (model != null && !model.isEmpty()) {
-            provider.setModel(model);
-        }
-        return provider.execute(buildPrompt(systemPrompt(), conversation, maxHistorySize()));
+        return provider.execute(buildPrompt(systemPrompt(), conversation, maxHistorySize()), requestModel(model));
     }
 
     @Override
@@ -67,9 +64,10 @@ public abstract class CliSubscriptionAiService implements AiService {
                                            Consumer<String> tokenConsumer, Runnable onComplete,
                                            Consumer<Exception> onError) {
         AtomicBoolean cancelled = new AtomicBoolean(false);
+        String requestModel = requestModel(model);
         Thread worker = new Thread(() -> {
             try {
-                String answer = generateResponse(conversation, model);
+                String answer = generateResponse(conversation, requestModel);
                 if (cancelled.get()) {
                     return;
                 }
@@ -89,9 +87,16 @@ public abstract class CliSubscriptionAiService implements AiService {
         }, getName() + "-cli-request");
         worker.setDaemon(true);
         worker.start();
-        // The CLI answer arrives as a single chunk, so cancelling only suppresses
-        // the callbacks; the child process is still bounded by its own timeout.
-        return () -> cancelled.set(true);
+        // The CLI answer arrives as a single chunk; cancelling suppresses callbacks
+        // and interrupts the runner so it terminates the child process immediately.
+        return () -> {
+            cancelled.set(true);
+            worker.interrupt();
+        };
+    }
+
+    private String requestModel(String model) {
+        return model == null ? provider.getModel() : model;
     }
 
     /**

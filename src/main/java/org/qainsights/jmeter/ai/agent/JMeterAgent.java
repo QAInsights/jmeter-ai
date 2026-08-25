@@ -206,8 +206,9 @@ public final class JMeterAgent {
      * reasoning settings do not apply - the CLI owns its own thinking budget.
      */
     public static AgentChatModelFactory cliFactory(SubscriptionCliProvider provider) {
+        String model = provider.getModel();
         return (specs, systemPrompt, priorTurns) ->
-                new CliAgentChatModel(provider, specs, systemPrompt, priorTurns);
+                new CliAgentChatModel(provider, specs, systemPrompt, priorTurns, model);
     }
 
     /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */

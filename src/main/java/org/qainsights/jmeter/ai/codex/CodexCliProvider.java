@@ -50,7 +50,7 @@ public final class CodexCliProvider implements CodexProvider {
     private final CliProcessRunner runner;
     private String executable;
     private boolean detectionAttempted;
-    private String model = "";
+    private volatile String model = "";
 
     public CodexCliProvider() {
         this(new OpenAiCodexCliAdapter(), new DefaultCliProcessRunner());
@@ -93,7 +93,11 @@ public final class CodexCliProvider implements CodexProvider {
 
     @Override
     public void setModel(String model) {
-        this.model = model == null || DEFAULT_MODEL.equals(model) ? "" : model.trim();
+        this.model = normalizeModel(model);
+    }
+
+    private static String normalizeModel(String model) {
+        return model == null || DEFAULT_MODEL.equals(model) ? "" : model.trim();
     }
 
     @Override
@@ -106,7 +110,7 @@ public final class CodexCliProvider implements CodexProvider {
      * set, otherwise PATH discovery via {@link OpenAiCodexCliAdapter}. Cached
      * until {@link #refresh()}.
      */
-    String executable() {
+    synchronized String executable() {
         String override = AiConfig.getProperty(EXECUTABLE_KEY, "").trim();
         if (!override.isEmpty()) {
             return override;
@@ -124,7 +128,8 @@ public final class CodexCliProvider implements CodexProvider {
     }
 
     /** Forgets the cached executable so a newly installed CLI is picked up. */
-    public void refresh() {
+    @Override
+    public synchronized void refresh() {
         detectionAttempted = false;
         executable = null;
     }
@@ -186,6 +191,11 @@ public final class CodexCliProvider implements CodexProvider {
 
     @Override
     public String execute(String prompt) {
+        return execute(prompt, model);
+    }
+
+    @Override
+    public String execute(String prompt, String model) {
         String exe = executable();
         if (exe == null) {
             throw new CliProviderException("The Codex CLI was not found. " + installHint());
@@ -195,7 +205,8 @@ public final class CodexCliProvider implements CodexProvider {
         }
         Path lastMessage = createLastMessageFile();
         try {
-            CliProcessResult result = runner.run(buildExecCommand(exe, lastMessage), prompt, executionTimeout());
+            CliProcessResult result = runner.run(buildExecCommand(exe, lastMessage, normalizeModel(model)),
+                    prompt, executionTimeout());
             return readAnswer(result, lastMessage);
         } finally {
             deleteQuietly(lastMessage);
@@ -208,7 +219,7 @@ public final class CodexCliProvider implements CodexProvider {
      * final answer written to {@code lastMessage} so the caller gets clean text
      * instead of progress noise.
      */
-    List<String> buildExecCommand(String exe, Path lastMessage) {
+    List<String> buildExecCommand(String exe, Path lastMessage, String model) {
         List<String> command = new ArrayList<>();
         command.add(exe);
         command.add("exec");
@@ -340,6 +351,7 @@ public final class CodexCliProvider implements CodexProvider {
      * {@code jmeter.ai.codex.models} (comma-separated). Model names move fast, so
      * nothing is hard-coded.
      */
+    @Override
     public List<String> listModels() {
         List<String> models = new ArrayList<>();
         models.add(DEFAULT_MODEL);

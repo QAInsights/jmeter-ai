@@ -64,6 +64,21 @@ class CliAgentChatModelTest {
     }
 
     @Test
+    void selectedModelIsStableAcrossAgentTurns() {
+        FakeProvider provider = new FakeProvider(
+                "{\"tool_calls\":[{\"name\":\"add_element\",\"arguments\":{\"type\":\"ConstantTimer\"}}]}",
+                "{\"final\":\"done\"}");
+        provider.setModel("initial-model");
+        CliAgentChatModel model = new CliAgentChatModel(provider, List.of(SPEC), "system", List.of());
+        provider.setModel("new-selection");
+
+        model.start("add a timer");
+        model.next(List.of(new ToolOutcome("call_0", "add_element", "added", false)));
+
+        assertEquals(List.of("initial-model", "initial-model"), provider.models);
+    }
+
+    @Test
     void aNonJsonReplyBecomesTheFinalAnswer() {
         FakeProvider provider = new FakeProvider("Use a Constant Timer of 500 ms.");
         CliAgentChatModel model = new CliAgentChatModel(provider, List.of(SPEC), "system", List.of());
@@ -91,6 +106,8 @@ class CliAgentChatModelTest {
 
         private final Deque<String> replies = new ArrayDeque<>();
         private final List<String> prompts = new ArrayList<>();
+        private final List<String> models = new ArrayList<>();
+        private String model = "";
 
         FakeProvider(String... replies) {
             this.replies.addAll(List.of(replies));
@@ -128,7 +145,13 @@ class CliAgentChatModelTest {
 
         @Override
         public String execute(String prompt) {
+            return execute(prompt, model);
+        }
+
+        @Override
+        public String execute(String prompt, String model) {
             prompts.add(prompt);
+            models.add(model);
             String reply = replies.poll();
             return reply == null ? "{\"final\":\"done\"}" : reply;
         }
@@ -149,12 +172,22 @@ class CliAgentChatModelTest {
         }
 
         @Override
+        public void refresh() {
+        }
+
+        @Override
+        public List<String> listModels() {
+            return List.of("default");
+        }
+
+        @Override
         public String getModel() {
-            return "";
+            return model;
         }
 
         @Override
         public void setModel(String model) {
+            this.model = model;
         }
 
         private static CliAuthState signedIn() {

@@ -48,34 +48,34 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
         StringBuilder stderr = new StringBuilder();
         Thread outDrain = drain(process.getInputStream(), stdout, stdoutLineConsumer, "cli-stdout");
         Thread errDrain = drain(process.getErrorStream(), stderr, null, "cli-stderr");
-
-        writeStdin(process, stdin);
+        Thread stdinWriter = writeStdin(process, stdin);
+        List<Thread> ioThreads = List.of(stdinWriter, outDrain, errDrain);
 
         boolean exited;
         try {
             exited = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            process.destroyForcibly();
+            destroy(process);
+            interrupt(ioThreads);
             Thread.currentThread().interrupt();
             throw new CliProviderException("The " + command.get(0) + " request was cancelled.", e);
         }
 
         if (!exited) {
-            process.destroyForcibly();
-            join(outDrain);
-            join(errDrain);
+            destroy(process);
+            interrupt(ioThreads);
+            join(ioThreads);
             long elapsed = elapsedMillis(startNanos);
             log.warn("CLI execution timed out after {} ms: {}", elapsed, command.get(0));
-            return new CliProcessResult(-1, stdout.toString(), stderr.toString(), true, elapsed);
+            return new CliProcessResult(-1, snapshot(stdout), snapshot(stderr), true, elapsed);
         }
 
-        join(outDrain);
-        join(errDrain);
+        join(ioThreads);
         int exitCode = process.exitValue();
         long elapsed = elapsedMillis(startNanos);
         log.info("CLI execution completed: executable={} exitCode={} durationMs={}",
                 command.get(0), exitCode, elapsed);
-        return new CliProcessResult(exitCode, stdout.toString(), stderr.toString(), false, elapsed);
+        return new CliProcessResult(exitCode, snapshot(stdout), snapshot(stderr), false, elapsed);
     }
 
     private static Process start(List<String> command) {
@@ -91,15 +91,20 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
     }
 
     /** Writes the prompt to the child's stdin; a closed pipe means the child already exited. */
-    private static void writeStdin(Process process, String stdin) {
-        try (OutputStream out = process.getOutputStream()) {
-            if (stdin != null) {
-                out.write(stdin.getBytes(StandardCharsets.UTF_8));
-                out.flush();
+    private static Thread writeStdin(Process process, String stdin) {
+        Thread thread = new Thread(() -> {
+            try (OutputStream out = process.getOutputStream()) {
+                if (stdin != null) {
+                    out.write(stdin.getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                }
+            } catch (IOException e) {
+                log.debug("Could not write to the CLI stdin (process may have exited): {}", e.getMessage());
             }
-        } catch (IOException e) {
-            log.debug("Could not write to the CLI stdin (process may have exited): {}", e.getMessage());
-        }
+        }, "cli-stdin");
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
     }
 
     private static Thread drain(InputStream stream, StringBuilder sink, Consumer<String> lineConsumer, String name) {
@@ -126,11 +131,46 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
         return thread;
     }
 
-    private static void join(Thread thread) {
-        try {
-            thread.join(DRAIN_JOIN_MILLIS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    private static void destroy(Process process) {
+        List<ProcessHandle> descendants = process.descendants().toList();
+        for (ProcessHandle descendant : descendants) {
+            descendant.destroyForcibly();
+        }
+        process.destroyForcibly();
+    }
+
+    private static void interrupt(List<Thread> threads) {
+        for (Thread thread : threads) {
+            thread.interrupt();
+        }
+    }
+
+    private static void join(List<Thread> threads) {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(DRAIN_JOIN_MILLIS);
+        for (Thread thread : threads) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0L) {
+                break;
+            }
+            long millis = TimeUnit.NANOSECONDS.toMillis(remaining);
+            int nanos = (int) (remaining - TimeUnit.MILLISECONDS.toNanos(millis));
+            try {
+                thread.join(millis, nanos);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        for (Thread thread : threads) {
+            if (thread.isAlive()) {
+                log.warn("CLI I/O thread did not stop within {} ms: {}", DRAIN_JOIN_MILLIS, thread.getName());
+            }
+        }
+    }
+
+    private static String snapshot(StringBuilder sink) {
+        synchronized (sink) {
+            return sink.toString();
         }
     }
 

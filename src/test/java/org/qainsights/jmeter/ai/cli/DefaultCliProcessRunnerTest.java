@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.cli;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -83,6 +85,56 @@ class DefaultCliProcessRunnerTest {
     }
 
     @Test
+    void timeoutIncludesABlockedStdinWrite(@TempDir Path dir) throws IOException {
+        Path program = program(dir, "NonReader", """
+                public class NonReader {
+                    public static void main(String[] args) throws Exception {
+                        Thread.sleep(30_000L);
+                    }
+                }
+                """);
+        String prompt = "x".repeat(4 * 1024 * 1024);
+
+        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(5),
+                () -> runner.run(javaCommand(program), prompt, Duration.ofMillis(500)));
+
+        assertTrue(result.isTimedOut());
+        assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void pipeHoldingDescendantCannotDelayOrRaceOutputSnapshot(@TempDir Path dir) throws IOException {
+        Path descendant = program(dir, "PipeHolder", """
+                public class PipeHolder {
+                    public static void main(String[] args) throws Exception {
+                        for (int i = 0; i < 10_000; i++) {
+                            System.out.println("descendant-out-" + i);
+                            System.err.println("descendant-err-" + i);
+                            Thread.sleep(1L);
+                        }
+                    }
+                }
+                """);
+        Path program = program(dir, "Spawner", """
+                public class Spawner {
+                    public static void main(String[] args) throws Exception {
+                        new ProcessBuilder(args[0], args[1]).inheritIO().start();
+                        System.out.println("parent-out");
+                        System.err.println("parent-err");
+                    }
+                }
+                """);
+
+        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(3),
+                () -> runner.run(javaCommand(program, javaLauncher(), descendant.toString()),
+                        null, Duration.ofSeconds(60)));
+
+        assertTrue(result.isSuccess());
+        assertTrue(result.getStdout().contains("parent-out"), result.getStdout());
+        assertTrue(result.getStderr().contains("parent-err"), result.getStderr());
+    }
+
+    @Test
     void aMissingExecutableIsReportedAsAProviderFailure() {
         CliProviderException failure = assertThrows(CliProviderException.class,
                 () -> runner.run(List.of("definitely-not-a-real-cli-xyz"), null, Duration.ofSeconds(5)));
@@ -102,9 +154,16 @@ class DefaultCliProcessRunnerTest {
     }
 
     /** Runs a single-file Java program with the JVM executing this test. */
-    private static List<String> javaCommand(Path program) {
+    private static List<String> javaCommand(Path program, String... args) {
+        List<String> command = new ArrayList<>();
+        command.add(javaLauncher());
+        command.add(program.toString());
+        command.addAll(List.of(args));
+        return command;
+    }
+
+    private static String javaLauncher() {
         boolean windows = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("win");
-        Path launcher = Path.of(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java");
-        return List.of(launcher.toString(), program.toString());
+        return Path.of(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java").toString();
     }
 }

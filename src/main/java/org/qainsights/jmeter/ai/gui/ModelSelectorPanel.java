@@ -82,6 +82,7 @@ class ModelSelectorPanel extends JPanel {
      */
     void setCliProviders(List<SubscriptionCliProvider> providers) {
         this.cliProviders = providers == null ? List.of() : List.copyOf(providers);
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
     }
 
     /** Registers the callback fired with the prefixed id whenever the effective model changes. */
@@ -116,7 +117,7 @@ class ModelSelectorPanel extends JPanel {
                 allModels.add(custom);
             }
         }
-        selectorButton.setEnabled(!allModels.isEmpty());
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
         String toSelect = defaultModel != null && allModels.contains(defaultModel)
                 ? defaultModel
                 : allModels.isEmpty() ? null : allModels.get(0);
@@ -184,13 +185,22 @@ class ModelSelectorPanel extends JPanel {
         starButton.setSelected(currentModel != null && prefs.isPinned(currentModel));
     }
 
+    private void addModels(List<String> models) {
+        for (String model : models) {
+            if (!allModels.contains(model)) {
+                allModels.add(model);
+            }
+        }
+        selectorButton.setEnabled(!allModels.isEmpty() || !cliProviders.isEmpty());
+    }
+
     private void openPopup() {
         if (allModels.isEmpty() && cliProviders.isEmpty()) {
             return;
         }
         java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
         ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog,
-                cliProviders);
+                cliProviders, this::addModels);
         popup.showFor(selectorButton, this::select);
     }
 

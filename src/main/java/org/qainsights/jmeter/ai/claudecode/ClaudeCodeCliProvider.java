@@ -45,7 +45,7 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
     private final CliProcessRunner runner;
     private String executable;
     private boolean detectionAttempted;
-    private String model = "";
+    private volatile String model = "";
 
     public ClaudeCodeCliProvider() {
         this(new ClaudeCodeCliAdapter(), new DefaultCliProcessRunner());
@@ -89,7 +89,11 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
 
     @Override
     public void setModel(String model) {
-        this.model = model == null || DEFAULT_MODEL.equals(model) ? "" : model.trim();
+        this.model = normalizeModel(model);
+    }
+
+    private static String normalizeModel(String model) {
+        return model == null || DEFAULT_MODEL.equals(model) ? "" : model.trim();
     }
 
     @Override
@@ -101,7 +105,7 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
      * The Claude executable: the {@code jmeter.ai.claudecode.executable} override
      * when set, otherwise PATH discovery via {@link ClaudeCodeCliAdapter}.
      */
-    String executable() {
+    synchronized String executable() {
         String override = AiConfig.getProperty(EXECUTABLE_KEY, "").trim();
         if (!override.isEmpty()) {
             return override;
@@ -119,7 +123,8 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
     }
 
     /** Forgets the cached executable so a newly installed CLI is picked up. */
-    public void refresh() {
+    @Override
+    public synchronized void refresh() {
         detectionAttempted = false;
         executable = null;
     }
@@ -182,6 +187,11 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
 
     @Override
     public String execute(String prompt) {
+        return execute(prompt, model);
+    }
+
+    @Override
+    public String execute(String prompt, String model) {
         String exe = executable();
         if (exe == null) {
             throw new CliProviderException("The Claude Code CLI was not found. " + installHint());
@@ -189,7 +199,7 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
         if (prompt == null || prompt.trim().isEmpty()) {
             throw new CliProviderException("Nothing to send to Claude Code: the prompt is empty.");
         }
-        CliProcessResult result = runner.run(buildExecCommand(exe), prompt, executionTimeout());
+        CliProcessResult result = runner.run(buildExecCommand(exe, normalizeModel(model)), prompt, executionTimeout());
         if (result.isTimedOut()) {
             throw new CliProviderException("Claude Code did not respond within "
                     + executionTimeout().toSeconds() + " seconds and was stopped. "
@@ -206,7 +216,7 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
     }
 
     /** {@code claude -p} reading the prompt from stdin, printing plain text. */
-    List<String> buildExecCommand(String exe) {
+    List<String> buildExecCommand(String exe, String model) {
         List<String> command = new ArrayList<>();
         command.add(exe);
         command.add("-p");
@@ -273,6 +283,7 @@ public final class ClaudeCodeCliProvider implements SubscriptionCliProvider {
      * Selector entries for Claude Code: the CLI's own default plus any ids listed
      * in {@code jmeter.ai.claudecode.models} (comma-separated).
      */
+    @Override
     public List<String> listModels() {
         List<String> models = new ArrayList<>();
         models.add(DEFAULT_MODEL);

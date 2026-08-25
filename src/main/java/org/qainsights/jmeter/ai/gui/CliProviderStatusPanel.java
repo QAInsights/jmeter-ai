@@ -36,13 +36,19 @@ class CliProviderStatusPanel extends JPanel {
 
     CliProviderStatusPanel(List<SubscriptionCliProvider> providers,
                            Consumer<SubscriptionCliProvider> onCustomModelRequest) {
+        this(providers, onCustomModelRequest, provider -> { });
+    }
+
+    CliProviderStatusPanel(List<SubscriptionCliProvider> providers,
+                           Consumer<SubscriptionCliProvider> onCustomModelRequest,
+                           Consumer<SubscriptionCliProvider> onProviderRefresh) {
         super();
         this.providers = providers;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
         setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, 0, 0, 0));
         for (SubscriptionCliProvider provider : providers) {
-            add(new ProviderRow(provider, onCustomModelRequest));
+            add(new ProviderRow(provider, onCustomModelRequest, onProviderRefresh));
         }
     }
 
@@ -63,7 +69,8 @@ class CliProviderStatusPanel extends JPanel {
                 new QuietButton("Custom model…", QuietButton.Kind.GHOST).compact();
 
         ProviderRow(SubscriptionCliProvider provider,
-                    Consumer<SubscriptionCliProvider> onCustomModelRequest) {
+                    Consumer<SubscriptionCliProvider> onCustomModelRequest,
+                    Consumer<SubscriptionCliProvider> onProviderRefresh) {
             // Stacked: the label line above the actions line, so a long
             // "Sign in with ..." button can never collide with the status text.
             super();
@@ -82,7 +89,14 @@ class CliProviderStatusPanel extends JPanel {
                     + " CLI login in your browser; Feather Wand never sees your credentials");
             signInButton.addActionListener(e -> run(provider::login, "Signing in\u2026"));
             signOutButton.addActionListener(e -> run(provider::logout, "Signing out\u2026"));
-            refreshButton.addActionListener(e -> run(provider::getAuthStatus, "Checking\u2026"));
+            refreshButton.addActionListener(e -> run(() -> {
+                provider.refresh();
+                return provider.getAuthStatus();
+            }, "Checking\u2026", state -> {
+                if (state.isInstalled()) {
+                    onProviderRefresh.accept(provider);
+                }
+            }));
             customModelButton.setToolTipText("Use a " + provider.displayName()
                     + " model id the CLI does not advertise; remembered for next time");
             customModelButton.addActionListener(e -> onCustomModelRequest.accept(provider));
@@ -107,6 +121,11 @@ class CliProviderStatusPanel extends JPanel {
 
         /** Runs a blocking CLI call off the EDT and renders the resulting state. */
         private void run(java.util.concurrent.Callable<CliAuthState> action, String pendingText) {
+            run(action, pendingText, state -> { });
+        }
+
+        private void run(java.util.concurrent.Callable<CliAuthState> action, String pendingText,
+                         Consumer<CliAuthState> onSuccess) {
             statusLabel.setText(pendingText);
             setActionsEnabled(false);
             new SwingWorker<CliAuthState, Void>() {
@@ -118,7 +137,9 @@ class CliProviderStatusPanel extends JPanel {
                 @Override
                 protected void done() {
                     try {
-                        render(get());
+                        CliAuthState state = get();
+                        render(state);
+                        onSuccess.accept(state);
                     } catch (java.util.concurrent.ExecutionException | InterruptedException e) {
                         if (e instanceof InterruptedException) {
                             Thread.currentThread().interrupt();

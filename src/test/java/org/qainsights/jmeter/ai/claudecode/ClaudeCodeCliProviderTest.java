@@ -12,6 +12,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +61,40 @@ class ClaudeCodeCliProviderTest {
     }
 
     @Test
+    void concurrentDetectionWaitsForTheSharedResult() throws Exception {
+        BlockingAdapter adapter = new BlockingAdapter("claude");
+        ClaudeCodeCliProvider provider = new ClaudeCodeCliProvider(adapter, runner);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> first = executor.submit(provider::executable);
+            assertTrue(adapter.started.await(2, TimeUnit.SECONDS));
+            Future<String> second = executor.submit(provider::executable);
+            try {
+                assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+            } finally {
+                adapter.release.countDown();
+            }
+            assertEquals("claude", first.get(2, TimeUnit.SECONDS));
+            assertEquals("claude", second.get(2, TimeUnit.SECONDS));
+        } finally {
+            adapter.release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void refreshRedetectsANewlyInstalledBinary() {
+        FakeAdapter adapter = new FakeAdapter(null);
+        ClaudeCodeCliProvider provider = new ClaudeCodeCliProvider(adapter, runner);
+        assertFalse(provider.isInstalled());
+
+        adapter.setBinary("claude");
+        provider.refresh();
+
+        assertTrue(provider.isInstalled());
+    }
+
+    @Test
     void readsTheStatusFromTheCli() {
         runner.queue(CliProcessResult.of(0, SIGNED_IN));
         assertEquals(ClaudeCodeAuthStatus.SUBSCRIPTION, provider("claude").getAuthStatus());
@@ -88,6 +128,19 @@ class ClaudeCodeCliProviderTest {
     }
 
     @Test
+    void requestModelDoesNotMutateSharedSelection() {
+        ClaudeCodeCliProvider provider = provider("claude");
+        provider.setModel("selected-model");
+        runner.queue(CliProcessResult.of(0, "ok"));
+
+        provider.execute("hi", "request-model");
+
+        List<String> command = runner.commands.get(0);
+        assertEquals("request-model", command.get(command.indexOf("--model") + 1));
+        assertEquals("selected-model", provider.getModel());
+    }
+
+    @Test
     void aTimedOutRunIsReportedWithoutAStackTrace() {
         runner.queue(CliProcessResult.timeout(120_000L));
         CliProviderException failure = assertThrows(CliProviderException.class,
@@ -115,9 +168,13 @@ class ClaudeCodeCliProviderTest {
 
     private static final class FakeAdapter extends ClaudeCodeCliAdapter {
 
-        private final String binary;
+        private String binary;
 
         FakeAdapter(String binary) {
+            this.binary = binary;
+        }
+
+        void setBinary(String binary) {
             this.binary = binary;
         }
 
@@ -125,6 +182,30 @@ class ClaudeCodeCliProviderTest {
         public boolean detect() {
             detectedPath = binary;
             return binary != null;
+        }
+    }
+
+    private static final class BlockingAdapter extends ClaudeCodeCliAdapter {
+
+        private final String binary;
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        BlockingAdapter(String binary) {
+            this.binary = binary;
+        }
+
+        @Override
+        public boolean detect() {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            detectedPath = binary;
+            return true;
         }
     }
 

@@ -107,6 +107,15 @@ class ModelSelectorPanelTest {
         }
 
         @Override
+        public void refresh() {
+        }
+
+        @Override
+        public List<String> listModels() {
+            return List.of("default");
+        }
+
+        @Override
         public String getModel() {
             return "";
         }
@@ -200,6 +209,15 @@ class ModelSelectorPanelTest {
         panel.setModels(List.of(), "claude-opus-4-8");
         assertNull(panel.getSelectedModel());
         assertEquals("Loading available models\u2026", panel.buttonText());
+    }
+
+    @Test
+    void enabledCliProviderKeepsSelectorAvailableWithoutLoadedModels() {
+        ModelSelectorPanel panel = panel(prefs());
+        panel.setCliProviders(List.of(new FakeCliProvider("codex:")));
+        panel.setModels(List.of(), null);
+
+        assertTrue(selectorButtonOf(panel).isEnabled());
     }
 
     @Test

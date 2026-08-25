@@ -23,6 +23,7 @@ public final class CliAgentChatModel implements ChatModel {
     private static final Logger log = LoggerFactory.getLogger(CliAgentChatModel.class);
 
     private final SubscriptionCliProvider provider;
+    private final String model;
     private final String header;
     private final List<String> transcript = new ArrayList<>();
     private int turn;
@@ -34,7 +35,13 @@ public final class CliAgentChatModel implements ChatModel {
      */
     public CliAgentChatModel(SubscriptionCliProvider provider, List<ToolSpec> specs, String systemPrompt,
                              List<String> priorTurns) {
+        this(provider, specs, systemPrompt, priorTurns, provider.getModel());
+    }
+
+    public CliAgentChatModel(SubscriptionCliProvider provider, List<ToolSpec> specs, String systemPrompt,
+                             List<String> priorTurns, String model) {
         this.provider = provider;
+        this.model = model;
         this.header = systemPrompt + "\n\n" + CliToolProtocol.instructions(specs);
         if (priorTurns != null) {
             for (int i = 0; i < priorTurns.size(); i++) {
@@ -67,7 +74,7 @@ public final class CliAgentChatModel implements ChatModel {
         }
         prompt.append("Reply now with a single JSON object.");
 
-        String reply = provider.execute(prompt.toString());
+        String reply = provider.execute(prompt.toString(), model);
         transcript.add("Assistant: " + reply);
         AssistantTurn assistantTurn = CliToolProtocol.parse(reply, "call_" + turn++);
         log.info("{} agent turn {}: {} tool call(s)", provider.displayName(), turn,

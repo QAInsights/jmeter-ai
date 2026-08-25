@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.cli;
 
+import java.util.List;
+
 /**
  * A locally installed coding-agent CLI (OpenAI Codex, Claude Code) used as an
  * AI backend through the subscription the user already signed into with that
@@ -38,6 +40,10 @@ public interface SubscriptionCliProvider {
      */
     String execute(String prompt);
 
+    default String execute(String prompt, String model) {
+        return execute(prompt);
+    }
+
     /** One-line hint on how to install the CLI, shown when it is missing. */
     String installHint();
 
@@ -46,6 +52,10 @@ public interface SubscriptionCliProvider {
 
     /** Selector-id prefix identifying this provider, e.g. {@code "codex:"}. */
     String modelPrefix();
+
+    void refresh();
+
+    List<String> listModels();
 
     /** The model id the provider sends to the CLI, or empty for the CLI's own default. */
     String getModel();
