@@ -228,6 +228,18 @@ class ModelSelectorPanelTest {
     }
 
     @Test
+    void selectorUsesReadableBodyText() {
+        ModelSelectorPanel panel = panel(prefs());
+        QuietButton selector = selectorButtonOf(panel);
+        selector.updateUI();
+        java.awt.Font expected = org.qainsights.jmeter.ai.gui.theme.UiTokens.body(
+                javax.swing.UIManager.getFont("Button.font"));
+
+        assertEquals(expected.getSize2D(), selector.getFont().getSize2D());
+        assertEquals(expected.getStyle(), selector.getFont().getStyle());
+    }
+
+    @Test
     void bareModelKeepsItsFullName() {
         ModelSelectorPanel panel = panel(prefs());
         panel.setModels(MODELS, "claude-opus-4-8");

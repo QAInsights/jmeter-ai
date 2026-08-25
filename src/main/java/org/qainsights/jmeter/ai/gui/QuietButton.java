@@ -27,6 +27,7 @@ class QuietButton extends JButton {
 
     private final Kind kind;
     private boolean compact;
+    private boolean bodyFont;
     private boolean iconOnly;
     private int iconButtonSize = UiTokens.ICON_BUTTON_SIZE;
 
@@ -42,6 +43,12 @@ class QuietButton extends JButton {
 
     QuietButton compact() {
         compact = true;
+        configure();
+        return this;
+    }
+
+    QuietButton bodyFont() {
+        bodyFont = true;
         configure();
         return this;
     }
@@ -141,7 +148,9 @@ class QuietButton extends JButton {
                 verticalInset, horizontalInset, verticalInset, horizontalInset));
         Font base = UIManager.getFont("Button.font");
         Font resolved = base != null ? base : getFont();
-        setFont(compact ? UiTokens.caption(resolved) : UiTokens.label(resolved));
+        setFont(bodyFont
+                ? UiTokens.body(resolved)
+                : compact ? UiTokens.caption(resolved) : UiTokens.label(resolved));
         setForeground(foregroundFor());
     }
 

@@ -49,7 +49,7 @@ class ModelSelectorPanel extends JPanel {
         setOpaque(false);
 
         selectorButton = new QuietButton(
-                "Loading available models\u2026", QuietButton.Kind.OUTLINED).compact();
+                "Loading available models\u2026", QuietButton.Kind.OUTLINED).compact().bodyFont();
         selectorButton.setIcon(ChevronIcons.down(10));
         selectorButton.setHorizontalTextPosition(SwingConstants.LEFT);
         selectorButton.setHorizontalAlignment(SwingConstants.LEFT);
