@@ -12,12 +12,11 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
 
 /**
- * Menu item and toolbar button for launching Claude Code terminal panel.
+ * Menu item and toolbar button for launching the AI CLI terminal panel.
  * <p>
- * Adds a terminal icon (">_") to the JMeter toolbar, next to the
+ * Adds the Feather Wand terminal mark to the JMeter toolbar, next to the
  * Feather Wand button. Clicking toggles a split pane with the
  * {@link ClaudeCodePanel} on the right side.
  */
@@ -29,53 +28,30 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
     private final JComponent parent;
 
     public ClaudeCodeMenuItem(JComponent parent) {
-        super("Claude Code");
+        super("AI CLI Terminal", getClaudeCodeIcon(16));
         this.parent = parent;
         addActionListener(this);
         addToolbarIcon();
     }
 
     /**
-     * Generates a terminal-style icon (">_") programmatically.
+     * Loads the Feather Wand terminal mark at the requested UI size.
      *
      * @param size the pixel size of the icon (square)
-     * @return the generated icon
+     * @return the branded terminal icon
      */
     public static ImageIcon getClaudeCodeIcon(int size) {
-        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = image.createGraphics();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-        // Background: rounded rectangle with dark color
-        g2d.setColor(new Color(45, 45, 45));
-        g2d.fillRoundRect(0, 0, size, size, size / 4, size / 4);
-
-        // Border
-        g2d.setColor(new Color(86, 182, 194));
-        g2d.setStroke(new BasicStroke(Math.max(1, size / 12f)));
-        g2d.drawRoundRect(1, 1, size - 2, size - 2, size / 4, size / 4);
-
-        // Draw ">_" terminal prompt
-        g2d.setColor(new Color(86, 182, 194));
-        float fontSize = size * 0.45f;
-        g2d.setFont(new Font(Font.MONOSPACED, Font.BOLD, (int) fontSize));
-
-        FontMetrics fm = g2d.getFontMetrics();
-        String text = ">_";
-        int textWidth = fm.stringWidth(text);
-        int textHeight = fm.getAscent();
-        int x = (size - textWidth) / 2;
-        int y = (size + textHeight) / 2 - fm.getDescent() / 2;
-
-        g2d.drawString(text, x, y);
-
-        g2d.dispose();
-        return new ImageIcon(image);
+        String path = String.format(
+                "/org/qainsights/jmeter/ai/featherwand-terminal-%dx%d.png", size, size);
+        java.net.URL resource = java.util.Objects.requireNonNull(
+                ClaudeCodeMenuItem.class.getResource(path), "Missing CLI terminal icon: " + path);
+        ImageIcon icon = new ImageIcon(resource);
+        icon.setDescription("Feather Wand AI CLI Terminal");
+        return icon;
     }
 
     /**
-     * Adds the Claude Code toolbar icon to JMeter's toolbar.
+     * Adds the AI CLI terminal icon to JMeter's toolbar.
      */
     private void addToolbarIcon() {
         GuiPackage instance = GuiPackage.getInstance();
@@ -113,7 +89,7 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
      */
     private JButton getToolbarButton() {
         JButton button = new JButton(getClaudeCodeIcon(22));
-        button.setToolTipText("Toggle Claude Code Terminal");
+        button.setToolTipText("Toggle AI CLI Terminal");
         button.addActionListener(this);
         button.setActionCommand("toggle_claude_code_panel");
         return button;

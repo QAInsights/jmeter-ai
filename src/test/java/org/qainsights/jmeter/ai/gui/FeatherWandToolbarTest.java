@@ -85,9 +85,21 @@ class FeatherWandToolbarTest {
     @Test
     void isFeatherWandButton_rejectsUnrelated() {
         JButton other = new JButton();
-        other.setToolTipText("Toggle Claude Code Terminal");
+        other.setToolTipText("Toggle AI CLI Terminal");
         other.setActionCommand("toggle_claude_code_panel");
         assertFalse(FeatherWandToolbar.isFeatherWandButton(other));
         assertFalse(FeatherWandToolbar.isFeatherWandButton(null));
+    }
+
+    @Test
+    void cliTerminalLogoIsAvailableAtUiSizes() {
+        for (int size : new int[] {16, 22, 32}) {
+            String path = "/org/qainsights/jmeter/ai/featherwand-terminal-" + size + "x" + size + ".png";
+            assertNotNull(org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem.class.getResource(path));
+            javax.swing.ImageIcon icon =
+                    org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem.getClaudeCodeIcon(size);
+            assertEquals(size, icon.getIconWidth());
+            assertEquals(size, icon.getIconHeight());
+        }
     }
 }

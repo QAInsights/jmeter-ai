@@ -136,6 +136,11 @@ public class ClaudeCodePanel extends JPanel {
         JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftPanel.setOpaque(false);
 
+        JLabel terminalLogo = new JLabel(ClaudeCodeMenuItem.getClaudeCodeIcon(32));
+        terminalLogo.setToolTipText("Feather Wand AI CLI Terminal");
+        terminalLogo.getAccessibleContext().setAccessibleName("Feather Wand AI CLI Terminal");
+        leftPanel.add(terminalLogo);
+
         if (availableClis == null || availableClis.isEmpty()) {
             JLabel titleLabel = new JLabel("AI CLI Terminal");
             titleLabel.setFont(HEADER_FONT);

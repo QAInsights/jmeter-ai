@@ -154,7 +154,7 @@ class MessageCard extends JPanel {
         senderLabel.setFont(UiTokens.label(senderLabel.getFont()));
         if (role == Role.ASSISTANT) {
             java.net.URL mark = MessageCard.class.getResource(
-                    "/org/qainsights/jmeter/ai/featherwand-13x13.png");
+                    "/org/qainsights/jmeter/ai/featherwand-16x16.png");
             if (mark != null) {
                 senderLabel.setIcon(new ImageIcon(mark));
                 senderLabel.setIconTextGap(UiTokens.SPACE_1);

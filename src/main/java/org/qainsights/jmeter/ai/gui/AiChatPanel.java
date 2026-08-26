@@ -662,7 +662,7 @@ public class AiChatPanel
         identityPanel.setLayout(new BoxLayout(identityPanel, BoxLayout.X_AXIS));
         identityPanel.setOpaque(false);
         URL markResource = AiChatPanel.class.getResource(
-                "/org/qainsights/jmeter/ai/featherwand-22x22.png");
+                "/org/qainsights/jmeter/ai/featherwand-32x32.png");
         JLabel mark = new JLabel(markResource == null ? null : new ImageIcon(markResource));
         mark.setAlignmentY(Component.CENTER_ALIGNMENT);
         mark.getAccessibleContext().setAccessibleName("Feather Wand");
