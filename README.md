@@ -51,7 +51,7 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), Meta Muse, or AWS Bedrock models—or use your CLI-managed ChatGPT/Codex or Claude Code account. |
+| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), Meta Muse, or AWS Bedrock models, or use your CLI-managed ChatGPT/Codex or Claude Code account. |
 | ⚡ **Real-Time Streaming** | Watch supported API responses appear token-by-token with a **Stop** button to cancel anytime; CLI-backed requests return one completed answer and are cancellable too. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
@@ -140,7 +140,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 <details>
 <summary><b>ChatGPT / Codex (CLI-managed account; no plugin API key)</b></summary>
 
-Uses the authentication managed by your local [Codex CLI](https://github.com/openai/codex)—normally ChatGPT, but an API key configured inside Codex is also recognized. Feather Wand does not require or inspect `openai.api.key` for this provider. See [Using Feather Wand with ChatGPT / Codex](#-using-feather-wand-with-chatgpt--codex).
+Uses the authentication managed by your local [Codex CLI](https://github.com/openai/codex). It normally uses ChatGPT, but an API key configured inside Codex is also recognized. Feather Wand does not require or inspect `openai.api.key` for this provider. See [Using Feather Wand with ChatGPT / Codex](#-using-feather-wand-with-chatgpt--codex).
 
 | Property | Description | Default |
 |----------|-------------|---------|
@@ -156,7 +156,7 @@ Uses the authentication managed by your local [Codex CLI](https://github.com/ope
 <details>
 <summary><b>Claude Code (CLI-managed account; no plugin API key)</b></summary>
 
-Uses the authentication managed by your local [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)—Claude subscription, Anthropic Console key, or supported cloud credentials. Feather Wand does not require or inspect `anthropic.api.key` for this provider. See [Using Feather Wand with Claude Code](#-using-feather-wand-with-claude-code).
+Uses the authentication managed by your local [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), including a Claude subscription, Anthropic Console key, or supported cloud credentials. Feather Wand does not require or inspect `anthropic.api.key` for this provider. See [Using Feather Wand with Claude Code](#-using-feather-wand-with-claude-code).
 
 | Property | Description | Default |
 |----------|-------------|---------|
@@ -307,7 +307,13 @@ Each service supports its own `*.system.prompt` property; tweak them in your pro
 
 ## 🔐 Using Feather Wand with ChatGPT / Codex
 
-Feather Wand can use the account already managed by your local Codex CLI—normally a **ChatGPT subscription**, but a Codex CLI API-key session is recognized too. This is a separate provider from the OpenAI API integration and does not require `openai.api.key` in Feather Wand.
+Feather Wand can use the account already managed by your local Codex CLI. It normally uses a **ChatGPT subscription**, but a Codex CLI API-key session is recognized too. This is a separate provider from the OpenAI API integration and does not require `openai.api.key` in Feather Wand.
+
+> **IMPORTANT: Check your provider's current terms before using a subscription.**
+>
+> OpenAI, Anthropic, and other LLM or CLI providers may change their terms of service, acceptable-use policies, subscription eligibility, rate limits, features, or billing at any time. Before enabling a subscription-backed provider in Feather Wand, review the current terms for your account and confirm that your plan permits this type of use.
+>
+> You are responsible for complying with the provider's terms and for monitoring usage, limits, and charges. Feather Wand is an independent integration and is not affiliated with or endorsed by these providers. It does not guarantee continued access or compatibility. To the extent permitted by law, the project and its maintainers are not responsible for provider-side changes, account restrictions or suspension, unexpected charges, or other consequences resulting from your use. Double-check the current terms before proceeding.
 
 1. Install the CLI: `npm install -g @openai/codex` (see the [Codex repo](https://github.com/openai/codex)).
 2. Add `jmeter.ai.codex.enabled=true` to `user.properties` and restart JMeter.
@@ -315,7 +321,7 @@ Feather Wand can use the account already managed by your local Codex CLI—norma
 4. Click **Sign in with ChatGPT** (or run `codex login`) and complete the browser flow owned by Codex.
 5. Select `default` to let Codex choose its configured model, select a model from `jmeter.ai.codex.models`, or use **Custom model…**.
 
-Statuses include `✓ Signed in`, `Signed in using API key`, `Not signed in`, `Codex CLI not installed`, and `Unable to determine status`. **Refresh** clears cached executable discovery, re-runs `codex login status`, and adds configured models after a CLI is installed—without reopening JMeter.
+Statuses include `✓ Signed in`, `Signed in using API key`, `Not signed in`, `Codex CLI not installed`, and `Unable to determine status`. **Refresh** clears cached executable discovery, re-runs `codex login status`, and adds configured models after a CLI is installed without reopening JMeter.
 
 ## 🔐 Using Feather Wand with Claude Code
 
@@ -354,15 +360,13 @@ Switching providers never rewrites or removes the other providers' settings.
 
 ### Picking a subscription model
 
-The CLIs publish no model list, so the picker offers `codex:default` / `claude-code:default` (let the CLI decide) plus raw ids from `jmeter.ai.codex.models` / `jmeter.ai.claudecode.models`. For an id that is not listed, click **Custom model…**, type the raw id (for example, `gpt-5.6-sol`), and it is selected immediately—no properties edit or restart. Custom ids are remembered in `~/.jmeter-ai/model-selector.json` and passed as `--model`; an unsupported id therefore returns a CLI error instead of silently falling back. API-backed providers continue to list models from their provider APIs.
+The CLIs publish no model list, so the picker offers `codex:default` / `claude-code:default` (let the CLI decide) plus raw ids from `jmeter.ai.codex.models` / `jmeter.ai.claudecode.models`. For an id that is not listed, click **Custom model…**, type the raw id (for example, `gpt-5.6-sol`), and it is selected immediately, with no properties edit or restart. Custom ids are remembered in `~/.jmeter-ai/model-selector.json` and passed as `--model`; an unsupported id therefore returns a CLI error instead of silently falling back. API-backed providers continue to list models from their provider APIs.
 
 ### Agent Mode with CLI providers
 
 Both CLI providers participate in the same 18-tool Agent Mode loop. Because the CLIs expose no native tool-calling API to Feather Wand, each prompt contains the available tool schemas and requests one JSON object with either `tool_calls` or a `final` answer. Tool results are replayed into the next one-shot CLI request; non-JSON output safely becomes the final plain-text answer. Existing iteration limits and destructive-tool confirmations still apply.
 
-The Codex child process uses `jmeter.ai.codex.sandbox` (`read-only` by default); Claude Code follows its own CLI permissions and configuration. Feather Wand's **Thinking** and effort controls do not override either CLI's reasoning budget—the CLI owns that behavior.
-
-> **Terms of use**: these modes require your own Codex or Claude Code installation and account on your machine. Usage remains subject to OpenAI's and Anthropic's terms. Both providers are opt-in and disabled by default.
+The Codex child process uses `jmeter.ai.codex.sandbox` (`read-only` by default); Claude Code follows its own CLI permissions and configuration. Feather Wand's **Thinking** and effort controls do not override either CLI's reasoning budget; the CLI owns that behavior.
 
 ## 🎨 Modern Chat UI & Model Picker
 
@@ -407,13 +411,13 @@ Type any of these directly in the chat box. All commands are context-aware and w
 
 ### 📚 Prompt Library
 
-Type `@prompts` in the chat input to open the prompt picker — it ships with six built-in starters (*Analyze results*, *Review plan vs best practices*, *Explain errors in jmeter.log*, *Suggest assertions & timers*, *Find correlation candidates*, *Recording brief*) and grows with your own prompts.
+Type `@prompts` in the chat input to open the prompt picker. It ships with six built-in starters (*Analyze results*, *Review plan vs best practices*, *Explain errors in jmeter.log*, *Suggest assertions & timers*, *Find correlation candidates*, *Recording brief*) and grows with your own prompts.
 
 - **Insert**: `Enter` puts the prompt text into the input box so you can edit it (fill in the `[bracketed]` placeholders, attach files) before sending.
 - **Save**: click **Save prompt** on any of your own messages to add it to the library (attachment markers become `[file name]` references).
-- **Manage**: in the picker, `Del` deletes one of your prompts (confirmed), `F2` edits/renames it. Built-ins are read-only — `F2` on one offers **Save as copy** so you can adapt it.
+- **Manage**: in the picker, `Del` deletes one of your prompts (confirmed), `F2` edits/renames it. Built-ins are read-only. Pressing `F2` on one offers **Save as copy** so you can adapt it.
 
-User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted — don't save credentials; override the path with `jmeter.ai.prompts.file`).
+User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save credentials; override the path with `jmeter.ai.prompts.file`).
 
 ### `@lint` Tips
 - Run it after importing a recorded test plan to clean up generic names.
@@ -452,7 +456,7 @@ All three providers get the exact same tools, system prompt, safety gates and it
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
-> 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration — keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
+> 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
 
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
@@ -852,6 +856,7 @@ See what's next on the [project board](https://github.com/users/QAInsights/proje
 
 ## ⚠️ Disclaimer
 
+- **Check provider terms**: third-party providers can change subscription rules, features, pricing, and acceptable-use policies. Confirm that your plan permits your intended use before enabling a subscription-backed provider.
 - **Verify everything**: AI can hallucinate. Double-check critical suggestions before production runs.
 - **Backup first**: save your `.jmx` before letting AI refactor it.
 - **Test in staging**: validate changes in a safe environment.
