@@ -25,28 +25,42 @@ $url = "https://models.dev/api.json"
 $outFile = Join-Path $repoRoot "src\main\resources\org\qainsights\jmeter\ai\reasoning\model-capabilities.json"
 
 Write-Host "Downloading models.dev model data ..."
-$tmp = Join-Path $env:TEMP "modelsdev-api.json"
-Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+$tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "modelsdev-$PID-$([guid]::NewGuid().ToString('N'))"
+$tmp = Join-Path $tmpDir "api.json"
+$classpathFile = Join-Path $tmpDir "classpath.txt"
+$classesDir = Join-Path $tmpDir "classes"
 
-Write-Host "Trimming to supported providers ..."
-$outDir = Split-Path -Parent $outFile
-New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+New-Item -ItemType Directory -Force -Path $classesDir | Out-Null
 
-# The trim runs in Java (Jackson) for robust JSON handling.
-$m2 = Join-Path $env:USERPROFILE ".m2\repository\com\fasterxml\jackson\core"
-$cp = @(
-    (Join-Path $m2 "jackson-databind\2.20.1\jackson-databind-2.20.1.jar"),
-    (Join-Path $m2 "jackson-core\2.20.1\jackson-core-2.20.1.jar"),
-    (Join-Path $m2 "jackson-annotations\2.20\jackson-annotations-2.20.jar")
-) -join ";"
-javac -cp $cp -d $env:TEMP (Join-Path $PSScriptRoot "TrimModelCapabilities.java")
-java -cp "$cp;$env:TEMP" TrimModelCapabilities $tmp $outFile
-if ($LASTEXITCODE -ne 0) { throw "Trim failed" }
+try {
+    Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
 
-# Stamp the fetch timestamp into the vendored file's header fields.
-$json = Get-Content $outFile -Raw | ConvertFrom-Json
-$json | Add-Member -NotePropertyName fetched -NotePropertyValue ((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")) -Force
-$json | ConvertTo-Json -Depth 6 -Compress | Set-Content $outFile -Encoding UTF8
+    Write-Host "Resolving Java dependencies from pom.xml ..."
+    Push-Location $repoRoot
+    try {
+        & mvn --batch-mode --no-transfer-progress dependency:build-classpath "-Dmdep.outputFile=$classpathFile"
+        if ($LASTEXITCODE -ne 0) { throw "Maven dependency resolution failed" }
+    } finally {
+        Pop-Location
+    }
 
-Write-Host "Vendored capabilities -> $outFile"
-Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    $cp = (Get-Content $classpathFile -Raw).Trim()
+    if (-not $cp) { throw "Maven produced an empty Java classpath" }
+
+    Write-Host "Trimming to supported providers ..."
+    $outDir = Split-Path -Parent $outFile
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+    # The trim runs in Java (Jackson) for robust JSON handling. Maven owns all
+    # dependency versions so this also works on a clean CI runner.
+    & javac -cp $cp -d $classesDir (Join-Path $PSScriptRoot "TrimModelCapabilities.java")
+    if ($LASTEXITCODE -ne 0) { throw "Trim compilation failed" }
+
+    $runtimeCp = "$cp$([System.IO.Path]::PathSeparator)$classesDir"
+    & java -cp $runtimeCp TrimModelCapabilities $tmp $outFile
+    if ($LASTEXITCODE -ne 0) { throw "Trim failed" }
+
+    Write-Host "Vendored capabilities -> $outFile"
+} finally {
+    Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+}
