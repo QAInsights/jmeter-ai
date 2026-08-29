@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   update:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -28,30 +28,31 @@ jobs:
           cache: maven
 
       - name: Refresh vendored capabilities
-        shell: powershell
-        run: ./scripts/Update-ModelCapabilities.ps1
+        run: ./scripts/update-model-capabilities.sh
 
       - name: Check for changes
         id: changes
-        shell: powershell
         run: |
           git add src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json
-          if (git diff --cached --quiet) {
-            "changed=false" | Out-File $env:GITHUB_OUTPUT -Append
-          } else {
-            "changed=true" | Out-File $env:GITHUB_OUTPUT -Append
-          }
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
-        shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $branch = "chore/model-capabilities-$(Get-Date -Format 'yyyy-MM-dd')"
+          branch="chore/model-capabilities-$(date +%F)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b $branch
+          git checkout -b "$branch"
           git commit -m "chore: refresh vendored models.dev capabilities"
-          git push -u origin $branch
-          gh pr create --title "chore: refresh vendored models.dev capabilities" --body "Automated daily refresh of ``src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json`` from https://models.dev/api.json (via ``scripts/Update-ModelCapabilities.ps1``).`n`nReview the diff like any dependency bump: new models gain Thinking/effort controls, removed/retired models lose them."
+          git push -u origin "$branch"
+          gh pr create \
+            --title "chore: refresh vendored models.dev capabilities" \
+            --body 'Automated daily refresh of `src/main/resources/org/qainsights/jmeter/ai/reasoning/model-capabilities.json` from https://models.dev/api.json (via `scripts/update-model-capabilities.sh`).
+
+          Review the diff like any dependency bump: new models gain Thinking/effort controls, removed/retired models lose them.'
