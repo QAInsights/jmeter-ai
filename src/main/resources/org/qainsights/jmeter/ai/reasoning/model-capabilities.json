@@ -1,364 +1,295 @@
 {
   "source" : "models.dev api.json",
   "providers" : {
-    "meta" : {
-      "muse-spark-1.1" : {
+    "google" : {
+      "deep-research-max-preview-04-2026" : {
         "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 4.25
-      },
-      "muse-spark-1.2" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 1.25,
-        "costOut" : 4.25
-      },
-      "muse-spark-1.2-contributor" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.1,
-        "costOut" : 0.2
-      }
-    },
-    "openai" : {
-      "chatgpt-image-latest" : {
-        "vision" : true
-      },
-      "gpt-3.5-turbo" : {
-        "contextWindow" : 16385,
-        "costIn" : 0.5,
-        "costOut" : 1.5
-      },
-      "gpt-4" : {
-        "contextWindow" : 8192,
-        "costIn" : 30.0,
-        "costOut" : 60.0
-      },
-      "gpt-4-turbo" : {
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 10.0,
-        "costOut" : 30.0
-      },
-      "gpt-4.1" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1047576,
-        "costIn" : 2.0,
-        "costOut" : 8.0
-      },
-      "gpt-4.1-mini" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1047576,
-        "costIn" : 0.4,
-        "costOut" : 1.6
-      },
-      "gpt-4.1-nano" : {
-        "vision" : true,
-        "contextWindow" : 1047576,
-        "costIn" : 0.1,
-        "costOut" : 0.4
-      },
-      "gpt-4o" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 128000,
-        "costIn" : 2.5,
-        "costOut" : 10.0
-      },
-      "gpt-4o-2024-05-13" : {
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 5.0,
-        "costOut" : 15.0
-      },
-      "gpt-4o-2024-08-06" : {
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 2.5,
-        "costOut" : 10.0
-      },
-      "gpt-4o-2024-11-20" : {
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 2.5,
-        "costOut" : 10.0
-      },
-      "gpt-4o-mini" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 128000,
-        "costIn" : 0.15,
-        "costOut" : 0.6
-      },
-      "gpt-5" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 1.25,
-        "costOut" : 10.0
-      },
-      "gpt-5-mini" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 0.25,
-        "costOut" : 2.0
-      },
-      "gpt-5-nano" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 0.05,
-        "costOut" : 0.4
-      },
-      "gpt-5-pro" : {
-        "reasoning" : true,
-        "effort" : [ "high" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 15.0,
-        "costOut" : 120.0
-      },
-      "gpt-5.1" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 1.25,
-        "costOut" : 10.0
-      },
-      "gpt-5.2" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 1.75,
-        "costOut" : 14.0
-      },
-      "gpt-5.2-chat-latest" : {
-        "reasoning" : true,
-        "effort" : [ "medium" ],
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 1.75,
-        "costOut" : 14.0
-      },
-      "gpt-5.2-pro" : {
-        "reasoning" : true,
-        "effort" : [ "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 21.0,
-        "costOut" : 168.0
-      },
-      "gpt-5.3-chat-latest" : {
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 1.75,
-        "costOut" : 14.0
-      },
-      "gpt-5.3-codex" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 400000,
-        "costIn" : 1.75,
-        "costOut" : 14.0
-      },
-      "gpt-5.3-codex-spark" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 128000,
-        "costIn" : 1.75,
-        "costOut" : 14.0
-      },
-      "gpt-5.4" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 2.5,
-        "costOut" : 15.0
-      },
-      "gpt-5.4-mini" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 0.75,
-        "costOut" : 4.5
-      },
-      "gpt-5.4-nano" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 400000,
-        "costIn" : 0.2,
-        "costOut" : 1.25
-      },
-      "gpt-5.4-pro" : {
-        "reasoning" : true,
-        "effort" : [ "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 30.0,
-        "costOut" : 180.0
-      },
-      "gpt-5.5" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 5.0,
-        "costOut" : 30.0
-      },
-      "gpt-5.5-pro" : {
-        "reasoning" : true,
-        "effort" : [ "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 30.0,
-        "costOut" : 180.0
-      },
-      "gpt-5.6" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 4.0,
-        "costOut" : 20.0
-      },
-      "gpt-5.6-luna" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 0.2,
-        "costOut" : 1.2
-      },
-      "gpt-5.6-sol" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
-        "costIn" : 4.0,
-        "costOut" : 20.0
-      },
-      "gpt-5.6-terra" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1050000,
+        "contextWindow" : 131072,
         "costIn" : 2.0,
         "costOut" : 12.0
       },
-      "gpt-image-1" : {
-        "vision" : true
-      },
-      "gpt-image-1-mini" : {
-        "vision" : true
-      },
-      "gpt-image-1.5" : {
-        "vision" : true
-      },
-      "gpt-image-2" : {
+      "deep-research-preview-04-2026" : {
+        "reasoning" : true,
         "vision" : true,
-        "costIn" : 5.0,
+        "pdf" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "gemini-2.5-computer-use-preview-10-2025" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 1.25,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-flash" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 0,
+        "budgetMax" : 24576,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-2.5-flash-image" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 32768,
+        "costIn" : 0.3,
         "costOut" : 30.0
       },
-      "gpt-realtime-2.1" : {
+      "gemini-2.5-flash-lite" : {
         "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "contextWindow" : 128000,
-        "costIn" : 4.0,
-        "costOut" : 24.0
-      },
-      "o1" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
+        "toggle" : true,
+        "budgetMin" : 512,
+        "budgetMax" : 24576,
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 15.0,
+        "contextWindow" : 1048576,
+        "costIn" : 0.1,
+        "costOut" : 0.4
+      },
+      "gemini-2.5-flash-preview-tts" : {
+        "contextWindow" : 8192,
+        "costIn" : 0.5,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-pro" : {
+        "reasoning" : true,
+        "budgetMin" : 128,
+        "budgetMax" : 32768,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 1.25,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-pro-preview-tts" : {
+        "contextWindow" : 8192,
+        "costIn" : 1.0,
+        "costOut" : 20.0
+      },
+      "gemini-3-flash-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.5,
+        "costOut" : 3.0
+      },
+      "gemini-3-pro-image" : {
+        "reasoning" : true,
+        "effort" : [ "low", "high" ],
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 120.0
+      },
+      "gemini-3-pro-image-preview" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 120.0
+      },
+      "gemini-3.1-flash-image" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.5,
         "costOut" : 60.0
       },
-      "o1-pro" : {
+      "gemini-3.1-flash-image-preview" : {
         "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
+        "effort" : [ "minimal", "high" ],
         "vision" : true,
-        "contextWindow" : 200000,
-        "costIn" : 150.0,
-        "costOut" : 600.0
+        "pdf" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.5,
+        "costOut" : 60.0
       },
-      "o3" : {
+      "gemini-3.1-flash-lite" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.25,
+        "costOut" : 1.5
+      },
+      "gemini-3.1-flash-lite-image" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "high" ],
+        "vision" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.25,
+        "costOut" : 30.0
+      },
+      "gemini-3.1-flash-lite-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.25,
+        "costOut" : 1.5
+      },
+      "gemini-3.1-flash-live-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 0.75,
+        "costOut" : 4.5
+      },
+      "gemini-3.1-flash-tts-preview" : {
+        "reasoning" : true,
+        "contextWindow" : 8192,
+        "costIn" : 1.0,
+        "costOut" : 20.0
+      },
+      "gemini-3.1-pro-preview" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 200000,
+        "contextWindow" : 1048576,
         "costIn" : 2.0,
-        "costOut" : 8.0
+        "costOut" : 12.0
       },
-      "o3-mini" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "contextWindow" : 200000,
-        "costIn" : 1.1,
-        "costOut" : 4.4
-      },
-      "o3-pro" : {
+      "gemini-3.1-pro-preview-customtools" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
         "vision" : true,
-        "contextWindow" : 200000,
-        "costIn" : 20.0,
-        "costOut" : 80.0
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 2.0,
+        "costOut" : 12.0
       },
-      "o4-mini" : {
+      "gemini-3.5-flash" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 1.5,
+        "costOut" : 9.0
+      },
+      "gemini-3.5-flash-lite" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-3.5-live-translate-preview" : {
+        "contextWindow" : 16384,
+        "costIn" : 3.5,
+        "costOut" : 21.0
+      },
+      "gemini-3.6-flash" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-3.7-flash" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
         "vision" : true,
-        "contextWindow" : 200000,
-        "costIn" : 1.1,
-        "costOut" : 4.4
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
       },
-      "text-embedding-3-large" : {
-        "contextWindow" : 8191,
-        "costIn" : 0.13
+      "gemini-embedding-001" : {
+        "contextWindow" : 2048,
+        "costIn" : 0.15
       },
-      "text-embedding-3-small" : {
-        "contextWindow" : 8191,
-        "costIn" : 0.02
-      },
-      "text-embedding-ada-002" : {
+      "gemini-embedding-2" : {
+        "vision" : true,
+        "pdf" : true,
         "contextWindow" : 8192,
-        "costIn" : 0.1
+        "costIn" : 0.2
+      },
+      "gemini-flash-latest" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-flash-lite-latest" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-omni-flash-preview" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 1.5,
+        "costOut" : 17.5
+      },
+      "gemini-robotics-er-1.6-preview" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 0,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
+      "gemma-4-26b-a4b-it" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "vision" : true,
+        "contextWindow" : 262144
+      },
+      "gemma-4-31b-it" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "vision" : true,
+        "contextWindow" : 262144
+      },
+      "lyria-3-clip-preview" : {
+        "vision" : true,
+        "contextWindow" : 1048576
+      },
+      "lyria-3-pro-preview" : {
+        "vision" : true,
+        "contextWindow" : 1048576
+      },
+      "veo-3.1-fast-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
+      },
+      "veo-3.1-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
+      },
+      "veo-3.1-lite-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
       }
     },
     "amazon-bedrock" : {
@@ -1293,381 +1224,391 @@
         "costOut" : 3.2
       }
     },
-    "google" : {
-      "deep-research-max-preview-04-2026" : {
-        "reasoning" : true,
+    "openai" : {
+      "chatgpt-image-latest" : {
+        "vision" : true
+      },
+      "gpt-3.5-turbo" : {
+        "contextWindow" : 16385,
+        "costIn" : 0.5,
+        "costOut" : 1.5
+      },
+      "gpt-4" : {
+        "contextWindow" : 8192,
+        "costIn" : 30.0,
+        "costOut" : 60.0
+      },
+      "gpt-4-turbo" : {
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 10.0,
+        "costOut" : 30.0
+      },
+      "gpt-4.1" : {
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 131072,
+        "contextWindow" : 1047576,
         "costIn" : 2.0,
-        "costOut" : 12.0
+        "costOut" : 8.0
       },
-      "deep-research-preview-04-2026" : {
-        "reasoning" : true,
+      "gpt-4.1-mini" : {
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 12.0
+        "contextWindow" : 1047576,
+        "costIn" : 0.4,
+        "costOut" : 1.6
       },
-      "gemini-2.5-computer-use-preview-10-2025" : {
-        "reasoning" : true,
+      "gpt-4.1-nano" : {
         "vision" : true,
-        "contextWindow" : 131072,
+        "contextWindow" : 1047576,
+        "costIn" : 0.1,
+        "costOut" : 0.4
+      },
+      "gpt-4o" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 128000,
+        "costIn" : 2.5,
+        "costOut" : 10.0
+      },
+      "gpt-4o-2024-05-13" : {
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 5.0,
+        "costOut" : 15.0
+      },
+      "gpt-4o-2024-08-06" : {
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 2.5,
+        "costOut" : 10.0
+      },
+      "gpt-4o-2024-11-20" : {
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 2.5,
+        "costOut" : 10.0
+      },
+      "gpt-4o-mini" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 128000,
+        "costIn" : 0.15,
+        "costOut" : 0.6
+      },
+      "gpt-5" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 400000,
         "costIn" : 1.25,
         "costOut" : 10.0
       },
-      "gemini-2.5-flash" : {
+      "gpt-5-mini" : {
         "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 0,
-        "budgetMax" : 24576,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 0.25,
+        "costOut" : 2.0
+      },
+      "gpt-5-nano" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 0.05,
+        "costOut" : 0.4
+      },
+      "gpt-5-pro" : {
+        "reasoning" : true,
+        "effort" : [ "high" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 15.0,
+        "costOut" : 120.0
+      },
+      "gpt-5.1" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 1.25,
+        "costOut" : 10.0
+      },
+      "gpt-5.2" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 1.75,
+        "costOut" : 14.0
+      },
+      "gpt-5.2-chat-latest" : {
+        "reasoning" : true,
+        "effort" : [ "medium" ],
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 1.75,
+        "costOut" : 14.0
+      },
+      "gpt-5.2-pro" : {
+        "reasoning" : true,
+        "effort" : [ "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 21.0,
+        "costOut" : 168.0
+      },
+      "gpt-5.3-chat-latest" : {
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 1.75,
+        "costOut" : 14.0
+      },
+      "gpt-5.3-codex" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 400000,
+        "costIn" : 1.75,
+        "costOut" : 14.0
+      },
+      "gpt-5.3-codex-spark" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 128000,
+        "costIn" : 1.75,
+        "costOut" : 14.0
+      },
+      "gpt-5.4" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.5,
+        "costOut" : 15.0
+      },
+      "gpt-5.4-mini" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 0.75,
+        "costOut" : 4.5
+      },
+      "gpt-5.4-nano" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 0.2,
+        "costOut" : 1.25
+      },
+      "gpt-5.4-pro" : {
+        "reasoning" : true,
+        "effort" : [ "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 30.0,
+        "costOut" : 180.0
+      },
+      "gpt-5.5" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 5.0,
+        "costOut" : 30.0
+      },
+      "gpt-5.5-pro" : {
+        "reasoning" : true,
+        "effort" : [ "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 30.0,
+        "costOut" : 180.0
+      },
+      "gpt-5.6" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
+      "gpt-5.6-luna" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 0.2,
+        "costOut" : 1.2
+      },
+      "gpt-5.6-sol" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
+      "gpt-5.6-terra" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "gpt-image-1" : {
+        "vision" : true
+      },
+      "gpt-image-1-mini" : {
+        "vision" : true
+      },
+      "gpt-image-1.5" : {
+        "vision" : true
+      },
+      "gpt-image-2" : {
+        "vision" : true,
+        "costIn" : 5.0,
+        "costOut" : 30.0
+      },
+      "gpt-realtime-2.1" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "contextWindow" : 128000,
+        "costIn" : 4.0,
+        "costOut" : 24.0
+      },
+      "o1" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 15.0,
+        "costOut" : 60.0
+      },
+      "o1-pro" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 200000,
+        "costIn" : 150.0,
+        "costOut" : 600.0
+      },
+      "o3" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 2.0,
+        "costOut" : 8.0
+      },
+      "o3-mini" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "contextWindow" : 200000,
+        "costIn" : 1.1,
+        "costOut" : 4.4
+      },
+      "o3-pro" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 200000,
+        "costIn" : 20.0,
+        "costOut" : 80.0
+      },
+      "o4-mini" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.1,
+        "costOut" : 4.4
+      },
+      "text-embedding-3-large" : {
+        "contextWindow" : 8191,
+        "costIn" : 0.13
+      },
+      "text-embedding-3-small" : {
+        "contextWindow" : 8191,
+        "costIn" : 0.02
+      },
+      "text-embedding-ada-002" : {
+        "contextWindow" : 8192,
+        "costIn" : 0.1
+      }
+    },
+    "meta" : {
+      "muse-spark-1.1" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 4.25
+      },
+      "muse-spark-1.2" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
+        "costIn" : 1.25,
+        "costOut" : 4.25
       },
-      "gemini-2.5-flash-image" : {
+      "muse-spark-1.2-contributor" : {
         "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 32768,
-        "costIn" : 0.3,
-        "costOut" : 30.0
-      },
-      "gemini-2.5-flash-lite" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 512,
-        "budgetMax" : 24576,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1048576,
         "costIn" : 0.1,
-        "costOut" : 0.4
-      },
-      "gemini-2.5-flash-preview-tts" : {
-        "contextWindow" : 8192,
-        "costIn" : 0.5,
-        "costOut" : 10.0
-      },
-      "gemini-2.5-pro" : {
-        "reasoning" : true,
-        "budgetMin" : 128,
-        "budgetMax" : 32768,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 1.25,
-        "costOut" : 10.0
-      },
-      "gemini-2.5-pro-preview-tts" : {
-        "contextWindow" : 8192,
-        "costIn" : 1.0,
-        "costOut" : 20.0
-      },
-      "gemini-3-flash-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.5,
-        "costOut" : 3.0
-      },
-      "gemini-3-pro-image" : {
-        "reasoning" : true,
-        "effort" : [ "low", "high" ],
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 120.0
-      },
-      "gemini-3-pro-image-preview" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 120.0
-      },
-      "gemini-3.1-flash-image" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.5,
-        "costOut" : 60.0
-      },
-      "gemini-3.1-flash-image-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.5,
-        "costOut" : 60.0
-      },
-      "gemini-3.1-flash-lite" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.25,
-        "costOut" : 1.5
-      },
-      "gemini-3.1-flash-lite-image" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.25,
-        "costOut" : 30.0
-      },
-      "gemini-3.1-flash-lite-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.25,
-        "costOut" : 1.5
-      },
-      "gemini-3.1-flash-live-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 0.75,
-        "costOut" : 4.5
-      },
-      "gemini-3.1-flash-tts-preview" : {
-        "reasoning" : true,
-        "contextWindow" : 8192,
-        "costIn" : 1.0,
-        "costOut" : 20.0
-      },
-      "gemini-3.1-pro-preview" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "gemini-3.1-pro-preview-customtools" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "gemini-3.5-flash" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 1.5,
-        "costOut" : 9.0
-      },
-      "gemini-3.5-flash-lite" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
-      },
-      "gemini-3.5-live-translate-preview" : {
-        "contextWindow" : 16384,
-        "costIn" : 3.5,
-        "costOut" : 21.0
-      },
-      "gemini-3.6-flash" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-3.7-flash" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-embedding-001" : {
-        "contextWindow" : 2048,
-        "costIn" : 0.15
-      },
-      "gemini-embedding-2" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8192,
-        "costIn" : 0.2
-      },
-      "gemini-flash-latest" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-flash-lite-latest" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
-      },
-      "gemini-omni-flash-preview" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 1.5,
-        "costOut" : 17.5
-      },
-      "gemini-robotics-er-1.6-preview" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 0,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 1.0,
-        "costOut" : 5.0
-      },
-      "gemma-4-26b-a4b-it" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "vision" : true,
-        "contextWindow" : 262144
-      },
-      "gemma-4-31b-it" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "vision" : true,
-        "contextWindow" : 262144
-      },
-      "lyria-3-clip-preview" : {
-        "vision" : true,
-        "contextWindow" : 1048576
-      },
-      "lyria-3-pro-preview" : {
-        "vision" : true,
-        "contextWindow" : 1048576
-      },
-      "veo-3.1-fast-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
-      },
-      "veo-3.1-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
-      },
-      "veo-3.1-lite-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
+        "costOut" : 0.2
       }
     },
-    "xai" : {
-      "grok-4.20-0309-non-reasoning" : {
-        "vision" : true,
-        "pdf" : true,
+    "deepseek" : {
+      "deepseek-v4-flash" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "effort" : [ "low", "high", "max" ],
         "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
+        "costIn" : 0.14,
+        "costOut" : 0.28
       },
-      "grok-4.20-0309-reasoning" : {
+      "deepseek-v4-flash-vision-exp" : {
         "reasoning" : true,
+        "toggle" : true,
+        "effort" : [ "low", "high", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
+        "costIn" : 0.14,
+        "costOut" : 0.28
       },
-      "grok-4.20-multi-agent-0309" : {
+      "deepseek-v4-pro" : {
         "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
+        "toggle" : true,
+        "effort" : [ "high", "max" ],
         "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.3" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-4.6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-build-0.1" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 256000,
-        "costIn" : 1.0,
-        "costOut" : 2.0
-      },
-      "grok-imagine-image" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-image-2.0" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-image-quality" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-video" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
-      },
-      "grok-imagine-video-1.5" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
+        "costIn" : 0.435,
+        "costOut" : 0.87
       }
     },
     "anthropic" : {
@@ -1794,31 +1735,90 @@
         "costOut" : 10.0
       }
     },
-    "deepseek" : {
-      "deepseek-v4-flash" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "effort" : [ "low", "high", "max" ],
-        "contextWindow" : 1000000,
-        "costIn" : 0.14,
-        "costOut" : 0.28
-      },
-      "deepseek-v4-flash-vision-exp" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "effort" : [ "low", "high", "max" ],
+    "xai" : {
+      "grok-4.20-0309-non-reasoning" : {
         "vision" : true,
+        "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 0.14,
-        "costOut" : 0.28
+        "costIn" : 1.25,
+        "costOut" : 2.5
       },
-      "deepseek-v4-pro" : {
+      "grok-4.20-0309-reasoning" : {
         "reasoning" : true,
-        "toggle" : true,
-        "effort" : [ "high", "max" ],
+        "vision" : true,
+        "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 0.435,
-        "costOut" : 0.87
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.20-multi-agent-0309" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.3" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-4.6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-build-0.1" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 256000,
+        "costIn" : 1.0,
+        "costOut" : 2.0
+      },
+      "grok-imagine-image" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-image-2.0" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-image-quality" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-video" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
+      },
+      "grok-imagine-video-1.5" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
       }
     }
   }
