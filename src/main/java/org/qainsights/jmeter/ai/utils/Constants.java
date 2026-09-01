@@ -8,6 +8,7 @@ public class Constants {
 
     public static final String DONATE_LINK = "https://www.buymeacoffee.com/qainsights";
     public static final String APP_NAME = "Feather Wand - JMeter Agent";
+    public static final String DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
     private static final int MODIFIER =
             System.getProperty("os.name").toLowerCase().contains("mac")
                     ? InputEvent.META_DOWN_MASK
