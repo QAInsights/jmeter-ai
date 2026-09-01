@@ -70,6 +70,24 @@ class AnthropicGatewayRoutingTest {
         }
     }
 
+    @Test
+    void messageCompletionUsesGatewayHeaderWithoutVendorApiKey() {
+        try (MockedStatic<AiConfig> ignored = mockConfig()) {
+            AnthropicClient client = GatewayConfig.apply(AnthropicOkHttpClient.builder()).build();
+            MessageCreateParams params = MessageCreateParams.builder()
+                    .model("claude-sonnet-4-6")
+                    .maxTokens(16)
+                    .addUserMessage("hello")
+                    .build();
+
+            Message message = client.messages().create(params);
+
+            assertEquals("hello", message.content().get(0).asText().text());
+            assertEquals(List.of("/v1/messages"), paths);
+            assertEquals(List.of("abc123"), corpTokenHeaders);
+        }
+    }
+
     private MockedStatic<AiConfig> mockConfig() {
         MockedStatic<AiConfig> mocked = mockStatic(AiConfig.class);
         mocked.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))

@@ -81,6 +81,24 @@ class OpenAiGatewayRoutingTest {
     }
 
     @Test
+    void chatCompletionUsesGatewayHeaderWithoutVendorApiKey() {
+        try (MockedStatic<AiConfig> ignored = mockConfig("")) {
+            OpenAIClient client = GatewayConfig.apply(OpenAIOkHttpClient.builder().apiKey("")).build();
+            ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                    .model("corp-gpt-4o")
+                    .addUserMessage("hello")
+                    .maxCompletionTokens(16)
+                    .build();
+
+            ChatCompletion completion = client.chat().completions().create(params);
+
+            assertEquals("hello", completion.choices().get(0).message().content().orElseThrow());
+            assertEquals(List.of("/v1/chat/completions"), paths);
+            assertEquals(List.of("abc123"), corpTokenHeaders);
+        }
+    }
+
+    @Test
     void gatewayModelListingKeepsNonGptModelsButDropsEmbeddingModels() {
         try (MockedStatic<AiConfig> ignored = mockConfig("")) {
             List<String> modelIds = Models.getOpenAiModelIds(null);

@@ -57,6 +57,41 @@ class GatewayConfigTest {
     }
 
     @Test
+    void gatewayHeadersCountAsCredentialsOnlyForCustomBaseUrls() {
+        try (MockedStatic<AiConfig> ignored = mockStatic(AiConfig.class)) {
+            ignored.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                    .thenReturn("https://openai.example/v1");
+            ignored.when(() -> AiConfig.getProperty("openai.extra.headers", ""))
+                    .thenReturn("X-Corp-Token=abc123");
+            ignored.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
+                    .thenReturn("https://anthropic.example");
+            ignored.when(() -> AiConfig.getProperty("anthropic.extra.headers", ""))
+                    .thenReturn("X-Corp-Token=abc123");
+
+            assertTrue(GatewayConfig.hasOpenAiGatewayCredentials());
+            assertTrue(GatewayConfig.hasAnthropicGatewayCredentials());
+
+            ignored.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                    .thenReturn(GatewayConfig.OPENAI_DEFAULT_BASE_URL);
+            ignored.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
+                    .thenReturn(GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL);
+            assertFalse(GatewayConfig.hasOpenAiGatewayCredentials());
+            assertFalse(GatewayConfig.hasAnthropicGatewayCredentials());
+
+            ignored.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                    .thenReturn("https://openai.example/v1");
+            ignored.when(() -> AiConfig.getProperty("openai.extra.headers", ""))
+                    .thenReturn("");
+            ignored.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
+                    .thenReturn("https://anthropic.example");
+            ignored.when(() -> AiConfig.getProperty("anthropic.extra.headers", ""))
+                    .thenReturn("");
+            assertFalse(GatewayConfig.hasOpenAiGatewayCredentials());
+            assertFalse(GatewayConfig.hasAnthropicGatewayCredentials());
+        }
+    }
+
+    @Test
     void parseHeadersHandlesValuesWhitespaceMalformedEntriesAndTrailingSeparator() {
         assertEquals(Map.of("A", "1", "B", "2"), GatewayConfig.parseHeaders("A=1;B=2"));
         assertEquals(Map.of("X-Tok", "abc=def"), GatewayConfig.parseHeaders("X-Tok=abc=def"));

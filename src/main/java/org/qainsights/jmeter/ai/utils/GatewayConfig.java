@@ -38,6 +38,22 @@ public final class GatewayConfig {
         return !ANTHROPIC_DEFAULT_BASE_URL.equals(anthropicBaseUrl());
     }
 
+    /**
+     * True when a custom OpenAI-compatible gateway can authenticate with
+     * configured headers instead of a vendor API key.
+     */
+    public static boolean hasOpenAiGatewayCredentials() {
+        return isOpenAiGateway() && !openAiHeaders().isEmpty();
+    }
+
+    /**
+     * True when a custom Anthropic-compatible gateway can authenticate with
+     * configured headers instead of a vendor API key.
+     */
+    public static boolean hasAnthropicGatewayCredentials() {
+        return isAnthropicGateway() && !anthropicHeaders().isEmpty();
+    }
+
     public static Map<String, String> openAiHeaders() {
         return parseHeaders(AiConfig.getProperty("openai.extra.headers", ""));
     }
@@ -96,13 +112,23 @@ public final class GatewayConfig {
     }
 
     public static OpenAIOkHttpClient.Builder apply(OpenAIOkHttpClient.Builder builder) {
-        builder.baseUrl(openAiBaseUrl());
+        String baseUrl = openAiBaseUrl();
+        if (baseUrl.regionMatches(true, 0, "http://", 0, 7)) {
+            log.warn("Gateway base URL {} uses plaintext HTTP; API keys and prompts will be sent unencrypted",
+                    baseUrl);
+        }
+        builder.baseUrl(baseUrl);
         openAiHeaders().forEach(builder::putHeader);
         return builder;
     }
 
     public static AnthropicOkHttpClient.Builder apply(AnthropicOkHttpClient.Builder builder) {
-        builder.baseUrl(anthropicBaseUrl());
+        String baseUrl = anthropicBaseUrl();
+        if (baseUrl.regionMatches(true, 0, "http://", 0, 7)) {
+            log.warn("Gateway base URL {} uses plaintext HTTP; API keys and prompts will be sent unencrypted",
+                    baseUrl);
+        }
+        builder.baseUrl(baseUrl);
         anthropicHeaders().forEach(builder::putHeader);
         return builder;
     }

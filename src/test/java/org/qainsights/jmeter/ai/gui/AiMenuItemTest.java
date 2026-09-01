@@ -9,7 +9,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import javax.swing.*;
 
@@ -121,6 +123,44 @@ class AiMenuItemTest {
         AiService service = AiMenuItem.createAiService(configuredServiceType);
 
         assertInstanceOf(ClaudeService.class, service);
+    }
+
+    @Test
+    void createAiServiceSupportsOpenAiHeaderOnlyGateway() {
+        configuredApiKey = "";
+        configuredModel = "corp-gpt-4o";
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                .thenReturn("https://openai.example/v1");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("openai.extra.headers", ""))
+                .thenReturn("X-Corp-Token=abc123");
+
+        AiService service = AiMenuItem.createAiService("openai");
+
+        assertInstanceOf(OpenAiService.class, service);
+    }
+
+    @Test
+    void createAiServiceSupportsAnthropicHeaderOnlyGateway() {
+        configuredServiceType = "anthropic";
+        configuredApiKey = "";
+        configuredModel = "claude-sonnet-4-6";
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty(
+                "anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
+                .thenReturn("https://anthropic.example");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.extra.headers", ""))
+                .thenReturn("X-Corp-Token=abc123");
+
+        AiService service = AiMenuItem.createAiService("anthropic");
+
+        assertInstanceOf(ClaudeService.class, service);
+    }
+
+    @Test
+    void createAiServiceRejectsMissingKeyAndGatewayHeaders() {
+        configuredApiKey = "";
+
+        assertNull(AiMenuItem.createAiService("openai"));
+        assertNull(AiMenuItem.createAiService("anthropic"));
     }
 
     @Test
