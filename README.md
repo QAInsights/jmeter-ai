@@ -278,19 +278,69 @@ If your organization fronts OpenAI or Anthropic with an internal gateway (LiteLL
 ```properties
 # OpenAI-compatible gateway
 openai.base.url=https://llm-gateway.corp.example.com/v1
-openai.extra.headers=Ocp-Apim-Subscription-Key=xxxx;X-Corp-Project=perf
+openai.extra.headers=X-Gateway-Key=<your-gateway-key>;X-Team=perf
 openai.models=corp-gpt-4o,corp-gpt-4o-mini
 
 # Anthropic-compatible gateway
 anthropic.base.url=https://llm-gateway.corp.example.com
-anthropic.extra.headers=X-Corp-Token=xxxx;X-Corp-Project=perf
+anthropic.extra.headers=X-Gateway-Key=<your-gateway-key>;X-Team=perf
 anthropic.models=corp-claude-sonnet,corp-claude-haiku
 ```
 
-- **Authentication.** Use `*.api.key` when the gateway expects the usual vendor auth header (many issue a "virtual key"). When it authenticates purely through its own header, set `*.extra.headers` and leave `*.api.key` unset — the gateway configuration alone is enough for the chat panel and the JSR223 refactoring menu. Values may contain `=` (only the first `=` separates name from value).
+- **Authentication.** Use `*.api.key` when the gateway expects the usual vendor auth header (many issue a "virtual key"). When it authenticates purely through its own header, set `*.extra.headers` and leave `*.api.key` unset — the gateway configuration alone is enough for the chat panel and the JSR223 refactoring menu. Values may contain `=` (only the first `=` separates name from value). Header names are gateway-specific — take them from your gateway's own documentation.
 - **Model list.** Gateways often don't expose model listing, or return names the vendor filter would drop. Set `*.models` to list them explicitly and Feather Wand skips the discovery call entirely. With a custom base URL the `gpt` prefix requirement is also lifted, so ids like `azure/gpt-4o` survive.
 - **Transport.** Use `https://`. A plaintext `http://` base URL still works (useful for a loopback or in-cluster endpoint) but logs a warning, since keys and prompts would travel unencrypted.
 - **TLS interception.** If your gateway presents a certificate from an internal CA, add it to the truststore JMeter runs with (for example `-Djavax.net.ssl.trustStore=...`).
+
+#### Gateway troubleshooting
+
+First confirm the gateway works outside JMeter, using the same URL, header and model id you put in the properties:
+
+```bash
+curl -sS https://llm-gateway.corp.example.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Gateway-Key: $GATEWAY_KEY" \
+  -d '{"model":"corp-gpt-4o","messages":[{"role":"user","content":"ping"}]}'
+```
+
+| Symptom | Likely cause |
+|---------|--------------|
+| Requests still reach `api.openai.com` / `api.anthropic.com` | Properties aren't loaded — they must be in `jmeter.properties` or `user.properties`, and JMeter must be restarted. `jmeter.log` logs the effective endpoint: `Initialized OpenAI service with baseUrl: ...` |
+| No gateway models in the picker | The gateway doesn't serve a model-listing endpoint, or returns ids the filter drops — set `openai.models` / `anthropic.models` explicitly |
+| `Error adding OpenAI models` / `Error loading Anthropic models` in `jmeter.log` | The discovery call failed: wrong base URL path, untrusted certificate, or missing auth header |
+| 401 / 403 on chat | The gateway wants its own header (`*.extra.headers`), or expects a virtual key in `*.api.key` rather than your vendor key |
+| 404 on chat | Base URL path is off — OpenAI-compatible URLs normally end in `/v1`, Anthropic-compatible ones do not |
+| `PKIX path building failed` | The gateway's certificate chains to an internal CA; start JMeter with `-Djavax.net.ssl.trustStore=/path/to/corp-truststore.jks` |
+| `uses plaintext HTTP` warning | The base URL is `http://`; switch to `https://` unless it's a loopback endpoint |
+
+If that doesn't settle it, paste the following into your own LLM (redact secrets first):
+
+```text
+I'm using the Feather Wand plugin for Apache JMeter and routing it through my
+company's LLM gateway instead of the vendor endpoint. It isn't working.
+
+My Feather Wand properties (secrets redacted, header NAMES kept):
+  openai.base.url=...
+  openai.extra.headers=...
+  openai.models=...
+  openai.default.model=...
+  openai.api.key=<set | not set>
+  (or the anthropic.* equivalents)
+
+What JMeter shows me: <error text from the Feather Wand chat panel>
+
+Relevant jmeter.log lines: <lines mentioning baseUrl, models, or an exception>
+
+How my gateway works: it speaks the <OpenAI /v1/chat/completions | Anthropic
+/v1/messages> wire format, authenticates via <bearer API key | custom header
+named X-...>, and <does | does not> expose a model-listing endpoint. Its
+documentation says: <paste the relevant part>
+
+Tell me which of these is wrong and give me the corrected property lines:
+the base URL (including whether a /v1 suffix belongs there), the auth header
+name and whether the key should go in openai.api.key instead, the model ids,
+or the TLS trust configuration.
+```
 
 Restart JMeter after changing gateway properties.
 
@@ -895,4 +945,3 @@ See what's next on the [project board](https://github.com/users/QAInsights/proje
 - **No secrets in chat**: never paste credentials or proprietary code into the chat box.
 
 Feather Wand is an assistant, not a replacement for engineering judgment.
-
