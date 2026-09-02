@@ -7,6 +7,7 @@ import com.anthropic.models.models.ModelInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -44,11 +45,12 @@ public class AnthropicUsage {
             }
 
             // Initialize the client using the correct builder pattern
-            client = AnthropicOkHttpClient.builder()
-                    .apiKey(apiKey)
+            client = GatewayConfig.apply(AnthropicOkHttpClient.builder()
+                    .apiKey(apiKey))
                     .build();
 
-            log.info("Anthropic client initialized for usage tracking");
+            log.info("Anthropic client initialized for usage tracking with baseUrl: {}",
+                    GatewayConfig.anthropicBaseUrl());
         } catch (Exception e) {
             log.error("Failed to initialize Anthropic client for usage tracking", e);
         }

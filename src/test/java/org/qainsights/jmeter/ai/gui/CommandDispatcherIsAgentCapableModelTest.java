@@ -71,4 +71,20 @@ class CommandDispatcherIsAgentCapableModelTest {
         assertFalse(CommandDispatcher.isAgentCapableModel("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0"),
                 "Bedrock has no tool-calling adapter yet");
     }
+
+    @Test
+    void chatSelectionNeverUsesAgent() {
+        assertFalse(CommandDispatcher.shouldUseAgent(true, false, "openai:gpt-4o"));
+    }
+
+    @Test
+    void agentSelectionUsesAgentForCapableModel() {
+        assertTrue(CommandDispatcher.shouldUseAgent(true, true, "openai:gpt-4o"));
+    }
+
+    @Test
+    void disabledFeatureAndUnsupportedModelsStayInChat() {
+        assertFalse(CommandDispatcher.shouldUseAgent(false, true, "openai:gpt-4o"));
+        assertFalse(CommandDispatcher.shouldUseAgent(true, true, "ollama:llama3.1"));
+    }
 }

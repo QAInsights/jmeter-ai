@@ -36,6 +36,11 @@ class InputOptionsRow extends JPanel {
 
     InputOptionsRow(Component popupParent, AttachmentBar attachmentBar,
                     JButton attachButton, Runnable onSend) {
+        this(popupParent, attachmentBar, attachButton, null, onSend);
+    }
+
+    InputOptionsRow(Component popupParent, AttachmentBar attachmentBar,
+                    JButton attachButton, JComponent leadingOption, Runnable onSend) {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
         setBorder(BorderFactory.createEmptyBorder(
@@ -58,6 +63,9 @@ class InputOptionsRow extends JPanel {
 
         optionsStrip = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
         optionsStrip.setOpaque(false);
+        if (leadingOption != null) {
+            optionsStrip.add(leadingOption);
+        }
         optionsStrip.add(attachButton);
 
         statsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_2, 0));

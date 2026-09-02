@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -69,6 +70,19 @@ class ProviderStatusTest {
     void fromConfig_readyWithAnthropicKey() {
         props.put("anthropic.api.key", "sk-ant-test");
         ProviderStatus status = ProviderStatus.fromConfig();
+        assertTrue(status.isReady());
+        assertTrue(status.hasAnyCloudProvider());
+    }
+
+    @Test
+    void fromConfig_readyWithHeaderOnlyGatewayCredentials() {
+        props.put("openai.base.url", "https://openai.example/v1");
+        props.put("openai.extra.headers", "X-Corp-Token=abc123");
+        props.put("anthropic.base.url", "https://anthropic.example");
+        props.put("anthropic.extra.headers", "X-Corp-Token=abc123");
+
+        ProviderStatus status = ProviderStatus.fromConfig();
+
         assertTrue(status.isReady());
         assertTrue(status.hasAnyCloudProvider());
     }

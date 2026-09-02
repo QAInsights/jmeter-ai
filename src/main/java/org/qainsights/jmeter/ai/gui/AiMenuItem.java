@@ -11,6 +11,7 @@ import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +70,8 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 // Check if OpenAI API key is configured
                 String apiKey = AiConfig.getProperty("openai.api.key", "");
                 String model = AiConfig.getProperty("openai.default.model", "");
-                if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
+                boolean apiKeyOk = apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY");
+                if ((apiKeyOk || GatewayConfig.hasOpenAiGatewayCredentials())
                         && model != null && !model.isEmpty()) {
                     return new OpenAiService();
                 }
@@ -80,7 +82,8 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                         AiConfig.getProperty("anthropic.default.model", ""),
                         AiConfig.getProperty("claude.default.model", ""),
                         AiConfig.getProperty("anthropic.model", ""));
-                if (apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY")
+                boolean apiKeyOk = apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY");
+                if ((apiKeyOk || GatewayConfig.hasAnthropicGatewayCredentials())
                         && model != null && !model.isEmpty()) {
                     return new ClaudeService();
                 }

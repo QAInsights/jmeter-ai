@@ -19,6 +19,7 @@ import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jorphan.gui.JMeterUIDefaults;
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -86,6 +87,7 @@ public class AiChatPanel
     private org.qainsights.jmeter.ai.service.prompts.PromptLibrary promptLibrary;
     private JTextArea messageField;
     private InputOptionsRow inputOptionsRow;
+    private InteractionModeSelector interactionModeSelector;
     private Runnable currentCancelHandle;
     private ModelSelectorPanel modelSelectorPanel;
     private ClaudeService claudeService;
@@ -626,8 +628,9 @@ public class AiChatPanel
         // beside the composer, with input actions and status on the final row.
         // The trailing Send button swaps to Stop while the AI is processing.
         QuietButton attachButton = new QuietButton("").iconOnly();
+        interactionModeSelector = new InteractionModeSelector(JMeterAgent.isEnabled());
         inputOptionsRow = new InputOptionsRow(
-                this, attachmentBar, attachButton, this::sendMessage);
+                this, attachmentBar, attachButton, interactionModeSelector, this::sendMessage);
         inputOptionsRow.setModelRow(createToolbarRow());
         inputOptionsRow.addOption(treeNavigationButtons.getUpButton());
         inputOptionsRow.addOption(treeNavigationButtons.getDownButton());
@@ -1137,6 +1140,11 @@ public class AiChatPanel
     }
 
     @Override
+    public boolean isAgentModeSelected() {
+        return interactionModeSelector != null && interactionModeSelector.isAgentSelected();
+    }
+
+    @Override
     public List<String> getConversationHistory() {
         return conversationTracker.history();
     }
@@ -1414,6 +1422,9 @@ public class AiChatPanel
         }
         if (inputOptionsRow != null) {
             inputOptionsRow.applyTheme();
+        }
+        if (interactionModeSelector != null) {
+            interactionModeSelector.applyTheme();
         }
         if (reasoningControls != null) {
             reasoningControls.applyTheme();

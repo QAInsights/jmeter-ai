@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.service;
 
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 /**
  * Read-only snapshot of which AI providers look configured from JMeter
@@ -26,7 +27,9 @@ public final class ProviderStatus {
                 || isApiKeyConfigured("deepseek.api.key")
                 || isApiKeyConfigured("grok.api.key")
                 || isApiKeyConfigured("meta.api.key")
-                || isBedrockConfigured();
+                || isBedrockConfigured()
+                || GatewayConfig.hasOpenAiGatewayCredentials()
+                || GatewayConfig.hasAnthropicGatewayCredentials();
         String serviceType = AiConfig.getProperty("jmeter.ai.service.type", "");
         boolean ollamaPreferred = "ollama".equalsIgnoreCase(serviceType == null ? "" : serviceType.trim());
         return new ProviderStatus(cloud, ollamaPreferred);

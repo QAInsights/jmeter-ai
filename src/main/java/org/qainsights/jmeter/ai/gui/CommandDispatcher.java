@@ -104,7 +104,7 @@ public class CommandDispatcher {
         }
 
         // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI and Google Gemini).
-        if (JMeterAgent.isEnabled() && isAgentCapableModel(cb.getSelectedModel())) {
+        if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
             handleAgentCommand(message);
             return;
         }
@@ -537,6 +537,10 @@ public class CommandDispatcher {
                 || (selectedModel != null && selectedModel.startsWith("google:"))
                 || (selectedModel != null && selectedModel.startsWith("codex:"))
                 || (selectedModel != null && selectedModel.startsWith("claude-code:"));
+    }
+
+    static boolean shouldUseAgent(boolean featureEnabled, boolean agentSelected, String selectedModel) {
+        return featureEnabled && agentSelected && isAgentCapableModel(selectedModel);
     }
 
     /** True when the selected model routes to Claude (non-prefixed model ids). */

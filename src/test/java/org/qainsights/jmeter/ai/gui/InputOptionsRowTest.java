@@ -49,6 +49,19 @@ class InputOptionsRowTest {
     }
 
     @Test
+    void leadingModeSelectorAppearsBeforePaperclip() {
+        JButton attachButton = new JButton("");
+        InteractionModeSelector selector = new InteractionModeSelector(true);
+        InputOptionsRow row = new InputOptionsRow(
+                null, attachmentBar, attachButton, selector, () -> { });
+
+        assertEquals(2, row.getOptionCount());
+        assertSame(selector.getParent(), attachButton.getParent());
+        assertTrue(selector.getParent().getComponentZOrder(selector)
+                < attachButton.getParent().getComponentZOrder(attachButton));
+    }
+
+    @Test
     void hintLabelPresent() {
         InputOptionsRow row = new InputOptionsRow(null, attachmentBar, new JButton());
         assertTrue(containsLabel(row, "Enter to send"),

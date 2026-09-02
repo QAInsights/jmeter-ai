@@ -14,6 +14,7 @@ import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.usage.AnthropicUsage;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +66,8 @@ public class ClaudeService implements AiService {
             );
         }
 
-        this.client = AnthropicOkHttpClient.builder().apiKey(API_KEY).build();
+        this.client = GatewayConfig.apply(AnthropicOkHttpClient.builder().apiKey(API_KEY)).build();
+        log.info("Initialized Anthropic service with baseUrl: {}", GatewayConfig.anthropicBaseUrl());
 
         // Get default model from properties or use SONNET if not specified
         this.currentModelId = AiConfig.getProperty(

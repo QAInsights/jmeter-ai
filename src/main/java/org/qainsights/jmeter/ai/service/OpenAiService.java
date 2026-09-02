@@ -16,6 +16,7 @@ import org.qainsights.jmeter.ai.service.reasoning.OpenAiReasoning;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.qainsights.jmeter.ai.usage.OpenAiUsage;
 
 public class OpenAiService implements AiService {
@@ -46,7 +47,8 @@ public class OpenAiService implements AiService {
             System.setProperty("OPENAI_LOG", loggingLevel);
             log.info("Enabled OpenAI client logging with level: {}", loggingLevel);
         }
-        this.client = new OpenAIOkHttpClient.Builder().apiKey(API_KEY).build();
+        this.client = GatewayConfig.apply(OpenAIOkHttpClient.builder().apiKey(API_KEY)).build();
+        log.info("Initialized OpenAI service with baseUrl: {}", GatewayConfig.openAiBaseUrl());
 
         // Set the client in the OpenAiUsage singleton for token usage tracking
         try {

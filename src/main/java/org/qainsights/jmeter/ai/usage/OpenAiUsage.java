@@ -6,6 +6,7 @@ import com.openai.client.OpenAIClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -44,11 +45,12 @@ public class OpenAiUsage {
             }
 
             // Initialize the client
-            client = new com.openai.client.okhttp.OpenAIOkHttpClient.Builder()
-                    .apiKey(apiKey)
+            client = GatewayConfig.apply(com.openai.client.okhttp.OpenAIOkHttpClient.builder()
+                    .apiKey(apiKey))
                     .build();
 
-            log.info("OpenAI client initialized for usage tracking");
+            log.info("OpenAI client initialized for usage tracking with baseUrl: {}",
+                    GatewayConfig.openAiBaseUrl());
         } catch (Exception e) {
             log.error("Failed to initialize OpenAI client for usage tracking", e);
         }

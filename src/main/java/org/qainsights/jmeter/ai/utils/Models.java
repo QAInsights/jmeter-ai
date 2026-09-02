@@ -44,14 +44,12 @@ public class Models {
         // Get Anthropic models
         try {
             if (serviceHolder.getClaudeService() != null) {
-                ModelListPage anthropicModels = getAnthropicModels(serviceHolder.getClaudeService().getClient());
-                if (anthropicModels != null && anthropicModels.data() != null) {
-                    for (ModelInfo model : anthropicModels.data()) {
-                        allModels.add(model.id());
-                        log.debug("Added Anthropic model: {}", model.id());
-                    }
-                    log.info("Added {} Anthropic models", anthropicModels.data().size());
+                List<String> anthropicModelIds = getAnthropicModelIds(serviceHolder.getClaudeService().getClient());
+                for (String modelId : anthropicModelIds) {
+                    allModels.add(modelId);
+                    log.debug("Added Anthropic model: {}", modelId);
                 }
+                log.info("Added {} Anthropic models", anthropicModelIds.size());
             }
         } catch (Exception e) {
             log.error("Error loading Anthropic models: {}", e.getMessage(), e);
@@ -60,25 +58,12 @@ public class Models {
         // Add OpenAI models
         try {
             if (serviceHolder.getOpenAiService() != null) {
-                com.openai.models.models.ModelListPage openAiModels = getOpenAiModels(serviceHolder.getOpenAiService().getClient());
-                if (openAiModels != null && openAiModels.data() != null) {
-                    for (Model openAiModel : openAiModels.data()) {
-                        if (openAiModel.id().startsWith("gpt") &&
-                                !openAiModel.id().contains("audio") &&
-                                !openAiModel.id().contains("tts") &&
-                                !openAiModel.id().contains("whisper") &&
-                                !openAiModel.id().contains("davinci") &&
-                                !openAiModel.id().contains("search") &&
-                                !openAiModel.id().contains("transcribe") &&
-                                !openAiModel.id().contains("realtime") &&
-                                !openAiModel.id().contains("instruct")) {
-                            String modelId = "openai:" + openAiModel.id();
-                            allModels.add(modelId);
-                            log.debug("Added OpenAI model to selector: {}", openAiModel.id());
-                        }
-                    }
-                    log.info("Added OpenAI models to selector");
+                List<String> openAiModelIds = getOpenAiModelIds(serviceHolder.getOpenAiService().getClient());
+                for (String modelId : openAiModelIds) {
+                    allModels.add("openai:" + modelId);
+                    log.debug("Added OpenAI model to selector: {}", modelId);
                 }
+                log.info("Added {} OpenAI models to selector", openAiModelIds.size());
             }
         } catch (Exception e) {
             log.error("Error adding OpenAI models: {}", e.getMessage(), e);
@@ -343,8 +328,8 @@ public class Models {
     public static ModelListPage getAnthropicModels(AnthropicClient client) {
         try {
             log.info("Fetching available models from Anthropic API");
-            client = AnthropicOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("anthropic.api.key", "YOUR_API_KEY"))
+            client = GatewayConfig.apply(AnthropicOkHttpClient.builder()
+                    .apiKey(AiConfig.getProperty("anthropic.api.key", "YOUR_API_KEY")))
                     .build();
 
             ModelListParams modelListParams = ModelListParams.builder().build();
@@ -368,6 +353,11 @@ public class Models {
      * @return List of model IDs
      */
     public static List<String> getAnthropicModelIds(AnthropicClient client) {
+        List<String> configuredModels = GatewayConfig.anthropicConfiguredModels();
+        if (!configuredModels.isEmpty()) {
+            return configuredModels;
+        }
+
         ModelListPage models = getAnthropicModels(client);
         if (models != null && models.data() != null) {
             return models.data().stream()
@@ -386,8 +376,8 @@ public class Models {
     public static com.openai.models.models.ModelListPage getOpenAiModels(OpenAIClient client) {
         try {
             log.info("Fetching available models from OpenAI API");
-            client = OpenAIOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
+            client = GatewayConfig.apply(OpenAIOkHttpClient.builder()
+                    .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY")))
                     .build();
 
             com.openai.models.models.ModelListPage models = client.models().list();
@@ -410,23 +400,33 @@ public class Models {
      * @return List of model IDs
      */
     public static List<String> getOpenAiModelIds(OpenAIClient client) {
+        List<String> configuredModels = GatewayConfig.openAiConfiguredModels();
+        if (!configuredModels.isEmpty()) {
+            return configuredModels;
+        }
+
         com.openai.models.models.ModelListPage models = getOpenAiModels(client);
         if (models != null && models.data() != null) {
-            // Return the list of GPT models only, excluding audio and TTS models
+            boolean gateway = GatewayConfig.isOpenAiGateway();
             return models.data().stream()
-                    .filter(model -> model.id().startsWith("gpt")) // Include only GPT models
-                    .filter(model -> !model.id().contains("audio")) // Exclude audio models
-                    .filter(model -> !model.id().contains("tts")) // Exclude text-to-speech models
-                    .filter(model -> !model.id().contains("whisper")) // Exclude whisper models
-                    .filter(model -> !model.id().contains("davinci")) // Exclude Davinci models
-                    .filter(model -> !model.id().contains("search")) // Exclude search models
-                    .filter(model -> !model.id().contains("transcribe")) // Exclude transcribe models
-                    .filter(model -> !model.id().contains("realtime")) // Exclude realtime models
-                    .filter(model -> !model.id().contains("instruct")) // Exclude instruct models
+                    .filter(model -> isOpenAiModelIncluded(model.id(), gateway))
                     .map(Model::id)
                     .collect(Collectors.toList());
         }
         return new ArrayList<>();
+    }
+
+    private static boolean isOpenAiModelIncluded(String modelId, boolean gateway) {
+        return (gateway || modelId.startsWith("gpt"))
+                && !modelId.contains("audio")
+                && !modelId.contains("tts")
+                && !modelId.contains("whisper")
+                && !modelId.contains("davinci")
+                && !modelId.contains("search")
+                && !modelId.contains("transcribe")
+                && !modelId.contains("realtime")
+                && !modelId.contains("instruct")
+                && (!gateway || !modelId.contains("embedding"));
     }
 
     private static List<String> getDeepSeekModelIds(DeepseekAiService deepseekService) {

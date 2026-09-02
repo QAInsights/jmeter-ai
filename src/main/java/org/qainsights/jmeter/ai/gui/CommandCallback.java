@@ -63,6 +63,10 @@ public interface CommandCallback {
 
     String getSelectedModel();
 
+    default boolean isAgentModeSelected() {
+        return false;
+    }
+
     List<String> getConversationHistory();
 
     void addToConversationHistory(String entry);
