@@ -945,3 +945,4 @@ See what's next on the [project board](https://github.com/users/QAInsights/proje
 - **No secrets in chat**: never paste credentials or proprietary code into the chat box.
 
 Feather Wand is an assistant, not a replacement for engineering judgment.
+
