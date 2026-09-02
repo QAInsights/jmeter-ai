@@ -30,6 +30,7 @@
 - [Features](#-features)
 - [Installation](#-installation)
 - [Configuration](#-configuration)
+- [Corporate LLM gateways](#corporate-llm-gateways)
 - [ChatGPT / Codex & Claude Code subscriptions](#-using-feather-wand-with-chatgpt--codex)
 - [Modern Chat UI & Model Picker](#-modern-chat-ui--model-picker)
 - [Special Commands](#-special-commands)
@@ -112,7 +113,10 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `anthropic.api.key` | Claude API key | **Required** |
+| `anthropic.api.key` | Claude API key | **Required** (optional behind a gateway that authenticates via headers) |
+| `anthropic.base.url` | Endpoint speaking the Anthropic `/v1/messages` format; point this at a [corporate gateway](#corporate-llm-gateways) | `https://api.anthropic.com` |
+| `anthropic.extra.headers` | Extra request headers, `;`-separated `name=value` pairs | *(empty)* |
+| `anthropic.models` | Explicit model list (comma-separated) for gateways that don't expose model listing | *(empty)* |
 | `claude.default.model` | Default model | `claude-sonnet-4-6` |
 | `claude.temperature` | Temperature (0.0-1.0) | `0.5` |
 | `claude.max.tokens` | Max response tokens | `1024` |
@@ -127,7 +131,10 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `openai.api.key` | OpenAI API key | **Required** |
+| `openai.api.key` | OpenAI API key | **Required** (optional behind a gateway that authenticates via headers) |
+| `openai.base.url` | Endpoint speaking the OpenAI `/v1/chat/completions` format; point this at a [corporate gateway](#corporate-llm-gateways) | `https://api.openai.com/v1` |
+| `openai.extra.headers` | Extra request headers, `;`-separated `name=value` pairs | *(empty)* |
+| `openai.models` | Explicit model list (comma-separated) for gateways that don't expose `GET /v1/models` | *(empty)* |
 | `openai.default.model` | Default model | `gpt-4o` |
 | `openai.temperature` | Temperature (0.0-1.0) | `0.5` |
 | `openai.max.tokens` | Max response tokens | `1024` |
@@ -263,6 +270,29 @@ Restart JMeter after changing Bedrock properties or installing a new plugin JAR.
 See the [Bedrock Converse API documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html) and [model access documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for account setup and model availability details.
 
 </details>
+
+### Corporate LLM Gateways
+
+If your organization fronts OpenAI or Anthropic with an internal gateway (LiteLLM, Azure API Management, Apigee, Kong, Portkey, Bedrock Access Gateway, ...), point Feather Wand at it instead of the vendor host. Any gateway that speaks the OpenAI `/v1/chat/completions` or Anthropic `/v1/messages` wire format works — no gateway-specific setup:
+
+```properties
+# OpenAI-compatible gateway
+openai.base.url=https://llm-gateway.corp.example.com/v1
+openai.extra.headers=Ocp-Apim-Subscription-Key=xxxx;X-Corp-Project=perf
+openai.models=corp-gpt-4o,corp-gpt-4o-mini
+
+# Anthropic-compatible gateway
+anthropic.base.url=https://llm-gateway.corp.example.com
+anthropic.extra.headers=X-Corp-Token=xxxx;X-Corp-Project=perf
+anthropic.models=corp-claude-sonnet,corp-claude-haiku
+```
+
+- **Authentication.** Use `*.api.key` when the gateway expects the usual vendor auth header (many issue a "virtual key"). When it authenticates purely through its own header, set `*.extra.headers` and leave `*.api.key` unset — the gateway configuration alone is enough for the chat panel and the JSR223 refactoring menu. Values may contain `=` (only the first `=` separates name from value).
+- **Model list.** Gateways often don't expose model listing, or return names the vendor filter would drop. Set `*.models` to list them explicitly and Feather Wand skips the discovery call entirely. With a custom base URL the `gpt` prefix requirement is also lifted, so ids like `azure/gpt-4o` survive.
+- **Transport.** Use `https://`. A plaintext `http://` base URL still works (useful for a loopback or in-cluster endpoint) but logs a warning, since keys and prompts would travel unencrypted.
+- **TLS interception.** If your gateway presents a certificate from an internal CA, add it to the truststore JMeter runs with (for example `-Djavax.net.ssl.trustStore=...`).
+
+Restart JMeter after changing gateway properties.
 
 ### AI CLI Terminal
 
@@ -841,6 +871,7 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 - **Gemini**: shows only `gemini-*` and `gemma-*` chat models.
 - **Grok**: shows only `grok-*` chat models.
 - **AWS Bedrock**: shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
+- **Corporate gateways**: with `openai.base.url` or `anthropic.base.url` set, gateway-specific model names are kept (embedding models are still hidden), or listed verbatim from `openai.models` / `anthropic.models`.
 
 Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
