@@ -273,7 +273,7 @@ See the [Bedrock Converse API documentation](https://docs.aws.amazon.com/bedrock
 
 ### Corporate LLM Gateways
 
-If your organization fronts OpenAI or Anthropic with an internal gateway (LiteLLM, Azure API Management, Apigee, Kong, Portkey, Bedrock Access Gateway, ...), point Feather Wand at it instead of the vendor host. Any gateway that speaks the OpenAI `/v1/chat/completions` or Anthropic `/v1/messages` wire format works — no gateway-specific setup:
+If your organization fronts OpenAI or Anthropic with an internal gateway (LiteLLM, Azure API Management, Apigee, Kong, Portkey, Bedrock Access Gateway, ...), point Feather Wand at it instead of the vendor host. Any gateway that speaks the OpenAI `/v1/chat/completions` or Anthropic `/v1/messages` wire format works, with no gateway-specific setup:
 
 ```properties
 # OpenAI-compatible gateway
@@ -287,7 +287,7 @@ anthropic.extra.headers=X-Gateway-Key=<your-gateway-key>;X-Team=perf
 anthropic.models=corp-claude-sonnet,corp-claude-haiku
 ```
 
-- **Authentication.** Use `*.api.key` when the gateway expects the usual vendor auth header (many issue a "virtual key"). When it authenticates purely through its own header, set `*.extra.headers` and leave `*.api.key` unset — the gateway configuration alone is enough for the chat panel and the JSR223 refactoring menu. Values may contain `=` (only the first `=` separates name from value). Header names are gateway-specific — take them from your gateway's own documentation.
+- **Authentication.** Use `*.api.key` when the gateway expects the usual vendor auth header (many issue a "virtual key"). When it authenticates purely through its own header, set `*.extra.headers` and leave `*.api.key` unset: the gateway configuration alone is enough for the chat panel and the JSR223 refactoring menu. Values may contain `=` (only the first `=` separates name from value). Header names are gateway-specific, so take them from your gateway's own documentation.
 - **Model list.** Gateways often don't expose model listing, or return names the vendor filter would drop. Set `*.models` to list them explicitly and Feather Wand skips the discovery call entirely. With a custom base URL the `gpt` prefix requirement is also lifted, so ids like `azure/gpt-4o` survive.
 - **Transport.** Use `https://`. A plaintext `http://` base URL still works (useful for a loopback or in-cluster endpoint) but logs a warning, since keys and prompts would travel unencrypted.
 - **TLS interception.** If your gateway presents a certificate from an internal CA, add it to the truststore JMeter runs with (for example `-Djavax.net.ssl.trustStore=...`).
@@ -305,11 +305,11 @@ curl -sS https://llm-gateway.corp.example.com/v1/chat/completions \
 
 | Symptom | Likely cause |
 |---------|--------------|
-| Requests still reach `api.openai.com` / `api.anthropic.com` | Properties aren't loaded — they must be in `jmeter.properties` or `user.properties`, and JMeter must be restarted. `jmeter.log` logs the effective endpoint: `Initialized OpenAI service with baseUrl: ...` |
-| No gateway models in the picker | The gateway doesn't serve a model-listing endpoint, or returns ids the filter drops — set `openai.models` / `anthropic.models` explicitly |
+| Requests still reach `api.openai.com` / `api.anthropic.com` | Properties aren't loaded. They must be in `jmeter.properties` or `user.properties`, and JMeter must be restarted. `jmeter.log` logs the effective endpoint: `Initialized OpenAI service with baseUrl: ...` |
+| No gateway models in the picker | The gateway doesn't serve a model-listing endpoint, or returns ids the filter drops. Set `openai.models` / `anthropic.models` explicitly |
 | `Error adding OpenAI models` / `Error loading Anthropic models` in `jmeter.log` | The discovery call failed: wrong base URL path, untrusted certificate, or missing auth header |
 | 401 / 403 on chat | The gateway wants its own header (`*.extra.headers`), or expects a virtual key in `*.api.key` rather than your vendor key |
-| 404 on chat | Base URL path is off — OpenAI-compatible URLs normally end in `/v1`, Anthropic-compatible ones do not |
+| 404 on chat | Base URL path is off. OpenAI-compatible URLs normally end in `/v1`, Anthropic-compatible ones do not |
 | `PKIX path building failed` | The gateway's certificate chains to an internal CA; start JMeter with `-Djavax.net.ssl.trustStore=/path/to/corp-truststore.jks` |
 | `uses plaintext HTTP` warning | The base URL is `http://`; switch to `https://` unless it's a loopback endpoint |
 
