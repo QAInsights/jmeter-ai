@@ -216,6 +216,21 @@ class AiChatPanelTest {
     }
 
     @Test
+    void chatModeDefaultsSafelyAndAppearsBeforeAttachmentAction() {
+        AiChatPanel panel = new AiChatPanel();
+        InteractionModeSelector selector = findComponent(panel, InteractionModeSelector.class);
+        javax.swing.JButton attach = findButton(
+                panel, "Attach a file (jmeter.log, results, or any text file)");
+
+        assertNotNull(selector);
+        assertNotNull(attach);
+        assertFalse(panel.isAgentModeSelected());
+        assertSame(selector.getParent(), attach.getParent());
+        assertTrue(selector.getParent().getComponentZOrder(selector)
+                < attach.getParent().getComponentZOrder(attach));
+    }
+
+    @Test
     void modelThinkingEffortAndFavoriteShareOneRow() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         ModelSelectorPanel selector = findComponent(panel, ModelSelectorPanel.class);

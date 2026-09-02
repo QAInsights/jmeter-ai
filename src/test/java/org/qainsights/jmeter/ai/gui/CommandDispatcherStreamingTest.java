@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -111,6 +112,21 @@ class CommandDispatcherStreamingTest {
         commandDispatcher.dispatch("Hello");
 
         verify(cb).appendLoadingIndicator();
+    }
+
+    @Test
+    void chatModeUsesPlainStreamingEvenWhenAgentFeatureIsEnabled() {
+        aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty(
+                JMeterAgent.ENABLED_KEY, "false")).thenReturn("true");
+        when(cb.isAgentModeSelected()).thenReturn(false);
+        when(cb.getSelectedModel()).thenReturn("openai:gpt-4o");
+        setupSuccessfulStreaming();
+
+        commandDispatcher.dispatch("Hello");
+
+        verify(cb).getAiStreamResponse(eq("Hello"), any(), any(), any());
+        verify(cb, never()).resolveAiService(anyString());
     }
 
     // ==================== Streaming Token Handling ====================
