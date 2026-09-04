@@ -1,6 +1,225 @@
 {
   "source" : "models.dev api.json",
   "providers" : {
+    "anthropic" : {
+      "claude-fable-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "claude-fable-5-1" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "claude-haiku-4-5" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
+      "claude-haiku-4-5-20251001" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
+      "claude-opus-4-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-5-20251101" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "max" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-7" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-8" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-sonnet-4-5" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-4-5-20250929" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-4-6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "max" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-5" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
+      }
+    },
+    "xai" : {
+      "grok-4.20-0309-non-reasoning" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.20-0309-reasoning" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.20-multi-agent-0309" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.3" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-4.6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-build-0.1" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 256000,
+        "costIn" : 1.0,
+        "costOut" : 2.0
+      },
+      "grok-imagine-image" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-image-2.0" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-image-quality" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8000
+      },
+      "grok-imagine-video" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
+      },
+      "grok-imagine-video-1.5" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
+      }
+    },
     "google" : {
       "deep-research-max-preview-04-2026" : {
         "reasoning" : true,
@@ -215,6 +434,15 @@
         "costIn" : 0.75,
         "costOut" : 3.75
       },
+      "gemini-3.8-flash" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
       "gemini-embedding-001" : {
         "contextWindow" : 2048,
         "costIn" : 0.15
@@ -249,15 +477,6 @@
         "contextWindow" : 131072,
         "costIn" : 1.5,
         "costOut" : 17.5
-      },
-      "gemini-robotics-er-1.6-preview" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 0,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 1.0,
-        "costOut" : 5.0
       },
       "gemma-4-26b-a4b-it" : {
         "reasoning" : true,
@@ -320,6 +539,15 @@
         "costOut" : 3.2
       },
       "anthropic.claude-fable-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "anthropic.claude-fable-5-1" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
@@ -601,6 +829,15 @@
         "costOut" : 11.0
       },
       "global.anthropic.claude-fable-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "global.anthropic.claude-fable-5-1" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
@@ -1064,6 +1301,15 @@
         "contextWindow" : 1000000,
         "costIn" : 10.0,
         "costOut" : 50.0
+      },
+      "us.anthropic.claude-fable-5-1" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 11.0,
+        "costOut" : 55.0
       },
       "us.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
@@ -1561,7 +1807,7 @@
         "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 1000000,
+        "contextWindow" : 1048576,
         "costIn" : 1.25,
         "costOut" : 4.25
       },
@@ -1575,6 +1821,24 @@
         "costOut" : 4.25
       },
       "muse-spark-1.2-contributor" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.1,
+        "costOut" : 0.2
+      },
+      "muse-spark-1.3" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 1.25,
+        "costOut" : 4.25
+      },
+      "muse-spark-1.3-contributor" : {
         "reasoning" : true,
         "effort" : [ "minimal", "low", "medium", "high", "xhigh" ],
         "vision" : true,
@@ -1609,216 +1873,6 @@
         "contextWindow" : 1000000,
         "costIn" : 0.435,
         "costOut" : 0.87
-      }
-    },
-    "anthropic" : {
-      "claude-fable-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 10.0,
-        "costOut" : 50.0
-      },
-      "claude-haiku-4-5" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
-      },
-      "claude-haiku-4-5-20251001" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
-      },
-      "claude-opus-4-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-5-20251101" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "max" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-7" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-8" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-sonnet-4-5" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-4-5-20250929" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-4-6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "max" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-5" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
-      }
-    },
-    "xai" : {
-      "grok-4.20-0309-non-reasoning" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.20-0309-reasoning" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.20-multi-agent-0309" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.3" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-4.6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-build-0.1" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 256000,
-        "costIn" : 1.0,
-        "costOut" : 2.0
-      },
-      "grok-imagine-image" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-image-2.0" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-image-quality" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8000
-      },
-      "grok-imagine-video" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
-      },
-      "grok-imagine-video-1.5" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
       }
     }
   }
