@@ -69,7 +69,7 @@ class CommandDispatcherIsAgentCapableModelTest {
 
     @Test
     void testBedrockModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("bedrock:anthropic.claude-3-5-sonnet"),
+        assertFalse(CommandDispatcher.isAgentCapableModel("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0"),
                 "Bedrock has no tool-calling adapter yet");
     }
 
