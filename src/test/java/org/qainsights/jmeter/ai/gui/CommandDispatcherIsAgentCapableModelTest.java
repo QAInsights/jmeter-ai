@@ -6,9 +6,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link CommandDispatcher#isAgentCapableModel(String)}.
- * Agent mode supports the three providers with tool-calling adapters - Anthropic
- * Claude (non-prefixed ids), OpenAI ({@code openai:} prefix) and Google Gemini
- * ({@code google:} prefix); everything else falls back to the plain chat path.
+ * Agent mode supports providers with tool-calling adapters - Anthropic Claude
+ * (non-prefixed ids), OpenAI ({@code openai:} prefix), Google Gemini
+ * ({@code google:} prefix), DeepSeek, Grok, and Meta Muse; everything else
+ * falls back to the plain chat path.
  */
 class CommandDispatcherIsAgentCapableModelTest {
 
@@ -46,8 +47,8 @@ class CommandDispatcherIsAgentCapableModelTest {
     }
 
     @Test
-    void testDeepseekModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("deepseek:deepseek-chat"));
+    void testDeepseekModel_returnsTrue() {
+        assertTrue(CommandDispatcher.isAgentCapableModel("deepseek:deepseek-chat"));
     }
 
     @Test
@@ -57,18 +58,18 @@ class CommandDispatcherIsAgentCapableModelTest {
     }
 
     @Test
-    void testGrokModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("grok:grok-2"));
+    void testGrokModel_returnsTrue() {
+        assertTrue(CommandDispatcher.isAgentCapableModel("grok:grok-2"));
     }
 
     @Test
-    void testMetaModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("meta:muse-spark-1.1"));
+    void testMetaModel_returnsTrue() {
+        assertTrue(CommandDispatcher.isAgentCapableModel("meta:muse-spark-1.1"));
     }
 
     @Test
     void testBedrockModel_returnsFalse() {
-        assertFalse(CommandDispatcher.isAgentCapableModel("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0"),
+        assertFalse(CommandDispatcher.isAgentCapableModel("bedrock:anthropic.claude-3-5-sonnet"),
                 "Bedrock has no tool-calling adapter yet");
     }
 

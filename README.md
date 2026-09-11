@@ -59,7 +59,7 @@
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan through 18 tools with API-backed Claude, OpenAI, Gemini, or the ChatGPT/Codex and Claude Code CLI providers. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan through 18 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -511,7 +511,7 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done, all inside the existing chat panel.
 
-> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, and **Google Gemini**, plus the **ChatGPT / Codex CLI** and **Claude Code CLI** providers. DeepSeek, Ollama, Grok, Meta Muse, and Bedrock currently fall back to plain chat.
+> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, and **Meta Muse**, plus the **ChatGPT / Codex CLI** and **Claude Code CLI** providers. Ollama and Bedrock currently fall back to plain chat.
 
 <div align="center">
 
@@ -528,19 +528,21 @@ Agent Mode is **off by default**. To turn it on:
 jmeter.ai.agent.enabled=true
 ```
 
-Select a **Claude**, **OpenAI**, or **Google Gemini** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
+Select a **Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, or **Meta Muse** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
 
 > If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
 
-All three providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks vs. OpenAI function `tool_calls` vs. Gemini `functionCall`/`functionResponse` parts).
+All supported providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks, OpenAI-compatible function `tool_calls`, or Gemini `functionCall`/`functionResponse` parts).
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
+
+> 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies.
 
 > 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
 
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
-All three providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
+The API-backed Agent Mode providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
 
 | Aspect | Anthropic Claude (`anthropic-java`) | OpenAI (`openai-java`) | Google Gemini (`google-genai`) |
 |--------|--------------------------------------|--------------------------|----------------------------------|
@@ -562,9 +564,9 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Google Gemini** | ✅ Agent Mode | Native `FunctionDeclaration`/`functionCall` via the official `google-genai` SDK | Done |
 | **ChatGPT / Codex CLI** | ✅ Agent Mode | No native tool API; driven through a JSON tool protocol in the prompt over `codex exec` | Done |
 | **Claude Code CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `claude -p` | Done |
-| **DeepSeek** | Plain chat only | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | 🟢 Trivial (already uses `openai-java`/`anthropic-java` pointed at `api.deepseek.com`) |
-| **Grok (xAI)** | Plain chat only | Yes: OpenAI-style function tools | 🟢 Trivial (already uses `openai-java` pointed at `api.x.ai`) |
-| **Meta "Muse"** | Plain chat only | Likely yes (OpenAI-compatible endpoint) | 🟢 Trivial, pending confirmation (already uses `openai-java` pointed at `api.meta.ai`) |
+| **DeepSeek** | ✅ Agent Mode | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | Done |
+| **Grok (xAI)** | ✅ Agent Mode | Yes: OpenAI-style function tools | Done |
+| **Meta "Muse"** | ✅ Agent Mode | Likely yes (OpenAI-compatible endpoint) | Done |
 | **Kimi K2/K3 (Moonshot AI)** | Not yet added | Yes: standard OpenAI-shaped `tools`/`tool_calls` | 🟢 Trivial (same "point `openai-java` at a new base URL" pattern) |
 | **Poolside (Laguna models)** | Not yet added | Yes: OpenAI-compatible `tools`/`tool_choice` at `inference.poolside.ai` (also via OpenRouter/Bedrock) | 🟢 Trivial (same pattern) |
 | **Mistral AI** | Not yet added | Yes: native function-calling, OpenAI-similar shape | 🟢 Trivial (same pattern) |
@@ -655,7 +657,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Examples
 
-Try these in the chat box with Agent Mode enabled and a Claude, OpenAI or Google Gemini model selected:
+Try these in the chat box with Agent Mode enabled and a Claude, OpenAI, Google Gemini, DeepSeek, Grok, or Meta Muse model selected:
 
 | Request | What the agent does |
 |---------|-------------------|
@@ -945,4 +947,3 @@ See what's next on the [project board](https://github.com/users/QAInsights/proje
 - **No secrets in chat**: never paste credentials or proprietary code into the chat box.
 
 Feather Wand is an assistant, not a replacement for engineering judgment.
-
