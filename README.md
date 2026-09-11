@@ -536,7 +536,7 @@ All supported providers get the exact same tools, system prompt, safety gates an
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
-> 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies.
+> 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies. For Meta Muse, agent runs go through Chat Completions rather than the Responses API used for plain chat, so the Thoughts card is not populated during agent runs.
 
 > 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
 
@@ -566,7 +566,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Claude Code CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `claude -p` | Done |
 | **DeepSeek** | ✅ Agent Mode | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | Done |
 | **Grok (xAI)** | ✅ Agent Mode | Yes: OpenAI-style function tools | Done |
-| **Meta "Muse"** | ✅ Agent Mode | Likely yes (OpenAI-compatible endpoint) | Done |
+| **Meta "Muse"** | ✅ Agent Mode | Yes: OpenAI-compatible function `tool_calls` on Chat Completions | Done |
 | **Kimi K2/K3 (Moonshot AI)** | Not yet added | Yes: standard OpenAI-shaped `tools`/`tool_calls` | 🟢 Trivial (same "point `openai-java` at a new base URL" pattern) |
 | **Poolside (Laguna models)** | Not yet added | Yes: OpenAI-compatible `tools`/`tool_choice` at `inference.poolside.ai` (also via OpenRouter/Bedrock) | 🟢 Trivial (same pattern) |
 | **Mistral AI** | Not yet added | Yes: native function-calling, OpenAI-similar shape | 🟢 Trivial (same pattern) |

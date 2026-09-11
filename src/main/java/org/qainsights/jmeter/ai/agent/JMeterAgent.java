@@ -401,6 +401,12 @@ public final class JMeterAgent {
         return openAiCompatibleFactory(grok.getClient(), grok.getCurrentModel(), maxTokens);
     }
 
+    /**
+     * Meta Muse agent runs use Chat Completions through {@link OpenAiChatModel}, rather
+     * than the Responses API used by plain chat. Muse's reasoning summary is therefore
+     * unavailable in agent runs and the Thoughts card stays empty, while tool calling
+     * retains the same OpenAI function-tool shape.
+     */
     private static AgentChatModelFactory factoryFor(MetaMuseAiService metaMuse, long maxTokens) {
         return openAiCompatibleFactory(metaMuse.getClient(), metaMuse.getCurrentModel(), maxTokens);
     }
