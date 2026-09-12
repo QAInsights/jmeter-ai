@@ -34,7 +34,10 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
+import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -45,8 +48,9 @@ import com.openai.client.OpenAIClient;
 
 /**
  * Façade that wires the tool registry, executor, schema-grounded system prompt
- * and a provider {@link ChatModel} (Claude, OpenAI, Google Gemini or a
- * subscription CLI, via {@link AgentChatModelFactory}) into a runnable {@link AgentLoop}. This is the
+ * and a provider {@link ChatModel} (Claude, OpenAI, Google Gemini, DeepSeek,
+ * Grok, Meta Muse, or a subscription CLI, via {@link AgentChatModelFactory})
+ * into a runnable {@link AgentLoop}. This is the
  * single entry point the chat UI calls to run an agentic request.
  */
 public final class JMeterAgent {
@@ -54,6 +58,7 @@ public final class JMeterAgent {
     public static final String ENABLED_KEY = "jmeter.ai.agent.enabled";
     public static final String MAX_TOKENS_KEY = "jmeter.ai.agent.max.tokens";
     public static final String MAX_ITERATIONS_KEY = "jmeter.ai.agent.max.iterations";
+    public static final int DEFAULT_MAX_ITERATIONS = 16;
     public static final String CONFIRM_DESTRUCTIVE_KEY = "jmeter.ai.agent.confirm.destructive";
     public static final String THINKING_EFFORT_KEY = "jmeter.ai.agent.thinking.effort";
 
@@ -167,6 +172,16 @@ public final class JMeterAgent {
                 specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns), reasoningSettings);
     }
 
+    /**
+     * Builds an OpenAI-compatible factory for third-party providers. Reasoning settings
+     * are intentionally omitted because the models.dev {@code openai:} catalog does not
+     * know these providers' model ids, so no {@code reasoning_effort} is sent.
+     */
+    private static AgentChatModelFactory openAiCompatibleFactory(OpenAIClient client, String model,
+                                                                  long maxTokens) {
+        return openAiFactory(params -> client.chat().completions().create(params), model, maxTokens, null);
+    }
+
     /** Builds a factory that wires the Google Gemini {@link GoogleChatModel} for each run. */
     public static AgentChatModelFactory googleFactory(GoogleChatModel.GenerateService service, String model,
                                                       long maxTokens) {
@@ -223,7 +238,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         AnthropicClient client = claude.getClient();
         ClaudeChatModel.MessageService service = params -> client.messages().create(params);
         boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
@@ -239,11 +254,39 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forOpenAi(OpenAiService openAi) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         OpenAIClient client = openAi.getClient();
         OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
         return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens,
                 openAi.getReasoningSettings()), maxIterations, destructiveGate());
+    }
+
+    /**
+     * Wires an agent against an existing DeepSeek service, using its configured
+     * OpenAI-compatible or Anthropic wire format.
+     */
+    public static JMeterAgent forDeepseek(DeepseekAiService deepseek) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        int maxIterations = maxIterations();
+        return new JMeterAgent(factoryFor(deepseek, maxTokens), maxIterations, destructiveGate());
+    }
+
+    /**
+     * Wires an agent against an existing Grok service using its OpenAI-compatible API.
+     */
+    public static JMeterAgent forGrok(GrokAiService grok) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        int maxIterations = maxIterations();
+        return new JMeterAgent(factoryFor(grok, maxTokens), maxIterations, destructiveGate());
+    }
+
+    /**
+     * Wires an agent against an existing Meta Muse service using its OpenAI-compatible API.
+     */
+    public static JMeterAgent forMetaMuse(MetaMuseAiService metaMuse) {
+        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
+        int maxIterations = maxIterations();
+        return new JMeterAgent(factoryFor(metaMuse, maxTokens), maxIterations, destructiveGate());
     }
 
     /**
@@ -253,7 +296,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forGoogle(GoogleAiService google) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         Client client = google.getClient();
         GoogleChatModel.GenerateService service = (model, contents, config) ->
                 client.models.generateContent(model, contents, config);
@@ -262,9 +305,9 @@ public final class JMeterAgent {
     }
 
     /**
-     * Wires an agent for whichever provider backs {@code service}, or returns {@code null}
-     * if that provider has no tool-calling adapter yet (the caller then falls back to the
-     * plain, non-agentic chat path).
+     * Wires an agent for Claude, OpenAI, Google Gemini, DeepSeek, Grok, Meta Muse,
+     * or a subscription CLI, or returns {@code null} for unsupported providers
+     * (the caller then falls back to the plain, non-agentic chat path).
      */
     public static JMeterAgent forService(AiService service) {
         if (service instanceof ClaudeService) {
@@ -275,6 +318,15 @@ public final class JMeterAgent {
         }
         if (service instanceof GoogleAiService) {
             return forGoogle((GoogleAiService) service);
+        }
+        if (service instanceof DeepseekAiService) {
+            return forDeepseek((DeepseekAiService) service);
+        }
+        if (service instanceof GrokAiService) {
+            return forGrok((GrokAiService) service);
+        }
+        if (service instanceof MetaMuseAiService) {
+            return forMetaMuse((MetaMuseAiService) service);
         }
         if (service instanceof CliSubscriptionAiService) {
             return forCli((CliSubscriptionAiService) service);
@@ -288,13 +340,13 @@ public final class JMeterAgent {
      * {@link #forClaude(ClaudeService)}.
      */
     public static JMeterAgent forCli(CliSubscriptionAiService service) {
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         return new JMeterAgent(cliFactory(service.getProvider()), maxIterations, destructiveGate());
     }
 
     /**
-     * The provider chat-model factory backing {@code service}, or {@code null} if that
-     * provider has no tool-calling adapter.
+     * The provider chat-model factory backing Claude, OpenAI, Google Gemini, DeepSeek,
+     * Grok, Meta Muse, or a subscription CLI, or {@code null} for unsupported providers.
      * <p>
      * Exposed for callers that drive their own tool registry rather than the default
      * JMeter one - Record Mode advertises browser tools instead - so provider detection
@@ -322,10 +374,42 @@ public final class JMeterAgent {
                     client.models.generateContent(model, contents, config);
             return googleFactory(generate, google.getCurrentModel(), maxTokens, google.getReasoningSettings());
         }
+        if (service instanceof DeepseekAiService) {
+            return factoryFor((DeepseekAiService) service, maxTokens);
+        }
+        if (service instanceof GrokAiService) {
+            return factoryFor((GrokAiService) service, maxTokens);
+        }
+        if (service instanceof MetaMuseAiService) {
+            return factoryFor((MetaMuseAiService) service, maxTokens);
+        }
         if (service instanceof CliSubscriptionAiService) {
             return cliFactory(((CliSubscriptionAiService) service).getProvider());
         }
         return null;
+    }
+
+    private static AgentChatModelFactory factoryFor(DeepseekAiService deepseek, long maxTokens) {
+        if (deepseek.isAnthropicFormat()) {
+            AnthropicClient client = deepseek.getAnthropicClient();
+            return claudeFactory(params -> client.messages().create(params),
+                    deepseek.getCurrentModel(), maxTokens, null);
+        }
+        return openAiCompatibleFactory(deepseek.getClient(), deepseek.getCurrentModel(), maxTokens);
+    }
+
+    private static AgentChatModelFactory factoryFor(GrokAiService grok, long maxTokens) {
+        return openAiCompatibleFactory(grok.getClient(), grok.getCurrentModel(), maxTokens);
+    }
+
+    /**
+     * Meta Muse agent runs use Chat Completions through {@link OpenAiChatModel}, rather
+     * than the Responses API used by plain chat. Muse's reasoning summary is therefore
+     * unavailable in agent runs and the Thoughts card stays empty, while tool calling
+     * retains the same OpenAI function-tool shape.
+     */
+    private static AgentChatModelFactory factoryFor(MetaMuseAiService metaMuse, long maxTokens) {
+        return openAiCompatibleFactory(metaMuse.getClient(), metaMuse.getCurrentModel(), maxTokens);
     }
 
     /** The confirmation gate for destructive tools, or {@code null} when disabled by config. */
@@ -393,6 +477,11 @@ public final class JMeterAgent {
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
         return new AgentLoop(chat, executor, maxIterations)
                 .run(userMessage, progress, onToolCallStarted, reasoning);
+    }
+
+    private static int maxIterations() {
+        return (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY,
+                String.valueOf(DEFAULT_MAX_ITERATIONS)), DEFAULT_MAX_ITERATIONS);
     }
 
     private static long parseLong(String value, long fallback) {

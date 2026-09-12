@@ -103,7 +103,7 @@ public class CommandDispatcher {
                 break;
         }
 
-        // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI and Google Gemini).
+        // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok and Meta Muse).
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
             handleAgentCommand(message);
             return;
@@ -446,8 +446,8 @@ public class CommandDispatcher {
                     AiService service = cb.resolveAiService(cb.getSelectedModel());
                     JMeterAgent agent = JMeterAgent.forService(service);
                     if (agent == null) {
-                        return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, "
-                                + "Codex and Claude Code models only. "
+                        return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, DeepSeek, Grok, "
+                                + "Meta Muse, Codex and Claude Code models only. "
                                 + "Select one of those and retry.");
                     }
                     AgentLoop.AgentResult result;
@@ -527,7 +527,8 @@ public class CommandDispatcher {
 
     /**
      * True when the selected model routes to a provider the agent can drive: the
-     * tool-calling adapters (Anthropic Claude, OpenAI, Google Gemini) plus the
+     * tool-calling adapters (Anthropic Claude, OpenAI, Google Gemini, DeepSeek,
+     * Grok, Meta Muse) plus the
      * subscription CLIs (Codex, Claude Code), which get their tools through the
      * prompt-level protocol. Every other provider falls back to plain chat.
      */
@@ -535,6 +536,9 @@ public class CommandDispatcher {
         return isClaudeModel(selectedModel)
                 || (selectedModel != null && selectedModel.startsWith("openai:"))
                 || (selectedModel != null && selectedModel.startsWith("google:"))
+                || (selectedModel != null && selectedModel.startsWith("deepseek:"))
+                || (selectedModel != null && selectedModel.startsWith("grok:"))
+                || (selectedModel != null && selectedModel.startsWith("meta:"))
                 || (selectedModel != null && selectedModel.startsWith("codex:"))
                 || (selectedModel != null && selectedModel.startsWith("claude-code:"));
     }
