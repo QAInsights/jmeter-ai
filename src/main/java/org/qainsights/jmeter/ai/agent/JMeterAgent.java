@@ -58,6 +58,7 @@ public final class JMeterAgent {
     public static final String ENABLED_KEY = "jmeter.ai.agent.enabled";
     public static final String MAX_TOKENS_KEY = "jmeter.ai.agent.max.tokens";
     public static final String MAX_ITERATIONS_KEY = "jmeter.ai.agent.max.iterations";
+    public static final int DEFAULT_MAX_ITERATIONS = 16;
     public static final String CONFIRM_DESTRUCTIVE_KEY = "jmeter.ai.agent.confirm.destructive";
     public static final String THINKING_EFFORT_KEY = "jmeter.ai.agent.thinking.effort";
 
@@ -237,7 +238,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         AnthropicClient client = claude.getClient();
         ClaudeChatModel.MessageService service = params -> client.messages().create(params);
         boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
@@ -253,7 +254,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forOpenAi(OpenAiService openAi) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         OpenAIClient client = openAi.getClient();
         OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
         return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens,
@@ -266,7 +267,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forDeepseek(DeepseekAiService deepseek) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         return new JMeterAgent(factoryFor(deepseek, maxTokens), maxIterations, destructiveGate());
     }
 
@@ -275,7 +276,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forGrok(GrokAiService grok) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         return new JMeterAgent(factoryFor(grok, maxTokens), maxIterations, destructiveGate());
     }
 
@@ -284,7 +285,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forMetaMuse(MetaMuseAiService metaMuse) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         return new JMeterAgent(factoryFor(metaMuse, maxTokens), maxIterations, destructiveGate());
     }
 
@@ -295,7 +296,7 @@ public final class JMeterAgent {
      */
     public static JMeterAgent forGoogle(GoogleAiService google) {
         long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         Client client = google.getClient();
         GoogleChatModel.GenerateService service = (model, contents, config) ->
                 client.models.generateContent(model, contents, config);
@@ -339,7 +340,7 @@ public final class JMeterAgent {
      * {@link #forClaude(ClaudeService)}.
      */
     public static JMeterAgent forCli(CliSubscriptionAiService service) {
-        int maxIterations = (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY, "8"), 8L);
+        int maxIterations = maxIterations();
         return new JMeterAgent(cliFactory(service.getProvider()), maxIterations, destructiveGate());
     }
 
@@ -476,6 +477,11 @@ public final class JMeterAgent {
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
         return new AgentLoop(chat, executor, maxIterations)
                 .run(userMessage, progress, onToolCallStarted, reasoning);
+    }
+
+    private static int maxIterations() {
+        return (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY,
+                String.valueOf(DEFAULT_MAX_ITERATIONS)), DEFAULT_MAX_ITERATIONS);
     }
 
     private static long parseLong(String value, long fallback) {
