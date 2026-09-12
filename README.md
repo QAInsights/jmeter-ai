@@ -605,7 +605,7 @@ The agent has 18 tools at its disposal:
 | Tool | What it does |
 |------|--------------|
 | `add_element` | Adds a new element (e.g. `HTTPSamplerProxy`) as a child of a parent element. |
-| `update_element_property` | Sets a scalar property (e.g. `HTTPSampler.path`) on an element. |
+| `update_element_property` | Sets a scalar property (e.g. `HTTPSampler.path`) on an element; rejects unknown keys when a catalog suggestion exists. |
 | `set_property_list` | Sets a flat string-list property (e.g. `ResponseAssertion` test patterns). |
 | `set_structured_property_list` | Sets a structured list (e.g. `HeaderManager.headers`, `Arguments.arguments`, `AuthManager.auth_list`). |
 | `delete_element` | Deletes an element and its subtree. **Confirmation gated.** |

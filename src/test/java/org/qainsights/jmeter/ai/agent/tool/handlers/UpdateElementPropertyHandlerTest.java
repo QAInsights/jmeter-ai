@@ -4,7 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
@@ -41,6 +43,7 @@ class UpdateElementPropertyHandlerTest {
 
     private JMeterTreeNode root;
     private JMeterTreeNode httpRequest;
+    private JMeterTreeNode realThreadGroup;
     private FakeUpdater updater;
     private Tool tool;
 
@@ -51,6 +54,13 @@ class UpdateElementPropertyHandlerTest {
         httpRequest = node("HTTP Request");
         root.add(threadGroup);
         threadGroup.add(httpRequest);
+        ThreadGroup element = new ThreadGroup();
+        element.setName("Real Thread Group");
+        LoopController controller = new LoopController();
+        controller.setLoops(1);
+        element.setSamplerController(controller);
+        realThreadGroup = new JMeterTreeNode(element, null);
+        root.add(realThreadGroup);
         // Mirror JMeter: the real Test Plan is the child of an internal wrapper root.
         JMeterTreeNode wrapperRoot = new JMeterTreeNode();
         wrapperRoot.add(root);
@@ -119,5 +129,43 @@ class UpdateElementPropertyHandlerTest {
                 args("Test Plan/Thread Group/HTTP Request", "HTTPSampler.path", "/x"));
         assertFalse(r.isSuccess());
         assertEquals(UpdateElementPropertyHandler.ERR_UPDATE_FAILED, r.getErrorCode());
+    }
+
+    @Test
+    void update_unknownThreadGroupLoops_returnsHintWithoutUpdating() {
+        ToolResult r = tool.execute(args("Test Plan/Real Thread Group", "ThreadGroup.loops", "2"));
+
+        assertFalse(r.isSuccess());
+        assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, r.getErrorCode());
+        assertTrue(r.getMessage().contains("LoopController.loops"));
+        assertNull(updater.lastNode);
+    }
+
+    @Test
+    void update_nestedLoopControllerProperty_delegatesToUpdater() {
+        ToolResult r = tool.execute(args("Test Plan/Real Thread Group", "LoopController.loops", "2"));
+
+        assertTrue(r.isSuccess());
+        assertSame(realThreadGroup, updater.lastNode);
+        assertEquals("LoopController.loops", updater.lastProperty);
+    }
+
+    @Test
+    void update_catalogPropertyAbsentOnThreadGroup_delegatesToUpdater() {
+        ToolResult r = tool.execute(args("Test Plan/Real Thread Group", "ThreadGroup.num_threads", "2"));
+
+        assertTrue(r.isSuccess());
+        assertSame(realThreadGroup, updater.lastNode);
+        assertEquals("ThreadGroup.num_threads", updater.lastProperty);
+    }
+
+    @Test
+    void update_brandNewConfigProperty_stillDelegatesToUpdater() {
+        ToolResult r = tool.execute(
+                args("Test Plan/Thread Group/HTTP Request", "some.brand_new_key", "value"));
+
+        assertTrue(r.isSuccess());
+        assertSame(httpRequest, updater.lastNode);
+        assertEquals("some.brand_new_key", updater.lastProperty);
     }
 }

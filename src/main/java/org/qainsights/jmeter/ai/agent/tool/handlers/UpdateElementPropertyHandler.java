@@ -1,15 +1,24 @@
 package org.qainsights.jmeter.ai.agent.tool.handlers;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
+import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
 import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
 import org.qainsights.jmeter.ai.agent.jmeter.PropertyUpdater;
+import org.qainsights.jmeter.ai.agent.schema.ElementPropertyCatalog;
 import org.qainsights.jmeter.ai.agent.tool.ParamType;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolParameter;
@@ -98,6 +107,11 @@ public final class UpdateElementPropertyHandler {
             return ToolResult.error(ERR_INVALID_PROPERTY, "A non-empty 'property' key is required.");
         }
 
+        Optional<String> unknownKeyHint = unknownKeyHint(node.getTestElement(), property);
+        if (unknownKeyHint.isPresent()) {
+            return ToolResult.error(ERR_INVALID_PROPERTY, unknownKeyHint.get());
+        }
+
         String value = string(args.get("value"));
         if (!updater.update(node, property, value)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
@@ -108,6 +122,45 @@ public final class UpdateElementPropertyHandler {
         }
 
         return ToolResult.ok("Set '" + property + "' = '" + value + "' on '" + elementId + "'.");
+    }
+
+    static Optional<String> unknownKeyHint(TestElement element, String property) {
+        if (!(element.getProperty(property) instanceof NullProperty)) {
+            return Optional.empty();
+        }
+
+        PropertyIterator it = element.propertyIterator();
+        while (it.hasNext()) {
+            JMeterProperty candidate = it.next();
+            if (candidate instanceof TestElementProperty) {
+                TestElement nested = ((TestElementProperty) candidate).getElement();
+                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
+                    return Optional.empty();
+                }
+            }
+        }
+
+        String type = element.getClass().getSimpleName();
+        boolean catalogContains = ElementPropertyCatalog.propertiesFor(type).stream()
+                .anyMatch(candidate -> candidate.getKey().equals(property));
+        if (catalogContains) {
+            return Optional.empty();
+        }
+
+        int dot = property.lastIndexOf('.');
+        String suffix = dot < 0 ? property : property.substring(dot + 1);
+        List<String> suggestions = new ArrayList<>();
+        for (String key : ElementPropertyCatalog.keysWithSuffix(suffix)) {
+            if (!key.equals(property)) {
+                suggestions.add(key);
+            }
+        }
+        if (suggestions.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of("Unknown property '" + property + "' for " + type + ". Did you mean: "
+                + String.join(", ", suggestions) + "? Call get_element_schema for valid keys.");
     }
 
     /**

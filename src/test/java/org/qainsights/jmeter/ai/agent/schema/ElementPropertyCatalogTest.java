@@ -33,6 +33,12 @@ class ElementPropertyCatalogTest {
     }
 
     @Test
+    void keysWithSuffix_loops_findsLoopControllerProperty() {
+        assertTrue(ElementPropertyCatalog.keysWithSuffix("loops").contains("LoopController.loops"));
+        assertTrue(ElementPropertyCatalog.keysWithSuffix("nope").isEmpty());
+    }
+
+    @Test
     void describe_knownType_rendersKeysTypesAndDescriptions() {
         String text = ElementPropertyCatalog.describe("HTTPSamplerProxy");
         assertTrue(text.contains("Common properties"));
