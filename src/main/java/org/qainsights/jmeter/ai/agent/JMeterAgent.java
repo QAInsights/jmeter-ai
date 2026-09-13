@@ -58,7 +58,7 @@ public final class JMeterAgent {
     public static final String ENABLED_KEY = "jmeter.ai.agent.enabled";
     public static final String MAX_TOKENS_KEY = "jmeter.ai.agent.max.tokens";
     public static final String MAX_ITERATIONS_KEY = "jmeter.ai.agent.max.iterations";
-    public static final int DEFAULT_MAX_ITERATIONS = 16;
+    public static final int DEFAULT_MAX_ITERATIONS = 500;
     public static final String CONFIRM_DESTRUCTIVE_KEY = "jmeter.ai.agent.confirm.destructive";
     public static final String THINKING_EFFORT_KEY = "jmeter.ai.agent.thinking.effort";
 

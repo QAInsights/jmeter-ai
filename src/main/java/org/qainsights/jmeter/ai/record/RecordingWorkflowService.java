@@ -33,7 +33,8 @@ public final class RecordingWorkflowService {
 
     private static final Logger log = LoggerFactory.getLogger(RecordingWorkflowService.class);
 
-    private static final int DEFAULT_MAX_ITERATIONS = 60;
+    public static final String MAX_ITERATIONS_KEY = "jmeter.ai.record.max.iterations";
+    public static final int DEFAULT_MAX_ITERATIONS = 500;
 
     /** Outcome of a recording run. */
     public record RecordingOutcome(
