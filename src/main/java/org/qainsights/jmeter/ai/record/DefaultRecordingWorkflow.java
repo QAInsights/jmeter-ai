@@ -8,6 +8,7 @@ import org.qainsights.jmeter.ai.agent.AgentChatModelFactory;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.gui.CommandCallback;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,8 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
             Path artifactDir = resolveArtifactDir(snapshot);
 
             RecordingWorkflowService service = new RecordingWorkflowService(
-                    treeModel, chatModelFactory, PlaywrightMcpSession.factory(), controller);
+                    treeModel, chatModelFactory, PlaywrightMcpSession.factory(), controller,
+                    maxIterations());
 
             RecordingWorkflowService.RecordingOutcome outcome =
                     service.record(config, artifactDir, line -> cb.processAiResponse(line));
@@ -78,6 +80,20 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
                 ? configured.prompt()
                 : prompt.trim();
         return new SessionConfig(effectivePrompt, configured.baseUri(), configured.browser());
+    }
+
+    private static int maxIterations() {
+        return (int) parseLong(AiConfig.getProperty(RecordingWorkflowService.MAX_ITERATIONS_KEY,
+                String.valueOf(RecordingWorkflowService.DEFAULT_MAX_ITERATIONS)),
+                RecordingWorkflowService.DEFAULT_MAX_ITERATIONS);
+    }
+
+    private static long parseLong(String value, long fallback) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (RuntimeException e) {
+            return fallback;
+        }
     }
 
     private static AgentChatModelFactory resolveChatModelFactory(CommandCallback cb) {

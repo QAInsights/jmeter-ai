@@ -582,7 +582,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 |----------|-------------|---------|
 | `jmeter.ai.agent.enabled` | Enable agent tool-calling loop | `false` |
 | `jmeter.ai.agent.max.tokens` | Max tokens per agent response | `4096` |
-| `jmeter.ai.agent.max.iterations` | Max reason-act iterations per request | `16` |
+| `jmeter.ai.agent.max.iterations` | Max reason-act iterations per request | `500` |
 | `jmeter.ai.agent.confirm.destructive` | Show confirmation dialog before destructive ops | `true` |
 
 > 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
@@ -651,7 +651,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 ### Safety
 
 - **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show an **Allow/Deny confirmation dialog** before executing - with an impact preview, not just a tool name: deletes list the subtree (child count + names, force flag), moves show from → to, `open_plan` shows the file and warns about unsaved changes, and correlation lists how many candidates it will touch. Disable with `jmeter.ai.agent.confirm.destructive=false`.
-- **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 16) even if the task isn't complete.
+- **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 500) even if the task isn't complete.
 - **Graceful degradation**: If the agent loop fails (API error, malformed response, etc.), it falls back to a plain-text answer describing what it attempted.
 - **Undo**: All agent mutations fire the same JMeter tree-model events as GUI actions, so they're undoable with Ctrl+Z when `undo.history.size > 0`.
 
@@ -804,7 +804,10 @@ jmeter.ai.record.enabled=true
 #jmeter.ai.record.think_time.min.ms=0
 #jmeter.ai.record.think_time.max.ms=10000
 #jmeter.ai.record.tool.output.max.chars=  # empty = 8000 (~2000 tokens)
+#jmeter.ai.record.max.iterations=500       # maximum agent iterations per recording
 ```
+
+The recording agent defaults to 500 iterations and can be adjusted with `jmeter.ai.record.max.iterations`.
 
 ## 🔔 Response Chime
 
