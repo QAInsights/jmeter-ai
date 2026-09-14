@@ -66,7 +66,7 @@ class GoogleThinkingTest {
     void namedLevelModelsGetThinkingLevel() {
         // Gemini 3 Pro: named levels [low, high]
         ReasoningSettings low = new ReasoningSettings(true, "low");
-        ThinkingConfig config = GoogleThinking.configFor(low, "gemini-3-pro-preview").orElseThrow();
+        ThinkingConfig config = GoogleThinking.configFor(low, "gemini-3-pro-image").orElseThrow();
         assertTrue(config.includeThoughts().orElseThrow());
         assertEquals("low", config.thinkingLevel().map(Object::toString).orElse("").toLowerCase());
     }
@@ -75,7 +75,7 @@ class GoogleThinkingTest {
     void invalidNamedLevelFallsBackToLastValue() {
         // "medium" is not a Gemini 3 level - falls back to "high"
         ReasoningSettings medium = new ReasoningSettings(true, "medium");
-        ThinkingConfig config = GoogleThinking.configFor(medium, "gemini-3-pro-preview").orElseThrow();
+        ThinkingConfig config = GoogleThinking.configFor(medium, "gemini-3-pro-image").orElseThrow();
         assertEquals("high", config.thinkingLevel().map(Object::toString).orElse("").toLowerCase());
     }
 

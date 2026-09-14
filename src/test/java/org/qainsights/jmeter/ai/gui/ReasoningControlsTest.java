@@ -97,8 +97,8 @@ class ReasoningControlsTest {
 
     @Test
     void twoLevelModelFallsBackToLastLevelWhenMediumMissing() {
-        // gemini-3-pro-preview has named levels [low, high] - no medium
-        controls.updateForModel("google:gemini-3-pro-preview");
+        // gemini-3-pro-image has named levels [low, high] - no medium
+        controls.updateForModel("google:gemini-3-pro-image");
         assertEquals(2, controls.getEffortCombo().getItemCount());
         assertEquals("high", controls.getEffortCombo().getSelectedItem());
         assertEquals("high", settings.getEffort());

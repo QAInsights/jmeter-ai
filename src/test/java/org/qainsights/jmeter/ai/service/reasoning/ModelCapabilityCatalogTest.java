@@ -159,7 +159,7 @@ class ModelCapabilityCatalogTest {
         assertTrue(catalog.supportsReasoning("openai:o3"));
         assertTrue(catalog.supportsReasoning("google:gemini-2.5-pro"));
         assertTrue(catalog.supportsReasoning("grok:grok-4.5"));
-        assertTrue(catalog.supportsReasoning("deepseek:deepseek-reasoner"));
+        assertTrue(catalog.supportsReasoning("deepseek:deepseek-v4-pro"));
         assertFalse(catalog.supportsReasoning("openai:gpt-4o"));
         assertTrue(catalog.supportsVision("openai:gpt-4o"));
         // Rich fields from the real data

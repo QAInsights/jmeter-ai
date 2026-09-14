@@ -81,7 +81,7 @@ class GoogleChatModelThinkingTest {
     @Test
     void namedLevelModelSendsThinkingLevel() {
         List<GenerateContentConfig> captured = new ArrayList<>();
-        model("gemini-3-pro-preview", new ReasoningSettings(true, "low"), captured).start("hi");
+        model("gemini-3-pro-image", new ReasoningSettings(true, "low"), captured).start("hi");
 
         assertEquals("low", captured.get(0).thinkingConfig().orElseThrow()
                 .thinkingLevel().map(Object::toString).orElse("").toLowerCase());

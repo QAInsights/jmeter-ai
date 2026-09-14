@@ -93,7 +93,7 @@ class ReasoningCapabilitiesTest {
         // Gemini Flash carries an explicit toggle; Pro thinks unconditionally
         assertTrue(ReasoningCapabilities.supportsThinkingToggle("google:gemini-2.5-flash"));
         assertFalse(ReasoningCapabilities.supportsThinkingToggle("google:gemini-2.5-pro"));
-        assertFalse(ReasoningCapabilities.supportsThinkingToggle("google:gemini-3-pro-preview"));
+        assertFalse(ReasoningCapabilities.supportsThinkingToggle("google:gemini-3-pro-image"));
         assertFalse(ReasoningCapabilities.supportsThinkingToggle("google:gemma-3-27b-it"));
     }
 
@@ -209,7 +209,7 @@ class ReasoningCapabilitiesTest {
                 ReasoningCapabilities.effortLevels("google:gemini-2.5-pro"));
         // Gemini 3 has named levels
         assertEquals(List.of("low", "high"),
-                ReasoningCapabilities.effortLevels("google:gemini-3-pro-preview"));
+                ReasoningCapabilities.effortLevels("google:gemini-3-pro-image"));
         assertEquals(List.of("low", "medium", "high"),
                 ReasoningCapabilities.effortLevels("ollama:qwen3:8b"));
         assertEquals(List.of("low", "medium", "high"),
