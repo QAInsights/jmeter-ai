@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.utils;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.testelement.TestElement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -441,6 +442,16 @@ public class JMeterElementManager {
     }
 
     /**
+     * Gives a freshly created HTTP sampler the defaults JMeter's own "Add" action
+     * gives it: GET, follow redirects and keep-alive enabled.
+     */
+    static void initializeHttpSamplerDefaults(HTTPSamplerBase sampler) {
+        sampler.setMethod("GET");
+        sampler.setFollowRedirects(true);
+        sampler.setUseKeepAlive(true);
+    }
+
+    /**
      * Adds a JMeter element to the currently selected node in the test plan.
      *
      * @param elementType The type of element to add (case-insensitive, spaces
@@ -492,6 +503,9 @@ public class JMeterElementManager {
                     log.info("Initializing Thread Group with a Loop Controller");
                     initializeThreadGroupDefaults((org.apache.jmeter.threads.ThreadGroup) newElement);
                     log.info("Loop Controller initialized for Thread Group");
+                }
+                if (newElement instanceof HTTPSamplerBase) {
+                    initializeHttpSamplerDefaults((HTTPSamplerBase) newElement);
                 }
 
                 // Set a name for the element

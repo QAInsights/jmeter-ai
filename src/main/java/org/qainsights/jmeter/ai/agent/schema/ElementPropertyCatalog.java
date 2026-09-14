@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -63,6 +64,26 @@ public final class ElementPropertyCatalog {
             return Collections.emptyList();
         }
         return BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
+    }
+
+    /** Curated property keys whose final segment matches {@code suffix}, in catalog order. */
+    public static List<String> keysWithSuffix(String suffix) {
+        if (suffix == null || suffix.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        String requested = suffix.trim();
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (List<Property> properties : BY_TYPE.values()) {
+            for (Property property : properties) {
+                String key = property.getKey();
+                int dot = key.lastIndexOf('.');
+                String keySuffix = dot < 0 ? key : key.substring(dot + 1);
+                if (keySuffix.equalsIgnoreCase(requested)) {
+                    keys.add(key);
+                }
+            }
+        }
+        return new ArrayList<>(keys);
     }
 
     private static final Map<String, List<String>> LIST_PROPERTIES_BY_TYPE = buildListProperties();
