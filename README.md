@@ -314,11 +314,11 @@ curl -sS https://llm-gateway.corp.example.com/v1/chat/completions \
 | 404 on chat | Base URL path is off. OpenAI-compatible URLs normally end in `/v1`, Anthropic-compatible ones do not |
 | `PKIX path building failed` | The gateway's certificate chains to an internal CA; start JMeter with `-Djavax.net.ssl.trustStore=/path/to/corp-truststore.jks` |
 | `uses plaintext HTTP` warning | The base URL is `http://`; switch to `https://` unless it's a loopback endpoint |
-| `429` / `RateLimitException` / "token quota exceeded" | The gateway's token budget is smaller than one Agent Mode request; see [Token quotas and 429 errors](#token-quotas-and-429-errors) |
+| `429` / `RateLimitException` / "token quota exceeded" | Usually the gateway's token budget is smaller than one Agent Mode request (a 429 can also be a request-rate or concurrency throttle; the panel shows the gateway's own message); see [Token quotas and 429 errors](#token-quotas-and-429-errors) |
 
 #### Token quotas and 429 errors
 
-Agent Mode is token-hungry by design: every reason/act turn re-sends the system prompt (including the JMeter element hierarchy), all ~24 tool definitions and the full conversation so far, and even a trivial request takes 2-4 turns (the agent reads the tree first). That fixed overhead is several thousand tokens per turn, so a gateway tier with a small budget (for example 10K tokens per 5 minutes) is exhausted on the first or second turn, whatever the prompt says. Some gateways also count `max_tokens` against the quota before the request runs.
+Agent Mode is token-hungry by design: every reason/act turn re-sends the system prompt (including the JMeter element hierarchy), all 21 tool definitions and the full conversation so far, and even a trivial request takes 2-4 turns (the agent reads the tree first). That fixed overhead is several thousand tokens per turn, so a gateway tier with a small budget (for example 10K tokens per 5 minutes) is exhausted on the first or second turn, whatever the prompt says. Some gateways also count `max_tokens` against the quota before the request runs.
 
 What helps, roughly in order of impact:
 

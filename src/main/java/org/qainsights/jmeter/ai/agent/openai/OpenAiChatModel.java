@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.completions.CompletionUsage;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionMessage;
@@ -143,7 +144,12 @@ public final class OpenAiChatModel implements ChatModel {
         if (completion.choices().isEmpty()) {
             throw new IllegalStateException("OpenAI returned no choices for the agent request");
         }
-        completion.usage().ifPresent(u -> usage.record(u.promptTokens(), u.completionTokens()));
+        if (completion.usage().isPresent()) {
+            CompletionUsage u = completion.usage().get();
+            usage.record(u.promptTokens(), u.completionTokens());
+        } else {
+            usage.recordUnreported();
+        }
         ChatCompletionMessage message = completion.choices().get(0).message();
         history.add(ChatCompletionMessageParam.ofAssistant(message.toParam()));
         return adapter.toAssistantTurn(message);

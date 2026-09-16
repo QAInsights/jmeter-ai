@@ -508,7 +508,7 @@ public class OpenAiService implements AiService {
         String errorMessage = e.getMessage();
 
         if (RateLimitErrors.isRateLimited(e)) {
-            return RateLimitErrors.describe(e);
+            return RateLimitErrors.describe(e, false);
         }
 
         // Check for credit balance error

@@ -14,6 +14,7 @@ public final class TokenUsageTracker {
 
     private final String provider;
     private int turns;
+    private int unreportedTurns;
     private long promptTokens;
     private long completionTokens;
 
@@ -27,6 +28,18 @@ public final class TokenUsageTracker {
         completionTokens += completion;
         log.info("Agent token usage [{}] turn {}: prompt={} completion={} | run total: prompt={} completion={} total={}",
                 provider, turns, prompt, completion, promptTokens, completionTokens, totalTokens());
+    }
+
+    /** Records a turn whose response carried no usage block (some gateways strip it). */
+    public void recordUnreported() {
+        turns++;
+        unreportedTurns++;
+        log.info("Agent token usage [{}] turn {}: not reported by provider | run total: prompt={} completion={} total={} ({} turn(s) unreported)",
+                provider, turns, promptTokens, completionTokens, totalTokens(), unreportedTurns);
+    }
+
+    public int unreportedTurns() {
+        return unreportedTurns;
     }
 
     public int turns() {

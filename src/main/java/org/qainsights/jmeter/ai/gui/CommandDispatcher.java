@@ -39,7 +39,7 @@ public class CommandDispatcher {
 
     private static String chatErrorMessage(Exception e) {
         if (RateLimitErrors.isRateLimited(e)) {
-            return "Error: " + RateLimitErrors.describe(e);
+            return "Error: " + RateLimitErrors.describe(e, false);
         }
         return "Sorry, I encountered an error while processing your request. Please try again.";
     }

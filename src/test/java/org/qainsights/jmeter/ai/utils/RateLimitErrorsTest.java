@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import com.anthropic.core.JsonValue;
+import com.google.genai.errors.ClientException;
 import com.openai.core.http.Headers;
 import com.openai.errors.RateLimitException;
 import com.openai.models.ErrorObject;
@@ -24,6 +26,42 @@ class RateLimitErrorsTest {
         RateLimitException e = openAi429("Allocated token quota for the client is exceeded.");
         assertTrue(RateLimitErrors.isRateLimited(e));
         assertTrue(RateLimitErrors.isRateLimited(new IllegalStateException("wrapped", e)));
+    }
+
+    @Test
+    void detectsAnthropicAndGeminiRateLimits() {
+        com.anthropic.errors.RateLimitException anthropic = com.anthropic.errors.RateLimitException.builder()
+                .headers(com.anthropic.core.http.Headers.builder().build())
+                .body(JsonValue.from("quota exceeded"))
+                .build();
+        assertTrue(RateLimitErrors.isRateLimited(anthropic));
+        assertTrue(RateLimitErrors.isRateLimited(new RuntimeException(anthropic)));
+        assertTrue(RateLimitErrors.describe(anthropic).startsWith("Rate limit or token quota exceeded (HTTP 429)"));
+
+        assertTrue(RateLimitErrors.isRateLimited(new ClientException(429, "RESOURCE_EXHAUSTED", "Quota exceeded")));
+        assertFalse(RateLimitErrors.isRateLimited(new ClientException(400, "INVALID_ARGUMENT", "bad request")));
+    }
+
+    @Test
+    void survivesCauseCycles() {
+        RuntimeException a = new RuntimeException("a");
+        RuntimeException b = new RuntimeException("b", a);
+        a.initCause(b);
+        assertFalse(RateLimitErrors.isRateLimited(a));
+        assertEquals("a", RateLimitErrors.serverMessage(a));
+    }
+
+    @Test
+    void describeDoesNotDoublePunctuationAndTailorsAdviceToMode() {
+        String agent = RateLimitErrors.describe(openAi429("quota exceeded."));
+        assertTrue(agent.contains("quota exceeded.\n\n"), agent);
+        assertFalse(agent.contains("exceeded.."), agent);
+
+        String chat = RateLimitErrors.describe(openAi429("quota exceeded"), false);
+        assertTrue(chat.contains("quota exceeded.\n\n"), chat);
+        assertFalse(chat.contains("tool definitions"), chat);
+        assertFalse(chat.contains("jmeter.ai.agent.max.tokens"), chat);
+        assertTrue(chat.contains("openai.max.retries=0"), chat);
     }
 
     @Test
