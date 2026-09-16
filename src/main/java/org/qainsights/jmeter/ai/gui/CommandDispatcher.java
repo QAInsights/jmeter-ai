@@ -10,6 +10,7 @@ import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.RateLimitErrors;
 import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -473,6 +474,11 @@ public class CommandDispatcher {
                     log.warn("Agent run aborted: {}", cliError.getMessage());
                     return finish("Error: " + cliError.getMessage());
                 } catch (RuntimeException agentError) {
+                    if (RateLimitErrors.isRateLimited(agentError)) {
+                        // Falling back to plain chat would spend more of the same exhausted quota.
+                        log.warn("Agent run aborted by rate limit: {}", agentError.getMessage());
+                        return finish("Error: " + RateLimitErrors.describe(agentError));
+                    }
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
                     publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
                             + " - falling back to a plain answer.]"));

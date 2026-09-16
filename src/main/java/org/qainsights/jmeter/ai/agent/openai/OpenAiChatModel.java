@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
@@ -50,6 +51,7 @@ public final class OpenAiChatModel implements ChatModel {
     private final long maxTokens;
     private final Optional<ReasoningEffort> reasoningEffort;
     private final List<ChatCompletionMessageParam> history;
+    private final TokenUsageTracker usage = new TokenUsageTracker("openai");
 
     public OpenAiChatModel(CompletionService service, OpenAiToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens) {
@@ -141,6 +143,7 @@ public final class OpenAiChatModel implements ChatModel {
         if (completion.choices().isEmpty()) {
             throw new IllegalStateException("OpenAI returned no choices for the agent request");
         }
+        completion.usage().ifPresent(u -> usage.record(u.promptTokens(), u.completionTokens()));
         ChatCompletionMessage message = completion.choices().get(0).message();
         history.add(ChatCompletionMessageParam.ofAssistant(message.toParam()));
         return adapter.toAssistantTurn(message);

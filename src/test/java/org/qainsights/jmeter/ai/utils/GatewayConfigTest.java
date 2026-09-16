@@ -101,6 +101,26 @@ class GatewayConfigTest {
     }
 
     @Test
+    void parseRetriesDefaultsForBlankNegativeOrNonNumeric() {
+        assertEquals(GatewayConfig.DEFAULT_MAX_RETRIES, GatewayConfig.parseRetries(""));
+        assertEquals(GatewayConfig.DEFAULT_MAX_RETRIES, GatewayConfig.parseRetries(null));
+        assertEquals(GatewayConfig.DEFAULT_MAX_RETRIES, GatewayConfig.parseRetries("-1"));
+        assertEquals(GatewayConfig.DEFAULT_MAX_RETRIES, GatewayConfig.parseRetries("many"));
+        assertEquals(0, GatewayConfig.parseRetries("0"));
+        assertEquals(5, GatewayConfig.parseRetries(" 5 "));
+    }
+
+    @Test
+    void maxRetriesReadPerProviderProperty() {
+        try (MockedStatic<AiConfig> ignored = mockStatic(AiConfig.class)) {
+            ignored.when(() -> AiConfig.getProperty("openai.max.retries", "")).thenReturn("0");
+            ignored.when(() -> AiConfig.getProperty("anthropic.max.retries", "")).thenReturn("");
+            assertEquals(0, GatewayConfig.openAiMaxRetries());
+            assertEquals(GatewayConfig.DEFAULT_MAX_RETRIES, GatewayConfig.anthropicMaxRetries());
+        }
+    }
+
+    @Test
     void parseModelsTrimsDropsBlanksAndPreservesOrder() {
         assertEquals(List.of("a", "b", "c"), GatewayConfig.parseModels("a, b ,,c"));
         assertEquals(List.of(), GatewayConfig.parseModels(""));

@@ -17,6 +17,7 @@ import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
+import org.qainsights.jmeter.ai.utils.RateLimitErrors;
 import org.qainsights.jmeter.ai.usage.OpenAiUsage;
 
 public class OpenAiService implements AiService {
@@ -505,6 +506,10 @@ public class OpenAiService implements AiService {
     }
     private String extractUserFriendlyErrorMessage(Exception e) {
         String errorMessage = e.getMessage();
+
+        if (RateLimitErrors.isRateLimited(e)) {
+            return RateLimitErrors.describe(e);
+        }
 
         // Check for credit balance error
         if (errorMessage != null && errorMessage.contains("insufficient_quota")) {
