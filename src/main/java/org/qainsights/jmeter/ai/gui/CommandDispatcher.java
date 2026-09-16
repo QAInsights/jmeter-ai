@@ -37,6 +37,13 @@ public class CommandDispatcher {
         this.cb = callback;
     }
 
+    private static String chatErrorMessage(Exception e) {
+        if (RateLimitErrors.isRateLimited(e)) {
+            return "Error: " + RateLimitErrors.describe(e);
+        }
+        return "Sorry, I encountered an error while processing your request. Please try again.";
+    }
+
     /**
      * Built on first use rather than in the constructor: Record Mode is off by default, and
      * its artifact store reads configuration that is not present outside a JMeter process.
@@ -138,10 +145,7 @@ public class CommandDispatcher {
                     cb.onStreamComplete(response);
                     cb.addToConversationHistory(response);
                 },
-                e -> {
-                    cb.onStreamError("Error getting AI stream response", e,
-                        "Sorry, I encountered an error while processing your request. Please try again.");
-                }
+                e -> cb.onStreamError("Error getting AI stream response", e, chatErrorMessage(e))
             );
         } else {
             log.info("Processing as regular AI request");
@@ -158,8 +162,7 @@ public class CommandDispatcher {
                         cb.onWorkerSuccess(response);
                         cb.addToConversationHistory(response);
                     } catch (InterruptedException | ExecutionException e) {
-                        cb.onWorkerError("Error getting AI response", e,
-                                "Sorry, I encountered an error while processing your request. Please try again.");
+                        cb.onWorkerError("Error getting AI response", e, chatErrorMessage(e));
                     }
                 }
             }.execute();
@@ -208,10 +211,7 @@ public class CommandDispatcher {
                     cb.onStreamComplete(response);
                     cb.addToConversationHistory(response);
                 },
-                e -> {
-                    cb.onStreamError("Error getting AI stream response", e,
-                        "Sorry, I encountered an error while processing your request. Please try again.");
-                }
+                e -> cb.onStreamError("Error getting AI stream response", e, chatErrorMessage(e))
             );
 
             // Restore the original user message in the conversation history immediately
@@ -243,8 +243,7 @@ public class CommandDispatcher {
                         cb.onWorkerSuccess(response);
                         cb.addToConversationHistory(response);
                     } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
-                        cb.onWorkerError("Error getting AI response", e,
-                                "Sorry, I encountered an error while processing your request. Please try again.");
+                        cb.onWorkerError("Error getting AI response", e, chatErrorMessage(e));
                     }
                 }
             }.execute();
