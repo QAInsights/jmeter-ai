@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletion;
+import com.openai.models.completions.CompletionUsage;
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.chat.completions.ChatCompletionMessage;
@@ -50,6 +52,7 @@ public final class OpenAiChatModel implements ChatModel {
     private final long maxTokens;
     private final Optional<ReasoningEffort> reasoningEffort;
     private final List<ChatCompletionMessageParam> history;
+    private final TokenUsageTracker usage = new TokenUsageTracker("openai");
 
     public OpenAiChatModel(CompletionService service, OpenAiToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens) {
@@ -140,6 +143,12 @@ public final class OpenAiChatModel implements ChatModel {
         ChatCompletion completion = service.create(params.build());
         if (completion.choices().isEmpty()) {
             throw new IllegalStateException("OpenAI returned no choices for the agent request");
+        }
+        if (completion.usage().isPresent()) {
+            CompletionUsage u = completion.usage().get();
+            usage.record(u.promptTokens(), u.completionTokens());
+        } else {
+            usage.recordUnreported();
         }
         ChatCompletionMessage message = completion.choices().get(0).message();
         history.add(ChatCompletionMessageParam.ofAssistant(message.toParam()));

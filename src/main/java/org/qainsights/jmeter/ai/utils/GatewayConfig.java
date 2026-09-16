@@ -16,6 +16,8 @@ import java.util.Map;
 public final class GatewayConfig {
     public static final String OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
     public static final String ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com";
+    /** Matches the SDK defaults, which retry 408/409/429/5xx with backoff. */
+    public static final int DEFAULT_MAX_RETRIES = 2;
 
     private static final Logger log = LoggerFactory.getLogger(GatewayConfig.class);
 
@@ -96,6 +98,35 @@ public final class GatewayConfig {
         return headers;
     }
 
+    /**
+     * Automatic SDK retries for OpenAI-compatible requests. Each retry of a 429
+     * response re-sends the whole prompt, so quota-metered gateways may want 0.
+     */
+    public static int openAiMaxRetries() {
+        return parseRetries(AiConfig.getProperty("openai.max.retries", ""));
+    }
+
+    public static int anthropicMaxRetries() {
+        return parseRetries(AiConfig.getProperty("anthropic.max.retries", ""));
+    }
+
+    static int parseRetries(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return DEFAULT_MAX_RETRIES;
+        }
+        try {
+            int retries = Integer.parseInt(raw.trim());
+            if (retries < 0) {
+                log.warn("Ignoring negative max.retries value {}; using default {}", raw, DEFAULT_MAX_RETRIES);
+                return DEFAULT_MAX_RETRIES;
+            }
+            return retries;
+        } catch (NumberFormatException e) {
+            log.warn("Ignoring non-numeric max.retries value '{}'; using default {}", raw, DEFAULT_MAX_RETRIES);
+            return DEFAULT_MAX_RETRIES;
+        }
+    }
+
     static List<String> parseModels(String raw) {
         List<String> models = new ArrayList<>();
         if (raw == null || raw.isEmpty()) {
@@ -118,6 +149,7 @@ public final class GatewayConfig {
                     baseUrl);
         }
         builder.baseUrl(baseUrl);
+        builder.maxRetries(openAiMaxRetries());
         openAiHeaders().forEach(builder::putHeader);
         return builder;
     }
@@ -129,6 +161,7 @@ public final class GatewayConfig {
                     baseUrl);
         }
         builder.baseUrl(baseUrl);
+        builder.maxRetries(anthropicMaxRetries());
         anthropicHeaders().forEach(builder::putHeader);
         return builder;
     }

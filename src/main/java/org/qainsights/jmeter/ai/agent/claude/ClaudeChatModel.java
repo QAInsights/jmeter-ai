@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
@@ -44,6 +45,7 @@ public final class ClaudeChatModel implements ChatModel {
     private final Long thinkingBudget;
     private final String thinkingEffort;
     private final List<MessageParam> history;
+    private final TokenUsageTracker usage = new TokenUsageTracker("anthropic");
     private String lastReasoning;
 
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
@@ -176,6 +178,7 @@ public final class ClaudeChatModel implements ChatModel {
         }
 
         Message response = service.create(params.build());
+        usage.record(response.usage().inputTokens(), response.usage().outputTokens());
         history.add(response.toParam());
         lastReasoning = org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking
                 .extractThinking(response.content());

@@ -116,6 +116,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `anthropic.api.key` | Claude API key | **Required** (optional behind a gateway that authenticates via headers) |
 | `anthropic.base.url` | Endpoint speaking the Anthropic `/v1/messages` format; point this at a [corporate gateway](#corporate-llm-gateways) | `https://api.anthropic.com` |
 | `anthropic.extra.headers` | Extra request headers, `;`-separated `name=value` pairs | *(empty)* |
+| `anthropic.max.retries` | Automatic SDK retries on 429/5xx; set `0` behind a [quota-limited gateway](#token-quotas-and-429-errors) | `2` |
 | `anthropic.models` | Explicit model list (comma-separated) for gateways that don't expose model listing | *(empty)* |
 | `claude.default.model` | Default model | `claude-sonnet-4-6` |
 | `claude.temperature` | Temperature (0.0-1.0) | `0.5` |
@@ -135,6 +136,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `openai.base.url` | Endpoint speaking the OpenAI `/v1/chat/completions` format; point this at a [corporate gateway](#corporate-llm-gateways) | `https://api.openai.com/v1` |
 | `openai.extra.headers` | Extra request headers, `;`-separated `name=value` pairs | *(empty)* |
 | `openai.models` | Explicit model list (comma-separated) for gateways that don't expose `GET /v1/models` | *(empty)* |
+| `openai.max.retries` | Automatic SDK retries on 429/5xx; set `0` behind a [quota-limited gateway](#token-quotas-and-429-errors) | `2` |
 | `openai.default.model` | Default model | `gpt-4o` |
 | `openai.temperature` | Temperature (0.0-1.0) | `0.5` |
 | `openai.max.tokens` | Max response tokens | `1024` |
@@ -312,6 +314,21 @@ curl -sS https://llm-gateway.corp.example.com/v1/chat/completions \
 | 404 on chat | Base URL path is off. OpenAI-compatible URLs normally end in `/v1`, Anthropic-compatible ones do not |
 | `PKIX path building failed` | The gateway's certificate chains to an internal CA; start JMeter with `-Djavax.net.ssl.trustStore=/path/to/corp-truststore.jks` |
 | `uses plaintext HTTP` warning | The base URL is `http://`; switch to `https://` unless it's a loopback endpoint |
+| `429` / `RateLimitException` / "token quota exceeded" | Usually the gateway's token budget is smaller than one Agent Mode request (a 429 can also be a request-rate or concurrency throttle; the panel shows the gateway's own message); see [Token quotas and 429 errors](#token-quotas-and-429-errors) |
+
+#### Token quotas and 429 errors
+
+Agent Mode is token-hungry by design: every reason/act turn re-sends the system prompt (including the JMeter element hierarchy), all 21 tool definitions and the full conversation so far, and even a trivial request takes 2-4 turns (the agent reads the tree first). That fixed overhead is several thousand tokens per turn, so a gateway tier with a small budget (for example 10K tokens per 5 minutes) is exhausted on the first or second turn, whatever the prompt says. Some gateways also count `max_tokens` against the quota before the request runs.
+
+What helps, roughly in order of impact:
+
+- **Turn off automatic retries**: `openai.max.retries=0` (or `anthropic.max.retries=0`). The SDK otherwise retries a 429 twice with backoff, tripling the tokens charged for one click. The chat panel now shows the gateway's own 429 message instead of retrying as plain chat.
+- **Lower `jmeter.ai.agent.max.tokens`** (e.g. `1024`) if your gateway reserves `max_tokens` up front.
+- **Start a new chat** per task: up to 10 prior turn pairs are re-sent with each agent request.
+- **Use plain chat** (deselect Agent Mode) for questions and snippets; it sends no tool schemas or hierarchy and costs a fraction per request.
+- **Measure**: each agent turn logs `Agent token usage [...] prompt=... completion=... | run total: ...` in `jmeter.log`, so you can compare a run against your quota before asking for a larger tier.
+
+If the quota is fixed at a few thousand tokens per window, Agent Mode will not fit; ask the gateway team for a larger allocation for the Feather Wand client.
 
 If that doesn't settle it, paste the following into your own LLM (redact secrets first):
 
