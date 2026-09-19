@@ -38,7 +38,7 @@ public final class ClaudeChatModel implements ChatModel {
 
     private final MessageService service;
     private final ClaudeToolAdapter adapter;
-    private final List<ToolSpec> specs;
+    private List<ToolSpec> specs;
     private final String systemPrompt;
     private final String model;
     private final long maxTokens;
@@ -130,6 +130,11 @@ public final class ClaudeChatModel implements ChatModel {
                 .content(userMessage)
                 .build());
         return send();
+    }
+
+    @Override
+    public void updateToolSpecs(List<ToolSpec> specs) {
+        this.specs = new ArrayList<>(specs);
     }
 
     @Override

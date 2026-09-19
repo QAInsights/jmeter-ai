@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.service.AiService;
 
 import java.util.List;
@@ -94,6 +96,16 @@ public interface CommandCallback {
      */
     default void appendToolActivity(String message) {
         appendMessageToChat(message);
+    }
+
+    default void appendJevRoute(AgentRequestRouter.Notice notice, String modelId) {
+    }
+
+    /**
+     * Appends a Jev failure-triage card after {@code get_test_results} reported
+     * failures. Default no-op for implementations without a styled transcript.
+     */
+    default void appendJevTriage(TriageNotice notice, String modelId) {
     }
 
     void appendErrorMessageToChat(String context, Exception e);

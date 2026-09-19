@@ -44,7 +44,7 @@ public final class GoogleChatModel implements ChatModel {
 
     private final GenerateService service;
     private final GoogleToolAdapter adapter;
-    private final List<ToolSpec> specs;
+    private List<ToolSpec> specs;
     private final String systemPrompt;
     private final String model;
     private final int maxOutputTokens;
@@ -112,6 +112,11 @@ public final class GoogleChatModel implements ChatModel {
     public AssistantTurn start(String userMessage) {
         history.add(Content.builder().role("user").parts(Part.fromText(userMessage)).build());
         return send();
+    }
+
+    @Override
+    public void updateToolSpecs(List<ToolSpec> specs) {
+        this.specs = new ArrayList<>(specs);
     }
 
     @Override

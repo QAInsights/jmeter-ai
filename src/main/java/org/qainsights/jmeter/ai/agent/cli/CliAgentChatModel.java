@@ -24,7 +24,8 @@ public final class CliAgentChatModel implements ChatModel {
 
     private final SubscriptionCliProvider provider;
     private final String model;
-    private final String header;
+    private final String systemPrompt;
+    private String header;
     private final List<String> transcript = new ArrayList<>();
     private int turn;
 
@@ -42,12 +43,22 @@ public final class CliAgentChatModel implements ChatModel {
                              List<String> priorTurns, String model) {
         this.provider = provider;
         this.model = model;
-        this.header = systemPrompt + "\n\n" + CliToolProtocol.instructions(specs);
+        this.systemPrompt = systemPrompt;
+        this.header = headerFor(specs);
         if (priorTurns != null) {
             for (int i = 0; i < priorTurns.size(); i++) {
                 transcript.add((i % 2 == 0 ? "User: " : "Assistant: ") + priorTurns.get(i));
             }
         }
+    }
+
+    @Override
+    public void updateToolSpecs(List<ToolSpec> specs) {
+        this.header = headerFor(specs);
+    }
+
+    private String headerFor(List<ToolSpec> specs) {
+        return systemPrompt + "\n\n" + CliToolProtocol.instructions(specs);
     }
 
     @Override

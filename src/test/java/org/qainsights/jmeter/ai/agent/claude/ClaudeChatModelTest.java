@@ -134,4 +134,27 @@ class ClaudeChatModelTest {
 
         assertEquals(1, captured.get(0).messages().size());
     }
+
+    @Test
+    void updateToolSpecsChangesToolsAdvertisedOnNextRequest() {
+        Deque<Message> responses = new ArrayDeque<>();
+        responses.add(toolMessage("tu_1", "get_tree_state"));
+        responses.add(textMessage("done"));
+        List<MessageCreateParams> captured = new ArrayList<>();
+        ClaudeChatModel.MessageService service = params -> {
+            captured.add(params);
+            return responses.removeFirst();
+        };
+
+        ClaudeChatModel model = new ClaudeChatModel(service, new ClaudeToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "claude", 1024);
+        model.start("inspect");
+        model.updateToolSpecs(List.of(ToolSpec.builder("run_test").description("Runs the plan").build()));
+        model.next(Collections.singletonList(
+                new ToolOutcome("tu_1", "get_tree_state", "tree", false)));
+
+        assertTrue(captured.get(0).tools().isEmpty());
+        assertTrue(captured.get(1).tools().isPresent());
+        assertEquals("run_test", captured.get(1).tools().get().get(0).asTool().name());
+    }
 }

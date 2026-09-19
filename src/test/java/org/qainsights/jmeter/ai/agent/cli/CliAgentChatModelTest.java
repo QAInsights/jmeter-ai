@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayDeque;
@@ -87,6 +88,23 @@ class CliAgentChatModelTest {
 
         assertEquals("Use a Constant Timer of 500 ms.", turn.getText());
         assertTrue(turn.getToolCalls().isEmpty());
+    }
+
+    @Test
+    void updateToolSpecsReissuesProtocolInstructionsOnNextTurn() {
+        FakeProvider provider = new FakeProvider(
+                "{\"tool_calls\":[{\"name\":\"add_element\",\"arguments\":{\"type\":\"ConstantTimer\"}}]}",
+                "{\"final\":\"done\"}");
+        CliAgentChatModel model = new CliAgentChatModel(provider, List.of(SPEC), "system", List.of());
+        model.start("add a timer");
+
+        model.updateToolSpecs(List.of(SPEC,
+                ToolSpec.builder("run_test").description("Runs the plan").build()));
+        model.next(List.of(new ToolOutcome("call_0", "add_element", "added", false)));
+
+        assertTrue(provider.prompts.get(0).contains("add_element"));
+        assertFalse(provider.prompts.get(0).contains("run_test"));
+        assertTrue(provider.prompts.get(1).contains("run_test"));
     }
 
     @Test

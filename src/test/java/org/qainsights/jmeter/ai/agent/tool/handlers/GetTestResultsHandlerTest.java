@@ -4,18 +4,23 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.SampleResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.FailureTriage;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunController;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
+import org.qainsights.jmeter.ai.service.JudgmentProvider;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -173,6 +178,90 @@ class GetTestResultsHandlerTest {
         assertFalse(r.isSuccess());
         assertEquals(GetTestResultsHandler.ERR_EXECUTION_FAILED, r.getErrorCode());
         assertTrue(r.getMessage().contains("no engine available"));
+    }
+
+    /** Fake Jev provider returning a fixed category/confidence per call. */
+    private static final class FakeProvider implements JudgmentProvider {
+        int calls;
+
+        @Override
+        public Set<Capability> capabilities() {
+            return Set.of(Capability.CHOICE);
+        }
+
+        @Override
+        public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
+            calls++;
+            return new ChoiceAnswer("TIMEOUT", Map.of("TIMEOUT", 0.9), 0.9);
+        }
+    }
+
+    private static SampleResult failedSample() {
+        SampleResult failed = new SampleResult();
+        failed.setSampleLabel("Broken Sampler");
+        failed.setSuccessful(false);
+        failed.setResponseCode("500");
+        failed.setResponseMessage("Internal Server Error");
+        return failed;
+    }
+
+    @Test
+    void run_withTriageAndFailures_appendsAdvisoryAndEmitsNotice() {
+        runner.toReturn = TestRunSummary.of(List.of(failedSample()), false, 10L);
+        FakeProvider provider = new FakeProvider();
+        FailureTriage triage = new FailureTriage(provider, 0.75, 5);
+        AtomicReference<TriageNotice> notice = new AtomicReference<>();
+        Tool triaged = new GetTestResultsHandler(
+                () -> root, controller, runner, () -> triage, notice::set).tool();
+
+        ToolResult r = triaged.execute(args(null));
+
+        assertTrue(r.isSuccess());
+        assertTrue(r.getData().contains("Broken Sampler"));
+        assertTrue(r.getData().contains("Jev triage"));
+        assertTrue(r.getData().contains("Timeout"));
+        assertEquals(1, provider.calls);
+        assertEquals(1, notice.get().totalFailures());
+        assertEquals(1, notice.get().classifiedFailures());
+        assertEquals("TIMEOUT", notice.get().dominantCategory());
+    }
+
+    @Test
+    void run_withTriageButNoFailures_leavesResultAndProviderAlone() {
+        runner.toReturn = TestRunSummary.of(sampleResults(3, 0), false, 500L);
+        FakeProvider provider = new FakeProvider();
+        AtomicReference<TriageNotice> notice = new AtomicReference<>();
+        Tool triaged = new GetTestResultsHandler(() -> root, controller, runner,
+                () -> new FailureTriage(provider, 0.75, 5), notice::set).tool();
+
+        ToolResult r = triaged.execute(args(null));
+
+        assertFalse(r.getData().contains("Jev triage"));
+        assertEquals(0, provider.calls);
+        assertNull(notice.get());
+    }
+
+    @Test
+    void run_withNullTriageSupplierResult_returnsPlainResult() {
+        runner.toReturn = TestRunSummary.of(List.of(failedSample()), false, 10L);
+        AtomicReference<TriageNotice> notice = new AtomicReference<>();
+        Tool untriaged = new GetTestResultsHandler(
+                () -> root, controller, runner, () -> null, notice::set).tool();
+
+        ToolResult r = untriaged.execute(args(null));
+
+        assertTrue(r.getData().contains("Broken Sampler"));
+        assertFalse(r.getData().contains("Jev triage"));
+        assertNull(notice.get());
+    }
+
+    @Test
+    void run_withDefaultConstructor_hasNoTriage() {
+        runner.toReturn = TestRunSummary.of(List.of(failedSample()), false, 10L);
+
+        ToolResult r = tool.execute(args(null));
+
+        assertFalse(r.getData().contains("Jev triage"));
     }
 
     private static List<SampleResult> sampleResults(int successCount, int failureCount) {

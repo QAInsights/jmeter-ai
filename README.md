@@ -59,7 +59,8 @@
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan through 18 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
+| **Jev Smart Routing** | Optional TypeSafe Jev intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -549,13 +550,41 @@ Select a **Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, or *
 
 > If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
 
-All supported providers get the exact same tools, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks, OpenAI-compatible function `tool_calls`, or Gemini `functionCall`/`functionResponse` parts).
+All supported providers share the same tool registry, system prompt, safety gates and iteration limits; only the wire format differs (Anthropic `tool_use` blocks, OpenAI-compatible function `tool_calls`, or Gemini `functionCall`/`functionResponse` parts). When optional Jev Smart Routing is enabled, the provider receives a focused subset for confident single-purpose requests and the complete registry for complex, uncertain, or failed routing.
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
 > 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies. For Meta Muse, agent runs go through Chat Completions rather than the Responses API used for plain chat, so the Thoughts card is not populated during agent runs.
 
 > 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
+
+### Optional Jev Smart Routing
+
+[Jev](https://docs.typesafe.ai/concepts/system-one) is an optional TypeSafe judgment model used only to classify an Agent Mode request before the selected chat model starts. A confident single-purpose classification advertises a focused tool pack; complex requests, low confidence, missing configuration, or service failures receive the complete standard registry.
+
+```properties
+jmeter.ai.typesafe.enabled=true
+jmeter.ai.typesafe.agent.routing.enabled=true
+jmeter.ai.typesafe.agent.routing.min.confidence=0.75
+jmeter.ai.typesafe.agent.routing.expansion.enabled=false
+jmeter.ai.typesafe.agent.routing.expansion.max=1
+jmeter.ai.typesafe.agent.triage.enabled=false
+jmeter.ai.typesafe.agent.triage.max.failures=5
+typesafe.api.key=YOUR_TYPESAFE_API_KEY
+typesafe.base.url=https://api.typesafe.ai
+typesafe.model=jev-latest
+typesafe.timeout.seconds=15
+```
+
+When enabled, every request shows a dedicated **Jev Smart Route** card before agent activity. It identifies the selected route, confidence, focused/total tool counts, and the chat model that still performs the work. Uncertain routing shows that all tools are being used; a TypeSafe failure shows that standard Agent Mode is being used.
+
+With `jmeter.ai.typesafe.agent.routing.expansion.enabled=true`, a focused pack also advertises an `expand_tools` escape hatch: if the model realises it needs a capability outside its pack, it can ask for more tools instead of giving up. Jev re-classifies the request with the model's stated need, the live tool set grows (never shrinks, capped by `expansion.max`, never beyond the full registry), and a second **Jev Expanded Tools** card lists what was added. The grown tool set is re-advertised to the provider on the model's next request, so newly added tools are actually callable — for the API-backed models (Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse) and for the subscription CLIs, whose tool protocol is re-issued in the next prompt. Newly exposed destructive tools still require the usual confirmation.
+
+With `jmeter.ai.typesafe.agent.triage.enabled=true` (independent of routing), Jev also classifies failures reported by `get_test_results`. Each unique failure signature — sampler label, response code, and a bounded message — gets one Choice judgment into a root-cause bucket (connection, timeout, 4xx/5xx, auth/session, assertion, script, config), capped at `triage.max.failures` signatures per run. The verdicts surface in a **Jev Failure Triage** card grouped by category with a dominant-cause callout, and an advisory summary is appended to the tool result so the chat model diagnoses from a categorized picture. Triage is advisory only: unavailable Jev, a missing key, or a clean run leaves the result untouched.
+
+Jev never appears in the model picker, generates the answer, selects tool arguments, executes a tool, or bypasses destructive-operation confirmation. Feather Wand sends TypeSafe only the current request with attachment bodies removed plus, for triage, failure labels/codes/truncated messages; it does not send conversation history, the serialized test plan, element properties, result bodies, headers, cookies, or provider credentials. Leave either feature flag false to make zero TypeSafe requests and preserve the original Agent Mode path.
+
+TypeSafe currently publishes Python and JavaScript/TypeScript SDKs; Feather Wand's Java 17 integration uses the documented [`POST /v1/systemone` HTTP API](https://docs.typesafe.ai/api) directly.
 
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
@@ -601,12 +630,19 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `jmeter.ai.agent.max.tokens` | Max tokens per agent response | `4096` |
 | `jmeter.ai.agent.max.iterations` | Max reason-act iterations per request | `500` |
 | `jmeter.ai.agent.confirm.destructive` | Show confirmation dialog before destructive ops | `true` |
+| `jmeter.ai.typesafe.enabled` | Master switch for TypeSafe/Jev integrations | `false` |
+| `jmeter.ai.typesafe.agent.routing.enabled` | Use Jev to select a focused Agent Mode tool pack | `false` |
+| `jmeter.ai.typesafe.agent.routing.min.confidence` | Minimum confidence for using a focused pack; lower values use all tools | `0.75` |
+| `typesafe.api.key` | TypeSafe API key; required only when Jev routing is enabled | *(empty)* |
+| `typesafe.base.url` | TypeSafe API root | `https://api.typesafe.ai` |
+| `typesafe.model` | TypeSafe System One model | `jev-latest` |
+| `typesafe.timeout.seconds` | Routing request timeout | `15` |
 
 > 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
 
 ### Available Tools
 
-The agent has 18 tools at its disposal:
+The agent has 21 tools at its disposal. Jev Smart Routing can advertise a focused subset for one request, but all tools remain available through the standard fallback:
 
 **Read**
 

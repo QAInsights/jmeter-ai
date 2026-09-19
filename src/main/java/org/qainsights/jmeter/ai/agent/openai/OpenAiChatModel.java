@@ -46,7 +46,7 @@ public final class OpenAiChatModel implements ChatModel {
 
     private final CompletionService service;
     private final OpenAiToolAdapter adapter;
-    private final List<ToolSpec> specs;
+    private List<ToolSpec> specs;
     private final String systemPrompt;
     private final String model;
     private final long maxTokens;
@@ -114,6 +114,11 @@ public final class OpenAiChatModel implements ChatModel {
     public AssistantTurn start(String userMessage) {
         history.add(userMessage(userMessage));
         return send();
+    }
+
+    @Override
+    public void updateToolSpecs(List<ToolSpec> specs) {
+        this.specs = new ArrayList<>(specs);
     }
 
     @Override

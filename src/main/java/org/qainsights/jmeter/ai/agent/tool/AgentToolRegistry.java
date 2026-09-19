@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.agent.tool;
 
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
@@ -31,6 +32,14 @@ public final class AgentToolRegistry {
 
     /** Builds a registry wired to the live JMeter tree. */
     public static ToolRegistry createDefault() {
+        return createDefault(null);
+    }
+
+    /**
+     * Builds a registry wired to the live JMeter tree, with an optional sink for Jev
+     * failure-triage notices emitted by {@code get_test_results}.
+     */
+    public static ToolRegistry createDefault(java.util.function.Consumer<TriageNotice> triageNotice) {
         ToolRegistry registry = new ToolRegistry();
         for (Tool tool : new ReadToolHandlers().tools()) {
             registry.register(tool);
@@ -47,7 +56,7 @@ public final class AgentToolRegistry {
         registry.register(new ReorderElementHandler().tool());
         registry.register(new RunTestHandler().tool());
         registry.register(new StopTestHandler().tool());
-        registry.register(new GetTestResultsHandler().tool());
+        registry.register(new GetTestResultsHandler(triageNotice).tool());
         registry.register(new SavePlanHandler().tool());
         registry.register(new OpenPlanHandler().tool());
         registry.register(new FindCorrelationCandidatesHandler().tool());

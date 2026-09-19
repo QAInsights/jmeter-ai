@@ -1,9 +1,13 @@
 package org.qainsights.jmeter.ai.agent.tool.handlers;
 
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
+import org.qainsights.jmeter.ai.agent.FailureTriage;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunController;
@@ -39,17 +43,33 @@ public final class GetTestResultsHandler {
     private final Supplier<JMeterTreeNode> rootSupplier;
     private final TestRunController controller;
     private final TestResultsRunner runner;
+    private final Supplier<FailureTriage> triageSupplier;
+    private final Consumer<TriageNotice> triageNotice;
 
     /** Production constructor wiring the live JMeter tree, run controller and engine runner. */
     public GetTestResultsHandler() {
-        this(ReadToolHandlers.guiPackageTree()::getRoot, TestRunController.live(), TestResultsRunner.live());
+        this(null);
+    }
+
+    /** Production wiring plus the sink the run's {@code Jev Failure Triage} card consumes. */
+    public GetTestResultsHandler(Consumer<TriageNotice> triageNotice) {
+        this(ReadToolHandlers.guiPackageTree()::getRoot, TestRunController.live(), TestResultsRunner.live(),
+                AgentTriageConfig::createTriage, triageNotice);
     }
 
     public GetTestResultsHandler(Supplier<JMeterTreeNode> rootSupplier, TestRunController controller,
                                   TestResultsRunner runner) {
+        this(rootSupplier, controller, runner, null, null);
+    }
+
+    GetTestResultsHandler(Supplier<JMeterTreeNode> rootSupplier, TestRunController controller,
+                          TestResultsRunner runner, Supplier<FailureTriage> triageSupplier,
+                          Consumer<TriageNotice> triageNotice) {
         this.rootSupplier = rootSupplier;
         this.controller = controller;
         this.runner = runner;
+        this.triageSupplier = triageSupplier;
+        this.triageNotice = triageNotice;
     }
 
     public Tool tool() {
@@ -102,7 +122,31 @@ public final class GetTestResultsHandler {
             return ToolResult.error(ERR_EXECUTION_FAILED, "Could not run the test plan: " + e.getMessage());
         }
 
-        return ToolResult.ok(format(summary));
+        return ToolResult.ok(withTriage(summary));
+    }
+
+    /**
+     * Appends the Jev triage advisory to the formatted result and emits the card
+     * notice. Triage is additive only: disabled, no failures, or an unavailable
+     * provider all return the plain formatted result untouched.
+     */
+    private String withTriage(TestRunSummary summary) {
+        String text = format(summary);
+        if (summary.getFailureCount() == 0 || triageSupplier == null) {
+            return text;
+        }
+        FailureTriage triage = triageSupplier.get();
+        if (triage == null) {
+            return text;
+        }
+        FailureTriage.TriageOutcome outcome = triage.triage(summary.getFailures(), summary.getFailureCount());
+        if (outcome == null) {
+            return text;
+        }
+        if (triageNotice != null) {
+            triageNotice.accept(outcome.notice());
+        }
+        return text + "\n" + outcome.advisory();
     }
 
     private static long clampTimeout(Long requested) {

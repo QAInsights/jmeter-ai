@@ -19,7 +19,9 @@ import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jorphan.gui.JMeterUIDefaults;
+import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -1258,9 +1260,17 @@ public class AiChatPanel
 
     @Override
     public void appendToolActivity(String message) {
-        runOnEdt(() -> {
-            transcript.addToolActivity(message);
-        });
+        runOnEdt(() -> transcript.addToolActivity(message));
+    }
+
+    @Override
+    public void appendJevRoute(AgentRequestRouter.Notice notice, String modelId) {
+        runOnEdt(() -> transcript.addJevRoute(notice, modelId));
+    }
+
+    @Override
+    public void appendJevTriage(TriageNotice notice, String modelId) {
+        runOnEdt(() -> transcript.addJevTriage(notice, modelId));
     }
 
     /**

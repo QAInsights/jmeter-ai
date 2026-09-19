@@ -39,6 +39,14 @@ class JMeterAgentProviderWiringTest {
     }
 
     @Test
+    void providerResolverReturnsNullForUnsupportedServices() {
+        UnsupportedService service = new UnsupportedService();
+
+        assertNull(JMeterAgentProviderResolver.forService(service));
+        assertNull(JMeterAgentProviderResolver.chatModelFactoryFor(service));
+    }
+
+    @Test
     void constructor_nullChatModelFactory_isRejected() {
         assertThrows(IllegalArgumentException.class, () -> new JMeterAgent(null, 5, null));
     }

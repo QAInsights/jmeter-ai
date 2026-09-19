@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.agent.loop;
 
 import java.util.List;
 
+import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+
 /**
  * Provider-neutral, stateful conversation seam used by {@link AgentLoop}.
  * <p>
@@ -28,5 +30,14 @@ public interface ChatModel {
      */
     default String consumeLastReasoning() {
         return null;
+    }
+
+    /**
+     * Replaces the tool specs advertised to the provider on subsequent turns.
+     * Used by mid-run tool-set expansion ({@code expand_tools}); implementations
+     * must apply the new list to the next request they build. Default no-op for
+     * models whose tool set is fixed for the run.
+     */
+    default void updateToolSpecs(List<ToolSpec> specs) {
     }
 }

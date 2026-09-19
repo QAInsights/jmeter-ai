@@ -3,6 +3,8 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.Font;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,6 +83,39 @@ class TranscriptViewTest {
         view.addToolActivity("tool three");
         view.addUserMessage("next");
         assertEquals(2, view.getCardCount());
+    }
+
+    @Test
+    void jevRouteUsesDedicatedCardAndParticipatesInThemeAndClear() {
+        TranscriptView view = view();
+        AgentRequestRouter.Notice notice = new AgentRequestRouter.Notice(
+                AgentRequestRouter.Decision.focused(
+                        AgentRequestRouter.Route.RUN_DIAGNOSE, java.util.Map.of(), 0.9),
+                java.util.List.of("get_tree_state", "run_test"), 21);
+
+        view.addJevRoute(notice, "google:gemini");
+
+        assertEquals(1, view.getRouteCardCount());
+        assertTrue(view.getRouteCard(0).getHeaderText().contains("Jev"));
+        assertDoesNotThrow(view::refreshTheme);
+        view.clearTranscript();
+        assertEquals(0, view.getRouteCardCount());
+    }
+
+    @Test
+    void jevTriageUsesDedicatedCardAndParticipatesInThemeAndClear() {
+        TranscriptView view = view();
+        TriageNotice notice = new TriageNotice(2, 2, "TIMEOUT", java.util.List.of(
+                new TriageNotice.Row("Login POST", "TIMEOUT", 0.9),
+                new TriageNotice.Row("Search GET", "TIMEOUT", 0.8)));
+
+        view.addJevTriage(notice, "meta:muse");
+
+        assertEquals(1, view.getTriageCardCount());
+        assertTrue(view.getTriageCard(0).getHeaderText().contains("Jev Failure Triage"));
+        assertDoesNotThrow(view::refreshTheme);
+        view.clearTranscript();
+        assertEquals(0, view.getTriageCardCount());
     }
 
     @Test

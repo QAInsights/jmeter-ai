@@ -14,7 +14,6 @@ import org.qainsights.jmeter.ai.agent.claude.ClaudeToolAdapter;
 import org.qainsights.jmeter.ai.agent.cli.CliAgentChatModel;
 import org.qainsights.jmeter.ai.agent.google.GoogleChatModel;
 import org.qainsights.jmeter.ai.agent.google.GoogleToolAdapter;
-import org.qainsights.jmeter.ai.agent.jmeter.SwingToolConfirmationGate;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
@@ -42,9 +41,6 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
-import com.anthropic.client.AnthropicClient;
-import com.google.genai.Client;
-import com.openai.client.OpenAIClient;
 
 /**
  * Façade that wires the tool registry, executor, schema-grounded system prompt
@@ -76,6 +72,7 @@ public final class JMeterAgent {
     private final AgentChatModelFactory chatModelFactory;
     private final int maxIterations;
     private final ToolConfirmationGate confirmationGate;
+    private final AgentRequestRouter requestRouter;
 
     public JMeterAgent(ClaudeChatModel.MessageService service, String model, long maxTokens, int maxIterations) {
         this(service, model, maxTokens, maxIterations, null);
@@ -97,12 +94,18 @@ public final class JMeterAgent {
      */
     public JMeterAgent(AgentChatModelFactory chatModelFactory, int maxIterations,
                        ToolConfirmationGate confirmationGate) {
+        this(chatModelFactory, maxIterations, confirmationGate, AgentRoutingConfig.createRouter());
+    }
+
+    public JMeterAgent(AgentChatModelFactory chatModelFactory, int maxIterations,
+                       ToolConfirmationGate confirmationGate, AgentRequestRouter requestRouter) {
         if (chatModelFactory == null) {
             throw new IllegalArgumentException("chatModelFactory must not be null");
         }
         this.chatModelFactory = chatModelFactory;
         this.maxIterations = maxIterations;
         this.confirmationGate = confirmationGate;
+        this.requestRouter = requestRouter;
     }
 
     /** Builds a factory that wires the Anthropic {@link ClaudeChatModel} for each run. */
@@ -177,7 +180,7 @@ public final class JMeterAgent {
      * are intentionally omitted because the models.dev {@code openai:} catalog does not
      * know these providers' model ids, so no {@code reasoning_effort} is sent.
      */
-    private static AgentChatModelFactory openAiCompatibleFactory(OpenAIClient client, String model,
+    static AgentChatModelFactory openAiCompatibleFactory(com.openai.client.OpenAIClient client, String model,
                                                                   long maxTokens) {
         return openAiFactory(params -> client.chat().completions().create(params), model, maxTokens, null);
     }
@@ -237,14 +240,7 @@ public final class JMeterAgent {
      * unless {@code jmeter.ai.agent.confirm.destructive} is set to {@code false}.
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        AnthropicClient client = claude.getClient();
-        ClaudeChatModel.MessageService service = params -> client.messages().create(params);
-        boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
-        ToolConfirmationGate gate = confirmDestructive ? new SwingToolConfirmationGate() : null;
-        return new JMeterAgent(claudeFactory(service, claude.getCurrentModel(), maxTokens,
-                claude.getReasoningSettings()), maxIterations, gate);
+        return JMeterAgentProviderResolver.forClaude(claude);
     }
 
     /**
@@ -253,12 +249,7 @@ public final class JMeterAgent {
      * {@link #forClaude(ClaudeService)}.
      */
     public static JMeterAgent forOpenAi(OpenAiService openAi) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        OpenAIClient client = openAi.getClient();
-        OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
-        return new JMeterAgent(openAiFactory(service, openAi.getCurrentModel(), maxTokens,
-                openAi.getReasoningSettings()), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forOpenAi(openAi);
     }
 
     /**
@@ -266,27 +257,21 @@ public final class JMeterAgent {
      * OpenAI-compatible or Anthropic wire format.
      */
     public static JMeterAgent forDeepseek(DeepseekAiService deepseek) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        return new JMeterAgent(factoryFor(deepseek, maxTokens), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forDeepseek(deepseek);
     }
 
     /**
      * Wires an agent against an existing Grok service using its OpenAI-compatible API.
      */
     public static JMeterAgent forGrok(GrokAiService grok) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        return new JMeterAgent(factoryFor(grok, maxTokens), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forGrok(grok);
     }
 
     /**
      * Wires an agent against an existing Meta Muse service using its OpenAI-compatible API.
      */
     public static JMeterAgent forMetaMuse(MetaMuseAiService metaMuse) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        return new JMeterAgent(factoryFor(metaMuse, maxTokens), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forMetaMuse(metaMuse);
     }
 
     /**
@@ -295,13 +280,7 @@ public final class JMeterAgent {
      * {@link #forClaude(ClaudeService)}.
      */
     public static JMeterAgent forGoogle(GoogleAiService google) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        int maxIterations = maxIterations();
-        Client client = google.getClient();
-        GoogleChatModel.GenerateService service = (model, contents, config) ->
-                client.models.generateContent(model, contents, config);
-        return new JMeterAgent(googleFactory(service, google.getCurrentModel(), maxTokens,
-                google.getReasoningSettings()), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forGoogle(google);
     }
 
     /**
@@ -310,28 +289,7 @@ public final class JMeterAgent {
      * (the caller then falls back to the plain, non-agentic chat path).
      */
     public static JMeterAgent forService(AiService service) {
-        if (service instanceof ClaudeService) {
-            return forClaude((ClaudeService) service);
-        }
-        if (service instanceof OpenAiService) {
-            return forOpenAi((OpenAiService) service);
-        }
-        if (service instanceof GoogleAiService) {
-            return forGoogle((GoogleAiService) service);
-        }
-        if (service instanceof DeepseekAiService) {
-            return forDeepseek((DeepseekAiService) service);
-        }
-        if (service instanceof GrokAiService) {
-            return forGrok((GrokAiService) service);
-        }
-        if (service instanceof MetaMuseAiService) {
-            return forMetaMuse((MetaMuseAiService) service);
-        }
-        if (service instanceof CliSubscriptionAiService) {
-            return forCli((CliSubscriptionAiService) service);
-        }
-        return null;
+        return JMeterAgentProviderResolver.forService(service);
     }
 
     /**
@@ -340,8 +298,7 @@ public final class JMeterAgent {
      * {@link #forClaude(ClaudeService)}.
      */
     public static JMeterAgent forCli(CliSubscriptionAiService service) {
-        int maxIterations = maxIterations();
-        return new JMeterAgent(cliFactory(service.getProvider()), maxIterations, destructiveGate());
+        return JMeterAgentProviderResolver.forCli(service);
     }
 
     /**
@@ -353,69 +310,7 @@ public final class JMeterAgent {
      * and the token/model settings live in exactly one place.
      */
     public static AgentChatModelFactory chatModelFactoryFor(AiService service) {
-        long maxTokens = parseLong(AiConfig.getProperty(MAX_TOKENS_KEY, "4096"), 4096L);
-        if (service instanceof ClaudeService) {
-            ClaudeService claude = (ClaudeService) service;
-            AnthropicClient client = claude.getClient();
-            ClaudeChatModel.MessageService messages = params -> client.messages().create(params);
-            return claudeFactory(messages, claude.getCurrentModel(), maxTokens, claude.getReasoningSettings());
-        }
-        if (service instanceof OpenAiService) {
-            OpenAiService openAi = (OpenAiService) service;
-            OpenAIClient client = openAi.getClient();
-            OpenAiChatModel.CompletionService completions =
-                    params -> client.chat().completions().create(params);
-            return openAiFactory(completions, openAi.getCurrentModel(), maxTokens, openAi.getReasoningSettings());
-        }
-        if (service instanceof GoogleAiService) {
-            GoogleAiService google = (GoogleAiService) service;
-            Client client = google.getClient();
-            GoogleChatModel.GenerateService generate = (model, contents, config) ->
-                    client.models.generateContent(model, contents, config);
-            return googleFactory(generate, google.getCurrentModel(), maxTokens, google.getReasoningSettings());
-        }
-        if (service instanceof DeepseekAiService) {
-            return factoryFor((DeepseekAiService) service, maxTokens);
-        }
-        if (service instanceof GrokAiService) {
-            return factoryFor((GrokAiService) service, maxTokens);
-        }
-        if (service instanceof MetaMuseAiService) {
-            return factoryFor((MetaMuseAiService) service, maxTokens);
-        }
-        if (service instanceof CliSubscriptionAiService) {
-            return cliFactory(((CliSubscriptionAiService) service).getProvider());
-        }
-        return null;
-    }
-
-    private static AgentChatModelFactory factoryFor(DeepseekAiService deepseek, long maxTokens) {
-        if (deepseek.isAnthropicFormat()) {
-            AnthropicClient client = deepseek.getAnthropicClient();
-            return claudeFactory(params -> client.messages().create(params),
-                    deepseek.getCurrentModel(), maxTokens, null);
-        }
-        return openAiCompatibleFactory(deepseek.getClient(), deepseek.getCurrentModel(), maxTokens);
-    }
-
-    private static AgentChatModelFactory factoryFor(GrokAiService grok, long maxTokens) {
-        return openAiCompatibleFactory(grok.getClient(), grok.getCurrentModel(), maxTokens);
-    }
-
-    /**
-     * Meta Muse agent runs use Chat Completions through {@link OpenAiChatModel}, rather
-     * than the Responses API used by plain chat. Muse's reasoning summary is therefore
-     * unavailable in agent runs and the Thoughts card stays empty, while tool calling
-     * retains the same OpenAI function-tool shape.
-     */
-    private static AgentChatModelFactory factoryFor(MetaMuseAiService metaMuse, long maxTokens) {
-        return openAiCompatibleFactory(metaMuse.getClient(), metaMuse.getCurrentModel(), maxTokens);
-    }
-
-    /** The confirmation gate for destructive tools, or {@code null} when disabled by config. */
-    private static ToolConfirmationGate destructiveGate() {
-        boolean confirmDestructive = Boolean.parseBoolean(AiConfig.getProperty(CONFIRM_DESTRUCTIVE_KEY, "true"));
-        return confirmDestructive ? new SwingToolConfirmationGate() : null;
+        return JMeterAgentProviderResolver.chatModelFactoryFor(service);
     }
 
     /**
@@ -461,30 +356,66 @@ public final class JMeterAgent {
 
     /**
      * Same as {@link #run(String, List, Consumer, Consumer)}, additionally forwarding
-     * each turn's thinking text (extended thinking) to {@code reasoning}, so the UI
-     * can render it in a collapsed thoughts card per run.
-     *
-     * @param reasoning receives each turn's thinking text (may be null)
+     * each turn's thinking text to {@code reasoning} for the collapsed thoughts card.
      */
     public AgentLoop.AgentResult run(String userMessage, List<String> priorConversationTurns, Consumer<String> progress,
                                       Consumer<AssistantTurn.ToolCall> onToolCallStarted, Consumer<String> reasoning) {
-        maybeWarnAboutUndoHistory(progress);
-        ToolRegistry registry = AgentToolRegistry.createDefault();
+        return run(userMessage, userMessage, priorConversationTurns,
+                new AgentRunListeners(progress, onToolCallStarted, reasoning, null, null));
+    }
+
+    public AgentLoop.AgentResult run(String userMessage, String routingMessage,
+                                      List<String> priorConversationTurns, Consumer<String> progress,
+                                      Consumer<AssistantTurn.ToolCall> onToolCallStarted, Consumer<String> reasoning,
+                                      Consumer<AgentRequestRouter.Notice> routingNotice) {
+        return run(userMessage, routingMessage, priorConversationTurns,
+                new AgentRunListeners(progress, onToolCallStarted, reasoning, routingNotice, null));
+    }
+
+    public AgentLoop.AgentResult run(String userMessage, String routingMessage,
+                                      List<String> priorConversationTurns, AgentRunListeners listeners) {
+        AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
+        ToolRegistry fullRegistry = AgentToolRegistry.createDefault(sinks.triageNotice());
+        AgentRequestRouter.Decision decision = route(routingMessage);
+        ToolRegistry registry = AgentToolPacks.select(fullRegistry, decision);
+        AgentToolExpander expander = AgentToolExpander.registerIfEnabled(requestRouter, routingMessage,
+                fullRegistry, registry, decision, sinks.routingNotice());
+        List<ToolSpec> specs = registry.getSpecs();
+        if (decision != null && sinks.routingNotice() != null) {
+            List<String> toolNames = specs.stream().map(ToolSpec::getName)
+                    .filter(name -> !ExpandToolsTool.EXPAND_TOOLS.equals(name)).toList();
+            sinks.routingNotice().accept(new AgentRequestRouter.Notice(decision, toolNames, fullRegistry.size()));
+        }
+        maybeWarnAboutUndoHistory(sinks.progress());
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
         List<String> seedTurns = ConversationSeed.normalize(priorConversationTurns, MAX_HISTORY_TURN_PAIRS);
-        List<ToolSpec> specs = registry.getSpecs();
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
+        if (expander != null) {
+            expander.bindSpecSink(chat::updateToolSpecs);
+        }
         return new AgentLoop(chat, executor, maxIterations)
-                .run(userMessage, progress, onToolCallStarted, reasoning);
+                .run(userMessage, sinks.progress(), sinks.toolCallStarted(), sinks.reasoning());
     }
 
-    private static int maxIterations() {
+    private AgentRequestRouter.Decision route(String userMessage) {
+        if (requestRouter == null) {
+            return null;
+        }
+        try {
+            AgentRequestRouter.Decision decision = requestRouter.route(userMessage);
+            return decision == null ? AgentRequestRouter.Decision.unavailable() : decision;
+        } catch (RuntimeException e) {
+            return AgentRequestRouter.Decision.unavailable();
+        }
+    }
+
+    static int maxIterations() {
         return (int) parseLong(AiConfig.getProperty(MAX_ITERATIONS_KEY,
                 String.valueOf(DEFAULT_MAX_ITERATIONS)), DEFAULT_MAX_ITERATIONS);
     }
 
-    private static long parseLong(String value, long fallback) {
+    static long parseLong(String value, long fallback) {
         try {
             return Long.parseLong(value.trim());
         } catch (RuntimeException e) {

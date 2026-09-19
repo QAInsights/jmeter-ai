@@ -9,10 +9,10 @@ import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
-import javax.swing.Timer;
+import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
+import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
@@ -32,6 +32,8 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     private final MessageProcessor messageProcessor = new MessageProcessor();
     private final List<MessageCard> cards = new ArrayList<>();
+    private final List<JevRouteCard> routeCards = new ArrayList<>();
+    private final List<JevTriageCard> triageCards = new ArrayList<>();
     private final Component glue = Box.createVerticalGlue();
 
     private Font baseFont;
@@ -176,6 +178,25 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         relayout(activityGroup);
     }
 
+    void addJevRoute(AgentRequestRouter.Notice notice, String modelId) {
+        dismissWelcome();
+        finishActivityIfRunning();
+        JevRouteCard card = new JevRouteCard(notice, modelId);
+        routeCards.add(card);
+        insertBeforeGlue(card);
+        relayout(card);
+    }
+
+    /** Appends a Jev failure-triage card after a run's tool activity finishes. */
+    void addJevTriage(TriageNotice notice, String modelId) {
+        dismissWelcome();
+        finishActivityIfRunning();
+        JevTriageCard card = new JevTriageCard(notice, modelId);
+        triageCards.add(card);
+        insertBeforeGlue(card);
+        relayout(card);
+    }
+
     private void finishActivityIfRunning() {
         if (activityGroup != null && activityGroup.isRunning()) {
             activityGroup.finish();
@@ -264,6 +285,8 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         streamingCard = null;
         welcomePanel = null;
         cards.clear();
+        routeCards.clear();
+        triageCards.clear();
         removeAll();
         add(glue);
         revalidate();
@@ -297,6 +320,12 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         }
         if (thinkingRow != null) {
             thinkingRow.applyTheme();
+        }
+        for (JevRouteCard card : routeCards) {
+            card.applyTheme();
+        }
+        for (JevTriageCard card : triageCards) {
+            card.applyTheme();
         }
     }
 
@@ -354,6 +383,22 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         return thinkingCard;
     }
 
+    int getRouteCardCount() {
+        return routeCards.size();
+    }
+
+    JevRouteCard getRouteCard(int index) {
+        return routeCards.get(index);
+    }
+
+    int getTriageCardCount() {
+        return triageCards.size();
+    }
+
+    JevTriageCard getTriageCard(int index) {
+        return triageCards.get(index);
+    }
+
     // --- Internals ---------------------------------------------------------------
 
     private void addCard(MessageCard card) {
@@ -385,41 +430,5 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
             );
         }
         c.revalidate();
-    }
-
-    /** Small animated "thinking" row shown while the AI works. */
-    private static final class ThinkingRow extends JPanel {
-        private final JLabel label;
-        private final Timer timer;
-        private int dots = 0;
-
-        ThinkingRow() {
-            super(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
-            setOpaque(false);
-            setAlignmentX(Component.LEFT_ALIGNMENT);
-            label = new JLabel("Feather Wand is thinking");
-            label.setFont(UiTokens.caption(label.getFont()).deriveFont(Font.ITALIC));
-            label.setForeground(ThemeColors.accent());
-            label.setBorder(BorderFactory.createEmptyBorder(
-                    UiTokens.SPACE_2, UiTokens.SPACE_3,
-                    UiTokens.SPACE_2, UiTokens.SPACE_3));
-            add(label);
-            timer = new Timer(400, e -> {
-                dots = (dots + 1) % 4;
-                label.setText(
-                    "Feather Wand is thinking" + ".".repeat(dots)
-                );
-            });
-            timer.start();
-        }
-
-        void applyTheme() {
-            label.setForeground(ThemeColors.accent());
-            repaint();
-        }
-
-        void dispose() {
-            timer.stop();
-        }
     }
 }

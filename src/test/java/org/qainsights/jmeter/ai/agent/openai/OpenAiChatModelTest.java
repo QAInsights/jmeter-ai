@@ -227,6 +227,31 @@ class OpenAiChatModelTest {
     }
 
     @Test
+    void updateToolSpecsChangesToolsAdvertisedOnNextRequest() {
+        Deque<ChatCompletion> responses = new ArrayDeque<>();
+        responses.add(toolCompletion("call_1", "get_tree_state"));
+        responses.add(textCompletion("done"));
+        List<ChatCompletionCreateParams> captured = new ArrayList<>();
+        OpenAiChatModel.CompletionService service = params -> {
+            captured.add(params);
+            return responses.removeFirst();
+        };
+
+        OpenAiChatModel chat = model(service);
+        chat.start("inspect");
+        chat.updateToolSpecs(List.of(
+                ToolSpec.builder("run_test").description("Runs the plan").build()));
+        chat.next(Collections.singletonList(
+                new ToolOutcome("call_1", "get_tree_state", "tree", false)));
+
+        assertTrue(captured.get(0).tools().orElse(Collections.emptyList()).isEmpty());
+        List<com.openai.models.chat.completions.ChatCompletionTool> tools =
+                captured.get(1).tools().orElse(Collections.emptyList());
+        assertEquals(1, tools.size());
+        assertEquals("run_test", tools.get(0).asFunction().function().name());
+    }
+
+    @Test
     void send_noChoices_throwsInsteadOfReturningAnEmptyTurn() {
         OpenAiChatModel.CompletionService service = params -> emptyChoicesCompletion();
 

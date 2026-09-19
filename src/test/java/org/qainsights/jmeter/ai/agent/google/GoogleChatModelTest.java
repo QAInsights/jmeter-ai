@@ -168,6 +168,33 @@ class GoogleChatModelTest {
         assertTrue(captured.get(0).tools().orElse(Collections.emptyList()).isEmpty());
     }
 
+    @Test
+    void updateToolSpecsChangesDeclarationsOnNextRequest() {
+        Deque<GenerateContentResponse> responses = new ArrayDeque<>();
+        responses.add(toolResponse("get_tree_state"));
+        responses.add(textResponse("done"));
+        List<GenerateContentConfig> captured = new ArrayList<>();
+        GoogleChatModel.GenerateService service = (model, contents, config) -> {
+            captured.add(config);
+            return responses.removeFirst();
+        };
+
+        GoogleChatModel model = new GoogleChatModel(service, new GoogleToolAdapter(),
+                Collections.<ToolSpec>emptyList(), "system", "gemini-2.5-flash", 1024);
+        model.start("inspect");
+        model.updateToolSpecs(List.of(
+                ToolSpec.builder("run_test").description("Runs the plan").build()));
+        model.next(Collections.singletonList(
+                new ToolOutcome("call_0", "get_tree_state", "tree", false)));
+
+        assertTrue(captured.get(0).tools().orElse(Collections.emptyList()).isEmpty());
+        List<com.google.genai.types.FunctionDeclaration> declarations =
+                captured.get(1).tools().orElseThrow().get(0)
+                        .functionDeclarations().orElseThrow();
+        assertEquals(1, declarations.size());
+        assertEquals("run_test", declarations.get(0).name().orElseThrow());
+    }
+
     private static GenerateContentResponse fromJson(Map<String, Object> json) {
         try {
             return GenerateContentResponse.fromJson(JSON.writeValueAsString(json));
