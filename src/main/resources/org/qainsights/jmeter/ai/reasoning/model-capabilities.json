@@ -1,6 +1,506 @@
 {
   "source" : "models.dev api.json",
   "providers" : {
+    "anthropic" : {
+      "claude-fable-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "claude-fable-5-1" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 10.0,
+        "costOut" : 50.0
+      },
+      "claude-haiku-4-5" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
+      "claude-haiku-4-5-20251001" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
+      "claude-opus-4-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-5-20251101" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "max" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-7" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-4-8" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-opus-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 5.0,
+        "costOut" : 25.0
+      },
+      "claude-sonnet-4-5" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-4-5-20250929" : {
+        "reasoning" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-4-6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "max" ],
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "claude-sonnet-5" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
+      }
+    },
+    "xai" : {
+      "grok-4.20-0309-non-reasoning" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.20-0309-reasoning" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.20-multi-agent-0309" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.3" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 1.25,
+        "costOut" : 2.5
+      },
+      "grok-4.5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-4.6" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
+      "grok-build-0.1" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 256000,
+        "costIn" : 1.0,
+        "costOut" : 2.0
+      },
+      "grok-imagine-image" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 16000
+      },
+      "grok-imagine-video" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
+      },
+      "grok-imagine-video-1.5" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1024
+      }
+    },
+    "google" : {
+      "deep-research-max-preview-04-2026" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "deep-research-preview-04-2026" : {
+        "reasoning" : true,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "gemini-2.5-computer-use-preview-10-2025" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 1.25,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-flash" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 0,
+        "budgetMax" : 24576,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-2.5-flash-image" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 32768,
+        "costIn" : 0.3,
+        "costOut" : 30.0
+      },
+      "gemini-2.5-flash-lite" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 512,
+        "budgetMax" : 24576,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.1,
+        "costOut" : 0.4
+      },
+      "gemini-2.5-flash-preview-tts" : {
+        "contextWindow" : 8192,
+        "costIn" : 0.5,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-pro" : {
+        "reasoning" : true,
+        "budgetMin" : 128,
+        "budgetMax" : 32768,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 1.25,
+        "costOut" : 10.0
+      },
+      "gemini-2.5-pro-preview-tts" : {
+        "contextWindow" : 8192,
+        "costIn" : 1.0,
+        "costOut" : 20.0
+      },
+      "gemini-3-flash-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.5,
+        "costOut" : 3.0
+      },
+      "gemini-3-pro-image" : {
+        "reasoning" : true,
+        "effort" : [ "low", "high" ],
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 120.0
+      },
+      "gemini-3-pro-image-preview" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 2.0,
+        "costOut" : 120.0
+      },
+      "gemini-3.1-flash-image" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.5,
+        "costOut" : 60.0
+      },
+      "gemini-3.1-flash-image-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.5,
+        "costOut" : 60.0
+      },
+      "gemini-3.1-flash-lite" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.25,
+        "costOut" : 1.5
+      },
+      "gemini-3.1-flash-lite-image" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "high" ],
+        "vision" : true,
+        "contextWindow" : 65536,
+        "costIn" : 0.25,
+        "costOut" : 30.0
+      },
+      "gemini-3.1-flash-lite-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.25,
+        "costOut" : 1.5
+      },
+      "gemini-3.1-flash-live-preview" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 0.75,
+        "costOut" : 4.5
+      },
+      "gemini-3.1-flash-tts-preview" : {
+        "reasoning" : true,
+        "contextWindow" : 8192,
+        "costIn" : 1.0,
+        "costOut" : 20.0
+      },
+      "gemini-3.1-pro-preview" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "gemini-3.1-pro-preview-customtools" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 2.0,
+        "costOut" : 12.0
+      },
+      "gemini-3.5-flash" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 1.5,
+        "costOut" : 9.0
+      },
+      "gemini-3.5-flash-lite" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-3.5-live-translate-preview" : {
+        "contextWindow" : 16384,
+        "costIn" : 3.5,
+        "costOut" : 21.0
+      },
+      "gemini-3.6-flash" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-3.7-flash" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-3.8-flash" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-embedding-001" : {
+        "contextWindow" : 2048,
+        "costIn" : 0.15
+      },
+      "gemini-embedding-2" : {
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 8192,
+        "costIn" : 0.2
+      },
+      "gemini-flash-latest" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.75,
+        "costOut" : 3.75
+      },
+      "gemini-flash-lite-latest" : {
+        "reasoning" : true,
+        "effort" : [ "minimal", "low", "medium", "high" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 0.3,
+        "costOut" : 2.5
+      },
+      "gemini-omni-flash-preview" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 131072,
+        "costIn" : 1.5,
+        "costOut" : 17.5
+      },
+      "gemma-4-26b-a4b-it" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "vision" : true,
+        "contextWindow" : 262144
+      },
+      "gemma-4-31b-it" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "vision" : true,
+        "contextWindow" : 262144
+      },
+      "lyria-3-clip-preview" : {
+        "vision" : true,
+        "contextWindow" : 1048576
+      },
+      "lyria-3-pro-preview" : {
+        "vision" : true,
+        "contextWindow" : 1048576
+      },
+      "veo-3.1-fast-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
+      },
+      "veo-3.1-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
+      },
+      "veo-3.1-lite-generate-preview" : {
+        "vision" : true,
+        "contextWindow" : 480
+      }
+    },
     "amazon-bedrock" : {
       "amazon.nova-2-lite-v1:0" : {
         "reasoning" : true,
@@ -51,6 +551,7 @@
       },
       "anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -60,6 +561,7 @@
       },
       "anthropic.claude-opus-4-1-20250805-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -69,6 +571,7 @@
       },
       "anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -79,16 +582,18 @@
       },
       "anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -98,6 +603,7 @@
       },
       "anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -107,6 +613,7 @@
       },
       "anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -116,6 +623,7 @@
       },
       "anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -125,13 +633,14 @@
       },
       "anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -162,27 +671,40 @@
         "costIn" : 0.84,
         "costOut" : 3.36
       },
-      "au.anthropic.claude-haiku-4-5-20251001-v1:0" : {
+      "apac.anthropic.claude-sonnet-4-20250514-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "au.anthropic.claude-haiku-4-5-20251001-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "au.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 16.5,
-        "costOut" : 82.5
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "au.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -192,33 +714,37 @@
       },
       "au.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "au.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "au.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "au.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -234,8 +760,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "ca.amazon.nova-lite-v1:0" : {
         "vision" : true,
@@ -304,6 +830,7 @@
       },
       "eu.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -313,6 +840,7 @@
       },
       "eu.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -323,6 +851,7 @@
       },
       "eu.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -333,6 +862,7 @@
       },
       "eu.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -342,6 +872,7 @@
       },
       "eu.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -351,6 +882,7 @@
       },
       "eu.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -358,8 +890,19 @@
         "costIn" : 5.5,
         "costOut" : 27.5
       },
+      "eu.anthropic.claude-sonnet-4-20250514-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
       "eu.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -369,6 +912,7 @@
       },
       "eu.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -423,6 +967,7 @@
       },
       "global.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -432,6 +977,7 @@
       },
       "global.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -442,6 +988,7 @@
       },
       "global.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -452,6 +999,7 @@
       },
       "global.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -461,6 +1009,7 @@
       },
       "global.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -470,6 +1019,7 @@
       },
       "global.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -477,8 +1027,19 @@
         "costIn" : 5.0,
         "costOut" : 25.0
       },
+      "global.anthropic.claude-sonnet-4-20250514-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
       "global.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -488,6 +1049,7 @@
       },
       "global.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -510,7 +1072,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 0.2,
         "costOut" : 1.2
@@ -519,7 +1080,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 4.0,
         "costOut" : 20.0
@@ -528,7 +1088,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 2.0,
         "costOut" : 12.0
@@ -537,7 +1096,6 @@
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 10.0,
         "costOut" : 50.0
@@ -622,58 +1180,64 @@
       },
       "jp.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "jp.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "jp.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "jp.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "jp.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "jp.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "jp.anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -682,8 +1246,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "meta.llama3-1-70b-instruct-v1:0" : {
         "contextWindow" : 128000,
@@ -1009,8 +1573,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 10.0,
-        "costOut" : 50.0
+        "costIn" : 11.0,
+        "costOut" : 55.0
       },
       "us.anthropic.claude-fable-5-1" : {
         "reasoning" : true,
@@ -1023,15 +1587,17 @@
       },
       "us.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "us.anthropic.claude-opus-4-1-20250805-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -1041,53 +1607,59 @@
       },
       "us.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
-      "us.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
+      "us.anthropic.claude-sonnet-4-20250514-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -1095,15 +1667,26 @@
         "costIn" : 3.0,
         "costOut" : 15.0
       },
+      "us.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.3,
+        "costOut" : 16.5
+      },
       "us.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "us.anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -1112,8 +1695,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "us.deepseek.r1-v1:0" : {
         "reasoning" : true,
@@ -1158,7 +1741,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 0.22,
         "costOut" : 1.32
@@ -1167,7 +1749,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 4.4,
         "costOut" : 22.0
@@ -1176,7 +1757,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 2.2,
         "costOut" : 13.2
@@ -1185,7 +1765,6 @@
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 11.0,
         "costOut" : 55.0
@@ -1682,516 +2261,6 @@
         "contextWindow" : 1000000,
         "costIn" : 0.435,
         "costOut" : 0.87
-      }
-    },
-    "anthropic" : {
-      "claude-fable-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 10.0,
-        "costOut" : 50.0
-      },
-      "claude-fable-5-1" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 10.0,
-        "costOut" : 50.0
-      },
-      "claude-haiku-4-5" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
-      },
-      "claude-haiku-4-5-20251001" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
-      },
-      "claude-opus-4-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-5-20251101" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "max" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-7" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-4-8" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-opus-5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
-      },
-      "claude-sonnet-4-5" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-4-5-20250929" : {
-        "reasoning" : true,
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-4-6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "max" ],
-        "budgetMin" : 1024,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
-      },
-      "claude-sonnet-5" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
-      }
-    },
-    "xai" : {
-      "grok-4.20-0309-non-reasoning" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.20-0309-reasoning" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.20-multi-agent-0309" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.3" : {
-        "reasoning" : true,
-        "effort" : [ "none", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1000000,
-        "costIn" : 1.25,
-        "costOut" : 2.5
-      },
-      "grok-4.5" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-4.6" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high", "xhigh" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 500000,
-        "costIn" : 2.0,
-        "costOut" : 6.0
-      },
-      "grok-build-0.1" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 256000,
-        "costIn" : 1.0,
-        "costOut" : 2.0
-      },
-      "grok-imagine-image" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 16000
-      },
-      "grok-imagine-image-2.0" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 64000
-      },
-      "grok-imagine-image-quality" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 16000
-      },
-      "grok-imagine-video" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
-      },
-      "grok-imagine-video-1.5" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1024
-      }
-    },
-    "google" : {
-      "deep-research-max-preview-04-2026" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "deep-research-preview-04-2026" : {
-        "reasoning" : true,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "gemini-2.5-computer-use-preview-10-2025" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 1.25,
-        "costOut" : 10.0
-      },
-      "gemini-2.5-flash" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 0,
-        "budgetMax" : 24576,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
-      },
-      "gemini-2.5-flash-image" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 32768,
-        "costIn" : 0.3,
-        "costOut" : 30.0
-      },
-      "gemini-2.5-flash-lite" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "budgetMin" : 512,
-        "budgetMax" : 24576,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.1,
-        "costOut" : 0.4
-      },
-      "gemini-2.5-flash-preview-tts" : {
-        "contextWindow" : 8192,
-        "costIn" : 0.5,
-        "costOut" : 10.0
-      },
-      "gemini-2.5-pro" : {
-        "reasoning" : true,
-        "budgetMin" : 128,
-        "budgetMax" : 32768,
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 1.25,
-        "costOut" : 10.0
-      },
-      "gemini-2.5-pro-preview-tts" : {
-        "contextWindow" : 8192,
-        "costIn" : 1.0,
-        "costOut" : 20.0
-      },
-      "gemini-3-flash-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.5,
-        "costOut" : 3.0
-      },
-      "gemini-3-pro-image" : {
-        "reasoning" : true,
-        "effort" : [ "low", "high" ],
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 120.0
-      },
-      "gemini-3-pro-image-preview" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 2.0,
-        "costOut" : 120.0
-      },
-      "gemini-3.1-flash-image" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.5,
-        "costOut" : 60.0
-      },
-      "gemini-3.1-flash-image-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.5,
-        "costOut" : 60.0
-      },
-      "gemini-3.1-flash-lite" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.25,
-        "costOut" : 1.5
-      },
-      "gemini-3.1-flash-lite-image" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "high" ],
-        "vision" : true,
-        "contextWindow" : 65536,
-        "costIn" : 0.25,
-        "costOut" : 30.0
-      },
-      "gemini-3.1-flash-lite-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.25,
-        "costOut" : 1.5
-      },
-      "gemini-3.1-flash-live-preview" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 0.75,
-        "costOut" : 4.5
-      },
-      "gemini-3.1-flash-tts-preview" : {
-        "reasoning" : true,
-        "contextWindow" : 8192,
-        "costIn" : 1.0,
-        "costOut" : 20.0
-      },
-      "gemini-3.1-pro-preview" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "gemini-3.1-pro-preview-customtools" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 2.0,
-        "costOut" : 12.0
-      },
-      "gemini-3.5-flash" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 1.5,
-        "costOut" : 9.0
-      },
-      "gemini-3.5-flash-lite" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
-      },
-      "gemini-3.5-live-translate-preview" : {
-        "contextWindow" : 16384,
-        "costIn" : 3.5,
-        "costOut" : 21.0
-      },
-      "gemini-3.6-flash" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-3.7-flash" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-3.8-flash" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-embedding-001" : {
-        "contextWindow" : 2048,
-        "costIn" : 0.15
-      },
-      "gemini-embedding-2" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 8192,
-        "costIn" : 0.2
-      },
-      "gemini-flash-latest" : {
-        "reasoning" : true,
-        "effort" : [ "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.75,
-        "costOut" : 3.75
-      },
-      "gemini-flash-lite-latest" : {
-        "reasoning" : true,
-        "effort" : [ "minimal", "low", "medium", "high" ],
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 1048576,
-        "costIn" : 0.3,
-        "costOut" : 2.5
-      },
-      "gemini-omni-flash-preview" : {
-        "reasoning" : true,
-        "vision" : true,
-        "contextWindow" : 131072,
-        "costIn" : 1.5,
-        "costOut" : 17.5
-      },
-      "gemma-4-26b-a4b-it" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "vision" : true,
-        "contextWindow" : 262144
-      },
-      "gemma-4-31b-it" : {
-        "reasoning" : true,
-        "toggle" : true,
-        "vision" : true,
-        "contextWindow" : 262144
-      },
-      "lyria-3-clip-preview" : {
-        "vision" : true,
-        "contextWindow" : 1048576
-      },
-      "lyria-3-pro-preview" : {
-        "vision" : true,
-        "contextWindow" : 1048576
-      },
-      "veo-3.1-fast-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
-      },
-      "veo-3.1-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
-      },
-      "veo-3.1-lite-generate-preview" : {
-        "vision" : true,
-        "contextWindow" : 480
       }
     }
   }
