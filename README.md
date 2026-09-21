@@ -16,6 +16,8 @@
 </div>
 
 > 🪄 **Why "Feather Wand"?** My kids named it after a *Bluey* episode, where a simple feather becomes a magical wand that turns the ordinary into something special. That's exactly what this plugin does for your JMeter workflow.
+  
+> 🤩 Show off your project in this [Feather Wand showcase](https://github.com/QAInsights/featherwand-showcase).  
 
 <div align="center">
 
