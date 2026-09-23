@@ -26,6 +26,11 @@ public class WrapCommandHandler {
     // Store the undone operations for redo functionality
     private static List<WrapOperation> lastUndoneOperation = new ArrayList<>();
 
+    static void clearHistory() {
+        lastWrapOperation.clear();
+        lastUndoneOperation.clear();
+    }
+
     /**
      * Processes the @wrap command, checking if a Thread Group is selected and grouping
      * HTTP request samplers under Transaction Controllers.
@@ -140,7 +145,7 @@ public class WrapCommandHandler {
      * @param samplers The list of sampler nodes to group
      * @return A map of group keys to lists of sampler nodes
      */
-    private Map<String, List<JMeterTreeNode>> groupSamplersBySimilarity(List<JMeterTreeNode> samplers) {
+    Map<String, List<JMeterTreeNode>> groupSamplersBySimilarity(List<JMeterTreeNode> samplers) {
         Map<String, List<JMeterTreeNode>> samplerGroups = new HashMap<>();
         
         log.info("Grouping {} samplers by similarity", samplers.size());
@@ -211,7 +216,7 @@ public class WrapCommandHandler {
      * @param name The name to simplify
      * @return The simplified name pattern
      */
-    private String simplifyName(String name) {
+    String simplifyName(String name) {
         // Replace numeric IDs (sequences of digits) with a placeholder
         String simplified = name.replaceAll("\\b\\d+\\b", "{ID}");
         
@@ -239,6 +244,17 @@ public class WrapCommandHandler {
         // Keep track of created Transaction Controllers to avoid duplicates
         Map<String, JMeterTreeNode> createdControllers = new HashMap<>();
         int groupsCreated = 0;
+
+        // Snapshot every sampler's index in its parent before any mutation so undo can rebuild the original order
+        Map<JMeterTreeNode, Integer> preWrapIndices = new HashMap<>();
+        for (List<JMeterTreeNode> group : samplerGroups.values()) {
+            for (JMeterTreeNode samplerNode : group) {
+                JMeterTreeNode parent = (JMeterTreeNode) samplerNode.getParent();
+                if (parent != null) {
+                    preWrapIndices.put(samplerNode, parent.getIndex(samplerNode));
+                }
+            }
+        }
         
         // Process each group of samplers
         for (Map.Entry<String, List<JMeterTreeNode>> entry : samplerGroups.entrySet()) {
@@ -334,11 +350,11 @@ public class WrapCommandHandler {
                 log.info("Moving sampler: '{}' to Transaction Controller: '{}'", 
                         samplerNode.getName(), controllerName);
                 
-                // Store the sampler's original parent and index for reference
-                JMeterTreeNode originalParent = (JMeterTreeNode) samplerNode.getParent();
-                int originalIndex = originalParent.getIndex(samplerNode);
-                
                 // Store original index for undo
+                Integer originalIndex = preWrapIndices.get(samplerNode);
+                if (originalIndex == null) {
+                    originalIndex = ((JMeterTreeNode) samplerNode.getParent()).getIndex(samplerNode);
+                }
                 originalIndices.put(samplerNode, originalIndex);
                 
                 // Get all direct children of the sampler (pre/post processors, etc.)
@@ -497,33 +513,29 @@ public class WrapCommandHandler {
             
             int unwrappedCount = 0;
             
-            // Process each wrap operation in reverse order
+            // Detach every wrapped sampler first, then remove the emptied controllers, then
+            // reinsert samplers in ascending original index so the pre-wrap order is rebuilt exactly.
+            List<DetachedSampler> detached = new ArrayList<>();
             for (int i = lastWrapOperation.size() - 1; i >= 0; i--) {
                 WrapOperation operation = lastWrapOperation.get(i);
-                
-                // Move samplers back to their original parent at their original indices
                 for (JMeterTreeNode sampler : operation.movedSamplers) {
-                    // Get the original index of this sampler
                     Integer originalIndex = operation.originalIndices.get(sampler);
                     if (originalIndex == null) {
                         originalIndex = 0; // Default to 0 if not found
                     }
-                    
-                    // Move the sampler back to its original parent
-                    log.info("Moving sampler '{}' back to original parent '{}' at index {}", 
-                            sampler.getName(), operation.parentNode.getName(), originalIndex);
-                    
                     try {
-                        // Remove from current parent (Transaction Controller)
-                        guiPackage.getTreeModel().removeNodeFromParent(sampler);
-                        
-                        // Insert at original position
-                        guiPackage.getTreeModel().insertNodeInto(sampler, operation.parentNode, originalIndex);
-                        unwrappedCount++;
+                        if (sampler.getParent() != null) {
+                            guiPackage.getTreeModel().removeNodeFromParent(sampler);
+                        }
+                        detached.add(new DetachedSampler(sampler, operation.parentNode, originalIndex));
                     } catch (Exception e) {
-                        log.error("Error moving sampler back to original position: {}", e.getMessage());
+                        log.error("Error detaching sampler '{}': {}", sampler.getName(), e.getMessage());
                     }
                 }
+            }
+            
+            for (int i = lastWrapOperation.size() - 1; i >= 0; i--) {
+                WrapOperation operation = lastWrapOperation.get(i);
                 
                 // Remove the Transaction Controller if it's now empty
                 if (operation.transactionController.getChildCount() == 0) {
@@ -540,8 +552,22 @@ public class WrapCommandHandler {
                     // Update to the parent node since we removed the current node
                     guiPackage.updateCurrentNode();
                 }
-                
-                // Refresh the tree structure
+            }
+            
+            detached.sort(Comparator.comparingInt(DetachedSampler::originalIndex));
+            for (DetachedSampler d : detached) {
+                int index = Math.min(d.originalIndex(), d.parentNode().getChildCount());
+                log.info("Moving sampler '{}' back to original parent '{}' at index {}",
+                        d.sampler().getName(), d.parentNode().getName(), index);
+                try {
+                    guiPackage.getTreeModel().insertNodeInto(d.sampler(), d.parentNode(), index);
+                    unwrappedCount++;
+                } catch (Exception e) {
+                    log.error("Error moving sampler back to original position: {}", e.getMessage());
+                }
+            }
+            
+            for (WrapOperation operation : lastWrapOperation) {
                 guiPackage.getTreeModel().nodeStructureChanged(operation.parentNode);
             }
             
@@ -607,13 +633,24 @@ public class WrapCommandHandler {
                         continue;
                     }
                     
-                    // Get the newly created Transaction Controller
-                    JMeterTreeNode newController = guiPackage.getTreeListener().getCurrentNode();
+                    // addElement attaches the new controller under the currently selected node
+                    JMeterTreeNode newController = findNewlyCreatedTransactionController(
+                            guiPackage.getTreeListener().getCurrentNode(), controllerName);
+                    if (newController == null) {
+                        log.error("Could not find the recreated Transaction Controller: {}", controllerName);
+                        continue;
+                    }
                     operation.transactionController = newController;
                     
-                    // Move the new controller to the parent node
+                    // Place the controller where its first sampler currently sits so plan order is preserved
+                    int insertIndex = parentNode.getChildCount();
+                    for (JMeterTreeNode sampler : operation.movedSamplers) {
+                        if (sampler.getParent() == parentNode) {
+                            insertIndex = Math.min(insertIndex, parentNode.getIndex(sampler));
+                        }
+                    }
                     guiPackage.getTreeModel().removeNodeFromParent(newController);
-                    guiPackage.getTreeModel().insertNodeInto(newController, parentNode, parentNode.getChildCount());
+                    guiPackage.getTreeModel().insertNodeInto(newController, parentNode, insertIndex);
                 }
                 
                 // Add this operation to the undo stack for future undo
@@ -658,6 +695,9 @@ public class WrapCommandHandler {
         }
     }
     
+    private record DetachedSampler(JMeterTreeNode sampler, JMeterTreeNode parentNode, int originalIndex) {
+    }
+
     /**
      * Class to store information about a wrap operation for undo/redo functionality.
      */
