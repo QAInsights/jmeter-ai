@@ -6,8 +6,6 @@ import com.jediterm.terminal.ui.JediTermWidget;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import org.apache.jmeter.gui.GuiPackage;
-import org.apache.jmeter.gui.tree.JMeterTreeModel;
-import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jorphan.collections.HashTree;
 import org.qainsights.jmeter.ai.terminal.DisabledTtyConnector;
@@ -529,15 +527,7 @@ public class ClaudeCodePanel extends JPanel {
 
             log.info("Silently reloading test plan from: {}", filePath);
 
-            // Pre-flight check: if a test is currently running, FileServer will have open
-            // files.
-            // clearTestPlan() will crash if files are open, wiping the UI without
-            // reloading.
-            // We safely test this by attempting to set the base dir to its current value.
-            try {
-                String currentBase = org.apache.jmeter.services.FileServer.getFileServer().getBaseDir();
-                org.apache.jmeter.services.FileServer.getFileServer().setBasedir(currentBase);
-            } catch (IllegalStateException ex) {
+            if (TestPlanReloader.isFileServerBusy()) {
                 log.info("Skipping auto-reload because a test is actively running (FileServer has open files).");
                 return;
             }
@@ -548,66 +538,8 @@ public class ClaudeCodePanel extends JPanel {
             // Replace the tree in JMeter's GUI
             SwingUtilities.invokeLater(() -> {
                 try {
-
                     javax.swing.JTree jTree = guiPackage.getTreeListener().getJTree();
-
-                    // Save expanded paths before reload
-                    List<javax.swing.tree.TreePath> expandedPaths = new ArrayList<>();
-                    int rowCount = jTree.getRowCount();
-                    for (int i = 0; i < rowCount; i++) {
-                        javax.swing.tree.TreePath path = jTree.getPathForRow(i);
-                        if (jTree.isExpanded(path)) {
-                            expandedPaths.add(path);
-                        }
-                    }
-
-                    // Save the selected path
-                    javax.swing.tree.TreePath selectedPath = jTree.getSelectionPath();
-                    String selectedNodeName = null;
-                    if (selectedPath != null) {
-                        Object lastComponent = selectedPath.getLastPathComponent();
-                        if (lastComponent instanceof JMeterTreeNode) {
-                            selectedNodeName = ((JMeterTreeNode) lastComponent).getName();
-                        }
-                    }
-
-                    // Save expanded node names (path of names from root to node)
-                    List<List<String>> expandedNodePaths = new ArrayList<>();
-                    for (javax.swing.tree.TreePath path : expandedPaths) {
-                        List<String> nodeNames = new ArrayList<>();
-                        for (Object component : path.getPath()) {
-                            if (component instanceof JMeterTreeNode) {
-                                nodeNames.add(((JMeterTreeNode) component).getName());
-                            }
-                        }
-                        expandedNodePaths.add(nodeNames);
-                    }
-
-                    // Clear the existing test plan from the model to prevent appending duplicates
-                    guiPackage.clearTestPlan();
-
-                    // Add the reloaded tree to the cleared model
-                    guiPackage.addSubTree(tree);
-
-                    // Restore the file path, as clearTestPlan() sets it to null
-                    guiPackage.setTestPlanFile(filePath);
-
-                    JMeterTreeModel newTreeModel = guiPackage.getTreeModel();
-                    JMeterTreeNode root = (JMeterTreeNode) newTreeModel.getRoot();
-                    newTreeModel.nodeStructureChanged(root);
-
-                    // Restore expanded paths by matching node names
-                    for (List<String> nodeNames : expandedNodePaths) {
-                        restoreExpandedPath(jTree, newTreeModel, nodeNames);
-                    }
-
-                    // Restore selection
-                    if (selectedNodeName != null) {
-                        restoreSelection(jTree, newTreeModel, selectedNodeName);
-                    }
-
-                    guiPackage.getMainFrame().repaint();
-                    log.info("Test plan silently reloaded with tree state preserved");
+                    TestPlanReloader.applyReloadedTree(guiPackage, jTree, tree, filePath);
                 } catch (Exception e) {
                     log.error("Failed to update tree after reload", e);
                 }
@@ -616,71 +548,6 @@ public class ClaudeCodePanel extends JPanel {
         } catch (Exception e) {
             log.error("Failed to reload test plan", e);
         }
-    }
-
-    /**
-     * Restores an expanded path by matching node names from root to leaf.
-     */
-    private void restoreExpandedPath(javax.swing.JTree jTree,
-                                     JMeterTreeModel treeModel,
-                                     List<String> nodeNames) {
-        JMeterTreeNode current = (JMeterTreeNode) treeModel.getRoot();
-        List<Object> pathComponents = new ArrayList<>();
-        pathComponents.add(current);
-
-        for (int i = 1; i < nodeNames.size(); i++) {
-            String targetName = nodeNames.get(i);
-            boolean found = false;
-            for (int j = 0; j < current.getChildCount(); j++) {
-                JMeterTreeNode child = (JMeterTreeNode) current.getChildAt(j);
-                if (child.getName().equals(targetName)) {
-                    pathComponents.add(child);
-                    current = child;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                break;
-            }
-        }
-
-        if (pathComponents.size() > 1) {
-            javax.swing.tree.TreePath treePath = new javax.swing.tree.TreePath(pathComponents.toArray());
-            jTree.expandPath(treePath);
-        }
-    }
-
-    /**
-     * Restores the selected node by name.
-     */
-    private void restoreSelection(javax.swing.JTree jTree,
-                                  JMeterTreeModel treeModel,
-                                  String nodeName) {
-        JMeterTreeNode root = (JMeterTreeNode) treeModel.getRoot();
-        JMeterTreeNode target = findNodeByName(root, nodeName);
-        if (target != null) {
-            javax.swing.tree.TreePath path = new javax.swing.tree.TreePath(target.getPath());
-            jTree.setSelectionPath(path);
-            jTree.scrollPathToVisible(path);
-        }
-    }
-
-    /**
-     * Finds a node by name in the tree (depth-first).
-     */
-    private JMeterTreeNode findNodeByName(JMeterTreeNode parent, String name) {
-        if (parent.getName().equals(name)) {
-            return parent;
-        }
-        for (int i = 0; i < parent.getChildCount(); i++) {
-            JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(i);
-            JMeterTreeNode result = findNodeByName(child, name);
-            if (result != null) {
-                return result;
-            }
-        }
-        return null;
     }
 
     /**
