@@ -157,6 +157,83 @@ class ClaudeCodeCliProviderTest {
     }
 
     @Test
+    void anUnauthenticatedRunExplainsHowToSignIn() {
+        runner.queue(new CliProcessResult(1, "", "Not logged in. Please run /login", false, 12L));
+        assertTrue(failureMessage().contains("claude auth login"));
+
+        runner.queue(new CliProcessResult(1, "", "Error: Invalid API key · Fix external API key", false, 12L));
+        assertTrue(failureMessage().contains("not signed in"));
+
+        runner.queue(new CliProcessResult(1, "", "401 Unauthorized", false, 12L));
+        assertTrue(failureMessage().contains("not signed in"));
+    }
+
+    @Test
+    void anOutdatedCliIsReportedAsSuch() {
+        runner.queue(new CliProcessResult(2, "", "error: unknown option '--output-format'", false, 12L));
+        String message = failureMessage();
+        assertTrue(message.contains("does not support"), message);
+        assertTrue(message.contains("npm install -g @anthropic-ai/claude-code@latest"), message);
+
+        runner.queue(new CliProcessResult(2, "", "error: unknown command 'auth'", false, 12L));
+        assertTrue(failureMessage().contains("does not support"));
+    }
+
+    @Test
+    void aPermissionDeniedRunPointsAtTheBinaryPermissions() {
+        runner.queue(new CliProcessResult(126, "", "sh: /usr/local/bin/claude: Permission denied", false, 12L));
+        String message = failureMessage();
+        assertTrue(message.contains("permission denied"), message);
+        assertTrue(message.contains("file permissions"), message);
+    }
+
+    @Test
+    void aUsageLimitIsReportedAsSuch() {
+        runner.queue(new CliProcessResult(1, "", "Claude usage limit reached. Resets at 5pm", false, 12L));
+        assertTrue(failureMessage().contains("usage limit"));
+
+        runner.queue(new CliProcessResult(1, "", "429 rate limit exceeded", false, 12L));
+        assertTrue(failureMessage().contains("usage limit"));
+
+        runner.queue(new CliProcessResult(1, "Quota exhausted for this billing period", "", false, 12L));
+        assertTrue(failureMessage().contains("usage limit"));
+    }
+
+    @Test
+    void anUnclassifiedFailureIncludesTheExitCodeAndFirstStderrLines() {
+        runner.queue(new CliProcessResult(7, "ignored stdout",
+                "line one\nline two\nline three\nline four", false, 12L));
+        String message = failureMessage();
+        assertTrue(message.contains("exited with code 7"), message);
+        assertTrue(message.contains("Details: line one line two line three"), message);
+        assertFalse(message.contains("line four"), message);
+        assertFalse(message.contains("ignored stdout"), message);
+    }
+
+    @Test
+    void anUnclassifiedFailureFallsBackToStdoutWhenStderrIsEmpty() {
+        runner.queue(new CliProcessResult(3, "something odd happened", "   ", false, 12L));
+        String message = failureMessage();
+        assertTrue(message.contains("exited with code 3"), message);
+        assertTrue(message.contains("Details: something odd happened"), message);
+
+        runner.queue(new CliProcessResult(4, "", "", false, 12L));
+        assertEquals("Claude Code exited with code 4.", failureMessage());
+    }
+
+    @Test
+    void anEmptyAnswerIsReported() {
+        runner.queue(CliProcessResult.of(0, "  \n"));
+        assertTrue(failureMessage().contains("empty response"));
+    }
+
+    private String failureMessage() {
+        CliProviderException failure = assertThrows(CliProviderException.class,
+                () -> provider("claude").execute("hi"));
+        return failure.getMessage();
+    }
+
+    @Test
     void anEmptyPromptNeverReachesTheCli() {
         assertThrows(CliProviderException.class, () -> provider("claude").execute(""));
         assertTrue(runner.commands.isEmpty());

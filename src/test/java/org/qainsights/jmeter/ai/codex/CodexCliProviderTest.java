@@ -7,6 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -152,6 +157,36 @@ class CodexCliProviderTest {
     }
 
     @Test
+    void executePrefersTheLastMessageFileOverStdout() {
+        runner.lastMessageContent = "  Use a Constant Timer.\n";
+        runner.queue(CliProcessResult.of(0, "[progress] thinking...\n[progress] running tools"));
+
+        assertEquals("Use a Constant Timer.", provider("codex").execute("How do I pace requests?"));
+
+        List<String> command = runner.commands.get(0);
+        int flag = command.indexOf("--output-last-message");
+        assertTrue(flag > 0, command.toString());
+        assertTrue(command.get(flag + 1).contains("featherwand-codex-"), command.get(flag + 1));
+        assertFalse(Files.exists(Paths.get(command.get(flag + 1))), "temp file is deleted after the run");
+    }
+
+    @Test
+    void anEmptyLastMessageFileFallsBackToStdout() {
+        runner.lastMessageContent = "   ";
+        runner.queue(CliProcessResult.of(0, "stdout answer"));
+        assertEquals("stdout answer", provider("codex").execute("hi"));
+    }
+
+    @Test
+    void aFailedRunIsReportedEvenWhenTheFileHasContent() {
+        runner.lastMessageContent = "partial answer";
+        runner.queue(new CliProcessResult(1, "", "boom", false, 5L));
+        String message = failureMessage();
+        assertTrue(message.contains("exited with code 1"), message);
+        assertFalse(message.contains("partial answer"), message);
+    }
+
+    @Test
     void executePassesTheSelectedModel() {
         CodexCliProvider provider = provider("codex");
         provider.setModel("gpt-5-codex");
@@ -197,6 +232,49 @@ class CodexCliProviderTest {
         CliProviderException failure = assertThrows(CliProviderException.class,
                 () -> provider("codex").execute("hi"));
         assertTrue(failure.getMessage().contains("does not support"), failure.getMessage());
+    }
+
+    @Test
+    void aPermissionDeniedRunPointsAtTheBinaryPermissions() {
+        runner.queue(new CliProcessResult(126, "", "sh: /usr/local/bin/codex: Permission denied", false, 5L));
+        String message = failureMessage();
+        assertTrue(message.contains("permission denied"), message);
+        assertTrue(message.contains("file permissions"), message);
+    }
+
+    @Test
+    void aUsageLimitIsReportedAsSuch() {
+        runner.queue(new CliProcessResult(1, "", "You've hit your usage limit", false, 5L));
+        assertTrue(failureMessage().contains("usage limit"));
+
+        runner.queue(new CliProcessResult(1, "", "429 Too Many Requests: rate limit exceeded", false, 5L));
+        assertTrue(failureMessage().contains("usage limit"));
+
+        runner.queue(new CliProcessResult(1, "insufficient_quota", "", false, 5L));
+        assertTrue(failureMessage().contains("usage limit"));
+    }
+
+    @Test
+    void anUnclassifiedFailureIncludesTheExitCodeAndFirstStderrLines() {
+        runner.queue(new CliProcessResult(7, "ignored stdout",
+                "line one\nline two\nline three\nline four", false, 5L));
+        String message = failureMessage();
+        assertTrue(message.contains("exited with code 7"), message);
+        assertTrue(message.contains("Details: line one line two line three"), message);
+        assertFalse(message.contains("line four"), message);
+        assertFalse(message.contains("ignored stdout"), message);
+
+        runner.queue(new CliProcessResult(3, "only stdout", "", false, 5L));
+        assertTrue(failureMessage().contains("Details: only stdout"));
+
+        runner.queue(new CliProcessResult(4, "", "", false, 5L));
+        assertEquals("Codex exited with code 4.", failureMessage());
+    }
+
+    private String failureMessage() {
+        CliProviderException failure = assertThrows(CliProviderException.class,
+                () -> provider("codex").execute("hi"));
+        return failure.getMessage();
     }
 
     @Test
@@ -273,12 +351,17 @@ class CodexCliProviderTest {
         }
     }
 
-    /** Records the commands it is asked to run and replays queued results. */
+    /**
+     * Records the commands it is asked to run and replays queued results. When
+     * {@code lastMessageContent} is set it is written to the
+     * {@code --output-last-message} file, as the real CLI would.
+     */
     private static final class RecordingRunner implements CliProcessRunner {
 
         private final Deque<CliProcessResult> results = new ArrayDeque<>();
         private final List<List<String>> commands = new ArrayList<>();
         private final List<String> stdins = new ArrayList<>();
+        private String lastMessageContent;
 
         void queue(CliProcessResult result) {
             results.add(result);
@@ -288,6 +371,15 @@ class CodexCliProviderTest {
         public CliProcessResult run(List<String> command, String stdin, Duration timeout) {
             commands.add(List.copyOf(command));
             stdins.add(stdin);
+            int flag = command.indexOf("--output-last-message");
+            if (lastMessageContent != null && flag >= 0) {
+                try {
+                    Files.write(Paths.get(command.get(flag + 1)),
+                            lastMessageContent.getBytes(StandardCharsets.UTF_8));
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
             CliProcessResult result = results.poll();
             return result == null ? CliProcessResult.of(0, "") : result;
         }

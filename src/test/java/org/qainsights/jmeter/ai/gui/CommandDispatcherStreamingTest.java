@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -13,8 +14,10 @@ import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -289,23 +292,53 @@ class CommandDispatcherStreamingTest {
 
     // ==================== Cancellation via Returned Runnable ====================
 
+    /**
+     * The Stop button is owned by the callback (AiChatPanel wires it to the handle
+     * it stores in getAiStreamResponse), so the dispatcher's contract is: arm the
+     * Stop button before starting the stream, and never cancel the stream itself.
+     */
     @Test
-    void testDispatch_whenStreamingEnabled_returnsCancelHandleFromCallback() {
+    void testDispatch_whenStreamingEnabled_armsStopButtonBeforeStartingTheStreamAndDoesNotCancelIt() {
         aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
         AtomicBoolean cancelled = new AtomicBoolean(false);
-
-        when(cb.getAiStreamResponse(
-                anyString(),
-                any(),
-                any(),
-                any()
-        )).thenReturn((Runnable) () -> cancelled.set(true));
+        AtomicBoolean stopArmedBeforeStream = new AtomicBoolean(false);
+        AtomicBoolean stopArmed = new AtomicBoolean(false);
+        doAnswer(inv -> {
+            stopArmed.set(true);
+            return null;
+        }).when(cb).showStopButton();
+        when(cb.getAiStreamResponse(anyString(), any(), any(), any())).thenAnswer(inv -> {
+            stopArmedBeforeStream.set(stopArmed.get());
+            return (Runnable) () -> cancelled.set(true);
+        });
 
         commandDispatcher.dispatch("Hello");
 
-        // The cancel handle from cb.getAiStreamResponse should be usable
-        // We verify it's not null by the fact the dispatch didn't throw
-        assertTrue(true, "Cancel handle should be returned without crashing");
+        InOrder inOrder = inOrder(cb);
+        inOrder.verify(cb).showStopButton();
+        inOrder.verify(cb).getAiStreamResponse(eq("Hello"), any(), any(), any());
+        assertTrue(stopArmedBeforeStream.get(), "Stop must be armed before the stream starts");
+        assertFalse(cancelled.get(), "dispatch must not cancel the stream it just started");
+        verify(cb, never()).hideStopButton();
+    }
+
+    @Test
+    void testDispatch_whenStreamingEnabled_stopButtonStaysArmedUntilTheStreamCompletes() {
+        aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
+        AtomicReference<Runnable> onComplete = new AtomicReference<>();
+        when(cb.getAiStreamResponse(anyString(), any(), any(), any())).thenAnswer(inv -> {
+            onComplete.set(inv.getArgument(2));
+            return (Runnable) () -> { };
+        });
+
+        commandDispatcher.dispatch("Hello");
+        verify(cb, never()).onStreamComplete(anyString());
+
+        onComplete.get().run();
+
+        verify(cb).onStreamComplete("");
+        // hiding Stop is the callback's job inside onStreamComplete, not the dispatcher's
+        verify(cb, never()).hideStopButton();
     }
 
     // ==================== Empty Message ====================

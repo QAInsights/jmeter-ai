@@ -18,34 +18,24 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
     }
 
     protected String findOnPath(String binaryName) {
-        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        boolean isWindows = isWindows();
         try {
-            String[] cmd = isWindows
-                    ? new String[]{"cmd.exe", "/c", "where", binaryName}
-                    : new String[]{"/bin/sh", "-c", "which " + binaryName};
-
-            Process process = new ProcessBuilder(cmd)
+            Process process = new ProcessBuilder(lookupCommand(binaryName, isWindows))
                     .redirectErrorStream(true)
                     .start();
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 if (isWindows) {
-                    java.util.List<String> candidates = new java.util.ArrayList<>();
+                    List<String> candidates = new ArrayList<>();
                     String line;
                     while ((line = reader.readLine()) != null) {
                         line = line.trim();
                         if (!line.isEmpty()) candidates.add(line);
                     }
                     int exitCode = process.waitFor();
-                    if (exitCode == 0 && !candidates.isEmpty()) {
-                        for (String c : candidates) {
-                            String lower = c.toLowerCase();
-                            if (lower.endsWith(".cmd") || lower.endsWith(".exe") || lower.endsWith(".bat")) {
-                                return c;
-                            }
-                        }
-                        return candidates.get(0);
+                    if (exitCode == 0) {
+                        return pickWindowsCandidate(candidates);
                     }
                 } else {
                     String line = reader.readLine();
@@ -59,6 +49,35 @@ public abstract class BaseCliAdapter implements AiCliAdapter {
             log.debug("Error searching PATH for {}: {}", binaryName, e.getMessage());
         }
         return null;
+    }
+
+    static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
+    }
+
+    /** The {@code where}/{@code which} invocation used to locate {@code binaryName}. */
+    static String[] lookupCommand(String binaryName, boolean isWindows) {
+        return isWindows
+                ? new String[]{"cmd.exe", "/c", "where", binaryName}
+                : new String[]{"/bin/sh", "-c", "which " + binaryName};
+    }
+
+    /**
+     * {@code where} may list several matches (e.g. a shim script next to its
+     * {@code .cmd} launcher); prefer the first directly executable one, else the
+     * first match. {@code null} when there are none.
+     */
+    static String pickWindowsCandidate(List<String> candidates) {
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        for (String c : candidates) {
+            String lower = c.toLowerCase();
+            if (lower.endsWith(".cmd") || lower.endsWith(".exe") || lower.endsWith(".bat")) {
+                return c;
+            }
+        }
+        return candidates.get(0);
     }
 
     @Override
