@@ -1,15 +1,22 @@
 package org.qainsights.jmeter.ai.gui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,6 +94,65 @@ class AiResponseRouterCliProviderTest {
         String response = router.getAiResponse("codex:default", history);
 
         assertTrue(response.contains("not signed in"), response);
+    }
+
+    @Test
+    void codexStreamingStripsThePrefixAndForwardsTheCallbacks() {
+        Runnable expectedHandle = () -> { };
+        Consumer<String> tokens = token -> { };
+        Runnable complete = () -> { };
+        Consumer<Exception> error = e -> { };
+        when(codexService.generateStreamResponse(eq(history), eq("gpt-5-codex"), same(tokens), any(),
+                same(complete), same(error))).thenReturn(expectedHandle);
+
+        Runnable handle = router.generateStreamResponse("codex:gpt-5-codex", history, tokens, complete, error);
+
+        assertSame(expectedHandle, handle);
+        verifyNoInteractions(openAiService, claudeService, claudeCodeService);
+    }
+
+    @Test
+    void claudeCodeStreamingStripsThePrefixAndForwardsTheCallbacks() {
+        Runnable expectedHandle = () -> { };
+        Consumer<String> tokens = token -> { };
+        Runnable complete = () -> { };
+        Consumer<Exception> error = e -> { };
+        when(claudeCodeService.generateStreamResponse(eq(history), eq("default"), same(tokens), any(),
+                same(complete), same(error))).thenReturn(expectedHandle);
+
+        Runnable handle = router.generateStreamResponse("claude-code:default", history, tokens, complete, error);
+
+        assertSame(expectedHandle, handle);
+        verifyNoInteractions(openAiService, claudeService, codexService);
+    }
+
+    @Test
+    void claudeCodeStreamingDoesNotFallThroughToTheAnthropicApi() {
+        // "claude-code:" also starts with "claude", the Anthropic fallback family
+        router.generateStreamResponse("claude-code:opus", history, token -> { }, () -> { }, e -> { });
+
+        verify(claudeCodeService).generateStreamResponse(eq(history), eq("opus"), any(), any(), any(), any());
+        verifyNoInteractions(claudeService);
+    }
+
+    @Test
+    void streamingWithoutACliServiceReturnsANoOpHandleAndFiresNoCallback() {
+        AiServiceHolder holder = new AiServiceHolder();
+        holder.setClaudeService(claudeService);
+        AiResponseRouter bare = new AiResponseRouter(holder);
+        AtomicInteger callbacks = new AtomicInteger();
+
+        Runnable codexHandle = bare.generateStreamResponse("codex:default", history,
+                token -> callbacks.incrementAndGet(), callbacks::incrementAndGet, e -> callbacks.incrementAndGet());
+        Runnable claudeCodeHandle = bare.generateStreamResponse("claude-code:default", history,
+                token -> callbacks.incrementAndGet(), callbacks::incrementAndGet, e -> callbacks.incrementAndGet());
+
+        assertNotNull(codexHandle);
+        assertNotNull(claudeCodeHandle);
+        codexHandle.run();
+        claudeCodeHandle.run();
+        assertEquals(0, callbacks.get());
+        verifyNoInteractions(claudeService);
     }
 
     @Test
