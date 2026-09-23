@@ -20,7 +20,7 @@ public class JMeterElementManager {
     private static final Logger log = LoggerFactory.getLogger(JMeterElementManager.class);
 
     // Class to hold model and GUI class names
-    private static class ElementClassInfo {
+    static class ElementClassInfo {
         String modelClassName;
         String guiClassName;
 
@@ -837,7 +837,7 @@ public class JMeterElementManager {
      * @param elementType The type of element to add
      * @return true if the node is compatible, false otherwise
      */
-    private static boolean isNodeCompatible(JMeterTreeNode currentNode, String elementType) {
+    static boolean isNodeCompatible(JMeterTreeNode currentNode, String elementType) {
         String nodeType = currentNode.getTestElement().getClass().getSimpleName();
         String nodeGuiClass = currentNode.getTestElement().getPropertyAsString(TestElement.GUI_CLASS);
 
