@@ -18,7 +18,12 @@ public class CorrelationInjector {
 
     public int apply(List<CorrelationCandidate> candidates) {
         GuiPackage gui = GuiPackage.getInstance();
-        JMeterTreeModel model = gui.getTreeModel();
+        int applied = apply(candidates, gui.getTreeModel());
+        gui.getMainFrame().repaint();
+        return applied;
+    }
+
+    int apply(List<CorrelationCandidate> candidates, JMeterTreeModel model) {
         JMeterTreeNode root = (JMeterTreeNode) model.getRoot();
 
         int applied = 0;
@@ -55,7 +60,6 @@ public class CorrelationInjector {
 
             applied++;
         }
-        gui.getMainFrame().repaint();
         return applied;
     }
 
@@ -71,7 +75,7 @@ public class CorrelationInjector {
         }
     }
 
-    private JMeterTreeNode findNode(JMeterTreeNode node, String name) {
+    JMeterTreeNode findNode(JMeterTreeNode node, String name) {
         if (node.getName().equals(name)) return node;
         // Also try matching just the last segment (e.g., "Catalog.action-4" from "test/actions/Catalog.action-4")
         if (name.contains("/") && node.getName().equals(name.substring(name.lastIndexOf('/') + 1))) return node;
@@ -85,7 +89,7 @@ public class CorrelationInjector {
         return null;
     }
 
-    private TestElement createExtractor(CorrelationCandidate c) {
+    TestElement createExtractor(CorrelationCandidate c) {
         if ("json".equals(c.getExtractorType())) {
             return createJsonExtractor(c);
         }
@@ -126,7 +130,7 @@ public class CorrelationInjector {
         }
     }
 
-    private void replaceInTarget(JMeterTreeNode root, String targetName, String paramName, String value, String varName) {
+    void replaceInTarget(JMeterTreeNode root, String targetName, String paramName, String value, String varName) {
         JMeterTreeNode node = findNode(root, targetName);
         if (node == null) {
             log.warn("Target sampler '{}' not found for replacement", targetName);
