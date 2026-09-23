@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import javax.swing.SwingWorker;
 
@@ -35,10 +36,17 @@ final class AgentCommandRunner {
 
     private final CommandCallback cb;
     private final TreeActivityGlowController glowController;
+    private final Function<AiService, JMeterAgent> agentFactory;
 
     AgentCommandRunner(CommandCallback cb, TreeActivityGlowController glowController) {
+        this(cb, glowController, JMeterAgent::forService);
+    }
+
+    AgentCommandRunner(CommandCallback cb, TreeActivityGlowController glowController,
+                       Function<AiService, JMeterAgent> agentFactory) {
         this.cb = cb;
         this.glowController = glowController;
+        this.agentFactory = agentFactory;
     }
 
     /** Tags a published chunk as either a tool progress line or a simulated final-text token. */
@@ -100,7 +108,7 @@ final class AgentCommandRunner {
             protected String doInBackground() {
                 try {
                     AiService service = cb.resolveAiService(selectedModel);
-                    JMeterAgent agent = JMeterAgent.forService(service);
+                    JMeterAgent agent = agentFactory.apply(service);
                     if (agent == null) {
                         return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, DeepSeek, Grok, "
                                 + "Meta Muse, Codex and Claude Code models only. "

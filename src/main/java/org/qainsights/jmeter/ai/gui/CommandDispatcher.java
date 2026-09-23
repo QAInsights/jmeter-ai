@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import javax.swing.SwingWorker;
 
@@ -26,10 +27,17 @@ public class CommandDispatcher {
 
     private final CommandCallback cb;
     private final TreeActivityGlowController glowController = new TreeActivityGlowController();
+    private final Function<AiService, JMeterAgent> agentFactory;
     private org.qainsights.jmeter.ai.record.RecordingPromptRouter recordingRouter;
 
     public CommandDispatcher(CommandCallback callback) {
+        this(callback, JMeterAgent::forService);
+    }
+
+    /** Package-private so tests can substitute the agent wired for a resolved {@link AiService}. */
+    CommandDispatcher(CommandCallback callback, Function<AiService, JMeterAgent> agentFactory) {
         this.cb = callback;
+        this.agentFactory = agentFactory;
     }
 
     private static String chatErrorMessage(Exception e) {
@@ -108,7 +116,7 @@ public class CommandDispatcher {
 
         // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok and Meta Muse).
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
-            new AgentCommandRunner(cb, glowController).run(message);
+            new AgentCommandRunner(cb, glowController, agentFactory).run(message);
             return;
         }
 
