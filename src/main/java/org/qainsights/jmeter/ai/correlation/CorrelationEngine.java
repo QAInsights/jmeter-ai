@@ -63,7 +63,7 @@ public class CorrelationEngine {
         return correlate(samplers, results);
     }
 
-    private List<CorrelationCandidate> correlate(List<AbstractSampler> samplers, List<SampleResult> results) {
+    List<CorrelationCandidate> correlate(List<AbstractSampler> samplers, List<SampleResult> results) {
         List<CorrelationCandidate> candidates = detectCandidates(samplers, results);
         candidatesFound = candidates.size();
         crossReference(candidates, samplers);
@@ -122,7 +122,7 @@ public class CorrelationEngine {
         return Collector.getResults();
     }
 
-    private List<SampleResult> parseJtl(Path jtlPath) throws Exception {
+    List<SampleResult> parseJtl(Path jtlPath) throws Exception {
         byte[] bytes = Files.readAllBytes(jtlPath);
         String content = new String(bytes, StandardCharsets.UTF_8).trim();
         if (content.isEmpty()) throw new IOException("JTL file is empty");
@@ -201,7 +201,7 @@ public class CorrelationEngine {
     }
     private static long parseLong(String s) { try { return Long.parseLong(s); } catch (Exception e) { return 0; } }
 
-    private List<CorrelationCandidate> detectCandidates(List<AbstractSampler> samplers, List<SampleResult> results) {
+    List<CorrelationCandidate> detectCandidates(List<AbstractSampler> samplers, List<SampleResult> results) {
         List<CorrelationCandidate> candidates = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < results.size(); i++) {
@@ -271,7 +271,7 @@ public class CorrelationEngine {
                 && !config.getExcludeValues().contains(v.toLowerCase(Locale.ROOT)) && !v.matches("\\d+");
     }
 
-    private void crossReference(List<CorrelationCandidate> candidates, List<AbstractSampler> samplers) {
+    void crossReference(List<CorrelationCandidate> candidates, List<AbstractSampler> samplers) {
         for (CorrelationCandidate c : candidates) {
             for (int i = c.getSourceSamplerIndex() + 1; i < samplers.size(); i++) {
                 AbstractSampler s = samplers.get(i);
@@ -297,7 +297,7 @@ public class CorrelationEngine {
         }
     }
 
-    private void generatePattern(CorrelationCandidate c) {
+    void generatePattern(CorrelationCandidate c) {
         String paramName = c.getParameterName();
         c.setVariableName(toVarName(paramName));
         String loc = c.getSourceLocation();
@@ -326,8 +326,8 @@ public class CorrelationEngine {
             c.setExtractionPattern("(?i)" + flexibleEsc + "=([^&;\"'<>\\s]+)");
     }
 
-    private static String escapeRegex(String s) { return s.replaceAll("([\\\\\\[\\](){}.*+?^$|])", "\\\\$1"); }
-    private static String toVarName(String s) { return s.replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_+|_+$", "").toLowerCase(Locale.ROOT); }
+    static String escapeRegex(String s) { return s.replaceAll("([\\\\\\[\\](){}.*+?^$|])", "\\\\$1"); }
+    static String toVarName(String s) { return s.replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_+|_+$", "").toLowerCase(Locale.ROOT); }
 
     public static class Collector extends AbstractTestElement implements SampleListener {
         private static volatile List<SampleResult> shared;
