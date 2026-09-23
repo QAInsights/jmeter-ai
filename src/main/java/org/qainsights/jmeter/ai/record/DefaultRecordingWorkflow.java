@@ -70,7 +70,7 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
      * The chat message is the recording instruction, because the user types it after
      * arming. The dialog's prompt is the fallback for an empty message.
      */
-    private static SessionConfig configFor(RecordingSessionSnapshot snapshot, String prompt) {
+    static SessionConfig configFor(RecordingSessionSnapshot snapshot, String prompt) {
         SessionConfig configured = snapshot.config();
         if (configured == null) {
             throw new RecordingException("No recording session is configured. Toggle Record off "
@@ -82,13 +82,13 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
         return new SessionConfig(effectivePrompt, configured.baseUri(), configured.browser());
     }
 
-    private static int maxIterations() {
+    static int maxIterations() {
         return (int) parseLong(AiConfig.getProperty(RecordingWorkflowService.MAX_ITERATIONS_KEY,
                 String.valueOf(RecordingWorkflowService.DEFAULT_MAX_ITERATIONS)),
                 RecordingWorkflowService.DEFAULT_MAX_ITERATIONS);
     }
 
-    private static long parseLong(String value, long fallback) {
+    static long parseLong(String value, long fallback) {
         try {
             return Long.parseLong(value.trim());
         } catch (RuntimeException e) {
@@ -115,14 +115,14 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
         return gui.getTreeModel();
     }
 
-    private Path resolveArtifactDir(RecordingSessionSnapshot snapshot) {
+    Path resolveArtifactDir(RecordingSessionSnapshot snapshot) {
         if (snapshot.artifactDirectory() != null && !snapshot.artifactDirectory().isEmpty()) {
             return Paths.get(snapshot.artifactDirectory());
         }
         return artifactStore.getRootDirectory();
     }
 
-    private static String report(RecordingWorkflowService.RecordingOutcome outcome) {
+    static String report(RecordingWorkflowService.RecordingOutcome outcome) {
         StringBuilder message = new StringBuilder();
         if (outcome.completed()) {
             message.append("Recording complete. ");
