@@ -10,6 +10,8 @@ import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.slf4j.Logger;
@@ -200,6 +202,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
+        Telemetry.record(TelemetryFeature.PANEL_OPEN);
         log.debug("Clicked" + e.getActionCommand());
         try {
             log.info("Calling AI panel");
