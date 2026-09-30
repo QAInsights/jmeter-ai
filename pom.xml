@@ -243,6 +243,24 @@
         </dependency>
     </dependencies>
     <build>
+        <resources>
+            <!-- Only the telemetry version stamp is Maven-filtered; every other
+                 resource ships unfiltered. -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>org/qainsights/jmeter/ai/telemetry/version.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>org/qainsights/jmeter/ai/telemetry/version.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

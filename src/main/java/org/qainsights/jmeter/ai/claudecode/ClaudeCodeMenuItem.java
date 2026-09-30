@@ -126,6 +126,8 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
+        org.qainsights.jmeter.ai.telemetry.Telemetry.record(
+                org.qainsights.jmeter.ai.telemetry.TelemetryFeature.AI_TERMINAL_TOGGLE);
         log.debug("Claude Code action: {}", e.getActionCommand());
         try {
             toggleClaudeCodePanel();

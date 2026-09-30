@@ -11,6 +11,7 @@ import org.qainsights.jmeter.ai.agent.dev.UpdateElementPropertyDevMenuItem;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem;
 import org.qainsights.jmeter.ai.correlation.CorrelationMenuItem;
 import org.qainsights.jmeter.ai.pet.PetBootstrap;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import javax.swing.*;
@@ -28,6 +29,11 @@ public class AiMenuCreator implements MenuCreator {
             PetBootstrap.initialize();
         } catch (Throwable e) {
             log.warn("Failed to initialize the JMeter pet", e);
+        }
+        try {
+            Telemetry.start();
+        } catch (Throwable e) {
+            log.warn("Failed to start telemetry", e);
         }
     }
 

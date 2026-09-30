@@ -200,6 +200,8 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
+        org.qainsights.jmeter.ai.telemetry.Telemetry.record(
+                org.qainsights.jmeter.ai.telemetry.TelemetryFeature.PANEL_OPEN);
         log.debug("Clicked" + e.getActionCommand());
         try {
             log.info("Calling AI panel");

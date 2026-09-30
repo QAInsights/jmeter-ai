@@ -45,6 +45,7 @@
 - [Pets](#-pets)
 - [AI CLI Terminal](#-multi-ai-cli-terminal)
 - [API Setup](#-api-configuration)
+- [Privacy and telemetry](#-privacy-and-telemetry)
 - [Roadmap & Issues](#-report-issues)
 - [Disclaimer](#-disclaimer-and-best-practices)
 
@@ -986,6 +987,29 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
 ---
+
+## 🔒 Privacy and telemetry
+
+Feather Wand sends one anonymous usage ping per UTC day. It is on by default and helps us see which JMeter versions, providers, and features people actually use.
+
+Each ping contains:
+
+- A random install ID (generated once, stored in `~/.jmeter-ai/telemetry.json`)
+- Plugin, JMeter, and Java versions
+- Operating system name and CPU architecture
+- The configured AI provider name and whether agent mode is enabled
+- A first-run flag
+- Feature usage counts: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors
+
+It never contains prompts, AI responses, API keys, base URLs, file paths, test plan content, hostnames, or IP addresses.
+
+Disable telemetry with any one of:
+
+- `jmeter.ai.telemetry.enabled=false` in `jmeter.properties`
+- `DO_NOT_TRACK=1` environment variable
+- `FEATHER_WAND_TELEMETRY=0` environment variable
+
+The endpoint can be overridden with `jmeter.ai.telemetry.url`.
 
 ## 🪲 Report Issues
 

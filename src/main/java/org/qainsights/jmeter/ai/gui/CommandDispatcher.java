@@ -4,6 +4,8 @@ import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -83,14 +85,17 @@ public class CommandDispatcher {
         if (org.qainsights.jmeter.ai.record.RecordingSessionController.getInstance().getSnapshot()
                 .state() == org.qainsights.jmeter.ai.record.RecordingSessionState.ARMED
                 && recordingRouter().route(message, cb)) {
+            Telemetry.record(TelemetryFeature.RECORDING_RUN);
             return;
         }
 
         switch (getCommand(message)) {
             case "@this":
+                Telemetry.record(TelemetryFeature.CMD_THIS);
                 handleThisCommand();
                 return;
             case "@optimize":
+                Telemetry.record(TelemetryFeature.CMD_OPTIMIZE);
                 handleOptimizeCommand();
                 return;
             case "@code":
@@ -99,15 +104,19 @@ public class CommandDispatcher {
                 cb.setInputEnabled(true);
                 return;
             case "@lint":
+                Telemetry.record(TelemetryFeature.CMD_LINT);
                 handleLintCommand(message);
                 return;
             case "@wrap":
+                Telemetry.record(TelemetryFeature.CMD_WRAP);
                 handleWrapCommand();
                 return;
             case "@usage":
+                Telemetry.record(TelemetryFeature.CMD_USAGE);
                 handleUsageCommand();
                 return;
             case "@testplan":
+                Telemetry.record(TelemetryFeature.CMD_TESTPLAN);
                 handleTestPlanCommand(message);
                 return;
             default:
@@ -116,9 +125,12 @@ public class CommandDispatcher {
 
         // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok and Meta Muse).
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
+            Telemetry.record(TelemetryFeature.AGENT_RUN);
             new AgentCommandRunner(cb, glowController, agentFactory).run(message);
             return;
         }
+
+        Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
 
         log.info("Checking if message is an element request: '{}'", message);
         cb.setInputEnabled(false);

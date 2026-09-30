@@ -143,6 +143,8 @@ public class JSR223ContextMenu {
         // Add AI refactoring menu item
         JMenuItem aiHelpItem = new JMenuItem("Refactor Code");
         aiHelpItem.addActionListener(e -> {
+            org.qainsights.jmeter.ai.telemetry.Telemetry.record(
+                    org.qainsights.jmeter.ai.telemetry.TelemetryFeature.JSR223_REFACTOR);
             if (refactorer != null) {
                 refactorer.refactorSelectedCode(textArea);
             }
