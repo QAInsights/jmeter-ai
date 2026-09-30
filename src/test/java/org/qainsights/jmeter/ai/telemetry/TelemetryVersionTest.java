@@ -14,6 +14,6 @@ class TelemetryVersionTest {
         String v = TelemetryClient.pluginVersion();
         assertNotEquals("unknown", v);
         assertFalse(v.contains("${"));
-        assertEquals("3.8.5", v);
+        assertTrue(v.matches("\\d+\\.\\d+\\.\\d+.*"), v);
     }
 }

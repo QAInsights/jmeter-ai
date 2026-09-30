@@ -19,6 +19,8 @@
   
 > 🤩 Show off your project in this [Feather Wand showcase](https://github.com/QAInsights/featherwand-showcase).  
 
+> 🔒 **Anonymous usage telemetry:** starting with v3.8.6, Feather Wand sends one anonymous ping per day so we can see how many people use it and which features matter. No prompts, keys, or test plan content ever leave your machine. [See what is collected and how to turn it off](#-privacy-and-telemetry).
+
 <div align="center">
 
 <img src="./images/Feather-Wand-AI-Agent-JMeter.png" alt="Feather Wand Chat UI" width="700">
@@ -990,26 +992,88 @@ Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepse
 
 ## 🔒 Privacy and telemetry
 
-Feather Wand sends one anonymous usage ping per UTC day. It is on by default and helps us see which JMeter versions, providers, and features people actually use.
+Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day. It is **on by default**, and you can [turn it off](#how-to-turn-it-off) at any time. These numbers are the only way we know how many people use Feather Wand, which JMeter versions and providers to keep supporting, and which features are worth improving.
 
-Each ping contains:
+### What is sent
 
-- A random install ID (generated once, stored in `~/.jmeter-ai/telemetry.json`)
-- Plugin, JMeter, and Java versions
-- Operating system name and CPU architecture
-- The configured AI provider name and whether agent mode is enabled
-- A first-run flag
-- Feature usage counts: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors
+| Field | Example | Notes |
+| --- | --- | --- |
+| Install ID | `3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d` | Random UUID created once and stored in `~/.jmeter-ai/telemetry.json`. It is not derived from your machine, user name, or account. |
+| Plugin version | `3.8.6` | |
+| JMeter version | `5.6.3` | |
+| Java version | `17.0.12` | |
+| OS and CPU architecture | `Mac OS X`, `aarch64` | |
+| AI provider | `anthropic` | The value of `jmeter.ai.service.type` only. |
+| Agent mode enabled | `true` | |
+| First run | `false` | `true` only on the first ping from a new install. |
+| Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
-It never contains prompts, AI responses, API keys, base URLs, file paths, test plan content, hostnames, or IP addresses.
+Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors. Only the count is sent, never what you typed or what the feature produced.
 
-Disable telemetry with any one of:
+A complete ping looks like this:
 
-- `jmeter.ai.telemetry.enabled=false` in `jmeter.properties`
-- `DO_NOT_TRACK=1` environment variable
-- `FEATHER_WAND_TELEMETRY=0` environment variable
+```json
+{
+  "installId": "3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d",
+  "event": "daily",
+  "pluginVersion": "3.8.6",
+  "jmeterVersion": "5.6.3",
+  "javaVersion": "17.0.12",
+  "os": "Mac OS X",
+  "arch": "aarch64",
+  "provider": "anthropic",
+  "agentEnabled": true,
+  "firstRun": false,
+  "features": { "chat_message": 12, "agent_run": 3 }
+}
+```
 
-The endpoint can be overridden with `jmeter.ai.telemetry.url`.
+### What is never sent
+
+Prompts, AI responses, chat history, API keys or tokens, base URLs or gateway settings, file names or paths, test plan content, hostnames, user names, or IP addresses.
+
+### How it works
+
+- The ping is sent from the JMeter GUI about 30 seconds after startup, at most once per UTC day. If it fails (offline, blocked by a proxy), it quietly retries every hour. It never blocks or slows down JMeter.
+- It goes to `https://telemetry.jmeter.ai/v1/ping`, a Cloudflare Worker. The server code is in [`telemetry-worker/`](telemetry-worker/).
+- The server stores the date, the fields above, and the country Cloudflare derives from the request. Your IP address is used only for rate limiting and is not stored.
+- The first time telemetry runs, Feather Wand writes one INFO line to `jmeter.log` saying so.
+
+### How to turn it off
+
+Any one of these switches turns telemetry off completely. Restart JMeter after changing it. When telemetry is off, nothing is sent and Feather Wand does not read or write `~/.jmeter-ai/telemetry.json`.
+
+**JMeter property.** Add this to `user.properties` (or `jmeter.properties`) in JMeter's `bin` folder:
+
+```properties
+jmeter.ai.telemetry.enabled=false
+```
+
+Or pass it when starting JMeter: `jmeter -Jjmeter.ai.telemetry.enabled=false`
+
+**`DO_NOT_TRACK` environment variable** (the common convention used by many tools). Set it to `1` or `true`:
+
+```bash
+# macOS / Linux
+export DO_NOT_TRACK=1
+```
+
+```powershell
+# Windows, current PowerShell session
+$env:DO_NOT_TRACK = "1"
+# Windows, permanently for your user (open a new terminal afterwards)
+setx DO_NOT_TRACK 1
+```
+
+**`FEATHER_WAND_TELEMETRY` environment variable** (affects only Feather Wand). Set it to `0` or `false`, the same way as above.
+
+### Reset your install ID
+
+Delete `~/.jmeter-ai/telemetry.json` (on Windows, `%USERPROFILE%\.jmeter-ai\telemetry.json`). If telemetry is on, a new random ID is created the next time JMeter starts.
+
+### Use your own endpoint
+
+Set `jmeter.ai.telemetry.url` to send pings somewhere else, for example your own copy of the Worker.
 
 ## 🪲 Report Issues
 
