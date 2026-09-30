@@ -1,0 +1,18 @@
+{
+	"name": "feather-wand-telemetry",
+	"private": true,
+	"type": "module",
+	"version": "0.0.0",
+	"scripts": {
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit",
+		"deploy:dry": "wrangler deploy --dry-run"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "0.22.0",
+		"@cloudflare/workers-types": "5.20260921.1",
+		"typescript": "5.9.3",
+		"vitest": "4.1.11",
+		"wrangler": "4.135.0"
+	}
+}

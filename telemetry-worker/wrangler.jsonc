@@ -1,0 +1,27 @@
+{
+	"name": "feather-wand-telemetry",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-22",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "feather-wand-telemetry",
+			// Replace with the id printed by `wrangler d1 create feather-wand-telemetry`.
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	],
+	"routes": [
+		{ "pattern": "telemetry.jmeter.ai", "custom_domain": true }
+	],
+	"ratelimits": [
+		{
+			"name": "PING_LIMITER",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		}
+	]
+}
