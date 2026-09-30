@@ -4,6 +4,8 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.CodeRefactorer;
 import org.qainsights.jmeter.ai.service.GroovyCodeFormatter;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import java.awt.event.ActionEvent;
 import org.apache.jmeter.gui.action.ActionNames;
@@ -143,8 +145,7 @@ public class JSR223ContextMenu {
         // Add AI refactoring menu item
         JMenuItem aiHelpItem = new JMenuItem("Refactor Code");
         aiHelpItem.addActionListener(e -> {
-            org.qainsights.jmeter.ai.telemetry.Telemetry.record(
-                    org.qainsights.jmeter.ai.telemetry.TelemetryFeature.JSR223_REFACTOR);
+            Telemetry.record(TelemetryFeature.JSR223_REFACTOR);
             if (refactorer != null) {
                 refactorer.refactorSelectedCode(textArea);
             }

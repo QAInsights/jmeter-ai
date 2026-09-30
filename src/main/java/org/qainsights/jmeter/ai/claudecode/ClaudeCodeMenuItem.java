@@ -5,6 +5,8 @@ import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
 import org.qainsights.jmeter.ai.gui.ComponentFinder;
 import org.qainsights.jmeter.ai.gui.FeatherWandToolbar;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,8 +128,7 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        org.qainsights.jmeter.ai.telemetry.Telemetry.record(
-                org.qainsights.jmeter.ai.telemetry.TelemetryFeature.AI_TERMINAL_TOGGLE);
+        Telemetry.record(TelemetryFeature.AI_TERMINAL_TOGGLE);
         log.debug("Claude Code action: {}", e.getActionCommand());
         try {
             toggleClaudeCodePanel();
