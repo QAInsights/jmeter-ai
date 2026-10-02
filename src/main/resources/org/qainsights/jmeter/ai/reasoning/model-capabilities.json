@@ -51,6 +51,7 @@
       },
       "anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -60,6 +61,7 @@
       },
       "anthropic.claude-opus-4-1-20250805-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -69,6 +71,7 @@
       },
       "anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -79,16 +82,18 @@
       },
       "anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -98,6 +103,7 @@
       },
       "anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -107,6 +113,7 @@
       },
       "anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -114,8 +121,18 @@
         "costIn" : 5.0,
         "costOut" : 25.0
       },
+      "anthropic.claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
       "anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -125,13 +142,14 @@
       },
       "anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -162,27 +180,40 @@
         "costIn" : 0.84,
         "costOut" : 3.36
       },
-      "au.anthropic.claude-haiku-4-5-20251001-v1:0" : {
+      "apac.anthropic.claude-sonnet-4-20250514-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
+      "au.anthropic.claude-haiku-4-5-20251001-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "au.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 16.5,
-        "costOut" : 82.5
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "au.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -192,33 +223,46 @@
       },
       "au.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "au.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
+      },
+      "au.anthropic.claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.4,
+        "costOut" : 22.0
       },
       "au.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "au.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -234,8 +278,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "ca.amazon.nova-lite-v1:0" : {
         "vision" : true,
@@ -304,6 +348,7 @@
       },
       "eu.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -313,6 +358,7 @@
       },
       "eu.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -323,6 +369,7 @@
       },
       "eu.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -333,6 +380,7 @@
       },
       "eu.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -342,6 +390,7 @@
       },
       "eu.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -351,6 +400,7 @@
       },
       "eu.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -358,8 +408,28 @@
         "costIn" : 5.5,
         "costOut" : 27.5
       },
+      "eu.anthropic.claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.4,
+        "costOut" : 22.0
+      },
+      "eu.anthropic.claude-sonnet-4-20250514-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
       "eu.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -369,6 +439,7 @@
       },
       "eu.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -423,6 +494,7 @@
       },
       "global.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -432,6 +504,7 @@
       },
       "global.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -442,6 +515,7 @@
       },
       "global.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -452,6 +526,7 @@
       },
       "global.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -461,6 +536,7 @@
       },
       "global.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -470,6 +546,7 @@
       },
       "global.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -477,8 +554,28 @@
         "costIn" : 5.0,
         "costOut" : 25.0
       },
+      "global.anthropic.claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
+      "global.anthropic.claude-sonnet-4-20250514-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
       "global.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -488,6 +585,7 @@
       },
       "global.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
@@ -506,11 +604,26 @@
         "costIn" : 2.0,
         "costOut" : 10.0
       },
+      "global.anthropic.claude-sonnet-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
+      },
+      "global.moonshotai.kimi-k3" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 3.0,
+        "costOut" : 15.0
+      },
       "global.openai.gpt-5.6-luna" : {
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 0.2,
         "costOut" : 1.2
@@ -519,7 +632,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 4.0,
         "costOut" : 20.0
@@ -528,7 +640,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 2.0,
         "costOut" : 12.0
@@ -537,10 +648,25 @@
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 10.0,
         "costOut" : 50.0
+      },
+      "global.openai.gpt-6-luna" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 0.1,
+        "costOut" : 0.5
+      },
+      "global.openai.gpt-6-sol" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
       },
       "global.xai.grok-4.6" : {
         "reasoning" : true,
@@ -558,7 +684,7 @@
       },
       "google.gemma-3-27b-it" : {
         "vision" : true,
-        "contextWindow" : 202752,
+        "contextWindow" : 131072,
         "costIn" : 0.23,
         "costOut" : 0.38
       },
@@ -622,58 +748,73 @@
       },
       "jp.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "jp.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "jp.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "jp.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
+      },
+      "jp.anthropic.claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.4,
+        "costOut" : 22.0
       },
       "jp.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "jp.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "jp.anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -682,8 +823,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "meta.llama3-1-70b-instruct-v1:0" : {
         "contextWindow" : 128000,
@@ -720,7 +861,7 @@
       },
       "minimax.minimax-m2.1" : {
         "reasoning" : true,
-        "contextWindow" : 204800,
+        "contextWindow" : 196608,
         "costIn" : 0.3,
         "costOut" : 1.2
       },
@@ -731,7 +872,7 @@
         "costOut" : 1.2
       },
       "mistral.devstral-2-123b" : {
-        "contextWindow" : 256000,
+        "contextWindow" : 262144,
         "costIn" : 0.4,
         "costOut" : 2.0
       },
@@ -762,7 +903,7 @@
       },
       "mistral.mistral-large-3-675b-instruct" : {
         "vision" : true,
-        "contextWindow" : 256000,
+        "contextWindow" : 262144,
         "costIn" : 0.5,
         "costOut" : 1.5
       },
@@ -784,7 +925,7 @@
       },
       "moonshot.kimi-k2-thinking" : {
         "reasoning" : true,
-        "contextWindow" : 262143,
+        "contextWindow" : 262144,
         "costIn" : 0.6,
         "costOut" : 2.5
       },
@@ -792,13 +933,13 @@
         "reasoning" : true,
         "toggle" : true,
         "vision" : true,
-        "contextWindow" : 262143,
+        "contextWindow" : 262144,
         "costIn" : 0.6,
         "costOut" : 3.0
       },
       "nvidia.nemotron-nano-12b-v2" : {
         "vision" : true,
-        "contextWindow" : 128000,
+        "contextWindow" : 131072,
         "costIn" : 0.2,
         "costOut" : 0.6
       },
@@ -824,7 +965,7 @@
         "effort" : [ "none", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 272000,
+        "contextWindow" : 1000000,
         "costIn" : 2.75,
         "costOut" : 16.5
       },
@@ -833,7 +974,7 @@
         "effort" : [ "none", "low", "medium", "high", "xhigh" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 272000,
+        "contextWindow" : 1000000,
         "costIn" : 5.5,
         "costOut" : 33.0
       },
@@ -873,31 +1014,49 @@
         "costIn" : 11.0,
         "costOut" : 55.0
       },
+      "openai.gpt-6-luna" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 0.11,
+        "costOut" : 0.55
+      },
+      "openai.gpt-6-sol" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.2,
+        "costOut" : 11.0
+      },
       "openai.gpt-oss-120b" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
-        "contextWindow" : 128000,
+        "contextWindow" : 131072,
         "costIn" : 0.15,
         "costOut" : 0.6
       },
       "openai.gpt-oss-120b-1:0" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
-        "contextWindow" : 128000,
+        "contextWindow" : 131072,
         "costIn" : 0.15,
         "costOut" : 0.6
       },
       "openai.gpt-oss-20b" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
-        "contextWindow" : 128000,
+        "contextWindow" : 131072,
         "costIn" : 0.07,
         "costOut" : 0.3
       },
       "openai.gpt-oss-20b-1:0" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high" ],
-        "contextWindow" : 128000,
+        "contextWindow" : 131072,
         "costIn" : 0.07,
         "costOut" : 0.3
       },
@@ -1009,8 +1168,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 10.0,
-        "costOut" : 50.0
+        "costIn" : 11.0,
+        "costOut" : 55.0
       },
       "us.anthropic.claude-fable-5-1" : {
         "reasoning" : true,
@@ -1023,15 +1182,17 @@
       },
       "us.anthropic.claude-haiku-4-5-20251001-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 1.0,
-        "costOut" : 5.0
+        "costIn" : 1.1,
+        "costOut" : 5.5
       },
       "us.anthropic.claude-opus-4-1-20250805-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -1041,53 +1202,68 @@
       },
       "us.anthropic.claude-opus-4-5-20251101-v1:0" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 200000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-6-v1" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-7" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-4-8" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
       "us.anthropic.claude-opus-5" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 5.0,
-        "costOut" : 25.0
+        "costIn" : 5.5,
+        "costOut" : 27.5
       },
-      "us.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
+      "us.anthropic.claude-opus-5-5" : {
         "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.4,
+        "costOut" : 22.0
+      },
+      "us.anthropic.claude-sonnet-4-20250514-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
@@ -1095,15 +1271,26 @@
         "costIn" : 3.0,
         "costOut" : 15.0
       },
+      "us.anthropic.claude-sonnet-4-5-20250929-v1:0" : {
+        "reasoning" : true,
+        "toggle" : true,
+        "budgetMin" : 1024,
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 200000,
+        "costIn" : 3.3,
+        "costOut" : 16.5
+      },
       "us.anthropic.claude-sonnet-4-6" : {
         "reasoning" : true,
+        "toggle" : true,
         "effort" : [ "low", "medium", "high", "max" ],
         "budgetMin" : 1024,
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 3.0,
-        "costOut" : 15.0
+        "costIn" : 3.3,
+        "costOut" : 16.5
       },
       "us.anthropic.claude-sonnet-5" : {
         "reasoning" : true,
@@ -1112,8 +1299,8 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 1000000,
-        "costIn" : 2.0,
-        "costOut" : 10.0
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "us.deepseek.r1-v1:0" : {
         "reasoning" : true,
@@ -1154,11 +1341,17 @@
         "costIn" : 2.0,
         "costOut" : 6.0
       },
+      "us.moonshotai.kimi-k3" : {
+        "reasoning" : true,
+        "vision" : true,
+        "contextWindow" : 1048576,
+        "costIn" : 3.3,
+        "costOut" : 16.5
+      },
       "us.openai.gpt-5.6-luna" : {
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 0.22,
         "costOut" : 1.32
@@ -1167,7 +1360,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 4.4,
         "costOut" : 22.0
@@ -1176,7 +1368,6 @@
         "reasoning" : true,
         "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 2.2,
         "costOut" : 13.2
@@ -1185,10 +1376,25 @@
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
-        "pdf" : true,
         "contextWindow" : 1050000,
         "costIn" : 11.0,
         "costOut" : 55.0
+      },
+      "us.openai.gpt-6-luna" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 0.11,
+        "costOut" : 0.55
+      },
+      "us.openai.gpt-6-sol" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.2,
+        "costOut" : 11.0
       },
       "us.writer.palmyra-x4-v1:0" : {
         "reasoning" : true,
@@ -1241,14 +1447,14 @@
       "zai.glm-4.7" : {
         "reasoning" : true,
         "toggle" : true,
-        "contextWindow" : 204800,
+        "contextWindow" : 202752,
         "costIn" : 0.6,
         "costOut" : 2.2
       },
       "zai.glm-4.7-flash" : {
         "reasoning" : true,
         "toggle" : true,
-        "contextWindow" : 200000,
+        "contextWindow" : 202752,
         "costIn" : 0.07,
         "costOut" : 0.4
       },
@@ -1516,6 +1722,41 @@
         "costIn" : 10.0,
         "costOut" : 50.0
       },
+      "gpt-6-luna" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 0.1,
+        "costOut" : 0.5
+      },
+      "gpt-6-sol" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
+      },
+      "gpt-daybreak-blue-latest" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
+      "gpt-daybreak-red-latest" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "contextWindow" : 400000,
+        "costIn" : 12.5,
+        "costOut" : 75.0
+      },
       "gpt-image-1" : {
         "vision" : true
       },
@@ -1678,7 +1919,7 @@
       "deepseek-v4-pro" : {
         "reasoning" : true,
         "toggle" : true,
-        "effort" : [ "high", "max" ],
+        "effort" : [ "low", "high", "max" ],
         "contextWindow" : 1000000,
         "costIn" : 0.435,
         "costOut" : 0.87
@@ -1778,6 +2019,15 @@
         "costIn" : 5.0,
         "costOut" : 25.0
       },
+      "claude-opus-5-5" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 4.0,
+        "costOut" : 20.0
+      },
       "claude-sonnet-4-5" : {
         "reasoning" : true,
         "budgetMin" : 1024,
@@ -1809,6 +2059,15 @@
       "claude-sonnet-5" : {
         "reasoning" : true,
         "toggle" : true,
+        "effort" : [ "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1000000,
+        "costIn" : 2.0,
+        "costOut" : 10.0
+      },
+      "claude-sonnet-5-5" : {
+        "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
         "vision" : true,
         "pdf" : true,
@@ -1869,6 +2128,15 @@
         "costIn" : 2.0,
         "costOut" : 6.0
       },
+      "grok-4.7" : {
+        "reasoning" : true,
+        "effort" : [ "low", "medium", "high", "xhigh" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 500000,
+        "costIn" : 2.0,
+        "costOut" : 6.0
+      },
       "grok-build-0.1" : {
         "reasoning" : true,
         "vision" : true,
@@ -1881,11 +2149,6 @@
         "vision" : true,
         "pdf" : true,
         "contextWindow" : 16000
-      },
-      "grok-imagine-image-2.0" : {
-        "vision" : true,
-        "pdf" : true,
-        "contextWindow" : 64000
       },
       "grok-imagine-image-quality" : {
         "vision" : true,
@@ -1923,7 +2186,7 @@
       "gemini-2.5-computer-use-preview-10-2025" : {
         "reasoning" : true,
         "vision" : true,
-        "contextWindow" : 131072,
+        "contextWindow" : 128000,
         "costIn" : 1.25,
         "costOut" : 10.0
       },
@@ -1989,7 +2252,7 @@
         "reasoning" : true,
         "effort" : [ "low", "high" ],
         "vision" : true,
-        "contextWindow" : 131072,
+        "contextWindow" : 65536,
         "costIn" : 2.0,
         "costOut" : 120.0
       },
@@ -2005,7 +2268,7 @@
         "effort" : [ "minimal", "high" ],
         "vision" : true,
         "pdf" : true,
-        "contextWindow" : 65536,
+        "contextWindow" : 131072,
         "costIn" : 0.5,
         "costOut" : 60.0
       },
