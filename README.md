@@ -565,7 +565,7 @@ All supported providers share the same tool registry, system prompt, safety gate
 
 ### Optional Jev Smart Routing
 
-[Jev](https://docs.typesafe.ai/concepts/system-one) is an optional TypeSafe judgment model used only to classify an Agent Mode request before the selected chat model starts. A confident single-purpose classification advertises a focused tool pack; complex requests, low confidence, missing configuration, or service failures receive the complete standard registry.
+[Jev](https://docs.typesafe.ai/concepts/system-one) is an optional TypeSafe judgment model used only to classify an Agent Mode request before the selected chat model starts. A confident single-purpose classification advertises a focused tool pack; complex requests, low confidence, or service failures receive the complete standard registry. Without a real `typesafe.api.key` Jev stays off entirely: no TypeSafe requests and no Jev card, even if the flags below are `true`.
 
 ```properties
 jmeter.ai.typesafe.enabled=true
@@ -581,7 +581,7 @@ typesafe.model=jev-latest
 typesafe.timeout.seconds=15
 ```
 
-When enabled, every request shows a dedicated **Jev Smart Route** card before agent activity. It identifies the selected route, confidence, focused/total tool counts, and the chat model that still performs the work. Uncertain routing shows that all tools are being used; a TypeSafe failure shows that standard Agent Mode is being used.
+When enabled with a real API key, every request shows a dedicated **Jev Smart Route** card before agent activity. It identifies the selected route, confidence, focused/total tool counts, and the chat model that still performs the work. Uncertain routing shows that all tools are being used; a TypeSafe failure shows that standard Agent Mode is being used.
 
 With `jmeter.ai.typesafe.agent.routing.expansion.enabled=true`, a focused pack also advertises an `expand_tools` escape hatch: if the model realises it needs a capability outside its pack, it can ask for more tools instead of giving up. Jev re-classifies the request with the model's stated need, the live tool set grows (never shrinks, capped by `expansion.max`, never beyond the full registry), and a second **Jev Expanded Tools** card lists what was added. The grown tool set is re-advertised to the provider on the model's next request, so newly added tools are actually callable — for the API-backed models (Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse) and for the subscription CLIs, whose tool protocol is re-issued in the next prompt. Newly exposed destructive tools still require the usual confirmation.
 

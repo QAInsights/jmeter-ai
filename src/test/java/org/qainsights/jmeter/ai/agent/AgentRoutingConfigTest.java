@@ -25,17 +25,19 @@ class AgentRoutingConfigTest {
     }
 
     @Test
-    void bothFlagsEnableRoutingAndMissingKeyProducesUnavailableRouter() {
+    void bothFlagsWithMissingOrPlaceholderKeyCreateNoRouter() {
         try (MockedStatic<AiConfig> config = defaults()) {
             config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false"))
                     .thenReturn("true");
             config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false"))
                     .thenReturn("true");
 
-            AgentRequestRouter router = AgentRoutingConfig.createRouter();
-
             assertTrue(AgentRoutingConfig.enabled());
-            assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, router.route("hello").outcome());
+            assertNull(AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.API_KEY, ""))
+                    .thenReturn("YOUR_TYPESAFE_API_KEY");
+            assertNull(AgentRoutingConfig.createRouter());
         }
     }
 
