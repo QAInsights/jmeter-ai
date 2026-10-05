@@ -12,11 +12,13 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.IOException;
 import java.net.URL;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.abort;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -98,12 +100,12 @@ class ResponseChimeTest {
         assertNotNull(resource);
 
         AudioInputStream audioIn = AudioSystem.getAudioInputStream(resource);
-        Clip clip = AudioSystem.getClip();
+        Clip clip = clipOrSkip();
 
         assertNotNull(clip, "Clip should not be null");
         assertFalse(clip.isOpen(), "Clip should not be open before calling clip.open()");
 
-        clip.open(audioIn);
+        openOrSkip(clip, audioIn);
 
         assertTrue(clip.isOpen(), "Clip should be open after calling clip.open()");
         assertEquals(audioIn.getFrameLength(), clip.getFrameLength(),
@@ -119,8 +121,8 @@ class ResponseChimeTest {
         assertNotNull(resource);
 
         AudioInputStream audioIn = AudioSystem.getAudioInputStream(resource);
-        Clip clip = AudioSystem.getClip();
-        clip.open(audioIn);
+        Clip clip = clipOrSkip();
+        openOrSkip(clip, audioIn);
 
         // clip.start() should not throw when fed a valid WAV
         assertDoesNotThrow(() -> {
@@ -132,6 +134,24 @@ class ResponseChimeTest {
 
         clip.close();
         audioIn.close();
+    }
+
+    /** Headless machines (CI, containers) have no audio line; skip rather than fail. */
+    private static Clip clipOrSkip() {
+        try {
+            return AudioSystem.getClip();
+        } catch (IllegalArgumentException | LineUnavailableException | SecurityException e) {
+            return abort("No audio output device available: " + e.getMessage());
+        }
+    }
+
+    private static void openOrSkip(Clip clip, AudioInputStream audioIn) throws IOException {
+        try {
+            clip.open(audioIn);
+        } catch (IllegalArgumentException | LineUnavailableException e) {
+            clip.close();
+            abort("Audio device cannot open the chime clip: " + e.getMessage());
+        }
     }
 
     // ==================== Config Integration ====================
