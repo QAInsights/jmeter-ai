@@ -22,13 +22,17 @@ public final class AgentRoutingConfig {
     private AgentRoutingConfig() {
     }
 
+    /**
+     * Builds the Jev router, or null (no routing, no Jev card) when the flags are off
+     * or the API key is missing/placeholder - Jev cannot run without a key.
+     */
     public static AgentRequestRouter createRouter() {
         if (!enabled()) {
             return null;
         }
         String apiKey = AiConfig.getProperty(API_KEY, "");
         if (!usableSecret(apiKey)) {
-            return message -> AgentRequestRouter.Decision.unavailable();
+            return null;
         }
         try {
             TypeSafeJudgmentProvider provider = new TypeSafeJudgmentProvider(apiKey,
