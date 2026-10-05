@@ -9,7 +9,7 @@ import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
 import org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler;
 import org.qainsights.jmeter.ai.utils.AiConfig;
-import org.qainsights.jmeter.ai.utils.RateLimitErrors;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.qainsights.jmeter.ai.wrap.WrapCommandHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,10 +43,7 @@ public class CommandDispatcher {
     }
 
     private static String chatErrorMessage(Exception e) {
-        if (RateLimitErrors.isRateLimited(e)) {
-            return "Error: " + RateLimitErrors.describe(e, false);
-        }
-        return "Sorry, I encountered an error while processing your request. Please try again.";
+        return ProviderErrors.describe(e);
     }
 
     /**
@@ -309,7 +306,7 @@ public class CommandDispatcher {
                     cb.onWorkerSuccess(get());
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error getting optimization suggestions", e,
-                            "Sorry, I encountered an error while getting optimization suggestions. Please try again.");
+                            ProviderErrors.describe(e, "getting optimization suggestions", false));
                 }
             }
         }.execute();
@@ -338,7 +335,7 @@ public class CommandDispatcher {
                     cb.onWorkerSuccess(get());
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error processing lint command", e,
-                            "Sorry, I encountered an error while processing your lint command. Please try again.");
+                            ProviderErrors.describe(e, "processing your lint command", false));
                 }
             }
         }.execute();
@@ -361,7 +358,7 @@ public class CommandDispatcher {
                     cb.onWorkerSuccess(get());
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error processing @wrap command", e,
-                            "Sorry, I encountered an error while processing the @wrap command. Please try again.");
+                            ProviderErrors.describe(e, "processing the @wrap command", false));
                 }
             }
         }.execute();
@@ -385,7 +382,7 @@ public class CommandDispatcher {
                     cb.onWorkerSuccess(get());
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error processing usage command", e,
-                            "Sorry, I encountered an error while processing the usage command. Please try again.");
+                            ProviderErrors.describe(e, "processing the usage command", false));
                 }
             }
         }.execute();

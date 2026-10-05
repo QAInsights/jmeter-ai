@@ -15,6 +15,7 @@ import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.qainsights.jmeter.ai.utils.RateLimitErrors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,6 +146,12 @@ final class AgentCommandRunner {
                         log.warn("Agent run aborted by rate limit: {}", agentError.getMessage());
                         return finish("Error: " + RateLimitErrors.describe(agentError));
                     }
+                    if (ProviderErrors.isConfigurationError(agentError)) {
+                        // A rejected key or unknown model fails plain chat the same way.
+                        log.warn("Agent run aborted by provider configuration error: {}",
+                                agentError.getMessage());
+                        return finish(ProviderErrors.describe(agentError, "running the agent", true));
+                    }
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
                     publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
                             + " - falling back to a plain answer.]"));
@@ -191,7 +198,7 @@ final class AgentCommandRunner {
                     cb.addToConversationHistory(response);
                 } catch (InterruptedException | ExecutionException e) {
                     cb.onWorkerError("Error running the agent", e,
-                            "Sorry, I encountered an error while running the agent. Please try again.");
+                            ProviderErrors.describe(e, "running the agent", true));
                 }
             }
         }.execute();

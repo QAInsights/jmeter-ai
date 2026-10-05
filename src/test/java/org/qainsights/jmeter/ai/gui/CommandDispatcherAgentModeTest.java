@@ -260,7 +260,8 @@ class CommandDispatcherAgentModeTest {
         commandDispatcher.dispatch(MESSAGE);
 
         verify(cb, timeout(WORKER_TIMEOUT_MS)).onWorkerError(eq("Error running the agent"), any(),
-                eq("Sorry, I encountered an error while running the agent. Please try again."));
+                eq("Error: Sorry, I encountered an error while running the agent. Provider said: chat also failed.\n\n"
+                        + "Full details are in jmeter.log."));
         verify(cb, never()).onWorkerSuccess(anyString());
     }
 

@@ -207,7 +207,8 @@ class CommandDispatcherStreamingTest {
         verify(cb).onStreamError(
                 eq("Error getting AI stream response"),
                 eq(testError),
-                eq("Sorry, I encountered an error while processing your request. Please try again.")
+                eq("Error: Sorry, I encountered an error while processing your request. Provider said: API Error.\n\n"
+                        + "Full details are in jmeter.log.")
         );
     }
 
