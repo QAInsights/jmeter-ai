@@ -111,6 +111,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `jmeter.ai.refactoring.enabled` | Enable JSR223 editor AI refactoring | `true` |
 | `jmeter.ai.service.type` | Default AI service for refactoring | `anthropic` |
 | `jmeter.ai.cli.max.history.size` | Conversation entries replayed with each one-shot Codex/Claude Code chat request | `10` |
+| `jmeter.ai.dev.menu` | Show the [AI Dev tool items](#dev-menu-items) under the Run menu | `false` |
 
 ### AI Service Settings
 
@@ -224,11 +225,28 @@ Uses the authentication managed by your local [Claude Code CLI](https://docs.ant
 | Property | Description | Default |
 |----------|-------------|---------|
 | `grok.api.key` | xAI API key | **Required** |
+| `grok.base.url` | Base URL endpoint | `https://api.x.ai/v1` |
 | `grok.default.model` | Default model | `grok-4.5` |
 | `grok.temperature` | Temperature (0.0-1.0) | `0.7` |
 | `grok.max.tokens` | Max response tokens | `4096` |
 | `grok.max.history.size` | Conversation history size | `10` |
 | `grok.system.prompt` | System prompt | See sample file |
+
+</details>
+
+<details>
+<summary><b>DeepSeek</b></summary>
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `deepseek.api.key` | DeepSeek API key | **Required** |
+| `deepseek.api.format` | Wire format: `openai` or `anthropic` | `openai` |
+| `deepseek.base.url` | Base URL endpoint; use `https://api.deepseek.com/anthropic` with the `anthropic` format | `https://api.deepseek.com` |
+| `deepseek.default.model` | Default model (`deepseek-chat` or `deepseek-reasoner`) | `deepseek-chat` |
+| `deepseek.temperature` | Temperature (0.0-1.0) | `0.7` |
+| `deepseek.max.tokens` | Max response tokens | `4096` |
+| `deepseek.max.history.size` | Conversation history size | `10` |
+| `deepseek.system.prompt` | System prompt | See sample file |
 
 </details>
 
@@ -377,6 +395,9 @@ Restart JMeter after changing gateway properties.
 | `jmeter.ai.terminal.copilot.path` | Full path to `copilot` binary | *(auto-detect)* |
 | `jmeter.ai.terminal.antigravity.enabled` | Enable Antigravity CLI | `false` |
 | `jmeter.ai.terminal.grok.enabled` | Enable Grok CLI | `false` |
+| `jmeter.ai.terminal.codex.enabled` | Enable OpenAI Codex CLI | `false` |
+| `jmeter.ai.terminal.opencode.enabled` | Enable OpenCode CLI | `false` |
+| `jmeter.ai.terminal.<cli>.prompt` | Starter prompt for that CLI (`claudecode`, `copilot`, `antigravity`, `grok`, `codex`, `opencode`) | See sample file |
 | `jmeter.ai.terminal.font.family` | Terminal font family (e.g. `Consolas`, `Noto Sans Mono CJK SC`) | *(auto-detect)* |
 | `jmeter.ai.terminal.font.size` | Terminal font size | `16.0` |
 | `jmeter.ai.terminal.font.cjk.fallback` | Fall back to a CJK-capable font when the selected font cannot display CJK | `true` |
@@ -407,6 +428,28 @@ The terminal uses the font family you configure. If `jmeter.ai.terminal.font.cjk
 ### Custom System Prompts
 
 Each service supports its own `*.system.prompt` property; tweak them in your properties file to focus the AI on specific JMeter topics or team conventions.
+
+### Correlation Settings
+
+Used by `find_correlation_candidates` / `apply_correlation`, which replay the plan with 1 thread and 1 iteration and look for dynamic values.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.correlation.known_tokens` | Token names to detect in cookies, JSON keys, form fields, and URL parameters (comma-separated, case-insensitive) | `JSESSIONID,jsessionid,sessionId,_sourcePage,__fp,_token,csrf,access_token,id_token,code,state,nonce` |
+| `jmeter.ai.correlation.custom.<n>` | Custom pattern as `name::regex`, numbered `1` to `50` | `uuid`, `jwt`, `hex` in the sample file |
+| `jmeter.ai.correlation.exclude_values` | Static values that are never correlated (comma-separated) | `true,false,null,undefined,application/json,text/html,utf-8,en-us` |
+| `jmeter.ai.correlation.min_value_length` | Minimum length for a value to count as dynamic | `3` |
+| `jmeter.ai.correlation.min_entropy` | Minimum entropy (0.0-8.0) for auto-detected values; `0` disables entropy detection | `2.8` |
+
+### Advanced: JVM System Properties
+
+These are read as Java system properties, not from `jmeter.properties` / `user.properties`. Set them in JMeter's `system.properties` or pass them with `-D` (for example `JVM_ARGS="-Djmeter.ai.session.dir=/data/fw-sessions" ./jmeter`).
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.session.dir` | Folder for saved conversations | `~/.jmeter-ai/sessions` |
+| `jmeter.ai.preferences.file` | Model picker pins, recents, and custom model ids | `~/.jmeter-ai/model-selector.json` |
+| `jmeter.ai.record.mcp.command` | Command that starts the Playwright MCP server for [Browser Recording](#-browser-recording) | `npx -y @playwright/mcp@latest` |
 
 ## 🔐 Using Feather Wand with ChatGPT / Codex
 
@@ -638,7 +681,11 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `jmeter.ai.typesafe.enabled` | Master switch for TypeSafe/Jev integrations | `false` |
 | `jmeter.ai.typesafe.agent.routing.enabled` | Use Jev to select a focused Agent Mode tool pack | `false` |
 | `jmeter.ai.typesafe.agent.routing.min.confidence` | Minimum confidence for using a focused pack; lower values use all tools | `0.75` |
-| `typesafe.api.key` | TypeSafe API key; required only when Jev routing is enabled | *(empty)* |
+| `jmeter.ai.typesafe.agent.routing.expansion.enabled` | Let a focused run ask for more tools via `expand_tools` | `false` |
+| `jmeter.ai.typesafe.agent.routing.expansion.max` | Max tool-set expansions per Agent Mode run | `1` |
+| `jmeter.ai.typesafe.agent.triage.enabled` | Use Jev to classify `get_test_results` failures into root-cause buckets | `false` |
+| `jmeter.ai.typesafe.agent.triage.max.failures` | Max unique failure signatures classified per run | `5` |
+| `typesafe.api.key` | TypeSafe API key; required for Jev routing and triage (without a real key Jev stays off) | *(empty)* |
 | `typesafe.base.url` | TypeSafe API root | `https://api.typesafe.ai` |
 | `typesafe.model` | TypeSafe System One model | `jev-latest` |
 | `typesafe.timeout.seconds` | Routing request timeout | `15` |
