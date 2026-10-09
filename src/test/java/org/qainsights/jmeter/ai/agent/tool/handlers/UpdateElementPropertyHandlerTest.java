@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent.tool.handlers;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -61,6 +62,9 @@ class UpdateElementPropertyHandlerTest {
         element.setSamplerController(controller);
         realThreadGroup = new JMeterTreeNode(element, null);
         root.add(realThreadGroup);
+        CSVDataSet csv = new CSVDataSet();
+        csv.setName("Users CSV");
+        root.add(new JMeterTreeNode(csv, null));
         // Mirror JMeter: the real Test Plan is the child of an internal wrapper root.
         JMeterTreeNode wrapperRoot = new JMeterTreeNode();
         wrapperRoot.add(root);
@@ -167,5 +171,22 @@ class UpdateElementPropertyHandlerTest {
         assertTrue(r.isSuccess());
         assertSame(httpRequest, updater.lastNode);
         assertEquals("some.brand_new_key", updater.lastProperty);
+    }
+
+    @Test
+    void update_csvShareModeOutsideAllowedLiterals_returnsHintWithoutUpdating() {
+        ToolResult r = tool.execute(args("Test Plan/Users CSV", "shareMode", "share mode"));
+
+        assertFalse(r.isSuccess());
+        assertTrue(r.getMessage().contains("shareMode.all, shareMode.group, shareMode.thread"), r.getMessage());
+        assertNull(updater.lastProperty);
+    }
+
+    @Test
+    void update_csvShareModeLiteral_delegatesToUpdater() {
+        ToolResult r = tool.execute(args("Test Plan/Users CSV", "shareMode", "shareMode.group"));
+
+        assertTrue(r.isSuccess());
+        assertEquals("shareMode.group", updater.lastValue);
     }
 }

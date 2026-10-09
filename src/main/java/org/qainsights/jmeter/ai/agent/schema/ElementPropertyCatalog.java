@@ -8,6 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Curated catalog of the most commonly edited JMeter property keys per element
@@ -27,12 +28,18 @@ public final class ElementPropertyCatalog {
         private final String type;
         private final String description;
         private final List<String> allowedValues;
+        private final boolean strict;
 
         Property(String key, String type, String description, List<String> allowedValues) {
+            this(key, type, description, allowedValues, false);
+        }
+
+        Property(String key, String type, String description, List<String> allowedValues, boolean strict) {
             this.key = key;
             this.type = type;
             this.description = description;
             this.allowedValues = allowedValues;
+            this.strict = strict;
         }
 
         public String getKey() {
@@ -50,6 +57,21 @@ public final class ElementPropertyCatalog {
         /** Literal values (or "value (meaning)" pairs) this property accepts; empty when free-form. */
         public List<String> getAllowedValues() {
             return allowedValues;
+        }
+
+        /** True when JMeter rejects anything outside {@link #getAllowedValues()} (or a {@code ${...}} expression). */
+        public boolean isStrict() {
+            return strict;
+        }
+
+        /** The literal part of each allowed value, without the "(meaning)" suffix. */
+        public List<String> allowedLiterals() {
+            List<String> literals = new ArrayList<>();
+            for (String allowed : allowedValues) {
+                int meaning = allowed.indexOf(" (");
+                literals.add(meaning < 0 ? allowed : allowed.substring(0, meaning));
+            }
+            return literals;
         }
     }
 
@@ -84,6 +106,29 @@ public final class ElementPropertyCatalog {
             }
         }
         return new ArrayList<>(keys);
+    }
+
+    /**
+     * Error hint when {@code value} is not an allowed literal of a strict enum-like property,
+     * e.g. a CSV Data Set {@code shareMode} of "share mode". Empty values and JMeter
+     * expressions are accepted.
+     */
+    public static Optional<String> invalidValueHint(String type, String key, String value) {
+        if (value == null || value.trim().isEmpty() || value.contains("${")) {
+            return Optional.empty();
+        }
+        for (Property property : propertiesFor(type)) {
+            if (!property.getKey().equals(key) || !property.isStrict()) {
+                continue;
+            }
+            List<String> literals = property.allowedLiterals();
+            if (literals.contains(value.trim())) {
+                return Optional.empty();
+            }
+            return Optional.of("Invalid value '" + value + "' for " + key + ". Use exactly one of: "
+                    + String.join(", ", literals) + ".");
+        }
+        return Optional.empty();
     }
 
     private static final Map<String, List<String>> LIST_PROPERTIES_BY_TYPE = buildListProperties();
@@ -197,7 +242,7 @@ public final class ElementPropertyCatalog {
 
         put(map, "ConstantThroughputTimer",
                 p("throughput", "double", "Target throughput in samples per minute."),
-                p("calcMode", "int", "Throughput scope for pacing (JMeter 5.6.x uses the plain int form below).",
+                oneOf("calcMode", "int", "Throughput scope for pacing (JMeter 5.6.x uses the plain int form below).",
                         "0 (this thread only)", "1 (all active threads)",
                         "2 (all active threads in current thread group)",
                         "3 (all active threads, shared)",
@@ -226,13 +271,13 @@ public final class ElementPropertyCatalog {
                 p("ignoreFirstLine", "bool", "Skip the first line (header)."),
                 p("recycle", "bool", "Restart from the top at end of file."),
                 p("stopThread", "bool", "Stop the thread at end of file."),
-                p("shareMode", "string",
-                        "Sharing scope; use one of the literal values below, or a specific thread group name "
-                                + "to share with just that group.",
-                        "shareMode.all", "shareMode.group", "shareMode.thread"));
+                oneOf("shareMode", "string",
+                        "Sharing scope; must be exactly one of the literal values below.",
+                        "shareMode.all (all threads)", "shareMode.group (current thread group)",
+                        "shareMode.thread (current thread)"));
 
         put(map, "ResponseAssertion",
-                p("Assertion.test_field", "string", "Field of the sample result to test.",
+                oneOf("Assertion.test_field", "string", "Field of the sample result to test.",
                         "Assertion.response_data", "Assertion.response_code", "Assertion.response_message",
                         "Assertion.response_headers", "Assertion.request_headers", "Assertion.request_data",
                         "Assertion.response_data_as_document", "Assertion.sample_label"),
@@ -294,7 +339,7 @@ public final class ElementPropertyCatalog {
 
         put(map, "SizeAssertion",
                 p("SizeAssertion.size", "long", "Response size to compare against, in bytes."),
-                p("SizeAssertion.operator", "int", "Comparison operator.",
+                oneOf("SizeAssertion.operator", "int", "Comparison operator.",
                         "1 (equal)", "2 (not equal)", "3 (greater than)", "4 (less than)",
                         "5 (greater-or-equal)", "6 (less-or-equal)"));
 
@@ -343,5 +388,11 @@ public final class ElementPropertyCatalog {
     private static Property p(String key, String type, String description, String... allowedValues) {
         return new Property(key, type, description,
                 Collections.unmodifiableList(new ArrayList<>(Arrays.asList(allowedValues))));
+    }
+
+    /** Like the enum-like overload, but values outside {@code allowedValues} are rejected. */
+    private static Property oneOf(String key, String type, String description, String... allowedValues) {
+        return new Property(key, type, description,
+                Collections.unmodifiableList(new ArrayList<>(Arrays.asList(allowedValues))), true);
     }
 }
