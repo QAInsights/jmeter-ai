@@ -150,7 +150,7 @@ public final class FailureTriage {
     }
 
     private String advisory(List<Row> rows) {
-        StringBuilder text = new StringBuilder("Jev triage (advisory):");
+        StringBuilder text = new StringBuilder(AgentJudgmentConfig.brand() + " triage (advisory):");
         Map<String, Integer> counts = countsByCategory(rows);
         List<String> parts = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : counts.entrySet()) {

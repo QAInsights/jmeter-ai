@@ -14,6 +14,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.FailureTriage;
 import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
@@ -94,7 +95,7 @@ class JevTriageCard extends JPanel {
     void setExpanded(boolean expanded) {
         this.expanded = expanded;
         detailsArea.setVisible(expanded);
-        headerLabel.setText((expanded ? "▾ " : "▸ ") + "Jev Failure Triage");
+        headerLabel.setText((expanded ? "▾ " : "▸ ") + AgentJudgmentConfig.brand() + " Failure Triage");
         revalidate();
     }
 

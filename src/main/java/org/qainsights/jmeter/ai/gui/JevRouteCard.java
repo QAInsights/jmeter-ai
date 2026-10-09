@@ -12,6 +12,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
@@ -88,7 +89,7 @@ class JevRouteCard extends JPanel {
     void setExpanded(boolean expanded) {
         this.expanded = expanded;
         detailsArea.setVisible(expanded);
-        String title = notice.isExpansion() ? "Jev Expanded Tools" : "Jev Smart Route";
+        String title = notice.isExpansion() ? AgentJudgmentConfig.brand() + " Expanded Tools" : AgentJudgmentConfig.brand() + " Smart Route";
         headerLabel.setText((expanded ? "▾ " : "▸ ") + title);
         revalidate();
     }
@@ -133,15 +134,15 @@ class JevRouteCard extends JPanel {
             return switch (decision.outcome()) {
                 case FOCUSED -> decision.route().displayName() + " added · " + confidence + "% confidence";
                 case ALL_TOOLS -> "All Agent Mode tools enabled · " + confidence + "% confidence";
-                case UNAVAILABLE -> "Jev unavailable · all Agent Mode tools enabled";
+                case UNAVAILABLE -> AgentJudgmentConfig.brand() + " unavailable · all Agent Mode tools enabled";
             };
         }
         return switch (decision.outcome()) {
             case FOCUSED -> decision.route().displayName() + " · " + confidence + "% confidence";
             case ALL_TOOLS -> decision.route() == AgentRequestRouter.Route.COMPLEX_OR_UNCLEAR
                     ? "Complex request · using all Agent Mode tools · " + confidence + "% confidence"
-                    : "Jev was uncertain · using all Agent Mode tools · " + confidence + "% confidence";
-            case UNAVAILABLE -> "Jev unavailable · using standard Agent Mode";
+                    : AgentJudgmentConfig.brand() + " was uncertain · using all Agent Mode tools · " + confidence + "% confidence";
+            case UNAVAILABLE -> AgentJudgmentConfig.brand() + " unavailable · using standard Agent Mode";
         };
     }
 
@@ -181,17 +182,17 @@ class JevRouteCard extends JPanel {
     private String detailsSummary(String model) {
         if (notice.isExpansion()) {
             return switch (notice.decision().outcome()) {
-                case FOCUSED -> "Jev added the " + notice.decision().route().displayName()
+                case FOCUSED -> AgentJudgmentConfig.brand() + " added the " + notice.decision().route().displayName()
                         + " tools; " + model + " still reasons and performs the work.";
-                case ALL_TOOLS -> "Jev enabled all Agent Mode tools for " + model + ".";
-                case UNAVAILABLE -> "Jev was unavailable; all Agent Mode tools were enabled for "
+                case ALL_TOOLS -> AgentJudgmentConfig.brand() + " enabled all Agent Mode tools for " + model + ".";
+                case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; all Agent Mode tools were enabled for "
                         + model + ".";
             };
         }
         return switch (notice.decision().outcome()) {
-            case FOCUSED -> "Jev selected the tool family; " + model + " still reasons and performs the work.";
-            case ALL_TOOLS -> "Jev provided all Agent Mode tools to " + model + " for this request.";
-            case UNAVAILABLE -> "Jev was unavailable; standard Agent Mode tools were provided to " + model + ".";
+            case FOCUSED -> AgentJudgmentConfig.brand() + " selected the tool family; " + model + " still reasons and performs the work.";
+            case ALL_TOOLS -> AgentJudgmentConfig.brand() + " provided all Agent Mode tools to " + model + " for this request.";
+            case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; standard Agent Mode tools were provided to " + model + ".";
         };
     }
 }
