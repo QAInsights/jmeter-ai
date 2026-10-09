@@ -71,6 +71,11 @@ class JMeterElementRequestHandlerTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "how do I configure a thread group?",
+            "In one short sentence, what does HTTP status 503 mean?",
+            "how do I add a thread group?",
+            "what do a thread group and an http request do?",
+            "Explain the csv data set and the http request",
+            "thread group, is it the same as a user group?",
             "optimize my test plan",
             "hello there"
     })
@@ -312,5 +317,15 @@ class JMeterElementRequestHandlerTest {
         assertTrue(addedElements.isEmpty());
         assertEquals("I'd like to add a Thread Group for you, but jmeter gui is not available. "
                 + "Please make sure you have a test plan open.", response);
+    }
+
+    @Test
+    void questionGateKeepsClausesWithActionVerbs() {
+        assertFalse(JMeterElementRequestHandler.isQuestion("can you add a thread group?",
+                java.util.List.of("can you add a thread group?")));
+        assertFalse(JMeterElementRequestHandler.isQuestion("thread group and http request",
+                java.util.List.of("thread group", "http request")));
+        assertTrue(JMeterElementRequestHandler.isQuestion("In one short sentence, what does HTTP status 503 mean?",
+                java.util.List.of("In one short sentence", "what does HTTP status 503 mean?")));
     }
 }

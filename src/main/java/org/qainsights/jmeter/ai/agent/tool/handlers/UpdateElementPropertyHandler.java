@@ -113,6 +113,11 @@ public final class UpdateElementPropertyHandler {
         }
 
         String value = string(args.get("value"));
+        Optional<String> invalidValueHint = ElementPropertyCatalog.invalidValueHint(
+                node.getTestElement().getClass().getSimpleName(), property, value);
+        if (invalidValueHint.isPresent()) {
+            return ToolResult.error(ERR_INVALID_PROPERTY, invalidValueHint.get());
+        }
         if (!updater.update(node, property, value)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
                     "Could not set '" + property + "' on '" + elementId + "'. If this property holds a list or "

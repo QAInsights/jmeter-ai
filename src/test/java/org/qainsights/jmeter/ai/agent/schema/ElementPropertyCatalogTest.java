@@ -134,7 +134,8 @@ class ElementPropertyCatalogTest {
         ElementPropertyCatalog.Property shareMode = findProperty("CSVDataSet", "shareMode");
         assertEquals(
                 java.util.Arrays.asList("shareMode.all", "shareMode.group", "shareMode.thread"),
-                shareMode.getAllowedValues());
+                shareMode.allowedLiterals());
+        assertTrue(shareMode.isStrict());
     }
 
     @Test
@@ -236,5 +237,22 @@ class ElementPropertyCatalogTest {
                 .filter(p -> p.getKey().equals(key))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No property " + key + " for type " + type));
+    }
+
+    @Test
+    void invalidValueHintRejectsUnknownShareModeOnly() {
+        assertTrue(ElementPropertyCatalog.invalidValueHint("CSVDataSet", "shareMode", "share mode").isPresent());
+        assertTrue(ElementPropertyCatalog.invalidValueHint("CSVDataSet", "shareMode", "shareMode.group").isEmpty());
+        assertTrue(ElementPropertyCatalog.invalidValueHint("CSVDataSet", "shareMode", "${mode}").isEmpty());
+        assertTrue(ElementPropertyCatalog.invalidValueHint("CSVDataSet", "shareMode", "").isEmpty());
+        assertTrue(ElementPropertyCatalog.invalidValueHint("CSVDataSet", "filename", "any.csv").isEmpty());
+    }
+
+    @Test
+    void invalidValueHintStripsMeaningFromIntEnums() {
+        assertTrue(ElementPropertyCatalog.invalidValueHint("SizeAssertion", "SizeAssertion.operator", "3").isEmpty());
+        String hint = ElementPropertyCatalog.invalidValueHint("SizeAssertion", "SizeAssertion.operator", "9")
+                .orElseThrow();
+        assertTrue(hint.contains("1, 2, 3, 4, 5, 6"), hint);
     }
 }

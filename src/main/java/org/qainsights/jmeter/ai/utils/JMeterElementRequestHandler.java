@@ -25,6 +25,11 @@ public class JMeterElementRequestHandler {
     private static final Pattern ADD_ELEMENT_PATTERN = Pattern.compile(
             "(?i)\\b(add|create|insert|include)\\b\\s+(?:\\b(?:a|an)\\b\\s+)?([a-z0-9\\s-]{2,}?)(?:\\s+(?:called|named|with name|with the name)?\\s+[\"']?([^\"']+?)[\"']?)?(?:\\s*$|\\s+(?:to|in)\\b)");
 
+    private static final Pattern ACTION_VERB = Pattern.compile("(?i)\\b(add|create|insert|include)\\b");
+
+    private static final Pattern QUESTION_START = Pattern.compile(
+            "(?i)^\\s*(what|why|how|when|where|which|who|whose|explain|describe|tell me)\\b");
+
     // Common synonyms and variations for element types
     private static final Map<String, List<String>> ELEMENT_SYNONYMS = new LinkedHashMap<>();
 
@@ -268,6 +273,11 @@ public class JMeterElementRequestHandler {
         // Check if the message contains multiple instructions
         List<String> instructions = splitIntoInstructions(message);
 
+        if (isQuestion(message, instructions)) {
+            log.info("Message looks like a question, leaving it for the AI: '{}'", message);
+            return null;
+        }
+
         if (instructions.size() > 1) {
             log.info("Message contains multiple instructions: {}", instructions.size());
             return processMultipleInstructions(instructions);
@@ -292,6 +302,26 @@ public class JMeterElementRequestHandler {
         // If the message doesn't match any of the patterns, return null
         // This will cause the message to be sent to the AI for processing
         return null;
+    }
+
+    /**
+     * True when the message asks something rather than requesting elements, e.g.
+     * "In one short sentence, what does HTTP status 503 mean?". A clause with an
+     * action verb ("can you add a timer?") still counts as a request.
+     */
+    static boolean isQuestion(String message, List<String> instructions) {
+        if (QUESTION_START.matcher(message).find()) {
+            return true;
+        }
+        for (String instruction : instructions) {
+            if (ACTION_VERB.matcher(instruction).find()) {
+                continue;
+            }
+            if (QUESTION_START.matcher(instruction).find() || instruction.trim().endsWith("?")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
