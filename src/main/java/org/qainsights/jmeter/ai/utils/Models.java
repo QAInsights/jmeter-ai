@@ -376,8 +376,8 @@ public class Models {
     public static com.openai.models.models.ModelListPage getOpenAiModels(OpenAIClient client) {
         try {
             log.info("Fetching available models from OpenAI API");
-            client = GatewayConfig.apply(OpenAIOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("openai.api.key", "YOUR_API_KEY")))
+            client = GatewayConfig.apply(OpenAIOkHttpClient.builder(),
+                    AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
                     .build();
 
             com.openai.models.models.ModelListPage models = client.models().list();

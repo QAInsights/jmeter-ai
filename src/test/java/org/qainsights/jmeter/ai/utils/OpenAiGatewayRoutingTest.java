@@ -83,7 +83,7 @@ class OpenAiGatewayRoutingTest {
     @Test
     void chatCompletionUsesGatewayHeaderWithoutVendorApiKey() {
         try (MockedStatic<AiConfig> ignored = mockConfig("")) {
-            OpenAIClient client = GatewayConfig.apply(OpenAIOkHttpClient.builder().apiKey("")).build();
+            OpenAIClient client = GatewayConfig.apply(OpenAIOkHttpClient.builder(), "").build();
             ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
                     .model("corp-gpt-4o")
                     .addUserMessage("hello")
@@ -95,6 +95,25 @@ class OpenAiGatewayRoutingTest {
             assertEquals("hello", completion.choices().get(0).message().content().orElseThrow());
             assertEquals(List.of("/v1/chat/completions"), paths);
             assertEquals(List.of("abc123"), corpTokenHeaders);
+            assertEquals(java.util.Collections.singletonList(null), authorizationHeaders);
+        }
+    }
+
+    @Test
+    void blankVendorKeyKeepsGatewayAuthorizationHeader() {
+        try (MockedStatic<AiConfig> config = mockConfig("")) {
+            config.when(() -> AiConfig.getProperty("openai.extra.headers", ""))
+                    .thenReturn("Authorization=Bearer corp-token");
+            OpenAIClient client = GatewayConfig.apply(OpenAIOkHttpClient.builder(), "").build();
+            ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                    .model("corp-gpt-4o")
+                    .addUserMessage("hello")
+                    .maxCompletionTokens(16)
+                    .build();
+
+            client.chat().completions().create(params);
+
+            assertEquals(List.of("Bearer corp-token"), authorizationHeaders);
         }
     }
 

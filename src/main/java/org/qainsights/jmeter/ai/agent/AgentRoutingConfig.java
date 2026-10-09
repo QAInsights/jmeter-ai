@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent;
 
 import java.time.Duration;
 
+import org.qainsights.jmeter.ai.service.JudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -23,22 +24,17 @@ public final class AgentRoutingConfig {
     }
 
     /**
-     * Builds the Jev router, or null (no routing, no Jev card) when the flags are off
-     * or the API key is missing/placeholder - Jev cannot run without a key.
+     * Builds the smart router (Jev or OpenAI Decisions, see {@link AgentJudgmentConfig}), or
+     * null (no routing, no card) when the flags are off or the backend's API key is
+     * missing/placeholder.
      */
     public static AgentRequestRouter createRouter() {
         if (!enabled()) {
             return null;
         }
-        String apiKey = AiConfig.getProperty(API_KEY, "");
-        if (!usableSecret(apiKey)) {
-            return null;
-        }
         try {
-            TypeSafeJudgmentProvider provider = new TypeSafeJudgmentProvider(apiKey,
-                    AiConfig.getProperty(BASE_URL_KEY, TypeSafeJudgmentProvider.DEFAULT_BASE_URL),
-                    AiConfig.getProperty(MODEL_KEY, TypeSafeJudgmentProvider.DEFAULT_MODEL), timeout());
-            return new TypeSafeAgentRequestRouter(provider, minConfidence());
+            JudgmentProvider provider = AgentJudgmentConfig.createProvider();
+            return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {
             return message -> AgentRequestRouter.Decision.unavailable();
         }

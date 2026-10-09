@@ -45,8 +45,7 @@ public class OpenAiUsage {
             }
 
             // Initialize the client
-            client = GatewayConfig.apply(com.openai.client.okhttp.OpenAIOkHttpClient.builder()
-                    .apiKey(apiKey))
+            client = GatewayConfig.apply(com.openai.client.okhttp.OpenAIOkHttpClient.builder(), apiKey)
                     .build();
 
             log.info("OpenAI client initialized for usage tracking with baseUrl: {}",

@@ -142,6 +142,19 @@ public final class GatewayConfig {
         return models;
     }
 
+    /**
+     * Sets the API key and applies gateway settings. A blank key is allowed when a custom
+     * gateway authenticates through {@code openai.extra.headers}; the SDK otherwise refuses
+     * to send requests without a bearer token.
+     */
+    public static OpenAIOkHttpClient.Builder apply(OpenAIOkHttpClient.Builder builder, String apiKey) {
+        builder.apiKey(apiKey == null ? "" : apiKey);
+        if ((apiKey == null || apiKey.isBlank()) && hasOpenAiGatewayCredentials()) {
+            builder.removeHeaders("Authorization");
+        }
+        return apply(builder);
+    }
+
     public static OpenAIOkHttpClient.Builder apply(OpenAIOkHttpClient.Builder builder) {
         String baseUrl = openAiBaseUrl();
         if (baseUrl.regionMatches(true, 0, "http://", 0, 7)) {

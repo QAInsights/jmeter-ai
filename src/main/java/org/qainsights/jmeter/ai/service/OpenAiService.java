@@ -48,7 +48,7 @@ public class OpenAiService implements AiService {
             System.setProperty("OPENAI_LOG", loggingLevel);
             log.info("Enabled OpenAI client logging with level: {}", loggingLevel);
         }
-        this.client = GatewayConfig.apply(OpenAIOkHttpClient.builder().apiKey(API_KEY)).build();
+        this.client = GatewayConfig.apply(OpenAIOkHttpClient.builder(), API_KEY).build();
         log.info("Initialized OpenAI service with baseUrl: {}", GatewayConfig.openAiBaseUrl());
 
         // Set the client in the OpenAiUsage singleton for token usage tracking

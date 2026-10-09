@@ -65,7 +65,7 @@
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
-| **Jev Smart Routing** | Optional TypeSafe Jev intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
+| **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -634,6 +634,21 @@ Jev never appears in the model picker, generates the answer, selects tool argume
 
 TypeSafe currently publishes Python and JavaScript/TypeScript SDKs; Feather Wand's Java 17 integration uses the documented [`POST /v1/systemone` HTTP API](https://docs.typesafe.ai/api) directly.
 
+#### OpenAI Decisions backend
+
+Routing and triage can run on the [OpenAI Decisions API](https://developers.openai.com/api/docs/guides/decisions) (`POST /v1/decisions`, public beta) instead of TypeSafe Jev. Each judgment is sent as a single `choice` question whose options are the route or failure categories, and OpenAI's per-option probabilities and confidence feed the same thresholds and fallbacks described above. It reuses your `openai.api.key`, so no TypeSafe key is needed:
+
+```properties
+jmeter.ai.judgment.provider=openai
+jmeter.ai.typesafe.enabled=true
+jmeter.ai.typesafe.agent.routing.enabled=true
+jmeter.ai.typesafe.agent.triage.enabled=true
+openai.api.key=YOUR_OPENAI_API_KEY
+openai.decisions.model=gpt-6-luna
+```
+
+The `jmeter.ai.typesafe.*` flags, confidence threshold, expansion and triage limits, and `typesafe.timeout.seconds` apply to both backends; the cards are labelled **OpenAI Decisions** instead of **Jev**. Without a real `openai.api.key` the OpenAI backend stays off entirely, exactly like Jev without a TypeSafe key. The same data boundaries apply: only the current request (or failure label, code and truncated message) is sent. Requests go through the official `openai-java` SDK and honour `openai.base.url`, `openai.extra.headers` and `openai.max.retries`, so a corporate gateway must implement `/v1/decisions`; if it does not, routing shows the unavailable card and Agent Mode falls back to all tools. Decisions bills input tokens only.
+
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
 The API-backed Agent Mode providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
@@ -688,7 +703,9 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `typesafe.api.key` | TypeSafe API key; required for Jev routing and triage (without a real key Jev stays off) | *(empty)* |
 | `typesafe.base.url` | TypeSafe API root | `https://api.typesafe.ai` |
 | `typesafe.model` | TypeSafe System One model | `jev-latest` |
-| `typesafe.timeout.seconds` | Routing request timeout | `15` |
+| `typesafe.timeout.seconds` | Routing and triage request timeout (both backends) | `15` |
+| `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev) or `openai` (OpenAI Decisions, uses `openai.api.key`) | `typesafe` |
+| `openai.decisions.model` | OpenAI Decisions model when `jmeter.ai.judgment.provider=openai` | `gpt-6-luna` |
 
 > 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
 
