@@ -21,19 +21,27 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(15);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final HttpClient SHARED_CLIENT = HttpClient.newBuilder().build();
+    static final HttpClient SHARED_CLIENT = HttpClient.newBuilder().build();
 
     private final HttpClient client;
     private final URI endpoint;
     private final String apiKey;
     private final String model;
     private final Duration timeout;
+    private final String label;
 
     public TypeSafeJudgmentProvider(String apiKey, String baseUrl, String model, Duration timeout) {
         this(SHARED_CLIENT, apiKey, endpoint(baseUrl), model, timeout);
     }
 
     TypeSafeJudgmentProvider(HttpClient client, String apiKey, URI endpoint, String model, Duration timeout) {
+        this(client, apiKey, endpoint, model, timeout, "TypeSafe");
+    }
+
+    /** Same System One wire format sent to another host (e.g. OpenRouter); {@code label} prefixes errors. */
+    TypeSafeJudgmentProvider(HttpClient client, String apiKey, URI endpoint, String model, Duration timeout,
+                             String label) {
+        this.label = label;
         this.client = client;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.endpoint = endpoint;
@@ -49,7 +57,7 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
     @Override
     public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
         if (apiKey.isEmpty()) {
-            throw new JudgmentException("TypeSafe API key is not configured");
+            throw new JudgmentException(label + " API key is not configured");
         }
         if (instructions == null || instructions.isBlank() || criteria == null || criteria.size() < 2) {
             throw new JudgmentException("A choice judgment needs instructions and at least two criteria");
@@ -63,14 +71,14 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
                     .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new JudgmentException("TypeSafe request failed with HTTP " + response.statusCode());
+                throw new JudgmentException(label + " request failed with HTTP " + response.statusCode());
             }
-            return parseChoice(response.body(), criteria);
+            return parseChoice(response.body(), criteria, label);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new JudgmentException("TypeSafe request was interrupted", e);
+            throw new JudgmentException(label + " request was interrupted", e);
         } catch (IOException | IllegalArgumentException e) {
-            throw new JudgmentException("TypeSafe request failed", e);
+            throw new JudgmentException(label + " request failed", e);
         }
     }
 
@@ -97,18 +105,19 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
         return MAPPER.writeValueAsString(root);
     }
 
-    private static ChoiceAnswer parseChoice(String body, Map<String, String> criteria) throws IOException {
+    private static ChoiceAnswer parseChoice(String body, Map<String, String> criteria, String label)
+            throws IOException {
         JsonNode answer = MAPPER.readTree(body).path("answers").path("route");
         if (!"choice".equals(answer.path("type").asText())) {
-            throw new JudgmentException("TypeSafe response did not contain a choice answer");
+            throw new JudgmentException(label + " response did not contain a choice answer");
         }
         String choice = answer.path("choice").asText("");
         if (!criteria.containsKey(choice)) {
-            throw new JudgmentException("TypeSafe response contained an unknown choice");
+            throw new JudgmentException(label + " response contained an unknown choice");
         }
         double confidence = answer.path("confidence").asDouble(Double.NaN);
         if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1) {
-            throw new JudgmentException("TypeSafe response contained invalid confidence");
+            throw new JudgmentException(label + " response contained invalid confidence");
         }
         Map<String, Double> probabilities = new LinkedHashMap<>();
         JsonNode probabilityNode = answer.path("probabilities");
@@ -116,7 +125,7 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
             JsonNode value = probabilityNode.path(option);
             double probability = value.isMissingNode() ? 0.0 : value.asDouble(Double.NaN);
             if (!Double.isFinite(probability) || probability < 0 || probability > 1) {
-                throw new JudgmentException("TypeSafe response contained invalid probabilities");
+                throw new JudgmentException(label + " response contained invalid probabilities");
             }
             probabilities.put(option, probability);
         }

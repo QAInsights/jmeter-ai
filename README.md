@@ -65,7 +65,7 @@
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
-| **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
+| **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, or OpenRouter Decisions with Microsoft-Decision-1) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -649,6 +649,21 @@ openai.decisions.model=gpt-6-luna
 
 The `jmeter.ai.typesafe.*` flags, confidence threshold, expansion and triage limits, and `typesafe.timeout.seconds` apply to both backends; the cards are labelled **OpenAI Decisions** instead of **Jev**. Without a real `openai.api.key` the OpenAI backend stays off entirely, exactly like Jev without a TypeSafe key. The same data boundaries apply: only the current request (or failure label, code and truncated message) is sent. Requests go through the official `openai-java` SDK and honour `openai.base.url`, `openai.extra.headers` and `openai.max.retries`, so a corporate gateway must implement `/v1/decisions`; if it does not, routing shows the unavailable card and Agent Mode falls back to all tools. Decisions bills input tokens only.
 
+#### OpenRouter Decisions backend (Microsoft-Decision-1)
+
+Routing and triage can also run on [OpenRouter's Decisions API](https://openrouter.ai/docs/client-sdks/python/sdks/decisions/README.md) (`POST /api/alpha/decisions`, alpha) with [Microsoft-Decision-1](https://openrouter.ai/microsoft/microsoft-decision-1), Microsoft's small decision-scoring model that returns a calibrated probability for each fixed option instead of generating text. Each judgment is the same single `choice` question used by the other backends, and the per-option probabilities and confidence feed the same thresholds and fallbacks:
+
+```properties
+jmeter.ai.judgment.provider=openrouter
+jmeter.ai.typesafe.enabled=true
+jmeter.ai.typesafe.agent.routing.enabled=true
+jmeter.ai.typesafe.agent.triage.enabled=true
+openrouter.api.key=YOUR_OPENROUTER_API_KEY
+openrouter.decisions.model=microsoft/microsoft-decision-1
+```
+
+The cards are named after the model's vendor: **Microsoft Decision** (for example "Microsoft Decision Smart Route") for `microsoft/*` models, **Jev** for `typesafe/*` models, and **OpenRouter Decisions** otherwise. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api`. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
+
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
 The API-backed Agent Mode providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
@@ -704,8 +719,11 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `typesafe.base.url` | TypeSafe API root | `https://api.typesafe.ai` |
 | `typesafe.model` | TypeSafe System One model | `jev-latest` |
 | `typesafe.timeout.seconds` | Routing and triage request timeout (both backends) | `15` |
-| `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev) or `openai` (OpenAI Decisions, uses `openai.api.key`) | `typesafe` |
+| `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev), `openai` (OpenAI Decisions, uses `openai.api.key`) or `openrouter` (OpenRouter Decisions, uses `openrouter.api.key`) | `typesafe` |
 | `openai.decisions.model` | OpenAI Decisions model when `jmeter.ai.judgment.provider=openai` | `gpt-6-luna` |
+| `openrouter.api.key` | OpenRouter API key; required when `jmeter.ai.judgment.provider=openrouter` (without a real key the backend stays off) | *(empty)* |
+| `openrouter.decisions.model` | OpenRouter Decisions model | `microsoft/microsoft-decision-1` |
+| `openrouter.base.url` | OpenRouter API root; requests go to `<root>/alpha/decisions` | `https://openrouter.ai/api` |
 
 > 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
 
@@ -1063,7 +1081,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | Field | Example | Notes |
 | --- | --- | --- |
 | Install ID | `3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d` | Random UUID created once and stored in `~/.jmeter-ai/telemetry.json`. It is not derived from your machine, user name, or account. |
-| Plugin version | `3.8.7` | |
+| Plugin version | `3.8.8` | |
 | JMeter version | `5.6.3` | |
 | Java version | `17.0.12` | |
 | OS and CPU architecture | `Mac OS X`, `aarch64` | |
@@ -1080,7 +1098,7 @@ A complete ping looks like this:
 {
   "installId": "3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d",
   "event": "daily",
-  "pluginVersion": "3.8.7",
+  "pluginVersion": "3.8.8",
   "jmeterVersion": "5.6.3",
   "javaVersion": "17.0.12",
   "os": "Mac OS X",
