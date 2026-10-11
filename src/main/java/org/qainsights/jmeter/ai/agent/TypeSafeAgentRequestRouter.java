@@ -7,8 +7,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class TypeSafeAgentRequestRouter implements AgentRequestRouter {
+
+    private static final Logger log = LoggerFactory.getLogger(TypeSafeAgentRequestRouter.class);
 
     static final int MAX_MESSAGE_CHARS = 4000;
     static final int MAX_SANITIZE_INPUT_CHARS = 50000;
@@ -45,6 +49,7 @@ public final class TypeSafeAgentRequestRouter implements AgentRequestRouter {
             }
             return Decision.focused(route, answer.probabilities(), answer.confidence());
         } catch (RuntimeException e) {
+            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage());
             return Decision.unavailable();
         }
     }

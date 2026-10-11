@@ -10,6 +10,8 @@ import java.util.Set;
 
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Jev classification of failed samples after a {@code get_test_results} run. Each
@@ -22,6 +24,8 @@ import org.qainsights.jmeter.ai.service.JudgmentProvider;
  * degrade to "unclassified"/no result - the run's own failure data is never altered.
  */
 public final class FailureTriage {
+
+    private static final Logger log = LoggerFactory.getLogger(FailureTriage.class);
 
     /** Jev root-cause buckets for a failed sample, with display names for the card. */
     public enum Category {
@@ -124,6 +128,7 @@ public final class FailureTriage {
                     answer.confidence() >= minConfidence ? category.name() : UNCLASSIFIED,
                     answer.confidence());
         } catch (RuntimeException e) {
+            log.warn("{} triage could not classify a failure: {}", AgentJudgmentConfig.brand(), e.getMessage());
             return new Row(failure.getLabel(), UNCLASSIFIED, 0.0);
         }
     }
