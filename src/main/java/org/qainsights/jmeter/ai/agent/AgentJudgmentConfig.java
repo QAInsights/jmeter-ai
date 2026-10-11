@@ -43,13 +43,28 @@ public final class AgentJudgmentConfig {
                 case OPENAI:
                     return "OpenAI Decisions";
                 case OPENROUTER:
-                    return "OpenRouter Decisions";
+                    return openRouterBrand(AiConfig.getProperty(OPENROUTER_MODEL_KEY,
+                            OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL));
                 default:
                     return "Jev";
             }
         } catch (RuntimeException e) {
             return "Jev";
         }
+    }
+
+    /** Names the model's vendor on OpenRouter cards, e.g. {@code microsoft/microsoft-decision-1}. */
+    static String openRouterBrand(String model) {
+        String value = model == null || model.isBlank()
+                ? OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL
+                : model.trim().toLowerCase(Locale.ROOT);
+        if (value.startsWith("microsoft/")) {
+            return "Microsoft Decision";
+        }
+        if (value.startsWith("typesafe/")) {
+            return "Jev";
+        }
+        return "OpenRouter Decisions";
     }
 
     /**

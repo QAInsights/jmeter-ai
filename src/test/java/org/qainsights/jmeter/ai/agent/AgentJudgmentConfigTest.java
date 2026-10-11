@@ -85,7 +85,7 @@ class AgentJudgmentConfigTest {
             config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
                     .thenReturn("OpenRouter");
             assertEquals(AgentJudgmentConfig.OPENROUTER, AgentJudgmentConfig.provider());
-            assertEquals("OpenRouter Decisions", AgentJudgmentConfig.brand());
+            assertEquals("Microsoft Decision", AgentJudgmentConfig.brand());
             assertNull(AgentJudgmentConfig.createProvider());
 
             config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_API_KEY, ""))
@@ -100,6 +100,14 @@ class AgentJudgmentConfigTest {
                     .thenReturn("sk-or-test");
             assertInstanceOf(OpenRouterDecisionsJudgmentProvider.class, AgentJudgmentConfig.createProvider());
         }
+    }
+
+    @Test
+    void openRouterCardsNameTheModelVendor() {
+        assertEquals("Microsoft Decision", AgentJudgmentConfig.openRouterBrand(null));
+        assertEquals("Microsoft Decision", AgentJudgmentConfig.openRouterBrand(" Microsoft/microsoft-decision-1 "));
+        assertEquals("Jev", AgentJudgmentConfig.openRouterBrand("typesafe/jev-1.13"));
+        assertEquals("OpenRouter Decisions", AgentJudgmentConfig.openRouterBrand("acme/decider-2"));
     }
 
     private static MockedStatic<AiConfig> openAi() {

@@ -662,7 +662,7 @@ openrouter.api.key=YOUR_OPENROUTER_API_KEY
 openrouter.decisions.model=microsoft/microsoft-decision-1
 ```
 
-The cards are labelled **OpenRouter Decisions**. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api`. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
+The cards are named after the model's vendor: **Microsoft Decision** (for example "Microsoft Decision Smart Route") for `microsoft/*` models, **Jev** for `typesafe/*` models, and **OpenRouter Decisions** otherwise. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api`. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
 
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
