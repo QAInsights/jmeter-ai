@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
+import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -75,6 +76,29 @@ class AgentJudgmentConfigTest {
             config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENAI_API_KEY, "")).thenReturn("");
             assertNull(AgentRoutingConfig.createRouter());
             assertNull(AgentTriageConfig.createTriage());
+        }
+    }
+
+    @Test
+    void openRouterBackendNeedsUsableOpenRouterKey() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn("OpenRouter");
+            assertEquals(AgentJudgmentConfig.OPENROUTER, AgentJudgmentConfig.provider());
+            assertEquals("OpenRouter Decisions", AgentJudgmentConfig.brand());
+            assertNull(AgentJudgmentConfig.createProvider());
+
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_API_KEY, ""))
+                    .thenReturn("YOUR_OPENROUTER_API_KEY");
+            assertNull(AgentJudgmentConfig.createProvider());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.API_KEY, "")).thenReturn("ts-key");
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENAI_API_KEY, "")).thenReturn("sk-test");
+            assertNull(AgentJudgmentConfig.createProvider(), "other backends' keys must not enable OpenRouter");
+
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_API_KEY, ""))
+                    .thenReturn("sk-or-test");
+            assertInstanceOf(OpenRouterDecisionsJudgmentProvider.class, AgentJudgmentConfig.createProvider());
         }
     }
 
