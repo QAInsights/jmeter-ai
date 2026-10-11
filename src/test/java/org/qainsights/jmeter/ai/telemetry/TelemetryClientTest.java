@@ -135,14 +135,38 @@ class TelemetryClientTest {
 
         JsonNode p = MAPPER.readTree(sent.get(0));
         assertEquals(Set.of("installId", "event", "pluginVersion", "jmeterVersion",
-                        "javaVersion", "os", "arch", "provider", "agentEnabled",
-                        "firstRun", "features"),
+                        "javaVersion", "os", "arch", "provider", "judgmentProvider", "model",
+                        "agentEnabled", "firstRun", "features"),
                 fieldSet(p));
         assertEquals(state.getInstallId(), p.get("installId").asText());
         assertEquals("daily", p.get("event").asText());
         assertFalse(p.get("agentEnabled").asBoolean());
         assertTrue(p.get("firstRun").asBoolean());
         assertEquals(2, p.get("features").get("chat_message").asInt());
+    }
+
+    @Test
+    void decisionsBackendAndModelAreAggregateLabels() throws Exception {
+        client(clockAt("2026-01-05")).tick();
+        JsonNode p = MAPPER.readTree(sent.get(0));
+        assertEquals("none", p.get("judgmentProvider").asText());
+        String model = p.get("model").asText();
+        assertTrue(model.length() <= 64 && model.matches("[a-z0-9.:-]+"), model);
+    }
+
+    @Test
+    void sendsAtMostFiftyKeysAndKeepsTheRestPending() throws Exception {
+        for (int i = 0; i < 60; i++) {
+            for (int n = 0; n <= i; n++) {
+                counters.increment("tool_t" + i);
+            }
+        }
+        client(clockAt("2026-01-05")).tick();
+        JsonNode f = MAPPER.readTree(sent.get(0)).get("features");
+        assertEquals(50, f.size());
+        assertEquals(60, f.get("tool_t59").asInt());
+        assertEquals(10, counters.snapshot().size());
+        assertEquals(1, counters.snapshot().get("tool_t0"));
     }
 
     private static Set<String> fieldSet(JsonNode n) {

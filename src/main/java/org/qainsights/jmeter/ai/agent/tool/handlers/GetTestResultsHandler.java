@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.agent.tool.handlers;
 
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -142,6 +144,10 @@ public final class GetTestResultsHandler {
         FailureTriage.TriageOutcome outcome = triage.triage(summary.getFailures(), summary.getFailureCount());
         if (outcome == null) {
             return text;
+        }
+        Telemetry.record(TelemetryFeature.TRIAGE_RUN);
+        if (outcome.notice() != null && outcome.notice().classifiedFailures() == 0) {
+            Telemetry.record(TelemetryFeature.TRIAGE_UNCLASSIFIED);
         }
         if (triageNotice != null) {
             triageNotice.accept(outcome.notice());

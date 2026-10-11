@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.service;
 
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -508,6 +509,7 @@ public class OpenAiService implements AiService {
         String errorMessage = e.getMessage();
 
         if (RateLimitErrors.isRateLimited(e)) {
+            Telemetry.recordError(e);
             return RateLimitErrors.describe(e, false);
         }
 

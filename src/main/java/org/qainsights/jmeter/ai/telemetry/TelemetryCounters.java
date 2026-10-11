@@ -13,7 +13,11 @@ public class TelemetryCounters {
     private final ConcurrentHashMap<String, Integer> counts = new ConcurrentHashMap<>();
 
     public void increment(TelemetryFeature feature) {
-        counts.merge(feature.wireName(), 1, Integer::sum);
+        increment(feature.wireName());
+    }
+
+    public void increment(String key) {
+        counts.merge(key, 1, Integer::sum);
     }
 
     /** Restores persisted counts saved from an earlier run. */

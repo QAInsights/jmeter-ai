@@ -1087,10 +1087,25 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | OS and CPU architecture | `Mac OS X`, `aarch64` | |
 | AI provider | `anthropic` | The value of `jmeter.ai.service.type` only. |
 | Agent mode enabled | `true` | |
+| Decisions backend | `openrouter:microsoft` | Which backend serves smart routing and failure triage: `none` (off, or its key is blank or a placeholder), `typesafe`, `openai`, or `openrouter:` plus the model vendor (the part before `/`). |
+| Model | `gpt-4o-mini` | The chat-panel model of your latest Chat or Agent message, or the configured default model before you send one. Only well-known public model ids (GPT, o-series, Claude, Gemini, DeepSeek, Grok, Muse, Llama, Qwen, Mistral and similar) are sent as-is. Fine-tunes, gateway aliases and every other name are sent as `custom`. `unknown` means none is set. |
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
 Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors. Only the count is sent, never what you typed or what the feature produced.
+
+These counters are also sent, again as counts only:
+
+| Counter | Meaning |
+| --- | --- |
+| `outcome_completed`, `outcome_step_limit`, `outcome_error`, `outcome_fallback` | How each Agent run ended: finished, stopped at the step limit, failed with a provider or configuration error, or fell back to a plain AI response. |
+| `outcome_tool_failed` | Agent tool calls that returned an error. |
+| `tool_<name>` | Agent tool calls per built-in tool, for example `tool_add_element`. Tool arguments and results are never sent. |
+| `route_focused`, `route_all_tools`, `route_unavailable`, `route_expanded` | Smart routing cards: a focused tool pack, all tools (low confidence), backend unavailable, and mid-run tool expansion. |
+| `triage_run`, `triage_unclassified` | Failure triage advisories, and those where no failure could be classified. |
+| `err_<provider>_<type>` | Provider errors, for example `err_openai_auth`. Types: `auth`, `forbidden`, `not_found`, `bad_request`, `rate_limit`, `server`, `timeout`, `unreachable`, `other`. The error message is never sent. |
+
+At most 50 counters go in one ping; any extra ones wait for the next day's ping.
 
 A complete ping looks like this:
 
@@ -1104,15 +1119,17 @@ A complete ping looks like this:
   "os": "Mac OS X",
   "arch": "aarch64",
   "provider": "anthropic",
+  "judgmentProvider": "openrouter:microsoft",
+  "model": "gpt-4o-mini",
   "agentEnabled": true,
   "firstRun": false,
-  "features": { "chat_message": 12, "agent_run": 3 }
+  "features": { "chat_message": 12, "agent_run": 3, "outcome_completed": 3, "tool_add_element": 5 }
 }
 ```
 
 ### What is never sent
 
-Prompts, AI responses, chat history, API keys or tokens, base URLs or gateway settings, file names or paths, test plan content, hostnames, user names, or IP addresses.
+Prompts, AI responses, chat history, error messages, tool arguments or results, custom or fine-tuned model names, API keys or tokens, base URLs or gateway settings, file names or paths, test plan content, hostnames, user names, or IP addresses.
 
 ### How it works
 

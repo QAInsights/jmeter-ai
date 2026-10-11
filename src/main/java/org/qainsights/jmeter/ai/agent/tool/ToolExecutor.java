@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.agent.tool;
 
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -82,11 +83,13 @@ public final class ToolExecutor {
 
         try {
             ToolResult result = tool.execute(args);
+            Telemetry.recordTool(toolName, result != null && result.isSuccess());
             if (result == null) {
                 return ToolResult.error(ERR_NULL_RESULT, "Tool '" + toolName + "' returned no result");
             }
             return result;
         } catch (Exception e) {
+            Telemetry.recordTool(toolName, false);
             log.error("Tool '{}' threw an exception", toolName, e);
             return ToolResult.error(ERR_TOOL_EXCEPTION,
                     "Tool '" + toolName + "' failed: " + e.getMessage());

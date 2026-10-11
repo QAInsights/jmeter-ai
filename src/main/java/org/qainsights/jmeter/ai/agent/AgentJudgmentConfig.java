@@ -68,6 +68,35 @@ public final class AgentJudgmentConfig {
     }
 
     /**
+     * Backend that would actually serve routing or triage, for telemetry: {@code none} when
+     * both features are off or the backend's key is unusable, otherwise {@code typesafe},
+     * {@code openai} or {@code openrouter:<model vendor>} (e.g. {@code openrouter:microsoft}).
+     */
+    public static String activeBackend() {
+        try {
+            if (!AgentRoutingConfig.enabled() && !AgentTriageConfig.enabled()) {
+                return "none";
+            }
+            String backend = provider();
+            String keyName = OPENAI.equals(backend) ? OPENAI_API_KEY
+                    : OPENROUTER.equals(backend) ? OPENROUTER_API_KEY : AgentRoutingConfig.API_KEY;
+            if (!AgentRoutingConfig.usableSecret(AiConfig.getProperty(keyName, ""))) {
+                return "none";
+            }
+            if (OPENROUTER.equals(backend)) {
+                String model = AiConfig.getProperty(OPENROUTER_MODEL_KEY, OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL);
+                String m = model == null || model.isBlank() ? OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL : model;
+                String vendor = m.contains("/") ? m.substring(0, m.indexOf('/')) : "custom";
+                vendor = vendor.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9-]", "");
+                return OPENROUTER + ":" + (vendor.isEmpty() ? "custom" : vendor.length() > 20 ? vendor.substring(0, 20) : vendor);
+            }
+            return backend;
+        } catch (RuntimeException e) {
+            return "none";
+        }
+    }
+
+    /**
      * Builds the configured judgment provider, or null when its API key is missing or a
      * placeholder. May throw when the client cannot be constructed (for example a bad URL).
      */

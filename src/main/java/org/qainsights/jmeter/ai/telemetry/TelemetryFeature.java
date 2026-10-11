@@ -14,7 +14,18 @@ public enum TelemetryFeature {
     CMD_TESTPLAN("cmd_testplan"),
     CORRELATION_STUDIO_OPEN("correlation_studio_open"),
     AI_TERMINAL_TOGGLE("ai_terminal_toggle"),
-    JSR223_REFACTOR("jsr223_refactor");
+    JSR223_REFACTOR("jsr223_refactor"),
+    OUTCOME_COMPLETED("outcome_completed"),
+    OUTCOME_STEP_LIMIT("outcome_step_limit"),
+    OUTCOME_ERROR("outcome_error"),
+    OUTCOME_FALLBACK("outcome_fallback"),
+    OUTCOME_TOOL_FAILED("outcome_tool_failed"),
+    ROUTE_FOCUSED("route_focused"),
+    ROUTE_ALL_TOOLS("route_all_tools"),
+    ROUTE_UNAVAILABLE("route_unavailable"),
+    ROUTE_EXPANDED("route_expanded"),
+    TRIAGE_RUN("triage_run"),
+    TRIAGE_UNCLASSIFIED("triage_unclassified");
 
     private final String wireName;
 

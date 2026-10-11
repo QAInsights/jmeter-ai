@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -128,6 +130,8 @@ final class AgentCommandRunner {
                     } finally {
                         glowController.onRunFinished();
                     }
+                    Telemetry.record(result.isCompleted()
+                            ? TelemetryFeature.OUTCOME_COMPLETED : TelemetryFeature.OUTCOME_STEP_LIMIT);
                     String summary = result.getFinalText();
                     if (!result.isCompleted()) {
                         summary = (summary.isEmpty() ? "" : summary + "\n\n")
@@ -138,20 +142,26 @@ final class AgentCommandRunner {
                     // The provider itself is unusable (CLI missing, not signed in,
                     // timed out): retrying as plain chat would just pay for the same
                     // failure twice, so surface the message the provider wrote.
+                    Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                     log.warn("Agent run aborted: {}", cliError.getMessage());
                     return finish("Error: " + cliError.getMessage());
                 } catch (RuntimeException agentError) {
                     if (RateLimitErrors.isRateLimited(agentError)) {
+                        Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
+                        Telemetry.recordError(agentError);
                         // Falling back to plain chat would spend more of the same exhausted quota.
                         log.warn("Agent run aborted by rate limit: {}", agentError.getMessage());
                         return finish("Error: " + RateLimitErrors.describe(agentError));
                     }
                     if (ProviderErrors.isConfigurationError(agentError)) {
+                        Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                         // A rejected key or unknown model fails plain chat the same way.
                         log.warn("Agent run aborted by provider configuration error: {}",
                                 agentError.getMessage());
                         return finish(ProviderErrors.describe(agentError, "running the agent", true));
                     }
+                    Telemetry.record(TelemetryFeature.OUTCOME_FALLBACK);
+                    Telemetry.recordError(agentError);
                     log.error("Agent loop failed, degrading to plain AI response", agentError);
                     publish(AgentChunk.progress("[Agent error: " + agentError.getMessage()
                             + " - falling back to a plain answer.]"));
@@ -197,6 +207,7 @@ final class AgentCommandRunner {
                     }
                     cb.addToConversationHistory(response);
                 } catch (InterruptedException | ExecutionException e) {
+                    Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                     cb.onWorkerError("Error running the agent", e,
                             ProviderErrors.describe(e, "running the agent", true));
                 }

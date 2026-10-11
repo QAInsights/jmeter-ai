@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.agent;
 
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -115,6 +117,7 @@ public final class AgentToolExpander {
             return ToolResult.ok("Your current tools already cover this request. Continue with them.");
         }
         specSink.accept(liveRegistry.getSpecs());
+        Telemetry.record(TelemetryFeature.ROUTE_EXPANDED);
         publishNotice(decision, added);
         return ToolResult.ok(describe(added));
     }

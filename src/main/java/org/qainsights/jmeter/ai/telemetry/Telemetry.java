@@ -1,5 +1,8 @@
 package org.qainsights.jmeter.ai.telemetry;
 
+import java.util.regex.Pattern;
+import java.util.Locale;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +21,8 @@ public final class Telemetry {
 
     private static volatile TelemetryCounters counters;
     private static volatile TelemetryState state;
+    private static volatile String lastSelectedModel;
+    private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
 
     private Telemetry() {
     }
@@ -40,7 +45,7 @@ public final class Telemetry {
 
             if (loaded.isNewInstall()) {
                 log.info("Feather Wand sends an anonymous daily usage ping "
-                        + "(plugin/JMeter/Java version, OS, provider, feature usage counts). "
+                        + "(plugin/JMeter/Java version, OS, provider and well-known model name, feature and error counts). "
                         + "Disable with jmeter.ai.telemetry.enabled=false or DO_NOT_TRACK=1.");
             }
 
@@ -68,6 +73,56 @@ public final class Telemetry {
             }, "feather-wand-telemetry-shutdown"));
         } catch (Throwable t) {
             log.debug("Telemetry failed to start", t);
+        }
+    }
+
+    /** Remembers the chat-panel model of the latest Chat or Agent message for the daily ping. */
+    public static void noteModel(String selectedModel) {
+        lastSelectedModel = selectedModel;
+    }
+
+    static String lastSelectedModel() {
+        return lastSelectedModel;
+    }
+
+    /** Counts one call of an Agent tool by its built-in name, plus a failure counter when it failed. */
+    public static void recordTool(String toolName, boolean success) {
+        recordKey(toolKey(toolName));
+        if (!success) {
+            record(TelemetryFeature.OUTCOME_TOOL_FAILED);
+        }
+    }
+
+    /** Counts a provider failure as err_&lt;provider&gt;_&lt;category&gt;; never the message itself. */
+    public static void recordError(Throwable error) {
+        try {
+            if (counters == null) {
+                return;
+            }
+            recordKey(errorKey(TelemetryModels.provider(lastSelectedModel), ProviderErrors.category(error)));
+        } catch (Throwable t) {
+            // telemetry must never break the plugin
+        }
+    }
+
+    static String toolKey(String toolName) {
+        String name = toolName == null ? "" : toolName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
+        return "tool_" + (name.length() > 35 ? name.substring(0, 35) : name);
+    }
+
+    static String errorKey(String provider, String category) {
+        String p = provider == null ? "" : provider.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return "err_" + (p.isEmpty() ? "unknown" : p.length() > 12 ? p.substring(0, 12) : p) + "_" + category;
+    }
+
+    private static void recordKey(String key) {
+        try {
+            TelemetryCounters c = counters;
+            if (c != null && key != null && KEY.matcher(key).matches()) {
+                c.increment(key);
+            }
+        } catch (Throwable t) {
+            // telemetry must never break the plugin
         }
     }
 
