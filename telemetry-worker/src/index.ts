@@ -16,6 +16,12 @@ const STRING_FIELDS = [
 	"os",
 	"arch",
 	"provider",
+	"judgmentProvider",
+	"model",
+] as const;
+const ERROR_CATEGORIES = [
+	"auth", "forbidden", "not_found", "bad_request", "rate_limit",
+	"server", "timeout", "unreachable", "other",
 ] as const;
 
 function json(body: unknown, status = 200): Response {
@@ -66,6 +72,8 @@ interface Ping {
 	os?: string;
 	arch?: string;
 	provider?: string;
+	judgmentProvider?: string;
+	model?: string;
 	agentEnabled?: boolean;
 	firstRun?: boolean;
 	features?: Record<string, number>;
@@ -151,15 +159,16 @@ async function handlePing(request: Request, env: Env): Promise<Response> {
 	const ins = await env.DB.prepare(
 		`INSERT OR IGNORE INTO pings
 		 (install_id, day, ts, event, plugin_version, jmeter_version, java_version,
-		  os, arch, provider, agent_enabled, first_run, country)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		  os, arch, provider, agent_enabled, first_run, country, judgment_provider, model)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	).bind(
 		p.installId, day, ts, p.event,
 		p.pluginVersion ?? null, p.jmeterVersion ?? null, p.javaVersion ?? null,
 		p.os ?? null, p.arch ?? null, p.provider ?? null,
 		p.agentEnabled === undefined ? null : p.agentEnabled ? 1 : 0,
 		p.firstRun === undefined ? null : p.firstRun ? 1 : 0,
-		country
+		country,
+		p.judgmentProvider ?? null, p.model ?? null
 	).run();
 
 	if (ins.meta.changes === 1 && p.features) {
@@ -216,28 +225,58 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 			 ) WHERE rn = 1 GROUP BY ${col} ORDER BY installs DESC`
 		).bind(mauSince).all<StatsRow>()).results;
 
-	const [pluginVersions, jmeterVersions, oses, providers, countries, features] =
+	const [pluginVersions, jmeterVersions, oses, providers, countries,
+		javaVersions, arches, agentEnabled, judgmentProviders, models, features] =
 		await Promise.all([
 			breakdown("plugin_version"),
 			breakdown("jmeter_version"),
 			breakdown("os"),
 			breakdown("provider"),
 			breakdown("country"),
+			breakdown("java_version"),
+			breakdown("arch"),
+			breakdown("agent_enabled"),
+			breakdown("judgment_provider"),
+			breakdown("model"),
 			env.DB.prepare(
 				`SELECT feature, SUM(count) AS total, COUNT(DISTINCT install_id) AS installs
 				 FROM feature_counts WHERE day >= ? GROUP BY feature ORDER BY total DESC`
 			).bind(mauSince).all<StatsRow>().then(r => r.results),
 		]);
 
+	// Of the installs at least N days old, how many pinged again N or more days after their first ping.
+	const retention = await Promise.all([1, 7, 30].map(async (days) => {
+		const r = await env.DB.prepare(
+			`WITH firsts AS (SELECT install_id, MIN(day) AS first_day FROM pings GROUP BY install_id)
+			 SELECT COUNT(*) AS cohort,
+				SUM(CASE WHEN EXISTS (
+					SELECT 1 FROM pings p WHERE p.install_id = f.install_id
+					AND julianday(p.day) - julianday(f.first_day) >= ?2
+				) THEN 1 ELSE 0 END) AS retained
+			 FROM firsts f WHERE julianday(?1) - julianday(f.first_day) >= ?2`
+		).bind(today, days).first<{ cohort: number; retained: number | null }>();
+		return { days, cohort: r?.cohort ?? 0, retained: r?.retained ?? 0 };
+	}));
+
+	const versionAdoption = (await env.DB.prepare(
+		`SELECT day, plugin_version AS version, COUNT(DISTINCT install_id) AS installs
+		 FROM pings WHERE day >= ? GROUP BY day, plugin_version ORDER BY day, installs DESC`
+	).bind(mauSince).all<StatsRow>()).results;
+
 	return {
 		today, dau, wau, mau, totalInstalls,
-		dailyActive, newInstalls,
+		dailyActive, newInstalls, retention, versionAdoption,
 		breakdowns: {
 			pluginVersion: pluginVersions,
 			jmeterVersion: jmeterVersions,
 			os: oses,
 			provider: providers,
 			country: countries,
+			javaVersion: javaVersions,
+			arch: arches,
+			agentEnabled,
+			judgmentProvider: judgmentProviders,
+			model: models,
 		},
 		features,
 	};
@@ -257,9 +296,60 @@ function table(title: string, headers: string[], rows: unknown[][]): string {
 	return `<h2>${esc(title)}</h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
+function pct(part: number, whole: number): string {
+	return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "-";
+}
+
+function perInstall(r: StatsRow): string {
+	const installs = Number(r.installs);
+	return installs > 0 ? (Number(r.total) / installs).toFixed(1) : "-";
+}
+
+/** Splits err_<provider>_<category> into its parts; null for other keys. */
+function parseErrorKey(feature: string): [string, string] | null {
+	if (!feature.startsWith("err_")) return null;
+	const rest = feature.slice(4);
+	for (const c of ERROR_CATEGORIES) {
+		if (rest.endsWith(`_${c}`) && rest.length > c.length + 1) {
+			return [rest.slice(0, rest.length - c.length - 1), c];
+		}
+	}
+	return null;
+}
+
+/** Pivot of installs per day (rows) and plugin version (columns, the 6 most common). */
+function adoptionTable(rows: StatsRow[]): string {
+	const totals = new Map<string, number>();
+	for (const r of rows) {
+		const v = String(r.version ?? "(none)");
+		totals.set(v, (totals.get(v) ?? 0) + Number(r.installs));
+	}
+	const versions = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
+	const byDay = new Map<string, Map<string, number>>();
+	for (const r of rows) {
+		const d = String(r.day);
+		if (!byDay.has(d)) byDay.set(d, new Map());
+		byDay.get(d)!.set(String(r.version ?? "(none)"), Number(r.installs));
+	}
+	const body = [...byDay.entries()].map(([d, m]) => [d, ...versions.map(v => m.get(v) ?? 0)]);
+	return table("Plugin version adoption (30d, installs per day)", ["day", ...versions], body);
+}
+
 function statsPage(s: Record<string, unknown>): string {
 	const bd = s.breakdowns as Record<string, StatsRow[]>;
 	const rows = (r: StatsRow[]) => r.map(x => [x.value ?? "(none)", x.installs]);
+	const onOff = (r: StatsRow[]) => r.map(x => [x.value === 1 ? "on" : x.value === 0 ? "off" : "(none)", x.installs]);
+	const features = s.features as StatsRow[];
+	const name = (r: StatsRow) => String(r.feature);
+	const errors = features.filter(r => parseErrorKey(name(r)) !== null);
+	const outcomes = features.filter(r => name(r).startsWith("outcome_"));
+	const tools = features.filter(r => name(r).startsWith("tool_"));
+	const judgment = features.filter(r => name(r).startsWith("route_") || name(r).startsWith("triage_"));
+	const usage = features.filter(r => !errors.includes(r) && !outcomes.includes(r)
+		&& !tools.includes(r) && !judgment.includes(r));
+	const usageRows = (list: StatsRow[], strip = "") =>
+		list.map(r => [name(r).slice(strip.length), r.total, r.installs, perInstall(r)]);
+	const retention = s.retention as { days: number; cohort: number; retained: number }[];
 	return `<!doctype html><html><head><meta charset="utf-8"><title>Feather Wand Telemetry</title>
 <style>
 body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
@@ -287,7 +377,20 @@ ${table("JMeter versions (30d)", ["version", "installs"], rows(bd.jmeterVersion)
 ${table("OS (30d)", ["os", "installs"], rows(bd.os))}
 ${table("Providers (30d)", ["provider", "installs"], rows(bd.provider))}
 ${table("Countries (30d)", ["country", "installs"], rows(bd.country))}
-${table("Feature usage (30d)", ["feature", "total", "installs"], (s.features as StatsRow[]).map(r => [r.feature, r.total, r.installs]))}
+${table("Retention (all time)", ["came back after", "eligible installs", "returned", "rate"],
+		retention.map(r => [`${r.days} day${r.days === 1 ? "" : "s"}`, r.cohort, r.retained, pct(r.retained, r.cohort)]))}
+${adoptionTable(s.versionAdoption as StatsRow[])}
+${table("Java versions (30d)", ["version", "installs"], rows(bd.javaVersion))}
+${table("CPU architecture (30d)", ["arch", "installs"], rows(bd.arch))}
+${table("Agent Mode (30d)", ["agent mode", "installs"], onOff(bd.agentEnabled))}
+${table("Models (30d)", ["model", "installs"], rows(bd.model))}
+${table("Decisions backend (30d)", ["backend", "installs"], rows(bd.judgmentProvider))}
+${table("Feature usage (30d)", ["feature", "total", "installs", "per install"], usageRows(usage))}
+${table("Agent outcomes (30d)", ["outcome", "total", "installs", "per install"], usageRows(outcomes, "outcome_"))}
+${table("Agent tool calls (30d)", ["tool", "total", "installs", "per install"], usageRows(tools, "tool_"))}
+${table("Smart routing and triage (30d)", ["event", "total", "installs", "per install"], usageRows(judgment))}
+${table("Provider errors (30d)", ["provider", "error", "total", "installs"],
+		errors.map(r => { const [prov, cat] = parseErrorKey(name(r))!; return [prov, cat, r.total, r.installs]; }))}
 </body></html>`;
 }
 

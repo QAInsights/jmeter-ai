@@ -115,3 +115,57 @@ describe("stats numbers", () => {
 		]);
 	});
 });
+
+describe("extended stats", () => {
+	it("computes retention, version adoption and new breakdowns", async () => {
+		// x: first seen 10 days ago, back 2 days ago. y: first seen 3 days ago only. z: new today.
+		await insertPing("x", day(10), { ts: Date.now() - 10 * 86400_000 });
+		await insertPing("x", day(2), { plugin_version: "3.8.8", ts: Date.now() - 2 * 86400_000 });
+		await insertPing("y", day(3));
+		await insertPing("z", day(0));
+		await env.DB.prepare(
+			"UPDATE pings SET judgment_provider = 'openrouter', model = 'gpt-4o-mini' WHERE install_id = 'x' AND day = ?"
+		).bind(day(2)).run();
+
+		const s = await (await stats(`/v1/stats?token=${TOKEN}`)).json() as any;
+
+		expect(s.retention).toEqual([
+			{ days: 1, cohort: 2, retained: 1 },
+			{ days: 7, cohort: 1, retained: 1 },
+			{ days: 30, cohort: 0, retained: 0 },
+		]);
+		expect(s.versionAdoption).toEqual([
+			{ day: day(10), version: "3.8.5", installs: 1 },
+			{ day: day(3), version: "3.8.5", installs: 1 },
+			{ day: day(2), version: "3.8.8", installs: 1 },
+			{ day: day(0), version: "3.8.5", installs: 1 },
+		]);
+		expect(s.breakdowns.javaVersion).toEqual([{ value: "17", installs: 3 }]);
+		expect(s.breakdowns.arch).toEqual([{ value: "aarch64", installs: 3 }]);
+		expect(s.breakdowns.agentEnabled).toEqual([{ value: 1, installs: 3 }]);
+		expect(s.breakdowns.judgmentProvider).toContainEqual({ value: "openrouter", installs: 1 });
+		expect(s.breakdowns.model).toContainEqual({ value: "gpt-4o-mini", installs: 1 });
+	});
+
+	it("groups errors, outcomes, tools and routing on the HTML page", async () => {
+		await insertPing("a", day(0));
+		await env.DB.prepare(
+			`INSERT INTO feature_counts (install_id, day, feature, count) VALUES
+			 ('a', ?1, 'err_openai_not_found', 3), ('a', ?1, 'outcome_completed', 4),
+			 ('a', ?1, 'tool_add_element', 6), ('a', ?1, 'route_focused', 2), ('a', ?1, 'chat_message', 9)`
+		).bind(day(0)).run();
+
+		const html = await (await stats(`/stats?token=${TOKEN}`)).text();
+
+		for (const heading of ["Retention (all time)", "Plugin version adoption", "Java versions",
+			"CPU architecture", "Agent Mode", "Models", "Decisions backend", "Agent outcomes",
+			"Agent tool calls", "Smart routing and triage", "Provider errors"]) {
+			expect(html).toContain(heading);
+		}
+		expect(html).toContain("<td>openai</td><td>not_found</td><td>3</td>");
+		expect(html).toContain("<td>add_element</td><td>6</td><td>1</td><td>6.0</td>");
+		expect(html).toContain("<td>completed</td><td>4</td>");
+		expect(html).toContain("<td>route_focused</td><td>2</td>");
+		expect(html).toContain("<td>chat_message</td><td>9</td>");
+	});
+});

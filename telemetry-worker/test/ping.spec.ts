@@ -165,3 +165,22 @@ describe("POST /v1/ping", () => {
 		expect(res.status).toBe(404);
 	});
 });
+
+describe("POST /v1/ping new fields", () => {
+	it("stores judgmentProvider and model", async () => {
+		const res = await postPing(pingBody({ judgmentProvider: "openrouter", model: "gpt-4o-mini" }));
+		expect(res.status).toBe(204);
+		const row = await env.DB.prepare("SELECT judgment_provider, model FROM pings").first<any>();
+		expect(row).toEqual({ judgment_provider: "openrouter", model: "gpt-4o-mini" });
+	});
+
+	it("stores nulls when an older plugin omits them", async () => {
+		expect((await postPing(pingBody())).status).toBe(204);
+		const row = await env.DB.prepare("SELECT judgment_provider, model FROM pings").first<any>();
+		expect(row).toEqual({ judgment_provider: null, model: null });
+	});
+
+	it("rejects an overlong model", async () => {
+		expect((await postPing(pingBody({ model: "m".repeat(65) }))).status).toBe(400);
+	});
+});

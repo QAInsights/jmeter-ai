@@ -34,6 +34,19 @@ npx wrangler deploy
 The route `telemetry.jmeter.ai` is configured as a custom domain in
 `wrangler.jsonc`; add the DNS/zone in Cloudflare before deploying.
 
+## Updating an existing deployment
+
+When a PR adds a file under `migrations/`, apply it before deploying the new code:
+
+```bash
+cd telemetry-worker
+npm ci
+npx wrangler d1 migrations apply feather-wand-telemetry --remote
+npx wrangler deploy
+```
+
+Older plugin versions keep working: new ping fields are optional and unknown fields are ignored.
+
 ## Viewing stats
 
 - JSON: `curl -H "Authorization: Bearer $STATS_TOKEN" https://telemetry.jmeter.ai/v1/stats`
