@@ -9,10 +9,14 @@
 		"deploy:dry": "wrangler deploy --dry-run"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "0.22.0",
-		"@cloudflare/workers-types": "5.20260921.1",
+		"@cloudflare/vitest-pool-workers": "0.23.0",
+		"@cloudflare/workers-types": "5.20261011.1",
 		"typescript": "5.9.3",
 		"vitest": "4.1.11",
-		"wrangler": "4.135.0"
+		"wrangler": "4.149.0"
+	},
+	"overrides": {
+		"miniflare": "5.20261006.1-alpha",
+		"source-map-js": "1.2.2"
 	}
 }
