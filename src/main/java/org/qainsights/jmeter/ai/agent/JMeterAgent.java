@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.agent;
 
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -404,10 +406,19 @@ public final class JMeterAgent {
         }
         try {
             AgentRequestRouter.Decision decision = requestRouter.route(userMessage);
-            return decision == null ? AgentRequestRouter.Decision.unavailable() : decision;
+            return recordRoute(decision == null ? AgentRequestRouter.Decision.unavailable() : decision);
         } catch (RuntimeException e) {
-            return AgentRequestRouter.Decision.unavailable();
+            return recordRoute(AgentRequestRouter.Decision.unavailable());
         }
+    }
+
+    private static AgentRequestRouter.Decision recordRoute(AgentRequestRouter.Decision decision) {
+        switch (decision.outcome()) {
+            case FOCUSED -> Telemetry.record(TelemetryFeature.ROUTE_FOCUSED);
+            case ALL_TOOLS -> Telemetry.record(TelemetryFeature.ROUTE_ALL_TOOLS);
+            default -> Telemetry.record(TelemetryFeature.ROUTE_UNAVAILABLE);
+        }
+        return decision;
     }
 
     static int maxIterations() {

@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.utils;
 
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.NoRouteToHostException;
@@ -36,6 +37,7 @@ public final class ProviderErrors {
      * error while ..." for failures that are not recognised.
      */
     public static String describe(Throwable error, String action, boolean agentMode) {
+        Telemetry.recordError(error);
         if (RateLimitErrors.isRateLimited(error)) {
             return "Error: " + RateLimitErrors.describe(error, agentMode);
         }
@@ -70,6 +72,32 @@ public final class ProviderErrors {
             text = withDetail("Sorry, I encountered an error while " + action + ".", detail);
         }
         return "Error: " + text + "\n\n" + LOG_HINT;
+    }
+
+    /** Telemetry bucket for a failure: auth, forbidden, not_found, bad_request, rate_limit, server, timeout, unreachable or other. */
+    public static String category(Throwable error) {
+        if (RateLimitErrors.isRateLimited(error)) {
+            return "rate_limit";
+        }
+        int status = statusCode(error);
+        if (status == 401) {
+            return "auth";
+        } else if (status == 403) {
+            return "forbidden";
+        } else if (status == 404) {
+            return "not_found";
+        } else if (status == 400 || status == 422) {
+            return "bad_request";
+        } else if (status == 408 || status >= 500) {
+            return "server";
+        } else if (status > 0) {
+            return "other";
+        } else if (isTimeout(error)) {
+            return "timeout";
+        } else if (isUnreachable(error)) {
+            return "unreachable";
+        }
+        return "other";
     }
 
     /**

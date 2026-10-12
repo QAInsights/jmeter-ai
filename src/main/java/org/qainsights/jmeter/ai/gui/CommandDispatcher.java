@@ -122,11 +122,13 @@ public class CommandDispatcher {
 
         // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok and Meta Muse).
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
+            Telemetry.noteModel(cb.getSelectedModel());
             Telemetry.record(TelemetryFeature.AGENT_RUN);
             new AgentCommandRunner(cb, glowController, agentFactory).run(message);
             return;
         }
 
+        Telemetry.noteModel(cb.getSelectedModel());
         Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
 
         log.info("Checking if message is an element request: '{}'", message);

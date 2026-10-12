@@ -113,4 +113,12 @@ class ProviderErrorsTest {
         assertEquals(-1, ProviderErrors.statusCode(a));
         assertTrue(ProviderErrors.describe(a).startsWith("Error: Sorry"));
     }
+
+    @Test
+    void categoriesForTelemetry() {
+        assertEquals("timeout", ProviderErrors.category(new java.net.SocketTimeoutException("read timed out")));
+        assertEquals("unreachable", ProviderErrors.category(new java.net.UnknownHostException("api.example.com")));
+        assertEquals("other", ProviderErrors.category(new IllegalStateException("boom")));
+        assertEquals("other", ProviderErrors.category(null));
+    }
 }

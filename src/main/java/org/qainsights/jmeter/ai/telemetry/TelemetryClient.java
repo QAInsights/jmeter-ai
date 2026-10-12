@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.telemetry;
 
+import java.util.LinkedHashMap;
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.jmeter.util.JMeterUtils;
@@ -20,6 +22,7 @@ import java.util.Properties;
  */
 public class TelemetryClient {
     private static final Logger log = LoggerFactory.getLogger(TelemetryClient.class);
+    static final int MAX_FEATURES = 50;
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String VERSION_RESOURCE =
             "org/qainsights/jmeter/ai/telemetry/version.properties";
@@ -54,7 +57,7 @@ public class TelemetryClient {
             if (today.equals(state.getLastPingDay())) {
                 return;
             }
-            Map<String, Integer> snapshot = counters.snapshot();
+            Map<String, Integer> snapshot = limit(counters.snapshot());
             String json = buildPayload(snapshot);
             if (sender.send(json)) {
                 counters.subtract(snapshot);
@@ -78,6 +81,9 @@ public class TelemetryClient {
         root.put("os", System.getProperty("os.name", "unknown"));
         root.put("arch", System.getProperty("os.arch", "unknown"));
         root.put("provider", AiConfig.getProperty("jmeter.ai.service.type", "openai"));
+        root.put("judgmentProvider", AgentJudgmentConfig.activeBackend());
+        String selected = Telemetry.lastSelectedModel();
+        root.put("model", TelemetryModels.publicName(selected != null ? selected : TelemetryModels.configuredModel()));
         root.put("agentEnabled", JMeterAgent.isEnabled());
         root.put("firstRun", !state.isFirstPingSent());
         ObjectNode f = root.putObject("features");
@@ -87,6 +93,19 @@ public class TelemetryClient {
             }
         });
         return root.toString();
+    }
+
+    /** Keeps the most-used keys within the server's per-ping limit; the rest stay pending for the next ping. */
+    static Map<String, Integer> limit(Map<String, Integer> snapshot) {
+        if (snapshot.size() <= MAX_FEATURES) {
+            return snapshot;
+        }
+        Map<String, Integer> kept = new LinkedHashMap<>();
+        snapshot.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(MAX_FEATURES)
+                .forEach(e -> kept.put(e.getKey(), e.getValue()));
+        return kept;
     }
 
     static String pluginVersion() {
