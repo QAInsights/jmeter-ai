@@ -82,4 +82,16 @@ class JevTriageCardTest {
         assertTrue(card.isExpanded());
         assertTrue(card.getHeaderText().startsWith("▾"));
     }
+
+    @Test
+    void cardShowsSeverityOnlyWhenRated() {
+        List<TriageNotice.Row> rows = List.of(row("Checkout POST", "HTTP_SERVER", 0.9));
+        JevTriageCard rated = new JevTriageCard(
+                new TriageNotice(1, 1, "HTTP_SERVER", rows, "HIGH", 0.84), "openai:gpt-5");
+        JevTriageCard unrated = new JevTriageCard(
+                new TriageNotice(1, 1, "HTTP_SERVER", rows), "openai:gpt-5");
+
+        assertTrue(rated.getSummaryText().contains("severity: High (84%)"));
+        assertFalse(unrated.getSummaryText().contains("severity"));
+    }
 }

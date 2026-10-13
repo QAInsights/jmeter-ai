@@ -18,7 +18,7 @@ final class InteractionModeSelector extends JPanel {
         configure(chatButton, "Use plain chat without JMeter tools");
         configure(agentButton, agentAvailable
                 ? "Allow the AI to use JMeter tools"
-                : "Agent mode is disabled in JMeter properties");
+                : "Agent mode is off. Set jmeter.ai.agent.enabled=true in user.properties and restart JMeter");
         agentButton.setEnabled(agentAvailable);
 
         ButtonGroup group = new ButtonGroup();

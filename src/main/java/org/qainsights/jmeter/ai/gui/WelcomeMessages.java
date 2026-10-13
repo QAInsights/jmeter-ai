@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.service.ProviderStatus;
 import org.qainsights.jmeter.ai.utils.Constants;
 
@@ -14,7 +15,18 @@ public final class WelcomeMessages {
 
     /** Welcome for the live {@link ProviderStatus#fromConfig()} snapshot. */
     public static String forCurrentConfig() {
-        return forStatus(ProviderStatus.fromConfig());
+        return forCurrentConfig(new AgentModeNudge());
+    }
+
+    /** Adds the one-time Agent Mode tip when {@code nudge} says it is due, then marks it shown. */
+    static String forCurrentConfig(AgentModeNudge nudge) {
+        ProviderStatus status = ProviderStatus.fromConfig();
+        String welcome = forStatus(status);
+        if (nudge.shouldShow(status.hasAnyCloudProvider(), JMeterAgent.isEnabled())) {
+            nudge.markShown();
+            return welcome + AgentModeNudge.TIP;
+        }
+        return welcome;
     }
 
     /**

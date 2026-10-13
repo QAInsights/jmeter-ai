@@ -65,11 +65,64 @@ class TypeSafeJudgmentProviderTest {
     }
 
     @Test
-    void capabilitiesExposeOnlyImplementedChoiceJudgments() {
-        assertEquals(1, provider().capabilities().size());
+    void capabilitiesExposeOnlyImplementedChoiceAndScoreJudgments() {
+        assertEquals(2, provider().capabilities().size());
         assertTrue(provider().capabilities().contains(JudgmentProvider.Capability.CHOICE));
+        assertTrue(provider().capabilities().contains(JudgmentProvider.Capability.SCORE));
         assertFalse(provider().capabilities().contains(JudgmentProvider.Capability.NOUL));
-        assertFalse(provider().capabilities().contains(JudgmentProvider.Capability.SCORE));
+    }
+
+    @Test
+    void scoreSendsOrderedCriteriaAndParsesScoreAnswer() throws Exception {
+        respond(200, """
+                {"answers":{"severity":{"type":"score","score":2.1,"confidence":0.91,
+                "probabilities":{"0":0,"1":0.05,"2":0.8,"3":0.15}}}}
+                """);
+
+        JudgmentProvider.ScoreAnswer answer = provider().score(java.util.Map.of("total_failures", 12),
+                "Rate severity", levels());
+
+        assertEquals(2.1, answer.score());
+        assertEquals(0.91, answer.confidence());
+        assertEquals(2, answer.level(4));
+        com.fasterxml.jackson.databind.JsonNode question = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(requestBody.get()).path("questions").path("severity");
+        assertEquals("score", question.path("type").asText());
+        assertEquals("Rate severity", question.path("instructions").asText());
+        assertEquals(4, question.path("criteria").size());
+        assertEquals("Minor", question.path("criteria").get(0).asText());
+        assertEquals("Run invalid", question.path("criteria").get(3).asText());
+    }
+
+    @Test
+    void scoreRejectsMissingOffScaleOrWrongTypeAnswers() {
+        respond(200, "{\"answers\":{\"severity\":{\"type\":\"score\",\"score\":3.5,\"confidence\":0.9}}}");
+        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
+                () -> provider().score("x", "Rate severity", levels()));
+    }
+
+    @Test
+    void scoreRejectsAnswerOfAnotherType() {
+        respond(200, "{\"answers\":{\"severity\":{\"type\":\"choice\",\"choice\":\"A\",\"confidence\":0.9}}}");
+        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
+                () -> provider().score("x", "Rate severity", levels()));
+    }
+
+    @Test
+    void scoreRejectsInvalidInputsBeforeNetworkCall() {
+        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
+                () -> provider().score("x", "Rate", java.util.Map.of("Only", "one level")));
+        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
+                () -> provider().score("x", " ", levels()));
+    }
+
+    private static java.util.Map<String, String> levels() {
+        java.util.Map<String, String> levels = new java.util.LinkedHashMap<>();
+        levels.put("Low", "Minor");
+        levels.put("Medium", "Degraded");
+        levels.put("High", "Key transactions fail");
+        levels.put("Critical", "Run invalid");
+        return levels;
     }
 
     @Test

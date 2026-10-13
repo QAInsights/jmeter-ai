@@ -553,6 +553,7 @@ Type any of these directly in the chat box. All commands are context-aware and w
 | `@wrap` | Group HTTP samplers under Transaction Controllers. | `@wrap` *(select a Thread Group first)* |
 | `@code` | Extract the last AI code block into the JSR223 editor. | `@code` |
 | `@usage` | Show token-usage stats and recent conversation history. | `@usage` |
+| `@sla` | Add SLA assertions (Duration Assertion and response-code Response Assertion) under the selected element. No AI call. | `@sla p95 under 800 ms and no 5xx` |
 | `@prompts` | Browse and insert prompts from the prompt library. | `@prompts analyze` |
 
 ### 📚 Prompt Library
@@ -569,6 +570,13 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 - Run it after importing a recorded test plan to clean up generic names.
 - Use it before sharing plans with your team.
 - Apply custom rules: `@lint rename based on the URL`.
+
+### `@sla` Details
+`@sla` reads the SLA from plain English, without calling the AI, and adds the matching assertions under the selected sampler, controller, Thread Group or Test Plan, so they apply to every sampler in that scope.
+
+- **Response time:** "under 800 ms", "below 1.5 s", "max 300ms" add a **Duration Assertion**. If you name a percentile or average (`p95`, `p99`, `avg`), the reply explains that JMeter assertions check each sample, so any single sample over the limit fails. That is stricter than a p95 target; read the percentile itself from the HTML dashboard or Aggregate Report.
+- **Response codes:** "no 5xx", "no 4xx or 5xx", "no errors", "only 2xx" or "status 200" add a **Response Assertion** on the response code with a clear failure message.
+- **Not supported:** run-level targets such as error rate or throughput are listed as "Not added", because a per-sample assertion can't check them. Anything else the parser doesn't recognise is listed back to you, never guessed.
 
 ### `@wrap` Details
 `@wrap` uses pattern matching (not AI) to group related HTTP samplers under Transaction Controllers, preserving child elements and hierarchy. Great for imported or recorded plans.
@@ -587,7 +595,7 @@ Agent Mode lets the AI **autonomously edit your live JMeter test plan** through 
 
 ### Enabling Agent Mode
 
-Agent Mode is **off by default**. To turn it on:
+Agent Mode is **off by default**. When a cloud provider key is set and Agent Mode is off, the welcome message shows a one-time tip explaining how to turn it on (it never changes the setting for you; the marker lives at `~/.jmeter-ai/agent-mode-tip-shown`). To turn it on:
 
 ```properties
 # In user.properties or jmeter.properties
@@ -628,7 +636,7 @@ When enabled with a real API key, every request shows a dedicated **Jev Smart Ro
 
 With `jmeter.ai.typesafe.agent.routing.expansion.enabled=true`, a focused pack also advertises an `expand_tools` escape hatch: if the model realises it needs a capability outside its pack, it can ask for more tools instead of giving up. Jev re-classifies the request with the model's stated need, the live tool set grows (never shrinks, capped by `expansion.max`, never beyond the full registry), and a second **Jev Expanded Tools** card lists what was added. The grown tool set is re-advertised to the provider on the model's next request, so newly added tools are actually callable — for the API-backed models (Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse) and for the subscription CLIs, whose tool protocol is re-issued in the next prompt. Newly exposed destructive tools still require the usual confirmation.
 
-With `jmeter.ai.typesafe.agent.triage.enabled=true` (independent of routing), Jev also classifies failures reported by `get_test_results`. Each unique failure signature — sampler label, response code, and a bounded message — gets one Choice judgment into a root-cause bucket (connection, timeout, 4xx/5xx, auth/session, assertion, script, config), capped at `triage.max.failures` signatures per run. The verdicts surface in a **Jev Failure Triage** card grouped by category with a dominant-cause callout, and an advisory summary is appended to the tool result so the chat model diagnoses from a categorized picture. Triage is advisory only: unavailable Jev, a missing key, or a clean run leaves the result untouched.
+With `jmeter.ai.typesafe.agent.triage.enabled=true` (independent of routing), Jev also classifies failures reported by `get_test_results`. Each unique failure signature — sampler label, response code, and a bounded message — gets one Choice judgment into a root-cause bucket (connection, timeout, 4xx/5xx, auth/session, assertion, script, config), capped at `triage.max.failures` signatures per run. The verdicts surface in a **Jev Failure Triage** card grouped by category with a dominant-cause callout, and an advisory summary is appended to the tool result so the chat model diagnoses from a categorized picture. On every backend (Jev, OpenAI Decisions and OpenRouter Decisions) triage then asks one extra `score` question for the whole run and shows a **severity** of Low, Medium, High or Critical on the card and in the advisory, for example "severity: High (88%)". The score uses the same confidence threshold; a low-confidence or failed score just leaves severity out and keeps the categories. Triage is advisory only: unavailable Jev, a missing key, or a clean run leaves the result untouched.
 
 Jev never appears in the model picker, generates the answer, selects tool arguments, executes a tool, or bypasses destructive-operation confirmation. Feather Wand sends TypeSafe only the current request with attachment bodies removed plus, for triage, failure labels/codes/truncated messages; it does not send conversation history, the serialized test plan, element properties, result bodies, headers, cookies, or provider credentials. Leave either feature flag false to make zero TypeSafe requests and preserve the original Agent Mode path.
 
@@ -1092,7 +1100,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
-Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors. Only the count is sent, never what you typed or what the feature produced.
+Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors. Only the count is sent, never what you typed or what the feature produced.
 
 These counters are also sent, again as counts only:
 

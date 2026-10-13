@@ -105,6 +105,7 @@ public class Constants {
             "- `@optimize` - get optimization suggestions\n" +
             "- `@lint` - rename elements with meaningful names\n" +
             "- `@wrap` - group samplers under Transaction Controllers\n" +
+            "- `@sla` - add SLA assertions, e.g. `@sla under 800 ms and no 5xx`\n" +
             "- `@usage` - view AI usage statistics\n\n" +
             "Type a message below and press **Enter** to send. How can I help today?";
 }

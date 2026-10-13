@@ -144,6 +144,11 @@ class JevTriageCard extends JPanel {
         if (!notice.dominantCategory().isEmpty()) {
             text.append(" · dominant: ").append(FailureTriage.displayName(notice.dominantCategory()));
         }
+        String severity = FailureTriage.severityDisplayName(notice.severity());
+        if (!severity.isEmpty()) {
+            text.append(" · severity: ").append(severity)
+                    .append(" (").append(Math.round(notice.severityConfidence() * 100)).append("%)");
+        }
         if (total > rows) {
             text.append(" · ").append(total - rows).append(" more not triaged");
         }

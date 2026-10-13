@@ -41,6 +41,11 @@ public final class OpenRouterDecisionsJudgmentProvider implements JudgmentProvid
         return delegate.choose(state, instructions, criteria);
     }
 
+    @Override
+    public ScoreAnswer score(Object state, String instructions, Map<String, String> levels) {
+        return delegate.score(state, instructions, levels);
+    }
+
     /** Accepts the API root ({@code https://openrouter.ai/api}), the host, a {@code /v1} URL or the full endpoint. */
     static URI endpoint(String baseUrl) {
         String value = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim();

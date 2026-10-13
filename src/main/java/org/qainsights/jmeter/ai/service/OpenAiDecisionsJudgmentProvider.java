@@ -25,6 +25,7 @@ public final class OpenAiDecisionsJudgmentProvider implements JudgmentProvider {
     public static final String DEFAULT_MODEL = "gpt-6-luna";
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(15);
     static final String QUESTION_NAME = "route";
+    static final String SCORE_QUESTION_NAME = "severity";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final DecisionService decisions;
@@ -44,7 +45,7 @@ public final class OpenAiDecisionsJudgmentProvider implements JudgmentProvider {
 
     @Override
     public Set<Capability> capabilities() {
-        return Set.of(Capability.CHOICE);
+        return Set.of(Capability.CHOICE, Capability.SCORE);
     }
 
     @Override
@@ -66,6 +67,60 @@ public final class OpenAiDecisionsJudgmentProvider implements JudgmentProvider {
         } catch (RuntimeException e) {
             throw new DecisionsException("OpenAI Decisions response was malformed", e);
         }
+    }
+
+    @Override
+    public ScoreAnswer score(Object state, String instructions, Map<String, String> levels) {
+        if (instructions == null || instructions.isBlank() || levels == null || levels.size() < 2) {
+            throw new DecisionsException("A score judgment needs instructions and at least two levels");
+        }
+        DecisionCreateParams params = scoreRequest(state, instructions, levels);
+        Decision decision;
+        try {
+            decision = decisions.create(params, RequestOptions.builder().timeout(timeout).build());
+        } catch (RuntimeException e) {
+            throw new DecisionsException("OpenAI Decisions request failed", e);
+        }
+        try {
+            return parseScore(decision, levels.size());
+        } catch (DecisionsException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new DecisionsException("OpenAI Decisions response was malformed", e);
+        }
+    }
+
+    DecisionCreateParams scoreRequest(Object state, String instructions, Map<String, String> levels) {
+        DecisionCreateParams.Question.Score.Builder question = DecisionCreateParams.Question.Score.builder()
+                .name(SCORE_QUESTION_NAME)
+                .instructions(instructions);
+        levels.forEach((label, description) -> question.addLevel(
+                DecisionCreateParams.Question.Score.Level.builder()
+                        .label(label).description(description).build()));
+        return DecisionCreateParams.builder()
+                .model(model)
+                .input(input(state))
+                .addQuestion(question.build())
+                .build();
+    }
+
+    private static ScoreAnswer parseScore(Decision decision, int levelCount) {
+        List<Decision.Answer> answers = decision.answers();
+        if (answers.isEmpty()) {
+            throw new DecisionsException("OpenAI Decisions response contained no answers");
+        }
+        Decision.Answer answer = answers.get(0);
+        if (answer.isRefusal()) {
+            throw new DecisionsException("OpenAI Decisions declined to answer");
+        }
+        if (!answer.isScore()) {
+            throw new DecisionsException("OpenAI Decisions response did not contain a score answer");
+        }
+        Decision.Answer.Score score = answer.asScore();
+        if (!JudgmentProvider.validScore(score.score(), score.confidence(), levelCount)) {
+            throw new DecisionsException("OpenAI Decisions response contained an invalid score");
+        }
+        return new ScoreAnswer(score.score(), score.confidence());
     }
 
     DecisionCreateParams request(Object state, String instructions, Map<String, String> criteria) {

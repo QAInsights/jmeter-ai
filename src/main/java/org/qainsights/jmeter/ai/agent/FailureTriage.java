@@ -50,6 +50,26 @@ public final class FailureTriage {
         }
     }
 
+    /** Ordered run severity, lowest first; the score question uses this order as its scale. */
+    public enum Severity {
+        LOW("Low", "Isolated or minor failures. The run still represents the system's behaviour under load."),
+        MEDIUM("Medium", "Some transactions fail. Results are degraded but still usable with caveats."),
+        HIGH("High", "Key transactions fail. The results cannot be trusted for a performance sign-off."),
+        CRITICAL("Critical", "The system is unreachable or most samples fail. The run is not valid.");
+
+        private final String displayName;
+        private final String description;
+
+        Severity(String displayName, String description) {
+            this.displayName = displayName;
+            this.description = description;
+        }
+
+        public String displayName() {
+            return displayName;
+        }
+    }
+
     /** Bucket for verdicts whose confidence fell below the threshold or were unusable. */
     public static final String UNCLASSIFIED = "UNCLASSIFIED";
 
@@ -59,6 +79,10 @@ public final class FailureTriage {
             "Classify the single most likely root cause of this failed JMeter sample. "
                     + "Use its sampler label, response code and response message.";
     private static final Map<String, String> CRITERIA = criteria();
+    private static final String SEVERITY_INSTRUCTIONS =
+            "Rate how severe these failures from one JMeter load test run are for the system under test. "
+                    + "Use how many samples failed, their root-cause categories, response codes and messages.";
+    private static final Map<String, String> SEVERITY_LEVELS = severityLevels();
 
     private final JudgmentProvider provider;
     private final double minConfidence;
@@ -95,7 +119,8 @@ public final class FailureTriage {
         if (rows.isEmpty()) {
             return null;
         }
-        return new TriageOutcome(buildNotice(rows, totalFailures), advisory(rows));
+        SeverityRating severity = rateSeverity(failures, rows, totalFailures);
+        return new TriageOutcome(buildNotice(rows, totalFailures, severity), advisory(rows, severity));
     }
 
     /** Both outputs of one triage pass: the card payload and the model-facing advisory text. */
@@ -103,6 +128,44 @@ public final class FailureTriage {
     }
 
     private record Row(String label, String category, double confidence) {
+    }
+
+    private record SeverityRating(Severity severity, double confidence) {
+    }
+
+    /**
+     * One score judgment for the whole run, only on SCORE-capable backends and only when at
+     * least one failure was classified. Errors and low confidence leave the rating out.
+     */
+    private SeverityRating rateSeverity(List<TestRunSummary.Failure> failures, List<Row> rows, int totalFailures) {
+        if (!provider.capabilities().contains(JudgmentProvider.Capability.SCORE)
+                || rows.stream().allMatch(row -> UNCLASSIFIED.equals(row.category()))) {
+            return null;
+        }
+        List<Map<String, String>> signatures = new ArrayList<>();
+        List<TestRunSummary.Failure> unique = unique(failures);
+        for (int i = 0; i < rows.size() && i < unique.size(); i++) {
+            TestRunSummary.Failure failure = unique.get(i);
+            signatures.add(Map.of("label", failure.getLabel(),
+                    "response_code", failure.getResponseCode(),
+                    "message", bound(failure.getMessage()),
+                    "category", rows.get(i).category()));
+        }
+        try {
+            JudgmentProvider.ScoreAnswer answer = provider.score(
+                    Map.of("total_failures", totalFailures,
+                            "unique_failures", unique.size(),
+                            "failures", signatures),
+                    SEVERITY_INSTRUCTIONS, SEVERITY_LEVELS);
+            if (answer == null || answer.confidence() < minConfidence) {
+                return null;
+            }
+            Severity[] levels = Severity.values();
+            return new SeverityRating(levels[answer.level(levels.length)], answer.confidence());
+        } catch (RuntimeException e) {
+            log.warn("{} triage could not rate severity: {}", AgentJudgmentConfig.brand(), e.getMessage());
+            return null;
+        }
     }
 
     private List<TestRunSummary.Failure> unique(List<TestRunSummary.Failure> failures) {
@@ -133,7 +196,7 @@ public final class FailureTriage {
         }
     }
 
-    private TriageNotice buildNotice(List<Row> rows, int totalFailures) {
+    private TriageNotice buildNotice(List<Row> rows, int totalFailures, SeverityRating severity) {
         Map<String, Integer> counts = countsByCategory(rows);
         int classified = 0;
         String dominant = "";
@@ -151,10 +214,13 @@ public final class FailureTriage {
         for (Row row : rows) {
             noticeRows.add(new TriageNotice.Row(row.label(), row.category(), row.confidence()));
         }
-        return new TriageNotice(totalFailures, classified, dominant, noticeRows);
+        return severity == null
+                ? new TriageNotice(totalFailures, classified, dominant, noticeRows)
+                : new TriageNotice(totalFailures, classified, dominant, noticeRows,
+                        severity.severity().name(), severity.confidence());
     }
 
-    private String advisory(List<Row> rows) {
+    private String advisory(List<Row> rows, SeverityRating severity) {
         StringBuilder text = new StringBuilder(AgentJudgmentConfig.brand() + " triage (advisory):");
         Map<String, Integer> counts = countsByCategory(rows);
         List<String> parts = new ArrayList<>();
@@ -162,6 +228,10 @@ public final class FailureTriage {
             parts.add(displayName(entry.getKey()) + "×" + entry.getValue());
         }
         text.append(" categories: ").append(String.join(", ", parts)).append(".");
+        if (severity != null) {
+            text.append(" Severity: ").append(severity.severity().displayName())
+                    .append(" (").append(Math.round(severity.confidence() * 100)).append("%).");
+        }
         for (Row row : rows) {
             text.append("\n- ").append(row.label()).append(" → ")
                     .append(displayName(row.category()))
@@ -190,9 +260,29 @@ public final class FailureTriage {
         }
     }
 
+    /** Display name for a severity name; empty for blank or unknown values. */
+    public static String severityDisplayName(String severity) {
+        if (severity == null || severity.isEmpty()) {
+            return "";
+        }
+        try {
+            return Severity.valueOf(severity).displayName();
+        } catch (IllegalArgumentException e) {
+            return "";
+        }
+    }
+
     private static String bound(String message) {
         String value = message == null ? "" : message;
         return value.length() <= MAX_MESSAGE_CHARS ? value : value.substring(0, MAX_MESSAGE_CHARS);
+    }
+
+    private static Map<String, String> severityLevels() {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (Severity severity : Severity.values()) {
+            values.put(severity.displayName(), severity.description);
+        }
+        return Collections.unmodifiableMap(values);
     }
 
     private static Map<String, String> criteria() {

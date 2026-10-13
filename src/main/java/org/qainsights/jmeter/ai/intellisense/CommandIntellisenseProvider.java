@@ -21,6 +21,7 @@ public class CommandIntellisenseProvider {
         DESCRIPTIONS.put("@optimize", "Get optimization suggestions for the plan");
         DESCRIPTIONS.put("@this", "Inspect the currently selected element");
         DESCRIPTIONS.put("@testplan", "Ask questions about the whole test plan");
+        DESCRIPTIONS.put("@sla", "Add SLA assertions, e.g. @sla under 800 ms and no 5xx");
         DESCRIPTIONS.put("@prompts", "Browse and insert saved prompts");
     }
 
@@ -33,6 +34,7 @@ public class CommandIntellisenseProvider {
         commands.add("@optimize");
         commands.add("@this");
         commands.add("@testplan");
+        commands.add("@sla");
         commands.add("@prompts");
 
         // Add more commands here as needed

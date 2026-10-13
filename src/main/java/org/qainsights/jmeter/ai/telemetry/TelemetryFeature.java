@@ -12,6 +12,7 @@ public enum TelemetryFeature {
     CMD_WRAP("cmd_wrap"),
     CMD_USAGE("cmd_usage"),
     CMD_TESTPLAN("cmd_testplan"),
+    CMD_SLA("cmd_sla"),
     CORRELATION_STUDIO_OPEN("correlation_studio_open"),
     AI_TERMINAL_TOGGLE("ai_terminal_toggle"),
     JSR223_REFACTOR("jsr223_refactor"),
