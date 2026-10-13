@@ -23,7 +23,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Transport-independent MCP server logic: answers JSON-RPC 2.0 messages for
@@ -58,6 +60,8 @@ public final class McpServerProtocol {
             ReadToolHandlers.GET_ELEMENT_CHILDREN, ReadToolHandlers.GET_ELEMENT_SCHEMA);
 
     private static final String STOP_TOOL = "stop_test";
+    /** Tools that run the plan without editing the tree, so reads may continue while they block. */
+    private static final Set<String> RUN_TOOLS = Set.of("run_test", "get_test_results", "find_correlation_candidates");
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
@@ -67,6 +71,7 @@ public final class McpServerProtocol {
     private final Set<String> destructiveTools;
     private final String serverVersion;
     private final ReentrantLock toolLock = new ReentrantLock(true);
+    private final ReentrantReadWriteLock treeLock = new ReentrantReadWriteLock(true);
     long busyWaitMillis = 5000;
 
     public McpServerProtocol(ToolRegistry registry, Set<String> destructiveTools,
@@ -85,6 +90,11 @@ public final class McpServerProtocol {
         if (message != null && message.isArray()) {
             if (message.isEmpty()) {
                 return error(null, INVALID_REQUEST, "Empty batch");
+            }
+            for (JsonNode item : message) {
+                if (item != null && "initialize".equals(item.path("method").asText(null))) {
+                    return error(null, INVALID_REQUEST, "initialize must not be sent in a batch");
+                }
             }
             ArrayNode replies = json.createArrayNode();
             for (JsonNode item : message) {
@@ -108,16 +118,20 @@ public final class McpServerProtocol {
             return error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 message");
         }
         JsonNode id = message.get("id");
-        if (!message.hasNonNull("method")) {
+        JsonNode methodNode = message.get("method");
+        if (methodNode == null && id != null && (message.has("result") || message.has("error"))) {
             return null;
+        }
+        if (id != null && !id.isNull() && !id.isTextual() && !id.isIntegralNumber()) {
+            return error(null, INVALID_REQUEST, "The id must be a string or an integer");
+        }
+        if (methodNode == null || !methodNode.isTextual()) {
+            return error(id == null || id.isNull() ? null : id, INVALID_REQUEST, "The method must be a string");
         }
         if (id == null || id.isNull()) {
             return null;
         }
-        if (!id.isTextual() && !id.isIntegralNumber()) {
-            return error(null, INVALID_REQUEST, "The id must be a string or an integer");
-        }
-        String method = message.path("method").asText();
+        String method = methodNode.asText();
         JsonNode params = message.path("params");
         try {
             JsonNode result = switch (method) {
@@ -139,6 +153,11 @@ public final class McpServerProtocol {
     }
 
     private JsonNode initialize(JsonNode params) {
+        if (!params.isObject() || !params.path("protocolVersion").isTextual()
+                || !params.path("capabilities").isObject() || !params.path("clientInfo").isObject()) {
+            throw new RpcException(INVALID_PARAMS,
+                    "initialize needs protocolVersion, capabilities and clientInfo");
+        }
         String requested = params.path("protocolVersion").asText("");
         ObjectNode result = json.createObjectNode();
         result.put("protocolVersion", SUPPORTED_VERSIONS.contains(requested) ? requested : LATEST_VERSION);
@@ -221,18 +240,38 @@ public final class McpServerProtocol {
         return result;
     }
 
+    /** True for requests that must get through while the workers are saturated: ping and stop_test. */
+    static boolean isControlRequest(JsonNode message) {
+        if (message == null || !message.isObject()) {
+            return false;
+        }
+        String method = message.path("method").asText("");
+        return "ping".equals(method)
+                || ("tools/call".equals(method) && STOP_TOOL.equals(message.path("params").path("name").asText("")));
+    }
+
     /**
-     * Read tools and stop_test run at once. Every other call holds one lock from node lookup to mutation,
-     * so a second client cannot replace or reshape the tree under it; a caller that cannot get the lock
-     * in time gets a "busy" tool error instead of tying up a worker thread.
+     * stop_test runs at once. Edits and runs take turns on one lock, held from node lookup to mutation, so a
+     * second client cannot replace or reshape the tree under them. Edits also hold the tree write lock and
+     * reads the read lock, so a read never sees half of an edit, yet reads still work during a long run.
+     * A caller that cannot get a lock in time gets a "busy" tool error instead of tying up a worker thread.
      */
     private ToolResult execute(String name, Map<String, Object> args) {
-        if (READ_ONLY_TOOLS.contains(name) || STOP_TOOL.equals(name)) {
+        if (STOP_TOOL.equals(name)) {
             return executor.execute(name, args);
         }
+        if (READ_ONLY_TOOLS.contains(name)) {
+            return withLock(treeLock.readLock(), () -> executor.execute(name, args));
+        }
+        return withLock(toolLock, () -> RUN_TOOLS.contains(name)
+                ? executor.execute(name, args)
+                : withLock(treeLock.writeLock(), () -> executor.execute(name, args)));
+    }
+
+    private ToolResult withLock(Lock lock, java.util.function.Supplier<ToolResult> call) {
         boolean locked;
         try {
-            locked = toolLock.tryLock(busyWaitMillis, TimeUnit.MILLISECONDS);
+            locked = lock.tryLock(busyWaitMillis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             locked = false;
@@ -243,9 +282,9 @@ public final class McpServerProtocol {
                     + "call stop_test to end a running test.");
         }
         try {
-            return executor.execute(name, args);
+            return call.get();
         } finally {
-            toolLock.unlock();
+            lock.unlock();
         }
     }
 

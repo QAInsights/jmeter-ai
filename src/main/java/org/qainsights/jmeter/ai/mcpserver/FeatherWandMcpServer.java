@@ -69,8 +69,14 @@ public final class FeatherWandMcpServer {
         return url(running != null ? running.port() : configuredPort());
     }
 
-    public static String token() throws IOException {
-        return McpServerToken.loadOrCreate(McpServerToken.defaultPath());
+    /** The token clients must send: the live server's when running, otherwise the stored one. */
+    public static synchronized String token() throws IOException {
+        return running != null ? running.token() : McpServerToken.loadOrCreate(McpServerToken.defaultPath());
+    }
+
+    /** False when {@code jmeter.ai.agent.confirm.destructive=false} lets destructive tools run unasked. */
+    public static boolean confirmsDestructive() {
+        return Boolean.parseBoolean(AiConfig.getProperty(JMeterAgent.CONFIRM_DESTRUCTIVE_KEY, "true"));
     }
 
     /**
@@ -99,7 +105,6 @@ public final class FeatherWandMcpServer {
     }
 
     private static ToolConfirmationGate destructiveGate() {
-        boolean confirm = Boolean.parseBoolean(AiConfig.getProperty(JMeterAgent.CONFIRM_DESTRUCTIVE_KEY, "true"));
-        return confirm ? new SwingToolConfirmationGate() : null;
+        return confirmsDestructive() ? new SwingToolConfirmationGate() : null;
     }
 }

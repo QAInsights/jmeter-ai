@@ -25,7 +25,7 @@ class McpHttpServerTest {
 
     private static final String TOKEN = "a".repeat(64);
     private static final String INITIALIZE = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
-            + "\"params\":{\"protocolVersion\":\"2025-06-18\"}}";
+            + "\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"1\"}}}";
 
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newHttpClient();
@@ -140,24 +140,47 @@ class McpHttpServerTest {
     }
 
     @Test
-    void aFloodOfRequestsIsShedAndTheServerRecovers() throws Exception {
-        protocol.busyWaitMillis = 1500;
-        CompletableFuture<HttpResponse<String>> run = http.sendAsync(post(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_test_results\"}}")
-                .header("Authorization", "Bearer " + TOKEN).build(), HttpResponse.BodyHandlers.ofString());
+    void aFloodIsShedWith503ButStopTestStillGetsThrough() throws Exception {
+        protocol.busyWaitMillis = 8000;
+        CompletableFuture<HttpResponse<String>> run = http.sendAsync(authed(toolCall("get_test_results", "{}")),
+                HttpResponse.BodyHandlers.ofString());
         assertTrue(tools.started.await(5, TimeUnit.SECONDS));
-        List<CompletableFuture<?>> flood = new ArrayList<>();
-        for (int i = 0; i < McpHttpServer.QUEUE_CAPACITY + 20; i++) {
-            flood.add(HttpClient.newHttpClient().sendAsync(post(
-                    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\","
-                            + "\"arguments\":{\"text\":\"x\"}}}")
-                    .header("Authorization", "Bearer " + TOKEN).build(), HttpResponse.BodyHandlers.ofString())
-                    .handle((r, e) -> r));
+        List<CompletableFuture<Integer>> flood = new ArrayList<>();
+        for (int i = 0; i < McpHttpServer.QUEUE_CAPACITY + 12; i++) {
+            flood.add(HttpClient.newHttpClient().sendAsync(authed(toolCall("echo", "{\"text\":\"x\"}")),
+                    HttpResponse.BodyHandlers.ofString()).handle((r, e) -> r == null ? -1 : r.statusCode()));
         }
-        CompletableFuture.allOf(flood.toArray(new CompletableFuture<?>[0])).get(30, TimeUnit.SECONDS);
+        long deadline = System.currentTimeMillis() + 5000;
+        while (flood.stream().noneMatch(f -> f.isDone() && f.join() == 503) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
+        assertTrue(flood.stream().anyMatch(f -> f.isDone() && f.join() == 503), "overflow requests get 503");
+
+        long before = System.nanoTime();
+        HttpResponse<String> stop = send(post(toolCall("stop_test", "{}")).header("Authorization", "Bearer " + TOKEN));
+        assertEquals(200, stop.statusCode());
+        assertTrue(stop.body().contains("stopped"), stop.body());
+        assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before) < 3000, "stop_test skipped the queue");
+
         tools.release.countDown();
         assertEquals(200, run.get(10, TimeUnit.SECONDS).statusCode());
+        CompletableFuture.allOf(flood.toArray(new CompletableFuture<?>[0])).get(60, TimeUnit.SECONDS);
         assertEquals(200, send(post(INITIALIZE).header("Authorization", "Bearer " + TOKEN)).statusCode());
+    }
+
+    @Test
+    void bearerSchemeIsCaseInsensitiveAndTrailingJsonIsRejected() throws Exception {
+        assertEquals(200, send(post(INITIALIZE).header("Authorization", "bearer " + TOKEN)).statusCode());
+        assertEquals(400, send(post(INITIALIZE + " {}").header("Authorization", "Bearer " + TOKEN)).statusCode());
+    }
+
+    private static String toolCall(String name, String args) {
+        return "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name
+                + "\",\"arguments\":" + args + "}}";
+    }
+
+    private HttpRequest authed(String body) {
+        return post(body).header("Authorization", "Bearer " + TOKEN).build();
     }
 
     @Test

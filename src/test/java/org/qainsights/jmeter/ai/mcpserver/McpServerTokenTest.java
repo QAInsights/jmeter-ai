@@ -51,4 +51,16 @@ class McpServerTokenTest {
             assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
         }
     }
+
+    @Test
+    void anExistingTokenIsTightenedToOwnerOnly() throws Exception {
+        if (!FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            return;
+        }
+        Path file = dir.resolve("mcp-token");
+        Files.writeString(file, "e".repeat(64));
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
+        assertEquals("e".repeat(64), McpServerToken.loadOrCreate(file));
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
+    }
 }

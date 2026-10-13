@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.mcpserver.FeatherWandMcpServer;
@@ -34,7 +35,19 @@ public class McpServerMenuItem extends JMenuItem {
 
     public McpServerMenuItem() {
         super("Feather Wand MCP Server");
-        addActionListener(e -> new McpServerDialog(SwingUtilities.getWindowAncestor(this)).setVisible(true));
+        addActionListener(e -> showDialog());
+    }
+
+    private McpServerDialog dialog;
+
+    private void showDialog() {
+        if (dialog == null || !dialog.isDisplayable()) {
+            dialog = new McpServerDialog(SwingUtilities.getWindowAncestor(this));
+        } else {
+            dialog.refresh();
+        }
+        dialog.setVisible(true);
+        dialog.toFront();
     }
 
     static final class McpServerDialog extends JDialog {
@@ -73,7 +86,11 @@ public class McpServerMenuItem extends JMenuItem {
             root.add(clients, BorderLayout.CENTER);
 
             JLabel note = new JLabel("<html>Only this computer can connect, and every request needs the token. "
-                    + "Delete, move, open and correlation edits still ask you in JMeter first.</html>");
+                    + (FeatherWandMcpServer.confirmsDestructive()
+                            ? "Delete, move, open and correlation edits still ask you in JMeter first."
+                            : "Delete, move, open and correlation edits run without asking, because "
+                                    + JMeterAgent.CONFIRM_DESTRUCTIVE_KEY + "=false.")
+                    + "</html>");
             note.setFont(UiTokens.caption(note.getFont()));
             note.setForeground(ThemeColors.secondaryText());
 
@@ -104,18 +121,23 @@ public class McpServerMenuItem extends JMenuItem {
         }
 
         private void onToggle() {
-            try {
-                if (FeatherWandMcpServer.isRunning()) {
+            if (FeatherWandMcpServer.isRunning()) {
+                try {
                     FeatherWandMcpServer.stop();
-                } else {
-                    FeatherWandMcpServer.start();
+                } catch (RuntimeException e) {
+                    JOptionPane.showMessageDialog(this, "The MCP server could not stop cleanly.\n" + e.getMessage(),
+                            "Feather Wand MCP Server", JOptionPane.ERROR_MESSAGE);
                 }
-            } catch (IOException | RuntimeException e) {
-                JOptionPane.showMessageDialog(this, "The MCP server could not start on "
-                        + FeatherWandMcpServer.url() + ".\n" + e.getMessage()
-                        + "\n\nIf another program uses the port, set " + FeatherWandMcpServer.PORT_KEY
-                        + " in user.properties and restart JMeter.",
-                        "Feather Wand MCP Server", JOptionPane.ERROR_MESSAGE);
+            } else {
+                try {
+                    FeatherWandMcpServer.start();
+                } catch (IOException | RuntimeException e) {
+                    JOptionPane.showMessageDialog(this, "The MCP server could not start on "
+                            + FeatherWandMcpServer.url() + ".\n" + e.getMessage()
+                            + "\n\nIf another program uses the port, set " + FeatherWandMcpServer.PORT_KEY
+                            + " in user.properties and click Start server again.",
+                            "Feather Wand MCP Server", JOptionPane.ERROR_MESSAGE);
+                }
             }
             refresh();
         }
@@ -136,7 +158,7 @@ public class McpServerMenuItem extends JMenuItem {
             refresh();
         }
 
-        private void refresh() {
+        void refresh() {
             boolean running = FeatherWandMcpServer.isRunning();
             String url = FeatherWandMcpServer.url();
             status.setText(running ? "\u25CF  Running at " + url : "\u25CF  Stopped");
@@ -144,23 +166,25 @@ public class McpServerMenuItem extends JMenuItem {
             toggle.setText(running ? "Stop server" : "Start server");
 
             String token;
+            String tokenError = null;
             try {
                 token = FeatherWandMcpServer.token();
             } catch (IOException e) {
-                token = "<token unavailable: " + e.getMessage() + ">";
+                token = null;
+                tokenError = "The token in ~/.jmeter-ai/mcp-token could not be read or written: " + e.getMessage();
             }
             int selected = Math.max(0, clients.getSelectedIndex());
             clients.removeAll();
-            addClient("Claude Code", "Run in a terminal:", McpClientSetup::claudeCode, url, token);
-            addClient("Cursor", "Add to ~/.cursor/mcp.json:", McpClientSetup::cursor, url, token);
-            addClient("Codex", "Add to ~/.codex/config.toml:", McpClientSetup::codex, url, token);
+            addClient("Claude Code", "Run in a terminal:", McpClientSetup::claudeCode, url, token, tokenError);
+            addClient("Cursor", "Add to ~/.cursor/mcp.json:", McpClientSetup::cursor, url, token, tokenError);
+            addClient("Codex", "Add to ~/.codex/config.toml:", McpClientSetup::codex, url, token, tokenError);
             clients.setSelectedIndex(Math.min(selected, clients.getTabCount() - 1));
         }
 
         private void addClient(String name, String hint, BiFunction<String, String, String> setup,
-                String url, String token) {
-            String full = setup.apply(url, token);
-            String masked = setup.apply(url, mask(token));
+                String url, String token, String tokenError) {
+            String full = token == null ? null : setup.apply(url, token);
+            String masked = token == null ? tokenError : setup.apply(url, mask(token));
 
             JPanel panel = new JPanel(new BorderLayout(0, UiTokens.SPACE_2));
             panel.setOpaque(false);
@@ -184,6 +208,7 @@ public class McpServerMenuItem extends JMenuItem {
 
             JButton copy = new QuietButton("Copy setup", QuietButton.Kind.OUTLINED);
             copy.setToolTipText("Copies the setup with the full token");
+            copy.setEnabled(full != null);
             copy.addActionListener(e -> {
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(full), null);
                 copy.setText("Copied");

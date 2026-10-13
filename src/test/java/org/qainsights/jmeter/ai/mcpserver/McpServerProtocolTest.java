@@ -47,7 +47,7 @@ class McpServerProtocolTest {
     @Test
     void initializeOffersTheLatestVersionForAnUnknownOne() throws Exception {
         JsonNode reply = send("{\"jsonrpc\":\"2.0\",\"id\":\"a\",\"method\":\"initialize\","
-                + "\"params\":{\"protocolVersion\":\"1999-01-01\"}}");
+                + "\"params\":{\"protocolVersion\":\"1999-01-01\",\"capabilities\":{},\"clientInfo\":{\"name\":\"t\",\"version\":\"1\"}}}");
         assertEquals(McpServerProtocol.LATEST_VERSION, reply.path("result").path("protocolVersion").asText());
         assertEquals("a", reply.path("id").asText());
     }
@@ -70,7 +70,7 @@ class McpServerProtocolTest {
     @Test
     void toolsListMapsSchemasAndSafetyHints() throws Exception {
         JsonNode list = send("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}").path("result").path("tools");
-        assertEquals(4, list.size());
+        assertEquals(5, list.size());
 
         JsonNode read = list.get(0);
         assertEquals("get_tree_state", read.path("name").asText());
@@ -146,6 +146,29 @@ class McpServerProtocolTest {
         tools.release.countDown();
         assertEquals("done", run.get(5, TimeUnit.SECONDS).path("result").path("content").get(0).path("text").asText());
         assertFalse(call("echo", "{\"text\":\"hi\"}").path("result").path("isError").asBoolean(true));
+    }
+
+    @Test
+    void malformedRequestsAndBatchedInitializeAreRejected() throws Exception {
+        assertEquals(-32600, send("{\"jsonrpc\":\"2.0\",\"id\":7}").path("error").path("code").asInt());
+        assertEquals(-32600, send("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":5}").path("error").path("code").asInt());
+        assertNull(send("{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{}}"));
+        assertEquals(-32602, send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")
+                .path("error").path("code").asInt());
+        JsonNode batch = send("[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}},"
+                + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}]");
+        assertEquals(-32600, batch.path("error").path("code").asInt());
+    }
+
+    @Test
+    void controlRequestsAreOnlyPingAndStopTest() throws Exception {
+        ObjectMapper m = new ObjectMapper();
+        assertTrue(McpServerProtocol.isControlRequest(m.readTree("{\"method\":\"ping\"}")));
+        assertTrue(McpServerProtocol.isControlRequest(
+                m.readTree("{\"method\":\"tools/call\",\"params\":{\"name\":\"stop_test\"}}")));
+        assertFalse(McpServerProtocol.isControlRequest(
+                m.readTree("{\"method\":\"tools/call\",\"params\":{\"name\":\"echo\"}}")));
+        assertFalse(McpServerProtocol.isControlRequest(m.readTree("[]")));
     }
 
     @Test
