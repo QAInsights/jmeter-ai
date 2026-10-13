@@ -10,7 +10,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,13 +30,15 @@ class McpHttpServerTest {
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newHttpClient();
     private McpHttpServer server;
+    private McpTestTools tools;
+    private McpServerProtocol protocol;
     private URI uri;
 
     @BeforeEach
     void start() throws Exception {
-        McpTestTools tools = new McpTestTools();
-        server = McpHttpServer.start(0, TOKEN,
-                new McpServerProtocol(tools.registry, Set.of("delete_element"), null, "1.0"));
+        tools = new McpTestTools();
+        protocol = new McpServerProtocol(tools.registry, Set.of("delete_element"), null, "1.0");
+        server = McpHttpServer.start(0, TOKEN, protocol);
         uri = URI.create("http://127.0.0.1:" + server.port() + McpHttpServer.PATH);
     }
 
@@ -122,6 +128,36 @@ class McpHttpServerTest {
         String big = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"pad\":\""
                 + "x".repeat(McpHttpServer.MAX_BODY_BYTES) + "\"}}";
         assertEquals(413, send(post(big).header("Authorization", "Bearer " + TOKEN)).statusCode());
+    }
+
+    @Test
+    void tokenCanBeSwappedWithoutRestarting() throws Exception {
+        String fresh = "d".repeat(64);
+        server.setToken(fresh);
+        assertEquals(401, send(post(INITIALIZE).header("Authorization", "Bearer " + TOKEN)).statusCode());
+        assertEquals(200, send(post(INITIALIZE).header("Authorization", "Bearer " + fresh)).statusCode());
+        assertThrows(IllegalArgumentException.class, () -> server.setToken(""));
+    }
+
+    @Test
+    void aFloodOfRequestsIsShedAndTheServerRecovers() throws Exception {
+        protocol.busyWaitMillis = 1500;
+        CompletableFuture<HttpResponse<String>> run = http.sendAsync(post(
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_test_results\"}}")
+                .header("Authorization", "Bearer " + TOKEN).build(), HttpResponse.BodyHandlers.ofString());
+        assertTrue(tools.started.await(5, TimeUnit.SECONDS));
+        List<CompletableFuture<?>> flood = new ArrayList<>();
+        for (int i = 0; i < McpHttpServer.QUEUE_CAPACITY + 20; i++) {
+            flood.add(HttpClient.newHttpClient().sendAsync(post(
+                    "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\","
+                            + "\"arguments\":{\"text\":\"x\"}}}")
+                    .header("Authorization", "Bearer " + TOKEN).build(), HttpResponse.BodyHandlers.ofString())
+                    .handle((r, e) -> r));
+        }
+        CompletableFuture.allOf(flood.toArray(new CompletableFuture<?>[0])).get(30, TimeUnit.SECONDS);
+        tools.release.countDown();
+        assertEquals(200, run.get(10, TimeUnit.SECONDS).statusCode());
+        assertEquals(200, send(post(INITIALIZE).header("Authorization", "Bearer " + TOKEN)).statusCode());
     }
 
     @Test

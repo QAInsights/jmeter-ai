@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Transport-independent MCP server logic: answers JSON-RPC 2.0 messages for
@@ -55,6 +57,7 @@ public final class McpServerProtocol {
             ReadToolHandlers.GET_TREE_STATE, ReadToolHandlers.GET_ELEMENT_CONFIG,
             ReadToolHandlers.GET_ELEMENT_CHILDREN, ReadToolHandlers.GET_ELEMENT_SCHEMA);
 
+    private static final String STOP_TOOL = "stop_test";
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
@@ -63,6 +66,8 @@ public final class McpServerProtocol {
     private final ToolExecutor executor;
     private final Set<String> destructiveTools;
     private final String serverVersion;
+    private final ReentrantLock toolLock = new ReentrantLock(true);
+    long busyWaitMillis = 5000;
 
     public McpServerProtocol(ToolRegistry registry, Set<String> destructiveTools,
             ToolConfirmationGate confirmationGate, String serverVersion) {
@@ -202,7 +207,7 @@ public final class McpServerProtocol {
             throw new RpcException(INVALID_PARAMS, "arguments must be a JSON object");
         }
         Telemetry.record(TelemetryFeature.MCP_TOOL_CALL);
-        ToolResult outcome = executor.execute(name, args);
+        ToolResult outcome = execute(name, args);
         ObjectNode result = json.createObjectNode();
         ObjectNode content = result.putArray("content").addObject();
         content.put("type", "text");
@@ -214,6 +219,34 @@ public final class McpServerProtocol {
             result.put("isError", true);
         }
         return result;
+    }
+
+    /**
+     * Read tools and stop_test run at once. Every other call holds one lock from node lookup to mutation,
+     * so a second client cannot replace or reshape the tree under it; a caller that cannot get the lock
+     * in time gets a "busy" tool error instead of tying up a worker thread.
+     */
+    private ToolResult execute(String name, Map<String, Object> args) {
+        if (READ_ONLY_TOOLS.contains(name) || STOP_TOOL.equals(name)) {
+            return executor.execute(name, args);
+        }
+        boolean locked;
+        try {
+            locked = toolLock.tryLock(busyWaitMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            locked = false;
+        }
+        if (!locked) {
+            return ToolResult.error("busy", "Another Feather Wand tool call is still running, for example "
+                    + "get_test_results or a confirmation dialog in JMeter. Retry once it finishes; "
+                    + "call stop_test to end a running test.");
+        }
+        try {
+            return executor.execute(name, args);
+        } finally {
+            toolLock.unlock();
+        }
     }
 
     private ObjectNode envelope(JsonNode id) {

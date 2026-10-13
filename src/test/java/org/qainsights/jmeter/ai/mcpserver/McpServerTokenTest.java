@@ -44,5 +44,11 @@ class McpServerTokenTest {
         String second = McpServerToken.regenerate(file);
         assertNotEquals(first, second);
         assertEquals(second, McpServerToken.loadOrCreate(file));
+        try (var listing = Files.list(dir)) {
+            assertEquals(1, listing.count());
+        }
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
+        }
     }
 }

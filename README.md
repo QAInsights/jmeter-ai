@@ -892,6 +892,7 @@ Then ask the client something like *"Open checkout.jmx in JMeter, add a Response
 - The server needs the JMeter GUI to be open; it does not run in non-GUI (`-n`) mode.
 - It uses the MCP Streamable HTTP transport with JSON replies (protocol versions `2025-06-18`, `2025-03-26` and `2024-11-05`). It offers tools only, with no resources, prompts or SSE stream.
 - `get_test_results` and `find_correlation_candidates` run the plan and block until it finishes, so keep thread counts and durations small when a client calls them.
+- Edits and runs go one at a time, even across clients, so two clients cannot change the tree under each other. A call that waits more than 5 seconds for the previous one gets a `busy` error and can retry. Read tools and `stop_test` always run at once.
 
 ## 💨 Streaming AI Responses
 

@@ -73,13 +73,14 @@ public final class FeatherWandMcpServer {
         return McpServerToken.loadOrCreate(McpServerToken.defaultPath());
     }
 
-    /** Replaces the token, restarting the server if it runs, so old client setups stop working. */
+    /**
+     * Replaces the token so old client setups stop working. A running server switches to the new token
+     * in place; if the new token cannot be written, the old one and the listener stay as they were.
+     */
     public static synchronized String regenerateToken() throws IOException {
-        boolean wasRunning = running != null;
-        stop();
         String token = McpServerToken.regenerate(McpServerToken.defaultPath());
-        if (wasRunning) {
-            start();
+        if (running != null) {
+            running.setToken(token);
         }
         return token;
     }

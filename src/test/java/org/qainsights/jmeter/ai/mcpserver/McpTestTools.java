@@ -10,6 +10,8 @@ import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /** Fake tools standing in for the live-tree Agent handlers. */
@@ -17,6 +19,8 @@ final class McpTestTools {
 
     final List<String> calls = new ArrayList<>();
     final ToolRegistry registry = new ToolRegistry();
+    final CountDownLatch started = new CountDownLatch(1);
+    final CountDownLatch release = new CountDownLatch(1);
 
     McpTestTools() {
         add(ToolSpec.builder("get_tree_state").description("Returns the tree.").build(),
@@ -34,6 +38,15 @@ final class McpTestTools {
                 args -> "fail".equals(args.get("text"))
                         ? ToolResult.error("bad_text", "Text was fail")
                         : ToolResult.ok(args.get("text") + " x" + args.get("count")));
+        add(ToolSpec.builder("get_test_results").description("Runs the plan and waits.").build(), args -> {
+            started.countDown();
+            try {
+                return release.await(10, TimeUnit.SECONDS) ? ToolResult.ok("done") : ToolResult.error("timeout", "x");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ToolResult.error("interrupted", "x");
+            }
+        });
     }
 
     private void add(ToolSpec spec, Function<Map<String, Object>, ToolResult> body) {

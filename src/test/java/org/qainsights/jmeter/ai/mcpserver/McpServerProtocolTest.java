@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -68,7 +70,7 @@ class McpServerProtocolTest {
     @Test
     void toolsListMapsSchemasAndSafetyHints() throws Exception {
         JsonNode list = send("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}").path("result").path("tools");
-        assertEquals(3, list.size());
+        assertEquals(4, list.size());
 
         JsonNode read = list.get(0);
         assertEquals("get_tree_state", read.path("name").asText());
@@ -119,6 +121,31 @@ class McpServerProtocolTest {
         allow = true;
         JsonNode allowed = call("delete_element", "{\"element_id\":\"Test Plan/Thread Group\"}").path("result");
         assertEquals("deleted Test Plan/Thread Group", allowed.path("content").get(0).path("text").asText());
+    }
+
+    @Test
+    void aSecondEditWaitsForTheRunningCallThenGetsBusy() throws Exception {
+        protocol.busyWaitMillis = 50;
+        CompletableFuture<JsonNode> run = CompletableFuture.supplyAsync(() -> {
+            try {
+                return call("get_test_results", "{}");
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        assertTrue(tools.started.await(5, TimeUnit.SECONDS));
+
+        JsonNode busy = call("echo", "{\"text\":\"hi\"}").path("result");
+        assertTrue(busy.path("isError").asBoolean());
+        assertTrue(busy.path("content").get(0).path("text").asText().startsWith("busy:"));
+        assertFalse(tools.calls.contains("echo"));
+
+        JsonNode read = call("get_tree_state", "{}").path("result");
+        assertFalse(read.path("isError").asBoolean(true));
+
+        tools.release.countDown();
+        assertEquals("done", run.get(5, TimeUnit.SECONDS).path("result").path("content").get(0).path("text").asText());
+        assertFalse(call("echo", "{\"text\":\"hi\"}").path("result").path("isError").asBoolean(true));
     }
 
     @Test

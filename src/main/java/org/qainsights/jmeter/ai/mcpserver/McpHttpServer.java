@@ -17,8 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -34,12 +36,14 @@ public final class McpHttpServer implements AutoCloseable {
     public static final String PATH = "/mcp";
     static final int MAX_BODY_BYTES = 4 * 1024 * 1024;
     private static final int WORKER_THREADS = 4;
+    static final int QUEUE_CAPACITY = 32;
+    private static final byte[] IPV4_LOOPBACK = {127, 0, 0, 1};
     private static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "[::1]", "::1");
 
     private final ObjectMapper json = new ObjectMapper();
     private final HttpServer server;
     private final ExecutorService workers;
-    private final byte[] expectedAuthorization;
+    private volatile byte[] expectedAuthorization;
     private final McpServerProtocol protocol;
 
     private McpHttpServer(HttpServer server, ExecutorService workers, String token, McpServerProtocol protocol) {
@@ -54,18 +58,28 @@ public final class McpHttpServer implements AutoCloseable {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("token must not be blank");
         }
-        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
+        HttpServer server = HttpServer.create(
+                new InetSocketAddress(InetAddress.getByAddress("localhost", IPV4_LOOPBACK), port), 0);
         AtomicInteger counter = new AtomicInteger();
-        ExecutorService workers = Executors.newFixedThreadPool(WORKER_THREADS, r -> {
-            Thread t = new Thread(r, "feather-wand-mcp-" + counter.incrementAndGet());
-            t.setDaemon(true);
-            return t;
-        });
+        ExecutorService workers = new ThreadPoolExecutor(WORKER_THREADS, WORKER_THREADS, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(QUEUE_CAPACITY), r -> {
+                    Thread t = new Thread(r, "feather-wand-mcp-" + counter.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                }, new ThreadPoolExecutor.AbortPolicy());
         McpHttpServer mcp = new McpHttpServer(server, workers, token, protocol);
         server.createContext(PATH, mcp::handle);
         server.setExecutor(workers);
         server.start();
         return mcp;
+    }
+
+    /** Swaps the accepted token without dropping the listener. */
+    public void setToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("token must not be blank");
+        }
+        expectedAuthorization = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
     }
 
     public int port() {
