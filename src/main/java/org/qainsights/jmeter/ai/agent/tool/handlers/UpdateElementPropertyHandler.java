@@ -202,12 +202,12 @@ public final class UpdateElementPropertyHandler {
         };
     }
 
-    private static JMeterTreeNode currentNode(GuiPackage gui) {
+    static JMeterTreeNode currentNode(GuiPackage gui) {
         return gui.getTreeListener() == null ? null : gui.getTreeListener().getCurrentNode();
     }
 
     /** Reloads the open editor panel for {@code node} from its element, without a stale write-back. */
-    private static void reloadPanel(GuiPackage gui, JMeterTreeNode node, boolean isCurrent) {
+    static void reloadPanel(GuiPackage gui, JMeterTreeNode node, boolean isCurrent) {
         try {
             if (isCurrent) {
                 JMeterGUIComponent comp = gui.getGui(node.getTestElement());

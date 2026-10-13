@@ -47,10 +47,11 @@ class AiMenuCreatorTest {
         JMenuItem[] items = creator.getMenuItemsAtLocation(MENU_LOCATION.RUN);
 
         assertNotNull(items);
-        assertEquals(3, items.length);
+        assertEquals(4, items.length);
         assertTrue(items[0] instanceof AiMenuItem);
         assertTrue(items[1] instanceof org.qainsights.jmeter.ai.correlation.CorrelationMenuItem);
         assertTrue(items[2] instanceof org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem);
+        assertTrue(items[3] instanceof McpServerMenuItem);
     }
 
     @Test
@@ -69,15 +70,16 @@ class AiMenuCreatorTest {
         JMenuItem[] items = creator.getMenuItemsAtLocation(MENU_LOCATION.RUN);
 
         assertNotNull(items);
-        assertEquals(8, items.length);
+        assertEquals(9, items.length);
         assertTrue(items[0] instanceof AiMenuItem);
         assertTrue(items[1] instanceof org.qainsights.jmeter.ai.correlation.CorrelationMenuItem);
         assertTrue(items[2] instanceof org.qainsights.jmeter.ai.claudecode.ClaudeCodeMenuItem);
-        assertTrue(items[3] instanceof org.qainsights.jmeter.ai.agent.dev.AddElementDevMenuItem);
-        assertTrue(items[4] instanceof org.qainsights.jmeter.ai.agent.dev.UpdateElementPropertyDevMenuItem);
-        assertTrue(items[5] instanceof org.qainsights.jmeter.ai.agent.dev.DeleteElementDevMenuItem);
-        assertTrue(items[6] instanceof org.qainsights.jmeter.ai.agent.dev.ToggleElementDevMenuItem);
-        assertTrue(items[7] instanceof org.qainsights.jmeter.ai.agent.dev.MoveElementDevMenuItem);
+        assertTrue(items[3] instanceof McpServerMenuItem);
+        assertTrue(items[4] instanceof org.qainsights.jmeter.ai.agent.dev.AddElementDevMenuItem);
+        assertTrue(items[5] instanceof org.qainsights.jmeter.ai.agent.dev.UpdateElementPropertyDevMenuItem);
+        assertTrue(items[6] instanceof org.qainsights.jmeter.ai.agent.dev.DeleteElementDevMenuItem);
+        assertTrue(items[7] instanceof org.qainsights.jmeter.ai.agent.dev.ToggleElementDevMenuItem);
+        assertTrue(items[8] instanceof org.qainsights.jmeter.ai.agent.dev.MoveElementDevMenuItem);
     }
 
     @Test

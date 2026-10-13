@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.mcpserver.FeatherWandMcpServer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.jmeter.gui.plugin.MenuCreator;
@@ -35,6 +37,11 @@ public class AiMenuCreator implements MenuCreator {
         } catch (Throwable e) {
             log.warn("Failed to start telemetry", e);
         }
+        try {
+            FeatherWandMcpServer.startIfEnabled();
+        } catch (Throwable e) {
+            log.warn("Failed to start the Feather Wand MCP server", e);
+        }
     }
 
     /**
@@ -55,6 +62,7 @@ public class AiMenuCreator implements MenuCreator {
                 items.add(new AiMenuItem(parentMenu));
                 items.add(new CorrelationMenuItem());
                 items.add(new ClaudeCodeMenuItem(parentMenu));
+                items.add(new McpServerMenuItem());
                 if (isDevMenuEnabled()) {
                     items.add(new AddElementDevMenuItem());
                     items.add(new UpdateElementPropertyDevMenuItem());

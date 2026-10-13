@@ -87,4 +87,35 @@ class TestPlanRunnerTest {
         assertEquals(3, summary.getSuccessCount());
         assertEquals(0, summary.getFailureCount());
     }
+
+    @Test
+    @Timeout(30)
+    void stopActive_endsARunningToolRunEarly() throws Exception {
+        assertFalse(TestPlanRunner.stopActive(false), "nothing to stop before a run");
+        TestPlanRunner runner = new TestPlanRunner();
+        java.util.concurrent.CompletableFuture<TestRunSummary> run =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> runner.runTree(planWithLoops(50_000_000), 25));
+        long deadline = System.currentTimeMillis() + 10_000;
+        boolean requested = false;
+        while (!requested && System.currentTimeMillis() < deadline) {
+            requested = TestPlanRunner.stopActive(true);
+            if (!requested) {
+                Thread.sleep(10);
+            }
+        }
+        assertTrue(requested, "the private engine was registered as active");
+        TestRunSummary summary = run.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        assertFalse(summary.isTimedOut());
+        assertTrue(summary.getTotalSamples() < 50_000_000);
+        assertFalse(TestPlanRunner.stopActive(false), "the engine is cleared once the run ends");
+    }
+
+    @Test
+    @Timeout(30)
+    void runTree_timeoutStopsALongRun() {
+        long before = System.currentTimeMillis();
+        TestRunSummary summary = new TestPlanRunner().runTree(planWithLoops(50_000_000), 1);
+        assertTrue(summary.isTimedOut());
+        assertTrue(System.currentTimeMillis() - before < 15_000);
+    }
 }

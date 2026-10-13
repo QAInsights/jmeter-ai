@@ -7,6 +7,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementRenamer;
+import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
 import org.qainsights.jmeter.ai.agent.tool.ParamType;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
@@ -107,7 +108,18 @@ public final class RenameElementHandler {
             if (gui == null) {
                 return false;
             }
-            return mutator.renameElement(gui.getTreeModel(), node, newName);
+            // Same order as update_element_property: flush pending panel edits, rename, then reload the
+            // open editor so its stale Name field cannot write the old name back on the next selection.
+            boolean isCurrent = node == UpdateElementPropertyHandler.currentNode(gui);
+            EdtExecutor edt = EdtExecutor.swing();
+            if (isCurrent) {
+                edt.run(gui::updateCurrentNode);
+            }
+            if (!mutator.renameElement(gui.getTreeModel(), node, newName)) {
+                return false;
+            }
+            edt.run(() -> UpdateElementPropertyHandler.reloadPanel(gui, node, isCurrent));
+            return true;
         };
     }
 
