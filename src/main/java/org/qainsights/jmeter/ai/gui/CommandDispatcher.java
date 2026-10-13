@@ -374,7 +374,7 @@ public class CommandDispatcher {
     /** Pure parsing plus a tree insert, so it runs on the EDT without a worker. */
     private void handleSlaCommand(String message) {
         log.info("Processing @sla command");
-        cb.setLastCommandType("NONE");
+        cb.setLastCommandType("SLA");
         cb.setInputEnabled(false);
         javax.swing.SwingUtilities.invokeLater(() -> {
             try {

@@ -6,6 +6,8 @@ import java.util.List;
 import org.apache.jmeter.assertions.DurationAssertion;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.exceptions.IllegalUserActionException;
+import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.Sampler;
 import org.apache.jmeter.control.Controller;
@@ -25,6 +27,10 @@ public final class SlaCommandHandler {
 
     static final String DURATION_GUI = "org.apache.jmeter.assertions.gui.DurationAssertionGui";
     static final String RESPONSE_GUI = "org.apache.jmeter.assertions.gui.AssertionGui";
+
+    static final String NOTHING_TO_UNDO = "Nothing to undo: the last `@sla` added no assertions that are still in the plan.";
+
+    private static List<JMeterTreeNode> lastAdded = List.of();
 
     static final String HELP = "Tell me the SLA after `@sla`, for example:\n"
             + "- `@sla under 800 ms and no 5xx`\n"
@@ -50,15 +56,44 @@ public final class SlaCommandHandler {
         }
         List<TestElement> elements = buildAssertions(spec, message);
         try {
-            for (TestElement element : elements) {
-                guiPackage.getTreeModel().addComponent(element, node);
-            }
-            guiPackage.getTreeModel().nodeStructureChanged(node);
+            addAll(guiPackage.getTreeModel(), node, elements);
         } catch (Exception e) {
             log.warn("Could not add @sla assertions under {}", node.getName(), e);
             return "I couldn't add the assertions under **" + node.getName() + "**: " + e.getMessage();
         }
         return reply(spec, node.getName(), elements);
+    }
+
+    static synchronized void addAll(JMeterTreeModel model, JMeterTreeNode parent, List<TestElement> elements)
+            throws IllegalUserActionException {
+        List<JMeterTreeNode> added = new ArrayList<>();
+        for (TestElement element : elements) {
+            added.add(model.addComponent(element, parent));
+        }
+        model.nodeStructureChanged(parent);
+        lastAdded = added;
+    }
+
+    /** Removes the assertions added by the last {@code @sla}; Ctrl+Z in the chat calls this. */
+    public static String undoLast() {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        return guiPackage == null ? NOTHING_TO_UNDO : undoLast(guiPackage.getTreeModel());
+    }
+
+    static synchronized String undoLast(JMeterTreeModel model) {
+        int removed = 0;
+        for (JMeterTreeNode node : lastAdded) {
+            if (node.getParent() != null) {
+                model.removeNodeFromParent(node);
+                removed++;
+            }
+        }
+        lastAdded = List.of();
+        if (removed == 0) {
+            return NOTHING_TO_UNDO;
+        }
+        return "Removed " + removed + (removed == 1 ? " SLA assertion" : " SLA assertions")
+                + " added by the last `@sla`.";
     }
 
     static boolean canHoldAssertions(TestElement element) {

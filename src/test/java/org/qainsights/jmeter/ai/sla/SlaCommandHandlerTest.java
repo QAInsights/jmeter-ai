@@ -83,4 +83,21 @@ class SlaCommandHandlerTest {
         assertEquals("1.5 s", SlaCommandHandler.formatMillis(1500));
         assertEquals("1250 ms", SlaCommandHandler.formatMillis(1250));
     }
+
+    @Test
+    void undoLastRemovesOnlyTheAssertionsItAdded() throws Exception {
+        org.apache.jmeter.gui.tree.JMeterTreeModel model = new org.apache.jmeter.gui.tree.JMeterTreeModel();
+        org.apache.jmeter.gui.tree.JMeterTreeNode plan =
+                (org.apache.jmeter.gui.tree.JMeterTreeNode) ((org.apache.jmeter.gui.tree.JMeterTreeNode) model.getRoot()).getChildAt(0);
+        org.apache.jmeter.gui.tree.JMeterTreeNode controller = model.addComponent(new LoopController(), plan);
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla under 800 ms and no 5xx");
+
+        SlaCommandHandler.addAll(model, controller, SlaCommandHandler.buildAssertions(spec, "x"));
+        assertEquals(2, controller.getChildCount());
+
+        assertTrue(SlaCommandHandler.undoLast(model).contains("Removed 2 SLA assertions"));
+        assertEquals(0, controller.getChildCount());
+        assertEquals(1, plan.getChildCount());
+        assertEquals(SlaCommandHandler.NOTHING_TO_UNDO, SlaCommandHandler.undoLast(model));
+    }
 }
