@@ -198,11 +198,12 @@ class FailureTriageTest {
 
         FailureTriage.TriageOutcome outcome = triage.triage(List.of(
                 failure("Checkout POST", "503", "Service Unavailable"),
-                failure("Search GET", "", "Read timed out")), 40);
+                failure("Search GET", "", "Read timed out")), 40, 10000);
 
         assertEquals(1, provider.scoreStates.size());
         Map<?, ?> state = (Map<?, ?>) provider.scoreStates.get(0);
         assertEquals(40, state.get("total_failures"));
+        assertEquals(10000, state.get("total_samples"));
         assertEquals(2, ((List<?>) state.get("failures")).size());
         assertEquals("HIGH", outcome.notice().severity());
         assertEquals(0.88, outcome.notice().severityConfidence());
@@ -243,6 +244,7 @@ class FailureTriageTest {
                 .triage(List.of(failure("Login POST", "", "Read timed out")), 1);
 
         assertEquals(1, provider.scoreStates.size());
+        assertFalse(((Map<?, ?>) provider.scoreStates.get(0)).containsKey("total_samples"));
         assertFalse(outcome.notice().hasSeverity());
         assertEquals("TIMEOUT", outcome.notice().rows().get(0).category());
     }

@@ -94,8 +94,12 @@ public final class SlaParser {
             if (clause.isEmpty()) {
                 continue;
             }
+            if (UNSUPPORTED.matcher(clause).find()) {
+                unsupported.add(raw.trim());
+                continue;
+            }
             Matcher duration = DURATION.matcher(clause);
-            if (duration.find() && !clause.contains("%")) {
+            if (duration.find()) {
                 long millis = toMillis(duration.group(1), duration.group(2));
                 if (millis > 0 && (maxMillis == 0 || millis < maxMillis)) {
                     maxMillis = millis;
@@ -114,11 +118,7 @@ public final class SlaParser {
                 exactCode = exact.group(1);
                 continue;
             }
-            if (UNSUPPORTED.matcher(clause).find()) {
-                unsupported.add(raw.trim());
-            } else {
-                unrecognized.add(raw.trim());
-            }
+            unrecognized.add(raw.trim());
         }
         if (codeRule != null && !exactCode.isEmpty()) {
             codeRule = null;
@@ -141,6 +141,9 @@ public final class SlaParser {
         }
         if (no && clause.matches(".*\\b(http )?errors?\\b.*") && !clause.matches(".*\\d.*")) {
             return CodeRule.NO_4XX_5XX;
+        }
+        if (no) {
+            return null;
         }
         if (clause.matches(".*\\b2xx\\b.*") || clause.matches("^(all |only )?success(ful)?( responses?)?$")) {
             return CodeRule.ONLY_2XX;

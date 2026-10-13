@@ -60,4 +60,21 @@ class SlaParserTest {
         assertTrue(SlaParser.parse("@sla").isEmpty());
         assertTrue(SlaParser.parse(null).isEmpty());
     }
+
+    @Test
+    void runLevelClauseWithATimeUnitIsNotTurnedIntoADurationAssertion() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla throughput under 2 s and p90 below 900 ms");
+
+        assertEquals(900, spec.maxMillis());
+        assertEquals("throughput under 2 s", spec.unsupported().get(0));
+    }
+
+    @Test
+    void negated2xxIsNotReversedIntoOnly2xx() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla no 2xx");
+
+        assertNull(spec.codeRule());
+        assertTrue(spec.isEmpty());
+        assertEquals("no 2xx", spec.unrecognized().get(0));
+    }
 }

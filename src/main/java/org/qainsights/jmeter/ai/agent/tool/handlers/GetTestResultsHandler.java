@@ -141,7 +141,8 @@ public final class GetTestResultsHandler {
         if (triage == null) {
             return text;
         }
-        FailureTriage.TriageOutcome outcome = triage.triage(summary.getFailures(), summary.getFailureCount());
+        FailureTriage.TriageOutcome outcome = triage.triage(summary.getFailures(), summary.getFailureCount(),
+                summary.getTotalSamples());
         if (outcome == null) {
             return text;
         }

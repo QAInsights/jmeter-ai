@@ -81,7 +81,8 @@ public final class FailureTriage {
     private static final Map<String, String> CRITERIA = criteria();
     private static final String SEVERITY_INSTRUCTIONS =
             "Rate how severe these failures from one JMeter load test run are for the system under test. "
-                    + "Use how many samples failed, their root-cause categories, response codes and messages.";
+                    + "Use how many samples failed out of total_samples when given, their root-cause categories, "
+                    + "response codes and messages.";
     private static final Map<String, String> SEVERITY_LEVELS = severityLevels();
 
     private final JudgmentProvider provider;
@@ -105,6 +106,11 @@ public final class FailureTriage {
      * return the untriaged result unchanged.
      */
     public TriageOutcome triage(List<TestRunSummary.Failure> failures, int totalFailures) {
+        return triage(failures, totalFailures, 0);
+    }
+
+    /** {@code totalSamples} lets the severity score weigh failures against the run size; 0 when unknown. */
+    public TriageOutcome triage(List<TestRunSummary.Failure> failures, int totalFailures, int totalSamples) {
         if (provider == null || failures == null || failures.isEmpty() || maxFailures < 1
                 || !provider.capabilities().contains(JudgmentProvider.Capability.CHOICE)) {
             return null;
@@ -119,7 +125,7 @@ public final class FailureTriage {
         if (rows.isEmpty()) {
             return null;
         }
-        SeverityRating severity = rateSeverity(failures, rows, totalFailures);
+        SeverityRating severity = rateSeverity(failures, rows, totalFailures, totalSamples);
         return new TriageOutcome(buildNotice(rows, totalFailures, severity), advisory(rows, severity));
     }
 
@@ -137,7 +143,8 @@ public final class FailureTriage {
      * One score judgment for the whole run, only on SCORE-capable backends and only when at
      * least one failure was classified. Errors and low confidence leave the rating out.
      */
-    private SeverityRating rateSeverity(List<TestRunSummary.Failure> failures, List<Row> rows, int totalFailures) {
+    private SeverityRating rateSeverity(List<TestRunSummary.Failure> failures, List<Row> rows,
+                                       int totalFailures, int totalSamples) {
         if (!provider.capabilities().contains(JudgmentProvider.Capability.SCORE)
                 || rows.stream().allMatch(row -> UNCLASSIFIED.equals(row.category()))) {
             return null;
@@ -152,11 +159,14 @@ public final class FailureTriage {
                     "category", rows.get(i).category()));
         }
         try {
-            JudgmentProvider.ScoreAnswer answer = provider.score(
-                    Map.of("total_failures", totalFailures,
-                            "unique_failures", unique.size(),
-                            "failures", signatures),
-                    SEVERITY_INSTRUCTIONS, SEVERITY_LEVELS);
+            Map<String, Object> state = new LinkedHashMap<>();
+            state.put("total_failures", totalFailures);
+            if (totalSamples > 0) {
+                state.put("total_samples", totalSamples);
+            }
+            state.put("unique_failures", unique.size());
+            state.put("failures", signatures);
+            JudgmentProvider.ScoreAnswer answer = provider.score(state, SEVERITY_INSTRUCTIONS, SEVERITY_LEVELS);
             if (answer == null || answer.confidence() < minConfidence) {
                 return null;
             }
