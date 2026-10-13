@@ -212,14 +212,15 @@ class FailureTriageTest {
     }
 
     @Test
-    void severityIsClampedToTheTopLevel() {
+    void severityOutsideTheScaleIsLeftOut() {
         FakeProvider provider = new FakeProvider(answer("CONNECTION", 0.95))
                 .scoring(new JudgmentProvider.ScoreAnswer(4.0, 0.97));
 
         FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
                 .triage(List.of(failure("Home GET", "", "Connection refused")), 1);
 
-        assertEquals("CRITICAL", outcome.notice().severity());
+        assertFalse(outcome.notice().hasSeverity());
+        assertEquals(1, outcome.notice().classifiedFailures());
     }
 
     @Test

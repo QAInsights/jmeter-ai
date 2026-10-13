@@ -47,7 +47,9 @@ public final class SlaCommandHandler {
     /** The tree node selected right now, or null without a GUI; capture it when the command is sent. */
     public static JMeterTreeNode selectedNode() {
         GuiPackage guiPackage = GuiPackage.getInstance();
-        return guiPackage == null ? null : guiPackage.getTreeListener().getCurrentNode();
+        return guiPackage == null || guiPackage.getTreeListener() == null
+                ? null
+                : guiPackage.getTreeListener().getCurrentNode();
     }
 
     /** Like {@link #process(String)} but adds under {@code node}, the selection when the command was sent. */
@@ -64,7 +66,7 @@ public final class SlaCommandHandler {
         if (model == null) {
             return "The JMeter GUI is not available, so I can't add assertions.";
         }
-        if (node == null || !canHoldAssertions(node.getTestElement())) {
+        if (node == null || node.getRoot() != model.getRoot() || !canHoldAssertions(node.getTestElement())) {
             return "Select a sampler, controller, Thread Group or the Test Plan first, then run `@sla` again. "
                     + "The assertions are added under the selected element.";
         }

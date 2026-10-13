@@ -173,6 +173,11 @@ public final class FailureTriage {
                 return null;
             }
             Severity[] levels = Severity.values();
+            if (!JudgmentProvider.validScore(answer.score(), answer.confidence(), levels.length)) {
+                log.info("{} triage left severity out: score {} is outside 0 to {}", AgentJudgmentConfig.brand(),
+                        answer.score(), levels.length - 1);
+                return null;
+            }
             return new SeverityRating(levels[answer.level(levels.length)], answer.confidence());
         } catch (RuntimeException e) {
             log.warn("{} triage could not rate severity: {}", AgentJudgmentConfig.brand(), e.getMessage());

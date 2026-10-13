@@ -142,4 +142,16 @@ class SlaParserTest {
     void httpPrefixedExactCodeIsAccepted() {
         assertEquals("200", SlaParser.parse("@sla http 200").exactCode());
     }
+
+    @Test
+    void statisticBelongsToTheLimitItIsWrittenWith() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla under 800 ms p99 under 1 s");
+        assertEquals(800, spec.maxMillis());
+        assertEquals("", spec.statistic());
+        assertEquals(java.util.List.of("p99 under 1 s"), spec.superseded());
+
+        SlaParser.SlaSpec trailing = SlaParser.parse("@sla under 800 ms at p95");
+        assertEquals("p95", trailing.statistic());
+        assertTrue(trailing.unrecognized().isEmpty());
+    }
 }

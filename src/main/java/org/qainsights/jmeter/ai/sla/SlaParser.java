@@ -28,7 +28,7 @@ public final class SlaParser {
 
     private static final Pattern FILLER = Pattern.compile(
             "\\b(response times?|latency|latencies|each|every|all|samples?|requests?|should|must|be|is|are|keep|"
-                    + "the|with|max|maximum|times?|of|for|in)\\b");
+                    + "the|with|max|maximum|times?|of|for|in|at)\\b");
     private static final Pattern CODE_WORDS = Pattern.compile(
             "\\b(no|zero|without|never|only|any|http|status|response|responses|codes?|errors?|server|client|"
                     + "5xx|4xx|2xx|or|nor|success|successful)\\b");
@@ -123,8 +123,27 @@ public final class SlaParser {
             Matcher duration = DURATION.matcher(clause);
             if (duration.find()) {
                 long millis = toMillis(duration.group(1), duration.group(2));
-                Matcher stat = STATISTIC.matcher(clause);
-                String clauseStatistic = stat.find() ? stat.group(1) : "";
+                String before = clause.substring(0, duration.start());
+                String after = clause.substring(duration.end());
+                String clauseStatistic = "";
+                Matcher stat = STATISTIC.matcher(before);
+                int statStart = -1;
+                int statEnd = -1;
+                while (stat.find()) {
+                    clauseStatistic = stat.group(1);
+                    statStart = stat.start();
+                    statEnd = stat.end();
+                }
+                if (statStart >= 0) {
+                    before = before.substring(0, statStart) + " " + before.substring(statEnd);
+                } else if (!DURATION.matcher(after).find()) {
+                    // A statistic after the limit ("under 800 ms at p95") only counts when no other limit follows.
+                    stat = STATISTIC.matcher(after);
+                    if (stat.find()) {
+                        clauseStatistic = stat.group(1);
+                        after = after.substring(0, stat.start()) + " " + after.substring(stat.end());
+                    }
+                }
                 String label = (clauseStatistic.isEmpty() ? "" : clauseStatistic + " ") + duration.group().trim();
                 if (millis <= 0) {
                     unrecognized.add(label);
@@ -138,8 +157,7 @@ public final class SlaParser {
                 } else {
                     superseded.add(label);
                 }
-                String rest = leftover(clause.substring(0, duration.start()) + " " + clause.substring(duration.end()),
-                        STATISTIC, FILLER);
+                String rest = leftover(before + " " + after, FILLER);
                 if (!rest.isEmpty()) {
                     pending.addFirst(rest);
                 }

@@ -128,6 +128,10 @@ class SlaCommandHandlerTest {
         String refused = new SlaCommandHandler().process("@sla under 800 ms", configNode, model);
         assertTrue(refused.startsWith("Select a sampler"), refused);
         assertEquals(0, configNode.getChildCount());
+
+        model.removeNodeFromParent(samplerNode);
+        String detached = new SlaCommandHandler().process("@sla under 800 ms", samplerNode, model);
+        assertTrue(detached.startsWith("Select a sampler"), detached);
         assertEquals(2, samplerNode.getChildCount());
     }
 
