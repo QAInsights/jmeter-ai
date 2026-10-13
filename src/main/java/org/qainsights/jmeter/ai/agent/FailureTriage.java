@@ -168,6 +168,8 @@ public final class FailureTriage {
             state.put("failures", signatures);
             JudgmentProvider.ScoreAnswer answer = provider.score(state, SEVERITY_INSTRUCTIONS, SEVERITY_LEVELS);
             if (answer == null || answer.confidence() < minConfidence) {
+                log.info("{} triage left severity out: confidence {} is below {}", AgentJudgmentConfig.brand(),
+                        answer == null ? "n/a" : String.format("%.2f", answer.confidence()), minConfidence);
                 return null;
             }
             Severity[] levels = Severity.values();
