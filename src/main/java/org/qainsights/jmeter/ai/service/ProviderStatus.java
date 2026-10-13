@@ -13,26 +13,28 @@ public final class ProviderStatus {
 
     private final boolean anyCloudReady;
     private final boolean ollamaPreferred;
+    private final boolean agentCapableReady;
 
-    private ProviderStatus(boolean anyCloudReady, boolean ollamaPreferred) {
+    private ProviderStatus(boolean anyCloudReady, boolean ollamaPreferred, boolean agentCapableReady) {
         this.anyCloudReady = anyCloudReady;
         this.ollamaPreferred = ollamaPreferred;
+        this.agentCapableReady = agentCapableReady;
     }
 
     /** Loads status from the current {@link AiConfig} / JMeter properties. */
     public static ProviderStatus fromConfig() {
-        boolean cloud = isApiKeyConfigured("anthropic.api.key")
+        boolean agentCapable = isApiKeyConfigured("anthropic.api.key")
                 || isApiKeyConfigured("openai.api.key")
                 || isApiKeyConfigured("google.api.key")
                 || isApiKeyConfigured("deepseek.api.key")
                 || isApiKeyConfigured("grok.api.key")
                 || isApiKeyConfigured("meta.api.key")
-                || isBedrockConfigured()
                 || GatewayConfig.hasOpenAiGatewayCredentials()
                 || GatewayConfig.hasAnthropicGatewayCredentials();
+        boolean cloud = agentCapable || isBedrockConfigured();
         String serviceType = AiConfig.getProperty("jmeter.ai.service.type", "");
         boolean ollamaPreferred = "ollama".equalsIgnoreCase(serviceType == null ? "" : serviceType.trim());
-        return new ProviderStatus(cloud, ollamaPreferred);
+        return new ProviderStatus(cloud, ollamaPreferred, agentCapable);
     }
 
     /**
@@ -46,6 +48,11 @@ public final class ProviderStatus {
     /** True when at least one non-placeholder cloud/API key is set. */
     public boolean hasAnyCloudProvider() {
         return anyCloudReady;
+    }
+
+    /** True when a provider that supports Agent Mode has a key (Bedrock and Ollama do not count). */
+    public boolean hasAgentCapableProvider() {
+        return agentCapableReady;
     }
 
     /** True when {@code jmeter.ai.service.type=ollama}. */

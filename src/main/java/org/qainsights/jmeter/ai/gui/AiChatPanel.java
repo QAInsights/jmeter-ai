@@ -848,7 +848,9 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        transcript.showWelcome(WelcomeMessages.forCurrentConfig());
+        String welcome = WelcomeMessages.forCurrentConfig();
+        transcript.showWelcome(welcome);
+        WelcomeMessages.onShown(welcome);
     }
 
     /** The session attachment registry (package-private for tests). */

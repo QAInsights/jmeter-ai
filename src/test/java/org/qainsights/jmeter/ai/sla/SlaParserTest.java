@@ -77,4 +77,69 @@ class SlaParserTest {
         assertTrue(spec.isEmpty());
         assertEquals("no 2xx", spec.unrecognized().get(0));
     }
+
+    @Test
+    void codeRuleWithoutSeparatorAfterDurationIsStillParsed() {
+        for (String text : java.util.List.of("@sla under 800 ms no 5xx", "@sla under 800 ms with no 5xx")) {
+            SlaParser.SlaSpec spec = SlaParser.parse(text);
+            assertEquals(800, spec.maxMillis(), text);
+            assertEquals(SlaParser.CodeRule.NO_5XX, spec.codeRule(), text);
+            assertTrue(spec.unrecognized().isEmpty(), text);
+        }
+    }
+
+    @Test
+    void negatedLimitIsNotTurnedIntoAnUpperBound() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla not under 800 ms");
+        assertEquals(0, spec.maxMillis());
+        assertEquals(1, spec.unrecognized().size());
+    }
+
+    @Test
+    void contradictoryCodeRulesAreReportedNotDropped() {
+        SlaParser.SlaSpec conflict = SlaParser.parse("@sla status 500 and no 5xx");
+        assertNull(conflict.codeRule());
+        assertEquals("", conflict.exactCode());
+        assertEquals(1, conflict.conflicts().size());
+
+        SlaParser.SlaSpec compatible = SlaParser.parse("@sla status 200 and no 5xx");
+        assertEquals("200", compatible.exactCode());
+        assertNull(compatible.codeRule());
+        assertTrue(compatible.conflicts().isEmpty());
+
+        assertEquals(1, SlaParser.parse("@sla status 200 and status 201").conflicts().size());
+    }
+
+    @Test
+    void noErrorRateIsRunLevelNotAPerSampleCodeRule() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla no error rate");
+        assertNull(spec.codeRule());
+        assertEquals(1, spec.unsupported().size());
+    }
+
+    @Test
+    void codeClauseWithUnparsedPartsIsReported() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla only 2xx or 3xx");
+        assertNull(spec.codeRule());
+        assertEquals(java.util.List.of("only 2xx or 3xx"), spec.unrecognized());
+    }
+
+    @Test
+    void fractionalLimitsRoundDown() {
+        assertEquals(800, SlaParser.parse("@sla under 800.6 ms").maxMillis());
+        assertEquals(1234, SlaParser.parse("@sla under 1.2349 s").maxMillis());
+    }
+
+    @Test
+    void looserLimitsAreReportedAsSuperseded() {
+        SlaParser.SlaSpec spec = SlaParser.parse("@sla p95 under 1.5 s and avg under 800 ms");
+        assertEquals(800, spec.maxMillis());
+        assertEquals("avg", spec.statistic());
+        assertEquals(java.util.List.of("p95 under 1.5 s"), spec.superseded());
+    }
+
+    @Test
+    void httpPrefixedExactCodeIsAccepted() {
+        assertEquals("200", SlaParser.parse("@sla http 200").exactCode());
+    }
 }

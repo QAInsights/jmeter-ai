@@ -146,8 +146,13 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
         if (!"score".equals(answer.path("type").asText())) {
             throw new JudgmentException(label + " response did not contain a score answer");
         }
-        double score = answer.path("score").asDouble(Double.NaN);
-        double confidence = answer.path("confidence").asDouble(Double.NaN);
+        JsonNode scoreNode = answer.path("score");
+        JsonNode confidenceNode = answer.path("confidence");
+        if (!scoreNode.isNumber() || !confidenceNode.isNumber()) {
+            throw new JudgmentException(label + " response contained an invalid score");
+        }
+        double score = scoreNode.asDouble();
+        double confidence = confidenceNode.asDouble();
         if (!JudgmentProvider.validScore(score, confidence, levelCount)) {
             throw new JudgmentException(label + " response contained an invalid score");
         }

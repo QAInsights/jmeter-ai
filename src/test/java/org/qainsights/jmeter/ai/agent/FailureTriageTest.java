@@ -214,7 +214,7 @@ class FailureTriageTest {
     @Test
     void severityIsClampedToTheTopLevel() {
         FakeProvider provider = new FakeProvider(answer("CONNECTION", 0.95))
-                .scoring(new JudgmentProvider.ScoreAnswer(3.0, 0.97));
+                .scoring(new JudgmentProvider.ScoreAnswer(4.0, 0.97));
 
         FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
                 .triage(List.of(failure("Home GET", "", "Connection refused")), 1);

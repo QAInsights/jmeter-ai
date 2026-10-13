@@ -19,7 +19,8 @@ import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 /**
  * {@link JudgmentProvider} backed by the OpenAI Decisions API ({@code POST /v1/decisions}).
- * Each call sends one {@code choice} question whose options are the criteria keys.
+ * {@code choose} sends one {@code choice} question whose options are the criteria keys;
+ * {@code score} sends one {@code score} question whose levels are the given labels, lowest first.
  */
 public final class OpenAiDecisionsJudgmentProvider implements JudgmentProvider {
     public static final String DEFAULT_MODEL = "gpt-6-luna";

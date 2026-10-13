@@ -27,6 +27,7 @@ class TypeSafeJudgmentProviderTest {
     private HttpServer server;
     private AtomicReference<String> authorization;
     private AtomicReference<String> requestBody;
+    private final java.util.concurrent.atomic.AtomicInteger requests = new java.util.concurrent.atomic.AtomicInteger();
 
     @BeforeEach
     void startServer() throws IOException {
@@ -110,10 +111,25 @@ class TypeSafeJudgmentProviderTest {
 
     @Test
     void scoreRejectsInvalidInputsBeforeNetworkCall() {
+        respond(200, "{\"answers\":{\"severity\":{\"type\":\"score\",\"score\":1,\"confidence\":0.9}}}");
         assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
                 () -> provider().score("x", "Rate", java.util.Map.of("Only", "one level")));
         assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
                 () -> provider().score("x", " ", levels()));
+        assertEquals(0, requests.get());
+    }
+
+    @Test
+    void scoreRejectsMissingAnswerMissingFieldsAndNonNumericValues() {
+        for (String body : java.util.List.of(
+                "{\"answers\":{}}",
+                "{\"answers\":{\"severity\":{\"type\":\"score\",\"confidence\":0.9}}}",
+                "{\"answers\":{\"severity\":{\"type\":\"score\",\"score\":1}}}",
+                "{\"answers\":{\"severity\":{\"type\":\"score\",\"score\":true,\"confidence\":true}}}",
+                "{\"answers\":{\"severity\":{\"type\":\"score\",\"score\":\"1\",\"confidence\":\"0.9\"}}}")) {
+            assertThrows(TypeSafeJudgmentProvider.JudgmentException.class,
+                    () -> TypeSafeJudgmentProvider.parseScore(body, 4, "Jev"), body);
+        }
     }
 
     private static java.util.Map<String, String> levels() {
@@ -211,6 +227,7 @@ class TypeSafeJudgmentProviderTest {
 
     private void respond(int status, String body) {
         server.createContext("/v1/systemone", exchange -> {
+            requests.incrementAndGet();
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

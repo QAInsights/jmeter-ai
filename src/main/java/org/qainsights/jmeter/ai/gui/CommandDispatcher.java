@@ -376,9 +376,10 @@ public class CommandDispatcher {
         log.info("Processing @sla command");
         cb.setLastCommandType("SLA");
         cb.setInputEnabled(false);
+        org.apache.jmeter.gui.tree.JMeterTreeNode target = SlaCommandHandler.selectedNode();
         javax.swing.SwingUtilities.invokeLater(() -> {
             try {
-                cb.onWorkerSuccess(new SlaCommandHandler().process(message));
+                cb.onWorkerSuccess(new SlaCommandHandler().process(message, target));
             } catch (RuntimeException e) {
                 cb.onWorkerError("Error processing @sla command", e,
                         ProviderErrors.describe(e, "processing the @sla command", false));

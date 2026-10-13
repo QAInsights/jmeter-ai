@@ -41,22 +41,36 @@ public final class SlaCommandHandler {
 
     /** Parses {@code message}, adds the assertions under the selected node and returns a markdown reply. */
     public String process(String message) {
+        return process(message, selectedNode());
+    }
+
+    /** The tree node selected right now, or null without a GUI; capture it when the command is sent. */
+    public static JMeterTreeNode selectedNode() {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        return guiPackage == null ? null : guiPackage.getTreeListener().getCurrentNode();
+    }
+
+    /** Like {@link #process(String)} but adds under {@code node}, the selection when the command was sent. */
+    public String process(String message, JMeterTreeNode node) {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        return process(message, node, guiPackage == null ? null : guiPackage.getTreeModel());
+    }
+
+    String process(String message, JMeterTreeNode node, JMeterTreeModel model) {
         SlaParser.SlaSpec spec = SlaParser.parse(message);
         if (spec.isEmpty()) {
             return notes(spec, HELP);
         }
-        GuiPackage guiPackage = GuiPackage.getInstance();
-        if (guiPackage == null) {
+        if (model == null) {
             return "The JMeter GUI is not available, so I can't add assertions.";
         }
-        JMeterTreeNode node = guiPackage.getTreeListener().getCurrentNode();
         if (node == null || !canHoldAssertions(node.getTestElement())) {
             return "Select a sampler, controller, Thread Group or the Test Plan first, then run `@sla` again. "
                     + "The assertions are added under the selected element.";
         }
         List<TestElement> elements = buildAssertions(spec, message);
         try {
-            addAll(guiPackage.getTreeModel(), node, elements);
+            addAll(model, node, elements);
         } catch (Exception e) {
             log.warn("Could not add @sla assertions under {}", node.getName(), e);
             return "I couldn't add the assertions under **" + node.getName() + "**: " + e.getMessage();
@@ -130,6 +144,10 @@ public final class SlaCommandHandler {
             } else {
                 assertion.setToEqualsType();
                 assertion.addTestString(spec.exactCode());
+                if (spec.exactCode().charAt(0) >= '4') {
+                    // JMeter fails 4xx/5xx samples before assertions run; let this assertion decide.
+                    assertion.setAssumeSuccess(true);
+                }
                 assertion.setName("SLA: response code " + spec.exactCode());
                 assertion.setCustomFailureMessage("SLA breached: expected response code " + spec.exactCode());
             }
@@ -159,8 +177,19 @@ public final class SlaCommandHandler {
         StringBuilder text = new StringBuilder(body);
         if (!spec.unsupported().isEmpty()) {
             text.append("\n\nNot added: ").append(String.join(", ", quoted(spec.unsupported())))
-                    .append(". Error rate and throughput targets apply to the whole run, "
-                            + "so a per-sample assertion can't check them.");
+                    .append(". These are run-level targets (error rate, throughput, a percentage of samples, "
+                            + "Apdex), so a per-sample assertion can't check them. Read them from the HTML "
+                            + "dashboard or Aggregate Report after the run.");
+        }
+        if (!spec.superseded().isEmpty()) {
+            text.append("\n\nAlso asked for: ").append(String.join(", ", quoted(spec.superseded())))
+                    .append(". Only the strictest limit is added, because a sample that meets it also meets "
+                            + "the looser ones.");
+        }
+        if (!spec.conflicts().isEmpty()) {
+            text.append("\n\nNo response-code assertion added, because these rules contradict each other: ")
+                    .append(String.join(", ", quoted(spec.conflicts())))
+                    .append(". Run `@sla` again with the one you want.");
         }
         if (!spec.unrecognized().isEmpty()) {
             text.append("\n\nI didn't understand: ").append(String.join(", ", quoted(spec.unrecognized())))
