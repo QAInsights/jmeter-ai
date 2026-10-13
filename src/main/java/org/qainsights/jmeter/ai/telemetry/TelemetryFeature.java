@@ -13,6 +13,8 @@ public enum TelemetryFeature {
     CMD_USAGE("cmd_usage"),
     CMD_TESTPLAN("cmd_testplan"),
     CMD_SLA("cmd_sla"),
+    MCP_SERVER_START("mcp_server_start"),
+    MCP_TOOL_CALL("mcp_tool_call"),
     CORRELATION_STUDIO_OPEN("correlation_studio_open"),
     AI_TERMINAL_TOGGLE("ai_terminal_toggle"),
     JSR223_REFACTOR("jsr223_refactor"),

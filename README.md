@@ -39,6 +39,7 @@
 - [Modern Chat UI & Model Picker](#-modern-chat-ui--model-picker)
 - [Special Commands](#-special-commands)
 - [Agent Mode](#-agent-mode)
+- [MCP Server](#-feather-wand-as-an-mcp-server)
 - [Streaming](#-streaming-ai-responses)
 - [File Attachments](#-file-attachments)
 - [Conversation Persistence & Export](#-conversation-persistence--export)
@@ -828,6 +829,70 @@ For isolated manual testing, Feather Wand adds dev menu items under **Run → AI
 - **AI Dev: Test toggle_element**: prompt for true/false, toggle selected node
 - **AI Dev: Test move_element**: prompt for destination parent id, move selected node
 
+## 🔌 Feather Wand as an MCP Server
+
+Feather Wand can run a [Model Context Protocol](https://modelcontextprotocol.io) server inside JMeter, so Claude Code, Cursor, Codex or any other MCP client can read, edit, run and analyze the test plan open in your JMeter GUI. The client gets the same 21 tools as [Agent Mode](#available-tools), with the same names and parameters, and every change shows up in the JMeter tree as it happens. No AI provider key is needed in Feather Wand for this: the client brings its own model.
+
+### Starting the server
+
+1. In JMeter, open **Run > Feather Wand MCP Server** and click **Start server**.
+2. To start it every time JMeter starts, add `jmeter.ai.mcp.server.enabled=true` to `user.properties`.
+3. The server listens on `http://127.0.0.1:7397/mcp`. Change the port with `jmeter.ai.mcp.server.port`.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.mcp.server.enabled` | Start the MCP server when JMeter starts | `false` |
+| `jmeter.ai.mcp.server.port` | Loopback port the server listens on | `7397` |
+
+### Connecting a client
+
+The **Feather Wand MCP Server** window shows the setup for each client with your token filled in. Click **Copy setup** and paste it:
+
+**Claude Code** (run in a terminal):
+
+```bash
+claude mcp add --transport http feather-wand http://127.0.0.1:7397/mcp --header "Authorization: Bearer <token>"
+```
+
+**Cursor** (`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "feather-wand": {
+      "url": "http://127.0.0.1:7397/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+**Codex** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.feather-wand]
+url = "http://127.0.0.1:7397/mcp"
+http_headers = { "Authorization" = "Bearer <token>" }
+```
+
+Clients that only speak stdio can connect through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote): `npx -y mcp-remote http://127.0.0.1:7397/mcp --header "Authorization: Bearer <token>"`.
+
+Then ask the client something like *"Open checkout.jmx in JMeter, add a Response Assertion for HTTP 200 to every sampler, run it and tell me which requests fail."*
+
+### Security
+
+- **Loopback only.** The server binds `127.0.0.1`, so other machines on your network cannot reach it.
+- **Token required.** Every request needs `Authorization: Bearer <token>`. The token is a random 256-bit value stored in `~/.jmeter-ai/mcp-token` (readable only by you on macOS and Linux). Click **New token** to replace it; clients set up with the old one stop working.
+- **No browser access.** Requests carrying a non-local `Origin` header are refused, so a web page cannot talk to the server even through DNS rebinding.
+- **Same confirmations as Agent Mode.** `delete_element`, `move_element`, `open_plan` and `apply_correlation` wait for you to click **Allow** in JMeter, unless `jmeter.ai.agent.confirm.destructive=false`. Tool annotations tell the client which tools are read-only and which are destructive.
+- **Nothing is saved behind your back.** Edits stay in the open plan until the client calls `save_plan` or you save in JMeter.
+
+### Limits
+
+- The server needs the JMeter GUI to be open; it does not run in non-GUI (`-n`) mode.
+- It uses the MCP Streamable HTTP transport with JSON replies (protocol versions `2025-06-18`, `2025-03-26` and `2024-11-05`). It offers tools only, with no resources, prompts or SSE stream.
+- `get_test_results` and `find_correlation_candidates` run the plan and block until it finishes, so keep thread counts and durations small when a client calls them.
+
 ## 💨 Streaming AI Responses
 
 All configured AI services that support streaming provide real-time responses. AWS Bedrock uses the ConverseStream API for compatible chat models. Responses appear token-by-token as they are generated.
@@ -1100,7 +1165,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
-Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, and JSR223 refactors. Only the count is sent, never what you typed or what the feature produced.
+Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Only the count is sent, never what you typed or what the feature produced.
 
 These counters are also sent, again as counts only:
 

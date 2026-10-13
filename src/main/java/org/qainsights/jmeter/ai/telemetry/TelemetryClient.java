@@ -108,7 +108,7 @@ public class TelemetryClient {
         return kept;
     }
 
-    static String pluginVersion() {
+    public static String pluginVersion() {
         try (InputStream in = TelemetryClient.class.getClassLoader().getResourceAsStream(VERSION_RESOURCE)) {
             if (in != null) {
                 Properties props = new Properties();

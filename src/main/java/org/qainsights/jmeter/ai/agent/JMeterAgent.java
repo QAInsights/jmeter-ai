@@ -68,6 +68,11 @@ public final class JMeterAgent {
             Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT,
                     OpenPlanHandler.OPEN_PLAN, ApplyCorrelationHandler.APPLY_CORRELATION)));
 
+    /** Tool names gated behind the destructive-action confirmation dialog. */
+    public static Set<String> destructiveTools() {
+        return DESTRUCTIVE_TOOLS;
+    }
+
     /** Ensures the undo-history nudge (see {@link #maybeWarnAboutUndoHistory}) fires once per session. */
     private static final AtomicBoolean UNDO_NUDGE_SHOWN = new AtomicBoolean(false);
 
