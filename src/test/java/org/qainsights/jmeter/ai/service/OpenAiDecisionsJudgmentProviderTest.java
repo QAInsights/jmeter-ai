@@ -107,8 +107,9 @@ class OpenAiDecisionsJudgmentProviderTest {
     }
 
     @Test
-    void capabilitiesAreChoiceOnly() {
-        assertEquals(Set.of(JudgmentProvider.Capability.CHOICE), provider(null).capabilities());
+    void capabilitiesAreChoiceAndScore() {
+        assertEquals(Set.of(JudgmentProvider.Capability.CHOICE, JudgmentProvider.Capability.SCORE),
+                provider(null).capabilities());
     }
 
     @Test
@@ -158,6 +159,57 @@ class OpenAiDecisionsJudgmentProviderTest {
                 OpenAiDecisionsJudgmentProvider.DecisionsException.class,
                 () -> provider(null).choose(Map.of("message", "x"), "Choose", CRITERIA));
         assertTrue(error.getMessage().contains(expectedMessage), error.getMessage());
+    }
+
+    @Test
+    void scoreSendsScoreQuestionWithLevelsAndParsesAnswer() throws Exception {
+        respond(200, """
+                {"id":"dec_2","object":"decision","model":"gpt-6-luna","answers":[
+                {"type":"score","name":"severity","score":1.2,"confidence":0.8,
+                "probabilities":[{"value":0,"label":"Low","probability":0.1},
+                {"value":1,"label":"Medium","probability":0.6},{"value":2,"label":"High","probability":0.3}]}],
+                "usage":{"input_tokens":20}}
+                """);
+
+        JudgmentProvider.ScoreAnswer answer = provider(null).score(
+                Map.of("total_failures", 3), "Rate severity", levels());
+
+        assertEquals(1.2, answer.score());
+        assertEquals(0.8, answer.confidence());
+        assertEquals(1, answer.level(3));
+        JsonNode question = MAPPER.readTree(requestBody.get()).path("questions").get(0);
+        assertEquals("score", question.path("type").asText());
+        assertEquals(OpenAiDecisionsJudgmentProvider.SCORE_QUESTION_NAME, question.path("name").asText());
+        assertEquals("Rate severity", question.path("instructions").asText());
+        assertEquals("Low", question.path("levels").get(0).path("label").asText());
+        assertEquals("Minor", question.path("levels").get(0).path("description").asText());
+        assertEquals("High", question.path("levels").get(2).path("label").asText());
+    }
+
+    @Test
+    void scoreRejectsRefusalAndOffScaleAnswers() {
+        respond(200, """
+                {"id":"dec_3","object":"decision","model":"gpt-6-luna","answers":[
+                {"type":"refusal","name":"severity","refusal":"no"}],"usage":{"input_tokens":5}}
+                """);
+        assertThrows(OpenAiDecisionsJudgmentProvider.DecisionsException.class,
+                () -> provider(null).score("x", "Rate severity", levels()));
+
+        respond(200, """
+                {"id":"dec_4","object":"decision","model":"gpt-6-luna","answers":[
+                {"type":"score","name":"severity","score":7,"confidence":0.8,"probabilities":[]}],
+                "usage":{"input_tokens":5}}
+                """);
+        assertThrows(OpenAiDecisionsJudgmentProvider.DecisionsException.class,
+                () -> provider(null).score("x", "Rate severity", levels()));
+    }
+
+    private static Map<String, String> levels() {
+        Map<String, String> levels = new LinkedHashMap<>();
+        levels.put("Low", "Minor");
+        levels.put("Medium", "Degraded");
+        levels.put("High", "Broken");
+        return levels;
     }
 
     private OpenAiDecisionsJudgmentProvider provider(String model) {

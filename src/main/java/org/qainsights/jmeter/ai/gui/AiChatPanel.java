@@ -145,6 +145,7 @@ public class AiChatPanel
         NONE,
         LINT,
         WRAP,
+        SLA,
     }
 
     private LastCommandType lastCommandType = LastCommandType.NONE;
@@ -414,6 +415,9 @@ public class AiChatPanel
                         case WRAP:
                             undoLastWrap();
                             break;
+                        case SLA:
+                            undoRedoDispatcher.undoLastSla();
+                            break;
                         case LINT:
                             undoLastRename();
                             break;
@@ -448,6 +452,9 @@ public class AiChatPanel
                     switch (lastCommandType) {
                         case WRAP:
                             showWrapRedoNotSupported();
+                            break;
+                        case SLA:
+                            appendMessageToChat("Redo isn't available for `@sla`. Run the command again instead.");
                             break;
                         case LINT:
                             redoLastUndo();
@@ -841,7 +848,9 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        transcript.showWelcome(WelcomeMessages.forCurrentConfig());
+        String welcome = WelcomeMessages.forCurrentConfig();
+        transcript.showWelcome(welcome);
+        WelcomeMessages.onShown(welcome);
     }
 
     /** The session attachment registry (package-private for tests). */
@@ -1172,6 +1181,9 @@ public class AiChatPanel
                 break;
             case "WRAP":
                 lastCommandType = LastCommandType.WRAP;
+                break;
+            case "SLA":
+                lastCommandType = LastCommandType.SLA;
                 break;
             default:
                 lastCommandType = LastCommandType.NONE;

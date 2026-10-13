@@ -134,6 +134,26 @@ class OpenRouterDecisionsJudgmentProviderTest {
         return OpenRouterDecisionsJudgmentProvider.endpoint("http://127.0.0.1:" + server.getAddress().getPort());
     }
 
+    @Test
+    void scoreUsesTheSameEndpointAndParsesTheScoreAnswer() throws Exception {
+        responseBody.set("""
+                {"id":"gen-2","model":"microsoft/microsoft-decision-1",
+                "answers":{"severity":{"type":"score","score":0.4,"confidence":0.7,
+                "probabilities":{"0":0.6,"1":0.4},"legend":{"0":"Minor","1":"Major"}}}}
+                """);
+        Map<String, String> levels = new java.util.LinkedHashMap<>();
+        levels.put("Low", "Minor");
+        levels.put("High", "Major");
+
+        JudgmentProvider.ScoreAnswer answer = provider(null).score(Map.of("total_failures", 2), "Rate", levels);
+
+        assertEquals(0, answer.level(2));
+        assertEquals(0.7, answer.confidence());
+        assertEquals("/api/alpha/decisions", path.get());
+        assertEquals("score", MAPPER.readTree(requestBody.get()).path("questions").path("severity")
+                .path("type").asText());
+    }
+
     private OpenRouterDecisionsJudgmentProvider provider(String model) {
         return new OpenRouterDecisionsJudgmentProvider(HttpClient.newHttpClient(), "sk-or-test", endpointUri(), model,
                 Duration.ofSeconds(5));

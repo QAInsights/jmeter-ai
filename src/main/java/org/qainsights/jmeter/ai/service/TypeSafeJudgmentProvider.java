@@ -12,6 +12,7 @@ import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public final class TypeSafeJudgmentProvider implements JudgmentProvider {
@@ -20,6 +21,7 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
     public static final String DEFAULT_MODEL = "jev-latest";
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(15);
 
+    static final String SCORE_QUESTION = "severity";
     private static final ObjectMapper MAPPER = new ObjectMapper();
     static final HttpClient SHARED_CLIENT = HttpClient.newBuilder().build();
 
@@ -51,7 +53,7 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
 
     @Override
     public Set<Capability> capabilities() {
-        return Set.of(Capability.CHOICE);
+        return Set.of(Capability.CHOICE, Capability.SCORE);
     }
 
     @Override
@@ -63,22 +65,43 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
             throw new JudgmentException("A choice judgment needs instructions and at least two criteria");
         }
         try {
-            HttpRequest request = HttpRequest.newBuilder(endpoint)
-                    .timeout(timeout)
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody(state, instructions, criteria)))
-                    .build();
+            return parseChoice(send(requestBody(state, instructions, criteria)), criteria, label);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new JudgmentException(label + " request failed", e);
+        }
+    }
+
+    @Override
+    public ScoreAnswer score(Object state, String instructions, Map<String, String> levels) {
+        if (apiKey.isEmpty()) {
+            throw new JudgmentException(label + " API key is not configured");
+        }
+        if (instructions == null || instructions.isBlank() || levels == null || levels.size() < 2) {
+            throw new JudgmentException("A score judgment needs instructions and at least two levels");
+        }
+        try {
+            return parseScore(send(scoreRequestBody(state, instructions, levels)), levels.size(), label);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new JudgmentException(label + " request failed", e);
+        }
+    }
+
+    private String send(String body) throws IOException {
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(timeout)
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new JudgmentException(label + " request failed with HTTP " + response.statusCode());
             }
-            return parseChoice(response.body(), criteria, label);
+            return response.body();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new JudgmentException(label + " request was interrupted", e);
-        } catch (IOException | IllegalArgumentException e) {
-            throw new JudgmentException(label + " request failed", e);
         }
     }
 
@@ -103,6 +126,37 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
         ObjectNode criteriaNode = route.putObject("criteria");
         criteria.forEach(criteriaNode::put);
         return MAPPER.writeValueAsString(root);
+    }
+
+    private String scoreRequestBody(Object state, String instructions, Map<String, String> levels)
+            throws IOException {
+        ObjectNode root = MAPPER.createObjectNode();
+        root.set("state", MAPPER.valueToTree(state));
+        root.put("model", model);
+        ObjectNode question = root.putObject("questions").putObject(SCORE_QUESTION);
+        question.put("type", "score");
+        question.put("instructions", instructions);
+        ArrayNode criteria = question.putArray("criteria");
+        JudgmentProvider.levelDescriptions(levels).forEach(criteria::add);
+        return MAPPER.writeValueAsString(root);
+    }
+
+    static ScoreAnswer parseScore(String body, int levelCount, String label) throws IOException {
+        JsonNode answer = MAPPER.readTree(body).path("answers").path(SCORE_QUESTION);
+        if (!"score".equals(answer.path("type").asText())) {
+            throw new JudgmentException(label + " response did not contain a score answer");
+        }
+        JsonNode scoreNode = answer.path("score");
+        JsonNode confidenceNode = answer.path("confidence");
+        if (!scoreNode.isNumber() || !confidenceNode.isNumber()) {
+            throw new JudgmentException(label + " response contained an invalid score");
+        }
+        double score = scoreNode.asDouble();
+        double confidence = confidenceNode.asDouble();
+        if (!JudgmentProvider.validScore(score, confidence, levelCount)) {
+            throw new JudgmentException(label + " response contained an invalid score");
+        }
+        return new ScoreAnswer(score, confidence);
     }
 
     private static ChoiceAnswer parseChoice(String body, Map<String, String> criteria, String label)

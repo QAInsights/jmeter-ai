@@ -1,11 +1,13 @@
 package org.qainsights.jmeter.ai.gui;
 
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.service.ProviderStatus;
 import org.qainsights.jmeter.ai.utils.Constants;
 
 /**
  * Builds the markdown welcome bubble for the chat transcript based on
- * whether any AI provider looks configured. Pure string logic, no Swing.
+ * whether any AI provider looks configured. Pure string logic, no Swing; the one-time
+ * Agent Mode tip is only marked shown by {@link #onShown(String)} once it is displayed.
  */
 public final class WelcomeMessages {
 
@@ -14,7 +16,28 @@ public final class WelcomeMessages {
 
     /** Welcome for the live {@link ProviderStatus#fromConfig()} snapshot. */
     public static String forCurrentConfig() {
-        return forStatus(ProviderStatus.fromConfig());
+        return forCurrentConfig(new AgentModeNudge());
+    }
+
+    /** Adds the one-time Agent Mode tip when {@code nudge} says it is due. Has no side effects. */
+    static String forCurrentConfig(AgentModeNudge nudge) {
+        ProviderStatus status = ProviderStatus.fromConfig();
+        String welcome = forStatus(status);
+        if (nudge.shouldShow(status.hasAgentCapableProvider(), JMeterAgent.isEnabled())) {
+            return welcome + AgentModeNudge.TIP;
+        }
+        return welcome;
+    }
+
+    /** Call after {@code welcome} is on screen: records the Agent Mode tip as shown if it was included. */
+    public static void onShown(String welcome) {
+        onShown(welcome, new AgentModeNudge());
+    }
+
+    static void onShown(String welcome, AgentModeNudge nudge) {
+        if (welcome != null && welcome.contains(AgentModeNudge.TIP)) {
+            nudge.markShown();
+        }
     }
 
     /**

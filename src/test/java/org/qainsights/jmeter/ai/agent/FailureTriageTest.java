@@ -12,6 +12,7 @@ import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,9 +28,29 @@ class FailureTriageTest {
             answers.addAll(List.of(canned));
         }
 
+        private JudgmentProvider.ScoreAnswer scoreAnswer;
+        private RuntimeException scoreError;
+        private final List<Object> scoreStates = new ArrayList<>();
+
+        FakeProvider scoring(JudgmentProvider.ScoreAnswer answer) {
+            this.scoreAnswer = answer;
+            return this;
+        }
+
         @Override
         public Set<Capability> capabilities() {
-            return Set.of(Capability.CHOICE);
+            return scoreAnswer == null && scoreError == null
+                    ? Set.of(Capability.CHOICE)
+                    : Set.of(Capability.CHOICE, Capability.SCORE);
+        }
+
+        @Override
+        public ScoreAnswer score(Object state, String instructions, Map<String, String> levels) {
+            scoreStates.add(state);
+            if (scoreError != null) {
+                throw scoreError;
+            }
+            return scoreAnswer;
         }
 
         @Override
@@ -167,5 +188,88 @@ class FailureTriageTest {
         assertEquals("Login POST", state.get("label"));
         assertEquals("500", state.get("response_code"));
         assertEquals(FailureTriage.MAX_MESSAGE_CHARS, state.get("message").length());
+    }
+
+    @Test
+    void scoreCapableProviderAddsOneSeverityRatingToNoticeAndAdvisory() {
+        FakeProvider provider = new FakeProvider(answer("HTTP_SERVER", 0.9), answer("TIMEOUT", 0.85))
+                .scoring(new JudgmentProvider.ScoreAnswer(2.2, 0.88));
+        FailureTriage triage = new FailureTriage(provider, 0.75, 5);
+
+        FailureTriage.TriageOutcome outcome = triage.triage(List.of(
+                failure("Checkout POST", "503", "Service Unavailable"),
+                failure("Search GET", "", "Read timed out")), 40, 10000);
+
+        assertEquals(1, provider.scoreStates.size());
+        Map<?, ?> state = (Map<?, ?>) provider.scoreStates.get(0);
+        assertEquals(40, state.get("total_failures"));
+        assertEquals(10000, state.get("total_samples"));
+        assertEquals(2, ((List<?>) state.get("failures")).size());
+        assertEquals("HIGH", outcome.notice().severity());
+        assertEquals(0.88, outcome.notice().severityConfidence());
+        assertTrue(outcome.notice().hasSeverity());
+        assertTrue(outcome.advisory().contains("Severity: High (88%)"));
+    }
+
+    @Test
+    void severityOutsideTheScaleIsLeftOut() {
+        FakeProvider provider = new FakeProvider(answer("CONNECTION", 0.95))
+                .scoring(new JudgmentProvider.ScoreAnswer(4.0, 0.97));
+
+        FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
+                .triage(List.of(failure("Home GET", "", "Connection refused")), 1);
+
+        assertFalse(outcome.notice().hasSeverity());
+        assertEquals(1, outcome.notice().classifiedFailures());
+    }
+
+    @Test
+    void lowConfidenceSeverityIsLeftOut() {
+        FakeProvider provider = new FakeProvider(answer("TIMEOUT", 0.9))
+                .scoring(new JudgmentProvider.ScoreAnswer(1.0, 0.4));
+
+        FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
+                .triage(List.of(failure("Login POST", "", "Read timed out")), 1);
+
+        assertFalse(outcome.notice().hasSeverity());
+        assertFalse(outcome.advisory().contains("Severity"));
+        assertEquals("TIMEOUT", outcome.notice().dominantCategory());
+    }
+
+    @Test
+    void severityErrorKeepsTheCategories() {
+        FakeProvider provider = new FakeProvider(answer("TIMEOUT", 0.9));
+        provider.scoreError = new IllegalStateException("HTTP 500");
+
+        FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
+                .triage(List.of(failure("Login POST", "", "Read timed out")), 1);
+
+        assertEquals(1, provider.scoreStates.size());
+        assertFalse(((Map<?, ?>) provider.scoreStates.get(0)).containsKey("total_samples"));
+        assertFalse(outcome.notice().hasSeverity());
+        assertEquals("TIMEOUT", outcome.notice().rows().get(0).category());
+    }
+
+    @Test
+    void choiceOnlyProviderNeverAsksForSeverity() {
+        FakeProvider provider = new FakeProvider(answer("TIMEOUT", 0.9));
+
+        FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
+                .triage(List.of(failure("Login POST", "", "Read timed out")), 1);
+
+        assertTrue(provider.scoreStates.isEmpty());
+        assertFalse(outcome.notice().hasSeverity());
+    }
+
+    @Test
+    void allUnclassifiedRunSkipsTheSeverityCall() {
+        FakeProvider provider = new FakeProvider(answer("TIMEOUT", 0.3))
+                .scoring(new JudgmentProvider.ScoreAnswer(2.0, 0.9));
+
+        FailureTriage.TriageOutcome outcome = new FailureTriage(provider, 0.75, 5)
+                .triage(List.of(failure("Login POST", "", "Read timed out")), 1);
+
+        assertTrue(provider.scoreStates.isEmpty());
+        assertFalse(outcome.notice().hasSeverity());
     }
 }

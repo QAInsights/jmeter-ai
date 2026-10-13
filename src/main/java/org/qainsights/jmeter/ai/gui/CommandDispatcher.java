@@ -4,6 +4,7 @@ import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.sla.SlaCommandHandler;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.usage.UsageCommandHandler;
@@ -111,6 +112,10 @@ public class CommandDispatcher {
             case "@usage":
                 Telemetry.record(TelemetryFeature.CMD_USAGE);
                 handleUsageCommand();
+                return;
+            case "@sla":
+                Telemetry.record(TelemetryFeature.CMD_SLA);
+                handleSlaCommand(message);
                 return;
             case "@testplan":
                 Telemetry.record(TelemetryFeature.CMD_TESTPLAN);
@@ -364,6 +369,22 @@ public class CommandDispatcher {
                 }
             }
         }.execute();
+    }
+
+    /** Pure parsing plus a tree insert, so it runs on the EDT without a worker. */
+    private void handleSlaCommand(String message) {
+        log.info("Processing @sla command");
+        cb.setLastCommandType("SLA");
+        cb.setInputEnabled(false);
+        org.apache.jmeter.gui.tree.JMeterTreeNode target = SlaCommandHandler.selectedNode();
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            try {
+                cb.onWorkerSuccess(new SlaCommandHandler().process(message, target));
+            } catch (RuntimeException e) {
+                cb.onWorkerError("Error processing @sla command", e,
+                        ProviderErrors.describe(e, "processing the @sla command", false));
+            }
+        });
     }
 
     private void handleUsageCommand() {
