@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.action.ActionNames;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunController;
 import org.qainsights.jmeter.ai.agent.tool.ParamType;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
@@ -72,14 +73,19 @@ public final class StopTestHandler {
         if (rootSupplier.get() == null) {
             return ToolResult.error(ERR_NO_TEST_PLAN, "No test plan is currently open.");
         }
-        if (!controller.isRunning()) {
-            return ToolResult.ok("Nothing is currently running.");
-        }
         boolean force = parseBoolean(args.get("force"));
+        boolean stoppedToolRun = TestPlanRunner.stopActive(force);
+        if (!controller.isRunning()) {
+            return stoppedToolRun ? stopped(force) : ToolResult.ok("Nothing is currently running.");
+        }
         String actionName = force ? ActionNames.ACTION_SHUTDOWN : ActionNames.ACTION_STOP;
         if (!controller.dispatch(actionName)) {
             return ToolResult.error(ERR_DISPATCH_FAILED, "Could not stop the test - no live JMeter GUI available.");
         }
+        return stopped(force);
+    }
+
+    private static ToolResult stopped(boolean force) {
         return ToolResult.ok(force
                 ? "Shutdown requested (in-flight samples interrupted immediately)."
                 : "Stop requested (waits for in-flight samples to finish).");

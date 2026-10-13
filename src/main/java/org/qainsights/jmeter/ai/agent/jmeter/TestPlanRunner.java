@@ -7,6 +7,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.jmeter.JMeter;
+import org.apache.jmeter.engine.JMeterEngineException;
 import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.samplers.SampleEvent;
@@ -30,6 +31,22 @@ import org.apache.jorphan.collections.ListedHashTree;
  * thread/loop overrides).
  */
 public final class TestPlanRunner {
+
+    private static volatile StandardJMeterEngine active;
+    /** Pending stop for the active run: TRUE stops at once, FALSE gracefully, null means keep running. */
+    private static volatile Boolean stopRequest;
+
+    /**
+     * Stops the run started by {@link #run}, which uses a private engine that JMeter's own Stop
+     * button and {@code ActionRouter} cannot reach. Returns false when no such run is active.
+     */
+    public static boolean stopActive(boolean now) {
+        if (active == null) {
+            return false;
+        }
+        stopRequest = now;
+        return true;
+    }
 
     /** Live entry point: pulls the current plan from the live {@link GuiPackage} tree model. */
     public TestRunSummary run(long timeoutSeconds) {
@@ -78,24 +95,44 @@ public final class TestPlanRunner {
         StandardJMeterEngine engine = new StandardJMeterEngine();
         long start = System.currentTimeMillis();
         try {
+            stopRequest = null;
             engine.configure(execTree);
-            engine.run();
-        } catch (RuntimeException e) {
+            active = engine;
+            engine.runTest();
+        } catch (JMeterEngineException | RuntimeException e) {
+            active = null;
             throw new TestExecutionException("Failed to run the test plan: " + e.getMessage());
         }
 
-        boolean finished;
+        // runTest() returns at once, so the timeout and stop_test are honoured while the engine runs.
+        long deadline = start + TimeUnit.SECONDS.toMillis(Math.max(1, timeoutSeconds));
+        boolean timedOut = false;
+        long lastStop = 0;
         try {
-            finished = done.await(Math.max(1, timeoutSeconds), TimeUnit.SECONDS);
+            while (!done.await(100, TimeUnit.MILLISECONDS)) {
+                long now = System.currentTimeMillis();
+                if (now >= deadline) {
+                    timedOut = true;
+                    engine.stopTest(true);
+                    done.await(10, TimeUnit.SECONDS);
+                    break;
+                }
+                Boolean stop = stopRequest;
+                if (stop != null && now - lastStop >= 1000) {
+                    engine.stopTest(stop);
+                    lastStop = now;
+                }
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            finished = false;
-        }
-        if (!finished) {
+            timedOut = true;
             engine.stopTest(true);
+        } finally {
+            active = null;
+            stopRequest = null;
         }
         long elapsed = System.currentTimeMillis() - start;
-        return TestRunSummary.of(SampleCollector.collected(), !finished, elapsed);
+        return TestRunSummary.of(SampleCollector.collected(), timedOut, elapsed);
     }
 
     /**
