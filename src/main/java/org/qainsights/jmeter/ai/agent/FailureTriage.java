@@ -174,8 +174,8 @@ public final class FailureTriage {
             }
             Severity[] levels = Severity.values();
             if (!JudgmentProvider.validScore(answer.score(), answer.confidence(), levels.length)) {
-                log.info("{} triage left severity out: score {} is outside 0 to {}", AgentJudgmentConfig.brand(),
-                        answer.score(), levels.length - 1);
+                log.info("{} triage left severity out: invalid answer (score {}, expected 0 to {}; confidence {})",
+                        AgentJudgmentConfig.brand(), answer.score(), levels.length - 1, answer.confidence());
                 return null;
             }
             return new SeverityRating(levels[answer.level(levels.length)], answer.confidence());
