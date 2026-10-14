@@ -22,7 +22,7 @@ None for local stub testing. Use a non-secret dummy OpenAI API key, never a real
 - Activate JMeter and maximize with `wmctrl -r 'Apache JMeter' -b add,maximized_vert,maximized_horz`.
 - Use Ctrl+Shift+A to show Feather Wand; wait for model discovery and ensure gpt-4o is selected.
 - Drag the split divider left to make response text readable.
-- Agent is preselected whenever an agent-capable model is available (Chat only when it is not, or with `jmeter.ai.agent.enabled=false`). Explicitly click the Chat radio before plain-chat tests.
+- Agent is preselected unless `jmeter.ai.agent.enabled=false`; unsupported selected models still fall back to plain chat. Explicitly click the Chat radio before plain-chat tests.
 - Type in the bottom composer and click the upward-arrow Send button once.
 
 ## Evidence
