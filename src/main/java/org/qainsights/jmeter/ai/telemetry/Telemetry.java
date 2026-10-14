@@ -27,9 +27,26 @@ public final class Telemetry {
     private Telemetry() {
     }
 
+    /**
+     * True inside a JUnit Platform test JVM (Maven, Gradle or an IDE). JMeter itself only ships JUnit 4,
+     * so a real JMeter session never has the platform launcher on its classpath.
+     */
+    static boolean runningUnderTests() {
+        try {
+            Class.forName("org.junit.platform.launcher.core.LauncherFactory", false,
+                    Telemetry.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+    }
+
     /** Idempotent: only the first call does anything. */
     public static void start() {
         if (!STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        if (runningUnderTests()) {
             return;
         }
         try {

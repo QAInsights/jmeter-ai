@@ -188,6 +188,15 @@ async function handlePing(request: Request, env: Env): Promise<Response> {
 
 interface StatsRow { [k: string]: unknown }
 
+/**
+ * Tool names that exist only in the plugin's own unit tests. Every `mvn verify` JVM used to
+ * send a ping with them, so installs that ever reported one are test runs, not users.
+ */
+export const TEST_ONLY_FEATURES = ["tool_boom", "tool_nullish", "tool_echo"] as const;
+const TEST_INSTALLS = `SELECT install_id FROM feature_counts WHERE feature IN (${
+	TEST_ONLY_FEATURES.map(f => `'${f}'`).join(", ")})`;
+const REAL = `install_id NOT IN (${TEST_INSTALLS})`;
+
 async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 	const today = todayUTC();
 	const wauSince = dateOffset(6);
@@ -198,21 +207,29 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 		return r?.n ?? 0;
 	};
 
-	const [dau, wau, mau, totalInstalls] = await Promise.all([
-		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day = ?`, today),
-		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day >= ?`, wauSince),
-		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day >= ?`, mauSince),
-		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings`),
+	const prevWeekSince = dateOffset(13);
+	const [dau, wau, mau, totalInstalls, testInstalls, wauPrev, newThisWeek, newPrevWeek] = await Promise.all([
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day = ? AND ${REAL}`, today),
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day >= ? AND ${REAL}`, wauSince),
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day >= ? AND ${REAL}`, mauSince),
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE ${REAL}`),
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE install_id IN (${TEST_INSTALLS})`),
+		scalar(`SELECT COUNT(DISTINCT install_id) AS n FROM pings WHERE day >= ? AND day < ? AND ${REAL}`,
+			prevWeekSince, wauSince),
+		scalar(`SELECT COUNT(*) AS n FROM (SELECT MIN(day) AS first_day FROM pings WHERE ${REAL}
+			 GROUP BY install_id) WHERE first_day >= ?`, wauSince),
+		scalar(`SELECT COUNT(*) AS n FROM (SELECT MIN(day) AS first_day FROM pings WHERE ${REAL}
+			 GROUP BY install_id) WHERE first_day >= ? AND first_day < ?`, prevWeekSince, wauSince),
 	]);
 
 	const dailyActive = (await env.DB.prepare(
 		`SELECT day, COUNT(DISTINCT install_id) AS installs
-		 FROM pings WHERE day >= ? GROUP BY day ORDER BY day`
+		 FROM pings WHERE day >= ? AND ${REAL} GROUP BY day ORDER BY day`
 	).bind(mauSince).all<StatsRow>()).results;
 
 	const newInstalls = (await env.DB.prepare(
 		`SELECT first_day AS day, COUNT(*) AS installs FROM (
-			 SELECT install_id, MIN(day) AS first_day FROM pings GROUP BY install_id
+			 SELECT install_id, MIN(day) AS first_day FROM pings WHERE ${REAL} GROUP BY install_id
 		 ) WHERE first_day >= ? GROUP BY first_day ORDER BY first_day`
 	).bind(mauSince).all<StatsRow>()).results;
 
@@ -221,7 +238,7 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 			`SELECT ${col} AS value, COUNT(*) AS installs FROM (
 				 SELECT install_id, ${col},
 					ROW_NUMBER() OVER (PARTITION BY install_id ORDER BY ts DESC) AS rn
-				 FROM pings WHERE day >= ?
+				 FROM pings WHERE day >= ? AND ${REAL}
 			 ) WHERE rn = 1 GROUP BY ${col} ORDER BY installs DESC`
 		).bind(mauSince).all<StatsRow>()).results;
 
@@ -240,14 +257,14 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 			breakdown("model"),
 			env.DB.prepare(
 				`SELECT feature, SUM(count) AS total, COUNT(DISTINCT install_id) AS installs
-				 FROM feature_counts WHERE day >= ? GROUP BY feature ORDER BY total DESC`
+				 FROM feature_counts WHERE day >= ? AND ${REAL} GROUP BY feature ORDER BY total DESC`
 			).bind(mauSince).all<StatsRow>().then(r => r.results),
 		]);
 
 	// Of the installs at least N days old, how many pinged again N or more days after their first ping.
 	const retention = await Promise.all([1, 7, 30].map(async (days) => {
 		const r = await env.DB.prepare(
-			`WITH firsts AS (SELECT install_id, MIN(day) AS first_day FROM pings GROUP BY install_id)
+			`WITH firsts AS (SELECT install_id, MIN(day) AS first_day FROM pings WHERE ${REAL} GROUP BY install_id)
 			 SELECT COUNT(*) AS cohort,
 				SUM(CASE WHEN EXISTS (
 					SELECT 1 FROM pings p WHERE p.install_id = f.install_id
@@ -258,13 +275,20 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 		return { days, cohort: r?.cohort ?? 0, retained: r?.retained ?? 0 };
 	}));
 
+	const messagers = await env.DB.prepare(
+		`SELECT COALESCE(SUM(count), 0) AS total, COUNT(DISTINCT install_id) AS installs
+		 FROM feature_counts WHERE day >= ? AND feature IN ('chat_message', 'agent_run') AND ${REAL}`
+	).bind(mauSince).first<{ total: number; installs: number }>();
+
 	const versionAdoption = (await env.DB.prepare(
 		`SELECT day, plugin_version AS version, COUNT(DISTINCT install_id) AS installs
-		 FROM pings WHERE day >= ? GROUP BY day, plugin_version ORDER BY day, installs DESC`
+		 FROM pings WHERE day >= ? AND ${REAL} GROUP BY day, plugin_version ORDER BY day, installs DESC`
 	).bind(mauSince).all<StatsRow>()).results;
 
 	return {
-		today, dau, wau, mau, totalInstalls,
+		today, dau, wau, mau, totalInstalls, testInstalls,
+		growth: { newThisWeek, newPrevWeek, wau, wauPrev },
+		engagement: { messages: messagers?.total ?? 0, messagingInstalls: messagers?.installs ?? 0, activeInstalls: mau },
 		dailyActive, newInstalls, retention, versionAdoption,
 		breakdowns: {
 			pluginVersion: pluginVersions,
@@ -298,6 +322,13 @@ function table(title: string, headers: string[], rows: unknown[][]): string {
 
 function pct(part: number, whole: number): string {
 	return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "-";
+}
+
+/** Week-over-week change, e.g. "+120%"; "-" when there is no previous week to compare. */
+function change(now: number, prev: number): string {
+	if (prev <= 0) return "-";
+	const p = Math.round(((now - prev) / prev) * 100);
+	return `${p > 0 ? "+" : ""}${p}%`;
 }
 
 function perInstall(r: StatsRow): string {
@@ -350,6 +381,8 @@ function statsPage(s: Record<string, unknown>): string {
 	const usageRows = (list: StatsRow[], strip = "") =>
 		list.map(r => [name(r).slice(strip.length), r.total, r.installs, perInstall(r)]);
 	const retention = s.retention as { days: number; cohort: number; retained: number }[];
+	const g = s.growth as { newThisWeek: number; newPrevWeek: number; wau: number; wauPrev: number };
+	const e = s.engagement as { messages: number; messagingInstalls: number; activeInstalls: number };
 	return `<!doctype html><html><head><meta charset="utf-8"><title>Feather Wand Telemetry</title>
 <style>
 body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
@@ -362,6 +395,7 @@ table { border-collapse: collapse; min-width: 20rem; }
 th, td { border: 1px solid #ddd; padding: 0.3rem 0.7rem; text-align: left; font-size: 0.9rem; }
 th { background: #f5f5f5; }
 .empty { color: #999; }
+.note { color: #666; font-size: 0.85rem; }
 </style></head><body>
 <h1>Feather Wand telemetry (${esc(s.today)} UTC)</h1>
 <div class="cards">
@@ -370,6 +404,18 @@ th { background: #f5f5f5; }
 <div class="card"><div class="n">${esc(s.mau)}</div>MAU</div>
 <div class="card"><div class="n">${esc(s.totalInstalls)}</div>Total installs</div>
 </div>
+<p class="note">Excludes ${esc(s.testInstalls)} installs that were the plugin's own test runs (installs that reported a test-only tool). Older test runs that pinged before reaching those tools can still be counted, so treat this as a lower bound.
+DAU, WAU and MAU count installs active today, in the last 7 days and in the last 30 days (UTC).</p>
+${table("Weekly growth (last 7 days vs the 7 before)", ["metric", "last 7 days", "previous 7 days", "change"], [
+		["New installs", g.newThisWeek, g.newPrevWeek, change(g.newThisWeek, g.newPrevWeek)],
+		["Active installs (WAU)", g.wau, g.wauPrev, change(g.wau, g.wauPrev)],
+	])}
+${table("Engagement (30d)", ["metric", "value"], [
+		["Messages sent (chat + agent)", e.messages],
+		["Installs that sent a message", `${e.messagingInstalls} of ${e.activeInstalls} (${pct(e.messagingInstalls, e.activeInstalls)})`],
+		["Messages per active install", e.activeInstalls > 0 ? (e.messages / e.activeInstalls).toFixed(1) : "-"],
+		["Messages per messaging install", e.messagingInstalls > 0 ? (e.messages / e.messagingInstalls).toFixed(1) : "-"],
+	])}
 ${table("Daily active installs (30d)", ["day", "installs"], (s.dailyActive as StatsRow[]).map(r => [r.day, r.installs]))}
 ${table("New installs (30d)", ["day", "installs"], (s.newInstalls as StatsRow[]).map(r => [r.day, r.installs]))}
 ${table("Plugin versions (30d)", ["version", "installs"], rows(bd.pluginVersion))}
