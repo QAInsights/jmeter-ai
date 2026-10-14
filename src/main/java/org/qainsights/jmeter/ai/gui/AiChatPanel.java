@@ -1440,6 +1440,9 @@ public class AiChatPanel
     ) {
         log.error(logMessage, e);
         runOnEdt(() -> {
+            if (conversationTracker.history().size() % 2 == 1) {
+                addToConversationHistory(org.qainsights.jmeter.ai.service.HistoryWindow.FAILED_REPLY);
+            }
             removeLoadingIndicator();
             transcript.addSystemMessage(userMessage, ThemeColors.error());
             setInputEnabled(true);

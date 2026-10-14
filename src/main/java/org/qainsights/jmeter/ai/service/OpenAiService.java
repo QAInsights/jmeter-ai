@@ -238,7 +238,7 @@ public class OpenAiService implements AiService {
 
             // Filter out error responses that were stored in history to avoid poisoning requests
             List<String> cleanHistory = new java.util.ArrayList<>();
-            for (String msg : limitedHistory) {
+            for (String msg : HistoryWindow.maskFailedReplies(limitedHistory)) {
                 if (msg != null && !msg.startsWith("Error:")) {
                     cleanHistory.add(msg);
                 } else if (msg != null) {
@@ -433,7 +433,7 @@ public class OpenAiService implements AiService {
         }
 
         List<String> cleanHistory = new java.util.ArrayList<>();
-        for (String msg : limitedHistory) {
+        for (String msg : HistoryWindow.maskFailedReplies(limitedHistory)) {
             if (msg != null && !msg.startsWith("Error:")) {
                 cleanHistory.add(msg);
             }

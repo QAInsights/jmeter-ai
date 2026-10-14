@@ -58,4 +58,12 @@ class HistoryWindowTest {
         assertEquals(List.of(), HistoryWindow.lastTurns(turns(12), 1));
         assertEquals(List.of(), HistoryWindow.lastTurns(turns(12), 0));
     }
+
+    @Test
+    void failedRepliesKeepTheirAssistantSlot() {
+        List<String> window = List.of("user0", "Error: timeout", "user2", "assistant3", "Error: odd slot");
+
+        assertEquals(List.of("user0", HistoryWindow.FAILED_REPLY, "user2", "assistant3", "Error: odd slot"),
+                HistoryWindow.maskFailedReplies(window));
+    }
 }

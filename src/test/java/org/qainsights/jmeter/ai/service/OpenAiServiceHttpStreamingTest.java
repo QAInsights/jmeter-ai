@@ -125,6 +125,28 @@ class OpenAiServiceHttpStreamingTest {
     }
 
     @Test
+    void failedReplyKeepsItsSlotSoTheNextQuestionStaysAUserTurn() throws Exception {
+        fixture.respondSse(COMPLETIONS, StreamingFixtureServer.openAiSse(chunk("ok")));
+        StreamCallbacks callbacks = new StreamCallbacks();
+        List<String> history = List.of("Add a sampler", "Error: request timed out", "Now add a timer");
+
+        service.generateStreamResponse(history, "gpt-4o",
+                callbacks.onToken, callbacks.onComplete, callbacks.onError);
+        callbacks.awaitTerminal();
+
+        JsonNode messages = fixture.onlyRequest().json().get("messages");
+        List<String> roles = new ArrayList<>();
+        List<String> contents = new ArrayList<>();
+        messages.forEach(m -> {
+            roles.add(m.get("role").asText());
+            contents.add(m.get("content").asText());
+        });
+        assertEquals(List.of("system", "user", "system", "user"), roles);
+        assertEquals(List.of(SYSTEM_PROMPT, "Add a sampler", "Assistant: " + HistoryWindow.FAILED_REPLY,
+                "Now add a timer"), contents);
+    }
+
+    @Test
     void emptyHistorySendsDefaultGreeting() throws Exception {
         fixture.respondSse(COMPLETIONS, StreamingFixtureServer.openAiSse(chunk("hi")));
         StreamCallbacks callbacks = new StreamCallbacks();

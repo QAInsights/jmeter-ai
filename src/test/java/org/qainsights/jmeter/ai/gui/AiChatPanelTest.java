@@ -510,4 +510,28 @@ class AiChatPanelTest {
         assertTrue(texts.contains("partial"), texts.toString());
         assertTrue(texts.stream().noneMatch(text -> text.contains("the rest")), texts.toString());
     }
+
+    @Test
+    void failedRequestSavesAPlaceholderReplySoRolesKeepAlternating() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+
+        panel.onWorkerError("failed", new Exception("boom"), "Could not reach the provider");
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question", org.qainsights.jmeter.ai.service.HistoryWindow.FAILED_REPLY),
+                panel.getConversationHistory());
+    }
+
+    @Test
+    void errorWithNoPendingUserTurnAddsNothing() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+        panel.addToConversationHistory("answer");
+
+        panel.onWorkerError("failed", new Exception("boom"), "Could not reach the provider");
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question", "answer"), panel.getConversationHistory());
+    }
 }

@@ -9,6 +9,9 @@ import java.util.List;
  */
 public final class HistoryWindow {
 
+    /** Stands in for a reply that failed, so the turns after it keep their roles. */
+    public static final String FAILED_REPLY = "(No reply: that request failed.)";
+
     private HistoryWindow() {
     }
 
@@ -26,5 +29,20 @@ public final class HistoryWindow {
             from++;
         }
         return new ArrayList<>(conversation.subList(from, size));
+    }
+
+    /**
+     * Replaces stored {@code Error:} replies in assistant slots with {@link #FAILED_REPLY};
+     * dropping them would shift every later turn into the wrong role.
+     */
+    public static List<String> maskFailedReplies(List<String> window) {
+        List<String> masked = new ArrayList<>(window);
+        for (int i = 1; i < masked.size(); i += 2) {
+            String msg = masked.get(i);
+            if (msg != null && msg.startsWith("Error:")) {
+                masked.set(i, FAILED_REPLY);
+            }
+        }
+        return masked;
     }
 }
