@@ -181,4 +181,15 @@ class LocalEmbeddingModelTest {
         assertEquals(home, LocalEmbeddingModel.root("~", home.toString()));
         assertEquals(Path.of("/opt/models"), LocalEmbeddingModel.root("/opt/models", home.toString()));
     }
+
+    @org.junit.jupiter.api.Test
+    void modelRejectsRepoIdsThatEscapeTheCacheFolder() {
+        String fallback = LocalEmbeddingModel.model(null);
+        org.junit.jupiter.api.Assertions.assertEquals(fallback, LocalEmbeddingModel.model("../../etc"));
+        org.junit.jupiter.api.Assertions.assertEquals(fallback, LocalEmbeddingModel.model("owner/.."));
+        org.junit.jupiter.api.Assertions.assertEquals(fallback, LocalEmbeddingModel.model("a/b/c"));
+        org.junit.jupiter.api.Assertions.assertEquals(fallback, LocalEmbeddingModel.model("C:\\tmp\\x"));
+        org.junit.jupiter.api.Assertions.assertEquals("onnx-community/embeddinggemma-2-ONNX",
+                LocalEmbeddingModel.model(" onnx-community/embeddinggemma-2-ONNX "));
+    }
 }

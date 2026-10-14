@@ -123,8 +123,20 @@ public final class LocalEmbeddingModel {
 
     /** The configured Hugging Face repo id, or the default when blank. */
     public static String model(String value) {
-        return value == null || value.isBlank() ? DEFAULT_MODEL : value.trim();
+        if (value == null || value.isBlank()) {
+            return DEFAULT_MODEL;
+        }
+        String repo = value.trim();
+        if (!REPO_ID.matcher(repo).matches() || repo.contains("..")) {
+            log.warn("Ignoring {}={}: expected a Hugging Face repo id like owner/name; using {}",
+                    MODEL_KEY, repo, DEFAULT_MODEL);
+            return DEFAULT_MODEL;
+        }
+        return repo;
     }
+
+    private static final java.util.regex.Pattern REPO_ID =
+            java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*");
 
     public String repo() {
         return repo;
@@ -251,7 +263,8 @@ public final class LocalEmbeddingModel {
             Files.createDirectories(directory);
             for (FileSpec spec : files) {
                 Path target = directory.resolve(spec.path());
-                if (Files.isRegularFile(target) && (spec.size() < 0 || Files.size(target) == spec.size())) {
+                if (Files.isRegularFile(target) && (spec.size() < 0 || Files.size(target) == spec.size())
+                        && (spec.sha256() == null || spec.sha256().equalsIgnoreCase(hashOf(target)))) {
                     downloadedBytes += Math.max(0, spec.size());
                     continue;
                 }
@@ -305,6 +318,17 @@ public final class LocalEmbeddingModel {
         } finally {
             Files.deleteIfExists(part);
         }
+    }
+
+    private static String hashOf(Path file) throws IOException {
+        MessageDigest digest = sha256();
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buf = new byte[1 << 16];
+            for (int n; (n = in.read(buf)) > 0; ) {
+                digest.update(buf, 0, n);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 
     private static MessageDigest sha256() {
