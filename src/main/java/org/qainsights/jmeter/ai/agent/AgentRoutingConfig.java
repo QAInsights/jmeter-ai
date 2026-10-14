@@ -4,6 +4,8 @@ import java.time.Duration;
 
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
+import org.qainsights.jmeter.ai.service.LocalEmbeddingModel;
+import org.qainsights.jmeter.ai.service.OnnxEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -25,7 +27,7 @@ public final class AgentRoutingConfig {
     }
 
     /**
-     * Builds the smart router (Jev, OpenAI or OpenRouter Decisions, or local Ollama embeddings,
+     * Builds the smart router (Jev, OpenAI or OpenRouter Decisions, or local embeddings via Ollama or ONNX,
      * see {@link AgentJudgmentConfig}), or null (no routing, no card) when the flags are off or
      * a remote backend's API key is missing/placeholder.
      */
@@ -36,6 +38,9 @@ public final class AgentRoutingConfig {
         try {
             if (AgentJudgmentConfig.OLLAMA.equals(AgentJudgmentConfig.provider())) {
                 return sharedEmbeddingRouter();
+            }
+            if (AgentJudgmentConfig.LOCAL.equals(AgentJudgmentConfig.provider())) {
+                return sharedOnnxRouter();
             }
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
@@ -59,6 +64,33 @@ public final class AgentRoutingConfig {
             embeddingRouterKey = key;
         }
         return embeddingRouter;
+    }
+
+    private static String onnxRouterKey;
+    private static EmbeddingAgentRequestRouter onnxRouter;
+    private static OnnxEmbeddingClient onnxClient;
+
+    /**
+     * One in-plugin ONNX router per model folder and threshold, so the model loads and the examples are
+     * embedded once per JMeter session. The previous model is closed when the settings change.
+     */
+    private static synchronized AgentRequestRouter sharedOnnxRouter() {
+        String key = String.join("|",
+                AiConfig.getProperty(LocalEmbeddingModel.MODEL_KEY, LocalEmbeddingModel.DEFAULT_MODEL),
+                AiConfig.getProperty(LocalEmbeddingModel.DIR_KEY, ""),
+                AiConfig.getProperty(LocalEmbeddingModel.DOWNLOAD_KEY, "true"),
+                AiConfig.getProperty(LocalEmbeddingModel.BASE_URL_KEY, LocalEmbeddingModel.DEFAULT_BASE_URL),
+                AiConfig.getProperty(OnnxEmbeddingClient.THREADS_KEY, ""), String.valueOf(minConfidence()));
+        if (onnxRouter == null || !key.equals(onnxRouterKey)) {
+            if (onnxClient != null) {
+                onnxClient.close();
+            }
+            OnnxEmbeddingClient client = OnnxEmbeddingClient.fromConfig();
+            onnxClient = client;
+            onnxRouter = new EmbeddingAgentRequestRouter(client::embed, minConfidence());
+            onnxRouterKey = key;
+        }
+        return onnxRouter;
     }
 
     public static boolean enabled() {

@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.service.LocalEmbeddingModel;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
@@ -150,6 +151,31 @@ class AgentJudgmentConfigTest {
 
             assertNull(AgentTriageConfig.createTriage());
             assertEquals("none", AgentJudgmentConfig.activeBackend());
+        }
+    }
+
+    @Test
+    void localBackendNeedsNoKeyRoutesOnlyAndIsBrandedByModel() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn(" LOCAL ");
+
+            assertEquals(AgentJudgmentConfig.LOCAL, AgentJudgmentConfig.provider());
+            assertEquals("EmbeddingGemma", AgentJudgmentConfig.brand());
+            assertNull(AgentJudgmentConfig.createProvider());
+            assertEquals("none", AgentJudgmentConfig.activeBackend());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false")).thenReturn("true");
+            assertNull(AgentTriageConfig.createTriage());
+            assertEquals("none", AgentJudgmentConfig.activeBackend());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
+            assertEquals(AgentJudgmentConfig.LOCAL, AgentJudgmentConfig.activeBackend());
+
+            config.when(() -> AiConfig.getProperty(LocalEmbeddingModel.MODEL_KEY, LocalEmbeddingModel.DEFAULT_MODEL))
+                    .thenReturn("acme/other-embed-ONNX");
+            assertEquals("Local embeddings", AgentJudgmentConfig.brand());
         }
     }
 

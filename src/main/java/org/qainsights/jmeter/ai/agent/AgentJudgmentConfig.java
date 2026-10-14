@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent;
 import java.util.Locale;
 
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.qainsights.jmeter.ai.service.LocalEmbeddingModel;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
@@ -11,8 +12,8 @@ import org.qainsights.jmeter.ai.utils.AiConfig;
 
 /**
  * Picks the backend behind smart routing and failure triage: TypeSafe Jev (default), the
- * OpenAI Decisions API, or OpenRouter's Decisions API (Microsoft-Decision-1 by default), or local Ollama embeddings
- * (routing only). The routing and triage feature flags are shared by all backends.
+ * OpenAI Decisions API, or OpenRouter's Decisions API (Microsoft-Decision-1 by default), or local embeddings
+ * through Ollama or inside the plugin with ONNX Runtime (routing only). The routing and triage feature flags are shared by all backends.
  */
 public final class AgentJudgmentConfig {
     public static final String PROVIDER_KEY = "jmeter.ai.judgment.provider";
@@ -25,15 +26,17 @@ public final class AgentJudgmentConfig {
     public static final String OPENROUTER_BASE_URL_KEY = "openrouter.base.url";
     public static final String OPENROUTER_MODEL_KEY = "openrouter.decisions.model";
     public static final String OLLAMA = "ollama";
+    public static final String LOCAL = "local";
 
     private AgentJudgmentConfig() {
     }
 
-    /** The configured backend; anything other than {@code openai}, {@code openrouter} or {@code ollama} means TypeSafe Jev. */
+    /** The configured backend; anything other than {@code openai}, {@code openrouter}, {@code ollama} or {@code local} means TypeSafe Jev. */
     public static String provider() {
         String value = AiConfig.getProperty(PROVIDER_KEY, TYPESAFE);
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        if (OPENAI.equals(normalized) || OPENROUTER.equals(normalized) || OLLAMA.equals(normalized)) {
+        if (OPENAI.equals(normalized) || OPENROUTER.equals(normalized) || OLLAMA.equals(normalized)
+                || LOCAL.equals(normalized)) {
             return normalized;
         }
         return TYPESAFE;
@@ -51,6 +54,9 @@ public final class AgentJudgmentConfig {
                 case OLLAMA:
                     return embeddingBrand(AiConfig.getProperty(OllamaEmbeddingClient.MODEL_KEY,
                             OllamaEmbeddingClient.DEFAULT_MODEL));
+                case LOCAL:
+                    return embeddingBrand(LocalEmbeddingModel.model(AiConfig.getProperty(LocalEmbeddingModel.MODEL_KEY,
+                            LocalEmbeddingModel.DEFAULT_MODEL)));
                 default:
                     return "Jev";
             }
@@ -83,7 +89,7 @@ public final class AgentJudgmentConfig {
      * Backend that would actually serve routing or triage, for telemetry: {@code none} when
      * both features are off or the backend's key is unusable, otherwise {@code typesafe},
      * {@code openai}, {@code openrouter:<model vendor>} (e.g. {@code openrouter:microsoft}) or
-     * {@code ollama} (routing only; it needs no key).
+     * {@code ollama} or {@code local} (routing only; they need no key).
      */
     public static String activeBackend() {
         try {
@@ -91,8 +97,8 @@ public final class AgentJudgmentConfig {
                 return "none";
             }
             String backend = provider();
-            if (OLLAMA.equals(backend)) {
-                return AgentRoutingConfig.enabled() ? OLLAMA : "none";
+            if (OLLAMA.equals(backend) || LOCAL.equals(backend)) {
+                return AgentRoutingConfig.enabled() ? backend : "none";
             }
             String keyName = OPENAI.equals(backend) ? OPENAI_API_KEY
                     : OPENROUTER.equals(backend) ? OPENROUTER_API_KEY : AgentRoutingConfig.API_KEY;
@@ -114,11 +120,11 @@ public final class AgentJudgmentConfig {
 
     /**
      * Builds the configured judgment provider, or null when its API key is missing or a
-     * placeholder, or for the Ollama backend, which only routes and has no judgment provider.
+     * placeholder, or for the Ollama and local backends, which only route and have no judgment provider.
      * May throw when the client cannot be constructed (for example a bad URL).
      */
     static JudgmentProvider createProvider() {
-        if (OLLAMA.equals(provider())) {
+        if (OLLAMA.equals(provider()) || LOCAL.equals(provider())) {
             return null;
         }
         if (OPENAI.equals(provider())) {
