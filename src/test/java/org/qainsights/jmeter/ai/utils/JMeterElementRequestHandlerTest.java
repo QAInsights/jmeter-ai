@@ -362,9 +362,16 @@ class JMeterElementRequestHandlerTest {
         guiPackage.when(GuiPackage::getInstance).thenReturn(gui);
         manager.when(() -> JMeterElementManager.addElement(anyString(), any())).thenAnswer(invocation -> {
             String type = invocation.getArgument(0);
-            org.apache.jmeter.testelement.TestElement element = type.equals("threadgroup")
-                    ? new org.apache.jmeter.threads.ThreadGroup()
-                    : new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+            org.apache.jmeter.testelement.TestElement element;
+            if (type.contains("thread")) {
+                element = new org.apache.jmeter.threads.ThreadGroup();
+            } else if (type.contains("assert")) {
+                element = new org.apache.jmeter.assertions.ResponseAssertion();
+            } else if (type.contains("runtime")) {
+                element = new org.apache.jmeter.control.RunTime();
+            } else {
+                element = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+            }
             element.setName(type);
             current[0].add(new JMeterTreeNode(element, null));
             addedElements.add(new String[] { type, invocation.getArgument(1) });
@@ -411,5 +418,25 @@ class JMeterElementRequestHandlerTest {
         JMeterElementRequestHandler.processElementRequest("add a thread group, an http request and an http request");
 
         assertEquals("[threadgroup[httprequest, httprequest]]", childNames(plan));
+    }
+
+    @Test
+    void assertionAfterASamplerIsScopedToThatSampler() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("thread group, http request and response assertion");
+
+        assertEquals("[threadgroup[httpsampler[responseassert]]]", childNames(plan));
+    }
+
+    @Test
+    void samplerAfterARuntimeControllerGoesInsideIt() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("thread group, runtime controller and http request");
+
+        assertEquals("[threadgroup[runtimecontroller[httpsampler]]]", childNames(plan));
     }
 }

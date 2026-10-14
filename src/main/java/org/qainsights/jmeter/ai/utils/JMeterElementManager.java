@@ -851,7 +851,8 @@ public class JMeterElementManager {
         boolean isTestPlan = nodeType.equals("TestPlan") || nodeGuiClass.contains("TestPlanGui");
         boolean isThreadGroup = nodeType.equals("ThreadGroup") || nodeGuiClass.contains("ThreadGroupGui");
         boolean isController = nodeType.contains("Controller") || nodeGuiClass.contains("ControllerPanel")
-                || nodeGuiClass.contains("ControllerGui");
+                || nodeGuiClass.contains("ControllerGui")
+                || currentNode.getTestElement() instanceof org.apache.jmeter.control.Controller;
         boolean isSampler = nodeType.contains("Sampler") || nodeGuiClass.contains("SamplerGui");
         boolean isTimer = nodeType.contains("Timer") || nodeGuiClass.contains("TimerGui");
         boolean isPreProcessor = nodeType.contains("PreProcessor") || nodeGuiClass.contains("PreProcessorGui");

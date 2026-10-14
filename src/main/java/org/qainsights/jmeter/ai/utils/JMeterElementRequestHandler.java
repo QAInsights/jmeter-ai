@@ -469,15 +469,14 @@ public class JMeterElementRequestHandler {
     }
 
     /**
-     * Where the next element of a list goes: inside a Thread Group or controller
-     * the previous instruction just added, otherwise beside the previous element.
+     * The element the previous instruction just added, so the next one can nest
+     * inside it; {@link #placementFor} climbs out when it can't hold that type.
      */
     private static JMeterTreeNode nextTarget(JMeterTreeNode target, JMeterTreeNode lastParent, int lastChildCount) {
         if (lastParent == null || lastParent.getChildCount() <= lastChildCount) {
             return target;
         }
-        JMeterTreeNode added = (JMeterTreeNode) lastParent.getChildAt(lastParent.getChildCount() - 1);
-        return added.getTestElement() instanceof org.apache.jmeter.control.Controller ? added : lastParent;
+        return (JMeterTreeNode) lastParent.getChildAt(lastParent.getChildCount() - 1);
     }
 
     /** The target itself, or its closest ancestor that can hold the element. */
