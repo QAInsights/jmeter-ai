@@ -52,6 +52,11 @@ Older plugin versions keep working: new ping fields are optional and unknown fie
 - JSON: `curl -H "Authorization: Bearer $STATS_TOKEN" https://telemetry.jmeter.ai/v1/stats`
 - HTML: open `https://telemetry.jmeter.ai/stats?token=$STATS_TOKEN` in a browser.
 
+Every number leaves out installs that ever reported a tool from `TEST_ONLY_FEATURES` in `src/index.ts`
+(`tool_boom`, `tool_nullish`, `tool_echo`). Those names exist only in the plugin's unit tests, and before
+the plugin's Surefire config set `DO_NOT_TRACK=1`, each `mvn verify` run (CI included) pinged as a fresh install.
+The page shows how many were hidden, plus week-over-week growth and messages per active install.
+
 ## Testing
 
 ```bash

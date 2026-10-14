@@ -377,6 +377,9 @@
                     <argLine
                     >@{jacocoArgLine} -Xmx128m -XX:+UseSerialGC -XX:+EnableDynamicAgentLoading
                     </argLine>
+                    <environmentVariables>
+                        <DO_NOT_TRACK>1</DO_NOT_TRACK>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <!-- Code Coverage with Jacoco -->

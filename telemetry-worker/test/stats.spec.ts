@@ -169,3 +169,54 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>chat_message</td><td>9</td>");
 	});
 });
+
+describe("test-run filtering, growth and engagement", () => {
+	it("hides installs that reported test-only tools from every number", async () => {
+		await insertPing("real", day(0), { os: "Windows 11", country: "IN" });
+		await insertPing("ci", day(0), { os: "Linux", country: "US" });
+		await insertPing("ci", day(1), { os: "Linux", country: "US" });
+		await env.DB.prepare(
+			`INSERT INTO feature_counts (install_id, day, feature, count) VALUES
+			 ('real', ?1, 'chat_message', 4), ('ci', ?2, 'tool_boom', 1), ('ci', ?2, 'chat_message', 50),
+			 ('ci', ?1, 'tool_add_element', 2)`
+		).bind(day(0), day(1)).run();
+
+		const s = await (await stats(`/v1/stats?token=${TOKEN}`)).json() as any;
+
+		expect([s.dau, s.wau, s.mau, s.totalInstalls, s.testInstalls]).toEqual([1, 1, 1, 1, 1]);
+		expect(s.dailyActive).toEqual([{ day: day(0), installs: 1 }]);
+		expect(s.newInstalls).toEqual([{ day: day(0), installs: 1 }]);
+		expect(s.breakdowns.os).toEqual([{ value: "Windows 11", installs: 1 }]);
+		expect(s.breakdowns.country).toEqual([{ value: "IN", installs: 1 }]);
+		expect(s.features).toEqual([{ feature: "chat_message", total: 4, installs: 1 }]);
+		expect(s.retention[0]).toEqual({ days: 1, cohort: 0, retained: 0 });
+		expect(s.versionAdoption).toEqual([{ day: day(0), version: "3.8.5", installs: 1 }]);
+	});
+
+	it("compares the last 7 days with the 7 before and reports messages per active install", async () => {
+		// old: first seen 10 days ago, active again today. a, b: new this week. gone: only 12 days ago.
+		await insertPing("old", day(10));
+		await insertPing("old", day(0));
+		await insertPing("gone", day(12));
+		await insertPing("a", day(3));
+		await insertPing("b", day(0));
+		await env.DB.prepare(
+			`INSERT INTO feature_counts (install_id, day, feature, count) VALUES
+			 ('a', ?1, 'chat_message', 6), ('a', ?1, 'agent_run', 2), ('b', ?2, 'chat_message', 4),
+			 ('b', ?2, 'panel_open', 9)`
+		).bind(day(3), day(0)).run();
+
+		const s = await (await stats(`/v1/stats?token=${TOKEN}`)).json() as any;
+
+		expect(s.growth).toEqual({ newThisWeek: 2, newPrevWeek: 2, wau: 3, wauPrev: 2 });
+		expect(s.engagement).toEqual({ messages: 12, messagingInstalls: 2, activeInstalls: 4 });
+
+		const html = await (await stats(`/stats?token=${TOKEN}`)).text();
+		expect(html).toContain("Excludes 0 installs that were the plugin's own test runs");
+		expect(html).toContain("<td>New installs</td><td>2</td><td>2</td><td>0%</td>");
+		expect(html).toContain("<td>Active installs (WAU)</td><td>3</td><td>2</td><td>+50%</td>");
+		expect(html).toContain("<td>Installs that sent a message</td><td>2 of 4 (50%)</td>");
+		expect(html).toContain("<td>Messages per active install</td><td>3.0</td>");
+		expect(html).toContain("<td>Messages per messaging install</td><td>6.0</td>");
+	});
+});
