@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
@@ -115,6 +116,41 @@ class AgentJudgmentConfigTest {
         config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
                 .thenReturn(" OpenAI ");
         return config;
+    }
+
+    @Test
+    void ollamaBackendNeedsNoKeyRoutesOnlyAndIsBrandedByModel() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn(" Ollama ");
+
+            assertEquals(AgentJudgmentConfig.OLLAMA, AgentJudgmentConfig.provider());
+            assertEquals("EmbeddingGemma", AgentJudgmentConfig.brand());
+            assertNull(AgentJudgmentConfig.createProvider());
+            assertEquals("none", AgentJudgmentConfig.activeBackend());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
+            assertEquals(AgentJudgmentConfig.OLLAMA, AgentJudgmentConfig.activeBackend());
+
+            config.when(() -> AiConfig.getProperty(OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL))
+                    .thenReturn("nomic-embed-text");
+            assertEquals("Local embeddings", AgentJudgmentConfig.brand());
+        }
+    }
+
+    @Test
+    void ollamaBackendLeavesTriageOff() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn(" Ollama ");
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false")).thenReturn("true");
+
+            assertNull(AgentTriageConfig.createTriage());
+            assertEquals("none", AgentJudgmentConfig.activeBackend());
+        }
     }
 
     private static MockedStatic<AiConfig> defaults() {

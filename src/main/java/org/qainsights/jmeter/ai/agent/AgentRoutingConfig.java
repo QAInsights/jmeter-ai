@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent;
 import java.time.Duration;
 
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -24,20 +25,40 @@ public final class AgentRoutingConfig {
     }
 
     /**
-     * Builds the smart router (Jev or OpenAI Decisions, see {@link AgentJudgmentConfig}), or
-     * null (no routing, no card) when the flags are off or the backend's API key is
-     * missing/placeholder.
+     * Builds the smart router (Jev, OpenAI or OpenRouter Decisions, or local Ollama embeddings,
+     * see {@link AgentJudgmentConfig}), or null (no routing, no card) when the flags are off or
+     * a remote backend's API key is missing/placeholder.
      */
     public static AgentRequestRouter createRouter() {
         if (!enabled()) {
             return null;
         }
         try {
+            if (AgentJudgmentConfig.OLLAMA.equals(AgentJudgmentConfig.provider())) {
+                return sharedEmbeddingRouter();
+            }
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {
             return message -> AgentRequestRouter.Decision.unavailable();
         }
+    }
+
+    private static String embeddingRouterKey;
+    private static EmbeddingAgentRequestRouter embeddingRouter;
+
+    /**
+     * One embedding router per Ollama endpoint, model, threshold and timeout, so the example vectors are
+     * embedded once per JMeter session rather than once per Agent message.
+     */
+    private static synchronized AgentRequestRouter sharedEmbeddingRouter() {
+        OllamaEmbeddingClient client = OllamaEmbeddingClient.fromConfig(timeout());
+        String key = client.baseUrl() + "|" + client.model() + "|" + minConfidence() + "|" + timeout();
+        if (embeddingRouter == null || !key.equals(embeddingRouterKey)) {
+            embeddingRouter = new EmbeddingAgentRequestRouter(client::embed, minConfidence());
+            embeddingRouterKey = key;
+        }
+        return embeddingRouter;
     }
 
     public static boolean enabled() {

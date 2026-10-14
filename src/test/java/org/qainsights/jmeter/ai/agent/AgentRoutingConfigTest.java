@@ -4,12 +4,15 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
@@ -107,6 +110,26 @@ class AgentRoutingConfigTest {
         assertFalse(AgentRoutingConfig.usableSecret("  "));
         assertFalse(AgentRoutingConfig.usableSecret("YOUR_TYPESAFE_API_KEY"));
         assertTrue(AgentRoutingConfig.usableSecret("ts-real"));
+    }
+
+    @Test
+    void ollamaBackendCreatesLocalEmbeddingRouterWithoutAnyKey() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn(" Ollama ");
+
+            assertNull(AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
+            AgentRequestRouter first = AgentRoutingConfig.createRouter();
+            assertTrue(first instanceof EmbeddingAgentRequestRouter);
+            assertSame(first, AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL))
+                    .thenReturn("nomic-embed-text");
+            assertNotSame(first, AgentRoutingConfig.createRouter());
+        }
     }
 
     private static MockedStatic<AiConfig> defaults() {
