@@ -236,9 +236,9 @@ public final class JMeterAgent {
                 new CliAgentChatModel(provider, specs, systemPrompt, priorTurns, model);
     }
 
-    /** True if the agent mode is enabled via {@code jmeter.ai.agent.enabled}. */
+    /** True unless agent mode is switched off with {@code jmeter.ai.agent.enabled=false}. */
     public static boolean isEnabled() {
-        return Boolean.parseBoolean(AiConfig.getProperty(ENABLED_KEY, "false"));
+        return Boolean.parseBoolean(AiConfig.getProperty(ENABLED_KEY, "true"));
     }
 
     /**

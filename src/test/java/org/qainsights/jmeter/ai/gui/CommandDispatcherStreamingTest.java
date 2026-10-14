@@ -121,7 +121,7 @@ class CommandDispatcherStreamingTest {
     void chatModeUsesPlainStreamingEvenWhenAgentFeatureIsEnabled() {
         aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
         aiConfigMockedStatic.when(() -> AiConfig.getProperty(
-                JMeterAgent.ENABLED_KEY, "false")).thenReturn("true");
+                JMeterAgent.ENABLED_KEY, "true")).thenReturn("true");
         when(cb.isAgentModeSelected()).thenReturn(false);
         when(cb.getSelectedModel()).thenReturn("openai:gpt-4o");
         setupSuccessfulStreaming();

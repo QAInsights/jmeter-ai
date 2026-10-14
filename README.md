@@ -596,11 +596,11 @@ Agent Mode lets the AI **autonomously edit your live JMeter test plan** through 
 
 ### Enabling Agent Mode
 
-Agent Mode is **off by default**. When a cloud provider key is set and Agent Mode is off, the welcome message shows a one-time tip explaining how to turn it on (it never changes the setting for you; the marker lives at `~/.jmeter-ai/agent-mode-tip-shown`). To turn it on:
+Agent Mode is **on by default**: with a supported model selected, **Agent** is preselected under the message box, and you can switch to **Chat** at any time for questions and snippets (plain chat costs far fewer tokens, see [token quotas](#token-quotas-and-429-errors)). Delete, move, open plan and apply correlation still ask for confirmation in JMeter. If a cloud provider key is set and you have switched Agent Mode off, the welcome message shows a one-time tip explaining how to turn it back on (it never changes the setting for you; the marker lives at `~/.jmeter-ai/agent-mode-tip-shown`). To switch it off for everyone on the machine:
 
 ```properties
 # In user.properties or jmeter.properties
-jmeter.ai.agent.enabled=true
+jmeter.ai.agent.enabled=false
 ```
 
 Select a **Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, or **Meta Muse** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
@@ -731,7 +731,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `jmeter.ai.agent.enabled` | Enable agent tool-calling loop | `false` |
+| `jmeter.ai.agent.enabled` | Enable the agent tool-calling loop (set `false` to keep the Agent option off) | `true` |
 | `jmeter.ai.agent.max.tokens` | Max tokens per agent response | `4096` |
 | `jmeter.ai.agent.max.iterations` | Max reason-act iterations per request | `500` |
 | `jmeter.ai.agent.confirm.destructive` | Show confirmation dialog before destructive ops | `true` |

@@ -140,7 +140,7 @@ class TelemetryClientTest {
                 fieldSet(p));
         assertEquals(state.getInstallId(), p.get("installId").asText());
         assertEquals("daily", p.get("event").asText());
-        assertFalse(p.get("agentEnabled").asBoolean());
+        assertTrue(p.get("agentEnabled").asBoolean());
         assertTrue(p.get("firstRun").asBoolean());
         assertEquals(2, p.get("features").get("chat_message").asInt());
     }
