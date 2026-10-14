@@ -691,6 +691,30 @@ Pull the model once with `ollama pull embeddinggemma` (about 620 MB). The backen
 - **Routing only:** embeddings cannot answer triage or severity questions, so `jmeter.ai.typesafe.agent.triage.enabled` has no effect with this backend.
 - **EmbeddingGemma 2:** Google's own `embeddinggemma-2` tags on Ollama currently need Apple's MLX runtime, so they only run on Apple Silicon Macs. On Windows and Linux the community GGUF build works: `ollama pull hf.co/ggml-org/embeddinggemma-2-GGUF:Q8_0`, then set `jmeter.ai.embeddings.model=hf.co/ggml-org/embeddinggemma-2-GGUF:Q8_0`. In our routing check EmbeddingGemma 1 made more confident picks, so it stays the default.
 
+#### Local routing inside the plugin (no Ollama)
+
+`jmeter.ai.judgment.provider=local` runs the same EmbeddingGemma router inside JMeter with ONNX Runtime, so it needs neither an API key nor Ollama:
+
+```properties
+jmeter.ai.typesafe.enabled=true
+jmeter.ai.typesafe.agent.routing.enabled=true
+jmeter.ai.judgment.provider=local
+# optional
+jmeter.ai.embeddings.local.model=onnx-community/embeddinggemma-300m-ONNX
+jmeter.ai.embeddings.local.dir=~/.jmeter-ai/models
+jmeter.ai.embeddings.local.download=true
+jmeter.ai.embeddings.local.threads=
+```
+
+- **First use:** the first Agent Mode request starts a background download of the 4-bit model from Hugging Face (about 217 MB for EmbeddingGemma 1, 207 MB for EmbeddingGemma 2) into `~/.jmeter-ai/models/<repo>/<revision>/`. While it downloads, routing shows the unavailable card and Agent Mode keeps all tools. Both supported models are pinned to a revision and every file is checked by size and SHA-256 before it is used. Later JMeter sessions load the model from disk in about a second.
+- **Offline or behind a proxy:** the download uses the JVM proxy settings (`-Dhttps.proxyHost`, `-Dhttps.proxyPort`). `jmeter.ai.embeddings.local.base.url` points it at a Hugging Face mirror. With `jmeter.ai.embeddings.local.download=false`, copy `onnx/model_q4.onnx`, `onnx/model_q4.onnx_data` and `tokenizer.json` into the folder named in `jmeter.log`.
+- **Models:** `onnx-community/embeddinggemma-300m-ONNX` (EmbeddingGemma 1, the default) or `onnx-community/embeddinggemma-2-ONNX` (EmbeddingGemma 2, the model Quick Links uses). On the routing check below, EmbeddingGemma 1 made 21 confident picks and EmbeddingGemma 2 made 4, both with no wrong confident picks, so EmbeddingGemma 1 stays the default.
+- **Runtime:** ONNX Runtime 1.24.3 on the CPU, bundled for Windows x64, Linux x64/aarch64 and Apple Silicon macOS. Intel Macs are not covered by this ONNX Runtime build; use the Ollama backend there. By default it uses half the CPU cores (at most 4) so a running test keeps its headroom; `jmeter.ai.embeddings.local.threads` overrides that.
+- **Cost:** the model loads on the first routed request (about 1.2 s) and stays loaded for the JMeter session: about 50 MB of Java heap for the tokenizer plus roughly 300 MB of native memory for the model. One embedding takes about 20 ms on an 8-core CPU, and a routed request (the request plus its clauses) about 50 ms.
+- **Licence:** the plugin does not bundle the model; it is downloaded from Hugging Face. EmbeddingGemma 1 is released under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms), and the EmbeddingGemma 2 ONNX export is listed as Apache 2.0.
+- **Check a model:** `FEATHER_WAND_ONNX_EMBED_MODEL=onnx-community/embeddinggemma-300m-ONNX mvn test -Dtest=EmbeddingAgentRequestRouterOnnxTest` runs the same accuracy check as the Ollama one.
+
+
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
 The API-backed Agent Mode providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
@@ -748,6 +772,11 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `typesafe.timeout.seconds` | Routing and triage request timeout (both backends) | `15` |
 | `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev), `openai` (OpenAI Decisions, uses `openai.api.key`) or `openrouter` (OpenRouter Decisions, uses `openrouter.api.key`) or `ollama` (local embeddings, routing only, no key) | `typesafe` |
 | `jmeter.ai.embeddings.model` | Ollama embedding model when `jmeter.ai.judgment.provider=ollama` | `embeddinggemma` |
+| `jmeter.ai.embeddings.local.model` | Hugging Face ONNX model when `jmeter.ai.judgment.provider=local` | `onnx-community/embeddinggemma-300m-ONNX` |
+| `jmeter.ai.embeddings.local.dir` | Folder for downloaded local models | `~/.jmeter-ai/models` |
+| `jmeter.ai.embeddings.local.download` | Download the local model on first use | `true` |
+| `jmeter.ai.embeddings.local.base.url` | Hugging Face base URL or mirror for the download | `https://huggingface.co` |
+| `jmeter.ai.embeddings.local.threads` | ONNX Runtime CPU threads for the local model | half the cores, at most 4 |
 | `openai.decisions.model` | OpenAI Decisions model when `jmeter.ai.judgment.provider=openai` | `gpt-6-luna` |
 | `openrouter.api.key` | OpenRouter API key; required when `jmeter.ai.judgment.provider=openrouter` (without a real key the backend stays off) | *(empty)* |
 | `openrouter.decisions.model` | OpenRouter Decisions model | `microsoft/microsoft-decision-1` |
