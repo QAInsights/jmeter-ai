@@ -458,6 +458,52 @@ public class JMeterElementRequestHandler {
         return instructions;
     }
 
+    private static JMeterTreeNode selectedNode() {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        return guiPackage == null ? null : guiPackage.getTreeListener().getCurrentNode();
+    }
+
+    private static void selectNode(JMeterTreeNode node) {
+        GuiPackage.getInstance().getTreeListener().getJTree()
+                .setSelectionPath(new javax.swing.tree.TreePath(node.getPath()));
+    }
+
+    /**
+     * Where the next element of a list goes: inside a Thread Group or controller
+     * the previous instruction just added, otherwise beside the previous element.
+     */
+    private static JMeterTreeNode nextTarget(JMeterTreeNode target, JMeterTreeNode lastParent, int lastChildCount) {
+        if (lastParent == null || lastParent.getChildCount() <= lastChildCount) {
+            return target;
+        }
+        JMeterTreeNode added = (JMeterTreeNode) lastParent.getChildAt(lastParent.getChildCount() - 1);
+        return added.getTestElement() instanceof org.apache.jmeter.control.Controller ? added : lastParent;
+    }
+
+    /** The target itself, or its closest ancestor that can hold the element. */
+    private static JMeterTreeNode placementFor(JMeterTreeNode target, String elementType) {
+        if (elementType == null) {
+            return target;
+        }
+        for (JMeterTreeNode node = target; node != null; node = (JMeterTreeNode) node.getParent()) {
+            if (JMeterElementManager.isNodeCompatible(node, elementType)) {
+                return node;
+            }
+        }
+        return target;
+    }
+
+    private static String elementTypeOf(String instruction) {
+        Matcher matcher = ADD_ELEMENT_PATTERN.matcher(instruction);
+        if (matcher.find()) {
+            String mapped = mapToSupportedElementType(matcher.group(2).trim());
+            if (mapped != null) {
+                return mapped;
+            }
+        }
+        return extractElementType(instruction);
+    }
+
     /**
      * Processes multiple instructions and returns a combined response.
      * 
@@ -467,6 +513,9 @@ public class JMeterElementRequestHandler {
     private static String processMultipleInstructions(List<String> instructions) {
         List<String> responses = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        JMeterTreeNode target = selectedNode();
+        JMeterTreeNode lastParent = null;
+        int lastChildCount = 0;
 
         for (String instruction : instructions) {
             log.info("Processing instruction: {}", instruction);
@@ -475,6 +524,13 @@ public class JMeterElementRequestHandler {
             if (instruction.matches("(?i)\\b(and|also|then|next)\\b")) {
                 log.info("Skipping separator instruction: {}", instruction);
                 continue;
+            }
+
+            if (target != null) {
+                target = nextTarget(target, lastParent, lastChildCount);
+                lastParent = placementFor(target, elementTypeOf(instruction));
+                lastChildCount = lastParent.getChildCount();
+                selectNode(lastParent);
             }
 
             // Process add element request
