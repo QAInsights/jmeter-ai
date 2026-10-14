@@ -287,7 +287,7 @@ public class OllamaAiService implements AiService {
 
             List<String> limitedHistory;
             if (messages.size() > maxHistorySize) {
-                limitedHistory = messages.subList(messages.size() - maxHistorySize, messages.size());
+                limitedHistory = HistoryWindow.lastTurns(messages, maxHistorySize);
             } else {
                 limitedHistory = new ArrayList<>(messages);
             }
@@ -343,7 +343,7 @@ public class OllamaAiService implements AiService {
                 }
 
                 List<String> limitedHistory = conversation.size() > maxHistorySize
-                        ? conversation.subList(conversation.size() - maxHistorySize, conversation.size())
+                        ? HistoryWindow.lastTurns(conversation, maxHistorySize)
                         : new ArrayList<>(conversation);
 
                 for (int i = 0; i < limitedHistory.size(); i++) {

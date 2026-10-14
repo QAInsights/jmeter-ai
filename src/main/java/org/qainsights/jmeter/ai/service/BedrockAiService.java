@@ -393,7 +393,7 @@ public class BedrockAiService implements AiService {
             }
         }
         if (clean.size() > maxHistorySize) {
-            return clean.subList(clean.size() - maxHistorySize, clean.size());
+            return HistoryWindow.lastTurns(clean, maxHistorySize);
         }
         return clean;
     }
