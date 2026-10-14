@@ -61,11 +61,11 @@ public class OllamaAiService implements AiService {
                 this.host, this.model, this.isThinkingModeEnabled ? this.thinkingMode : "DISABLED", this.requestTimeoutSeconds);
     }
 
-    private static String buildHost(String hostValue, String portValue) {
+    static String buildHost(String hostValue, String portValue) {
         if (hostValue == null || hostValue.isEmpty()) {
             return "http://localhost:11434";
         }
-        if (!portValue.isEmpty() && !hostValue.matches(".*:\\d+/?$")) {
+        if (portValue != null && !portValue.isEmpty() && !hostValue.matches(".*:\\d+/?$")) {
             hostValue = hostValue.endsWith("/") ? hostValue.substring(0, hostValue.length() - 1) : hostValue;
             return hostValue + ":" + portValue;
         }

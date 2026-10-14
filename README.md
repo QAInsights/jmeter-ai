@@ -66,7 +66,7 @@
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
-| **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, or OpenRouter Decisions with Microsoft-Decision-1) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
+| **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, OpenRouter Decisions with Microsoft-Decision-1, or local EmbeddingGemma through Ollama) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
 | 🧠 **Thinking & Effort** | Per-model **Thinking** checkbox and effort dropdown in the toolbar; reasoning streams into a collapsible *Thoughts* card in the transcript. |
@@ -673,6 +673,22 @@ openrouter.decisions.model=microsoft/microsoft-decision-1
 
 The cards are named after the model's vendor: **Microsoft Decision** (for example "Microsoft Decision Smart Route") for `microsoft/*` models, **Jev** for `typesafe/*` models, and **OpenRouter Decisions** otherwise. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api`. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
 
+#### Local Ollama embeddings backend (EmbeddingGemma)
+
+Smart routing can also run entirely on your machine, with no API key and nothing sent to a cloud service, using an embedding model served by your local [Ollama](https://ollama.com/). Feather Wand embeds the request with Ollama's `POST /api/embed` and compares it with a handful of example requests for each tool pack; the closest pack wins. The similarity scores become per-pack probabilities, so the same confidence threshold, expansion and all-tools fallback apply:
+
+```properties
+jmeter.ai.judgment.provider=ollama
+jmeter.ai.typesafe.enabled=true
+jmeter.ai.typesafe.agent.routing.enabled=true
+jmeter.ai.embeddings.model=embeddinggemma
+```
+
+Pull the model once with `ollama pull embeddinggemma` (about 620 MB). The backend reuses `ollama.host` and `ollama.port`, and `typesafe.timeout.seconds` as the request timeout. The examples are embedded on the first Agent Mode request and kept in memory, so later requests send one short embedding call (typically under 150 ms on a laptop CPU). The cards are labelled **EmbeddingGemma** (for example "EmbeddingGemma Smart Route") for EmbeddingGemma models and **Local embeddings** for any other embedding model. If Ollama is not running or the model is not pulled, routing shows the unavailable card, `jmeter.log` says what to run, and Agent Mode keeps all tools.
+
+- **Routing only:** embeddings cannot answer triage or severity questions, so `jmeter.ai.typesafe.agent.triage.enabled` has no effect with this backend.
+- **EmbeddingGemma 2:** Google's own `embeddinggemma-2` tags on Ollama currently need Apple's MLX runtime, so they only run on Apple Silicon Macs. On Windows and Linux the community GGUF build works: `ollama pull hf.co/ggml-org/embeddinggemma-2-GGUF:Q8_0`, then set `jmeter.ai.embeddings.model=hf.co/ggml-org/embeddinggemma-2-GGUF:Q8_0`. In our routing check EmbeddingGemma 1 made more confident picks, so it stays the default.
+
 ### Claude vs. OpenAI vs. Gemini: How the Adapters Differ
 
 The API-backed Agent Mode providers are driven through the exact same provider-neutral `ChatModel` seam (`start`/`next`) and share one `JsonSchemaMapper`, so every tool looks byte-identical across them; only the wire format differs:
@@ -728,7 +744,8 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `typesafe.base.url` | TypeSafe API root | `https://api.typesafe.ai` |
 | `typesafe.model` | TypeSafe System One model | `jev-latest` |
 | `typesafe.timeout.seconds` | Routing and triage request timeout (both backends) | `15` |
-| `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev), `openai` (OpenAI Decisions, uses `openai.api.key`) or `openrouter` (OpenRouter Decisions, uses `openrouter.api.key`) | `typesafe` |
+| `jmeter.ai.judgment.provider` | Backend for routing and triage: `typesafe` (Jev), `openai` (OpenAI Decisions, uses `openai.api.key`) or `openrouter` (OpenRouter Decisions, uses `openrouter.api.key`) or `ollama` (local embeddings, routing only, no key) | `typesafe` |
+| `jmeter.ai.embeddings.model` | Ollama embedding model when `jmeter.ai.judgment.provider=ollama` | `embeddinggemma` |
 | `openai.decisions.model` | OpenAI Decisions model when `jmeter.ai.judgment.provider=openai` | `gpt-6-luna` |
 | `openrouter.api.key` | OpenRouter API key; required when `jmeter.ai.judgment.provider=openrouter` (without a real key the backend stays off) | *(empty)* |
 | `openrouter.decisions.model` | OpenRouter Decisions model | `microsoft/microsoft-decision-1` |
@@ -1161,7 +1178,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | OS and CPU architecture | `Mac OS X`, `aarch64` | |
 | AI provider | `anthropic` | The value of `jmeter.ai.service.type` only. |
 | Agent mode enabled | `true` | |
-| Decisions backend | `openrouter:microsoft` | Which backend serves smart routing and failure triage: `none` (off, or its key is blank or a placeholder), `typesafe`, `openai`, or `openrouter:` plus the model vendor (the part before `/`). |
+| Decisions backend | `openrouter:microsoft` | Which backend serves smart routing and failure triage: `none` (off, or its key is blank or a placeholder), `typesafe`, `openai`, `openrouter:` plus the model vendor (the part before `/`), or `ollama` (local embedding routing). |
 | Model | `gpt-4o-mini` | The chat-panel model of your latest Chat or Agent message, or the configured default model before you send one. Only well-known public model ids (GPT, o-series, Claude, Gemini, DeepSeek, Grok, Muse, Llama, Qwen, Mistral and similar) are sent as-is. Fine-tunes, gateway aliases and every other name are sent as `custom`. `unknown` means none is set. |
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |

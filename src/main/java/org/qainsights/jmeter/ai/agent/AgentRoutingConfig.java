@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent;
 import java.time.Duration;
 
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
@@ -24,15 +25,19 @@ public final class AgentRoutingConfig {
     }
 
     /**
-     * Builds the smart router (Jev or OpenAI Decisions, see {@link AgentJudgmentConfig}), or
-     * null (no routing, no card) when the flags are off or the backend's API key is
-     * missing/placeholder.
+     * Builds the smart router (Jev, OpenAI or OpenRouter Decisions, or local Ollama embeddings,
+     * see {@link AgentJudgmentConfig}), or null (no routing, no card) when the flags are off or
+     * a remote backend's API key is missing/placeholder.
      */
     public static AgentRequestRouter createRouter() {
         if (!enabled()) {
             return null;
         }
         try {
+            if (AgentJudgmentConfig.OLLAMA.equals(AgentJudgmentConfig.provider())) {
+                return new EmbeddingAgentRequestRouter(OllamaEmbeddingClient.fromConfig(timeout())::embed,
+                        minConfidence());
+            }
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {

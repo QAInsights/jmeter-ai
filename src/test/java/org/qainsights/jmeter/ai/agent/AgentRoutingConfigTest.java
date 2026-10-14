@@ -109,6 +109,20 @@ class AgentRoutingConfigTest {
         assertTrue(AgentRoutingConfig.usableSecret("ts-real"));
     }
 
+    @Test
+    void ollamaBackendCreatesLocalEmbeddingRouterWithoutAnyKey() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn(" Ollama ");
+
+            assertNull(AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
+            assertTrue(AgentRoutingConfig.createRouter() instanceof EmbeddingAgentRequestRouter);
+        }
+    }
+
     private static MockedStatic<AiConfig> defaults() {
         MockedStatic<AiConfig> config = mockStatic(AiConfig.class);
         config.when(() -> AiConfig.getProperty(anyString(), anyString()))
