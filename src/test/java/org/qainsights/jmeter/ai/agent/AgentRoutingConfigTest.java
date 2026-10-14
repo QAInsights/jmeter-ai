@@ -4,6 +4,7 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.service.LocalEmbeddingModel;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -128,6 +129,30 @@ class AgentRoutingConfigTest {
 
             config.when(() -> AiConfig.getProperty(OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL))
                     .thenReturn("nomic-embed-text");
+            assertNotSame(first, AgentRoutingConfig.createRouter());
+        }
+    }
+
+    @Test
+    void localBackendCreatesSharedOnnxRouterWithoutAnyKeyOrDownload() {
+        try (MockedStatic<AiConfig> config = defaults()) {
+            config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE))
+                    .thenReturn("local");
+            config.when(() -> AiConfig.getProperty(LocalEmbeddingModel.DIR_KEY, ""))
+                    .thenReturn(System.getProperty("java.io.tmpdir") + "/fw-no-model");
+            config.when(() -> AiConfig.getProperty(LocalEmbeddingModel.DOWNLOAD_KEY, "true")).thenReturn("false");
+
+            assertNull(AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
+            config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
+            AgentRequestRouter first = AgentRoutingConfig.createRouter();
+            assertTrue(first instanceof EmbeddingAgentRequestRouter);
+            assertSame(first, AgentRoutingConfig.createRouter());
+            assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, first.route("save the plan").outcome());
+
+            config.when(() -> AiConfig.getProperty(LocalEmbeddingModel.MODEL_KEY, LocalEmbeddingModel.DEFAULT_MODEL))
+                    .thenReturn("onnx-community/embeddinggemma-2-ONNX");
             assertNotSame(first, AgentRoutingConfig.createRouter());
         }
     }
