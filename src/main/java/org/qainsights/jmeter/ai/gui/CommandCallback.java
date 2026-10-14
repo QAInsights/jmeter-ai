@@ -35,6 +35,10 @@ public interface CommandCallback {
 
     void hideStopButton();
 
+    /** Registers what the Stop button runs for a request that is not a plain streaming chat. */
+    default void setCancelHandle(Runnable cancelHandle) {
+    }
+
     void appendStreamToken(String token);
 
     void onStreamComplete(String fullResponse);

@@ -1022,6 +1022,11 @@ public class AiChatPanel
     }
 
     @Override
+    public void setCancelHandle(Runnable cancelHandle) {
+        currentCancelHandle = cancelHandle;
+    }
+
+    @Override
     public void hideStopButton() {
         setPetBusy(false);
         SwingUtilities.invokeLater(() -> {
