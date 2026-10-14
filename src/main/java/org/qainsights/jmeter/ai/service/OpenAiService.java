@@ -179,7 +179,7 @@ public class OpenAiService implements AiService {
             // Limit conversation history to last 10 messages to avoid token limits
             List<String> limitedConversation = conversation;
             if (conversation.size() > maxHistorySize) {
-                limitedConversation = conversation.subList(conversation.size() - maxHistorySize, conversation.size());
+                limitedConversation = HistoryWindow.lastTurns(conversation, maxHistorySize);
                 log.info("Limiting conversation to last {} messages", limitedConversation.size());
             }
 
@@ -225,7 +225,7 @@ public class OpenAiService implements AiService {
             // limits
             List<String> limitedHistory;
             if (conversation.size() > maxHistorySize) {
-                limitedHistory = conversation.subList(conversation.size() - maxHistorySize, conversation.size());
+                limitedHistory = HistoryWindow.lastTurns(conversation, maxHistorySize);
                 log.info("Limiting conversation to last {} messages", limitedHistory.size());
             } else {
                 limitedHistory = new java.util.ArrayList<>(conversation);
@@ -427,7 +427,7 @@ public class OpenAiService implements AiService {
 
         List<String> limitedHistory;
         if (conversation.size() > maxHistorySize) {
-            limitedHistory = conversation.subList(conversation.size() - maxHistorySize, conversation.size());
+            limitedHistory = HistoryWindow.lastTurns(conversation, maxHistorySize);
         } else {
             limitedHistory = new java.util.ArrayList<>(conversation);
         }

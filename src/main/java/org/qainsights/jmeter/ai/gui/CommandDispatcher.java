@@ -140,10 +140,12 @@ public class CommandDispatcher {
         cb.setInputEnabled(false);
 
         String elementResponse = JMeterElementRequestHandler.processElementRequest(message);
-        if (elementResponse != null && !elementResponse.contains("I couldn't understand what to do with")) {
+        if (elementResponse != null && !elementResponse.contains("I couldn't understand what to do with")
+                && !elementResponse.startsWith("I couldn't find a JMeter element type")) {
             log.info("Detected element request");
             cb.removeLoadingIndicator();
             cb.processAiResponse(elementResponse);
+            cb.addToConversationHistory(elementResponse);
             cb.setInputEnabled(true);
             return;
         }

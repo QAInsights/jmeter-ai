@@ -30,6 +30,18 @@ public class JMeterElementRequestHandler {
     private static final Pattern QUESTION_START = Pattern.compile(
             "(?i)^\\s*(what|why|how|when|where|which|who|whose|explain|describe|tell me)\\b");
 
+    private static final Pattern COMMAND_START = Pattern.compile(
+            "(?i)^\\s*(?:please\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?)?(?:add|create|insert)\\b");
+
+    private static final Pattern INCLUDE_START = Pattern.compile(
+            "(?i)^\\s*(?:please\\s+)?include\\s+(.+?)\\s*[.!]?\\s*$");
+
+    private static final Pattern NAME_CLAUSE = Pattern.compile("(?i)\\b(?:called|named|with (?:the )?name)\\b.*$");
+
+    private static final Pattern NEGATION = Pattern.compile("(?i)\\b(?:not|never)\\b|n't\\b");
+
+    private static final Pattern LEADING_ARTICLE = Pattern.compile("(?i)^(?:a|an|the)\\s+");
+
     // Common synonyms and variations for element types
     private static final Map<String, List<String>> ELEMENT_SYNONYMS = new LinkedHashMap<>();
 
@@ -278,6 +290,11 @@ public class JMeterElementRequestHandler {
             return null;
         }
 
+        if (!isElementCommand(message, instructions)) {
+            log.info("Message is not an element command, leaving it for the AI: '{}'", message);
+            return null;
+        }
+
         if (instructions.size() > 1) {
             log.info("Message contains multiple instructions: {}", instructions.size());
             return processMultipleInstructions(instructions);
@@ -318,6 +335,50 @@ public class JMeterElementRequestHandler {
                 continue;
             }
             if (QUESTION_START.matcher(instruction).find() || instruction.trim().endsWith("?")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when the message is a request to add elements: it starts with an
+     * add verb ("add ...", "please create ...", "can you insert ..."), starts with
+     * "include" followed only by an element name ("include a regex extractor",
+     * not "include an example of ... in my guide"), or every
+     * clause is just an element name ("thread group and http request"). Prose
+     * that only mentions elements, or says not to change anything, goes to the AI.
+     */
+    static boolean isElementCommand(String message, List<String> instructions) {
+        String withoutName = NAME_CLAUSE.matcher(message).replaceFirst("");
+        if (NEGATION.matcher(withoutName).find()) {
+            return false;
+        }
+        if (COMMAND_START.matcher(message).find()) {
+            return true;
+        }
+        Matcher include = INCLUDE_START.matcher(withoutName);
+        if (include.find()) {
+            return isBareElementName(include.group(1).replaceAll("\\s+(?:to|in)\\s+.*$", ""));
+        }
+        for (String instruction : instructions) {
+            if (!isBareElementName(instruction)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isBareElementName(String clause) {
+        String name = LEADING_ARTICLE.matcher(clause.trim()).replaceFirst("").toLowerCase();
+        if (name.isEmpty()) {
+            return false;
+        }
+        if (JMeterElementManager.isElementTypeSupported(JMeterElementManager.normalizeElementType(name))) {
+            return true;
+        }
+        for (Map.Entry<String, List<String>> entry : ELEMENT_SYNONYMS.entrySet()) {
+            if (entry.getKey().equals(name) || entry.getValue().contains(name)) {
                 return true;
             }
         }

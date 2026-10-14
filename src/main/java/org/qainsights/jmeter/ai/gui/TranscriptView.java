@@ -164,6 +164,22 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         }
     }
 
+    /**
+     * Ends a stream the user stopped: the card keeps its partial text and the
+     * next reply gets a card of its own. Returns the partial text.
+     */
+    String abandonStream() {
+        finishReasoningIfRunning();
+        if (streamingCard == null) {
+            return "";
+        }
+        String partial = streamingCard.getText();
+        streamingCard.setMarkdownContent(partial);
+        relayout(streamingCard);
+        streamingCard = null;
+        return partial;
+    }
+
     // --- Agent tool activity -------------------------------------------------
 
     /** Routes a tool-activity line into the current (or a new) group. */

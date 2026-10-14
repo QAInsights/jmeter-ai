@@ -313,8 +313,7 @@ public class GrokAiService implements AiService {
             return new ArrayList<>();
         }
         if (conversation.size() > maxHistorySize) {
-            return conversation.subList(conversation.size() - maxHistorySize,
-                    conversation.size());
+            return HistoryWindow.lastTurns(conversation, maxHistorySize);
         }
         return new ArrayList<>(conversation);
     }

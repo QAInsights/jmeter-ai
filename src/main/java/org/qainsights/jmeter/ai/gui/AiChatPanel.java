@@ -91,6 +91,10 @@ public class AiChatPanel
     private InputOptionsRow inputOptionsRow;
     private InteractionModeSelector interactionModeSelector;
     private Runnable currentCancelHandle;
+    private final java.util.concurrent.atomic.AtomicInteger streamGeneration =
+            new java.util.concurrent.atomic.AtomicInteger();
+    /** History size when the running request started; Stop adds a reply only if none was saved since. */
+    private int requestHistorySize = -1;
     private ModelSelectorPanel modelSelectorPanel;
     private ClaudeService claudeService;
     private OpenAiService openAiService;
@@ -1010,19 +1014,60 @@ public class AiChatPanel
     @Override
     public void showStopButton() {
         setPetBusy(true);
-        SwingUtilities.invokeLater(() -> inputOptionsRow.showStop(() -> {
-            if (currentCancelHandle != null) {
-                currentCancelHandle.run();
-                appendMessageToChat("\nResponse stopped.");
-                hideStopButton();
-                setInputEnabled(true);
-                removeLoadingIndicator();
+        SwingUtilities.invokeLater(() -> inputOptionsRow.showStop(this::stopCurrentResponse));
+    }
+
+    /** History entry for a reply stopped before any text arrived. */
+    static final String STOPPED_REPLY = "(Response stopped by the user.)";
+
+    /**
+     * Stops the running response. Late tokens, completion and the interrupted
+     * stream's error are dropped, and the history keeps alternating user and
+     * assistant turns, which providers rely on.
+     */
+    void stopCurrentResponse() {
+        if (currentCancelHandle == null) {
+            return;
+        }
+        streamGeneration.incrementAndGet();
+        currentCancelHandle.run();
+        String partial = transcript.abandonStream();
+        firstTokenReceived = false;
+        if (conversationTracker.history().size() == requestHistorySize) {
+            addToConversationHistory(partial.isBlank() ? STOPPED_REPLY : partial);
+        }
+        appendMessageToChat("\nResponse stopped.");
+        hideStopButton();
+        setInputEnabled(true);
+        removeLoadingIndicator();
+    }
+
+    /** Starts a new stream generation; callbacks from older ones are ignored. */
+    int beginStream() {
+        firstTokenReceived = false;
+        requestHistorySize = conversationTracker.history().size();
+        return streamGeneration.incrementAndGet();
+    }
+
+    <T> java.util.function.Consumer<T> ifStreamCurrent(int generation, java.util.function.Consumer<T> delegate) {
+        return value -> {
+            if (streamGeneration.get() == generation) {
+                delegate.accept(value);
             }
-        }));
+        };
+    }
+
+    Runnable runIfStreamCurrent(int generation, Runnable delegate) {
+        return () -> {
+            if (streamGeneration.get() == generation) {
+                delegate.run();
+            }
+        };
     }
 
     @Override
     public void setCancelHandle(Runnable cancelHandle) {
+        requestHistorySize = conversationTracker.history().size();
         currentCancelHandle = cancelHandle;
     }
 
@@ -1039,7 +1084,11 @@ public class AiChatPanel
 
     @Override
     public void appendStreamToken(String token) {
+        int generation = streamGeneration.get();
         SwingUtilities.invokeLater(() -> {
+            if (generation != streamGeneration.get()) {
+                return;
+            }
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
                 firstTokenReceived = true;
@@ -1053,7 +1102,11 @@ public class AiChatPanel
 
     @Override
     public void onStreamComplete(String fullResponse) {
+        int generation = streamGeneration.get();
         SwingUtilities.invokeLater(() -> {
+            if (generation != streamGeneration.get()) {
+                return;
+            }
             playResponseChime();
             // Capture the pinned state before the re-render changes the
             // transcript height (and with it the scrollbar maximum).
@@ -1077,7 +1130,11 @@ public class AiChatPanel
         Exception e,
         String userMessage
     ) {
+        int generation = streamGeneration.get();
         SwingUtilities.invokeLater(() -> {
+            if (generation != streamGeneration.get()) {
+                return;
+            }
             firstTokenReceived = false;
             hideStopButton();
             onWorkerError(logMessage, e, userMessage);
@@ -1091,14 +1148,15 @@ public class AiChatPanel
         Runnable onComplete,
         java.util.function.Consumer<Exception> onError
     ) {
-        firstTokenReceived = false;
+        int generation = beginStream();
+        java.util.function.Consumer<String> reasoning = this::appendReasoningToken;
         Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
             modelSelectorPanel.getSelectedModel(),
             conversationTracker.historyCopy(),
-            tokenConsumer,
-            this::appendReasoningToken,
-            onComplete,
-            onError
+            ifStreamCurrent(generation, tokenConsumer),
+            ifStreamCurrent(generation, reasoning),
+            runIfStreamCurrent(generation, onComplete),
+            ifStreamCurrent(generation, onError)
         );
         currentCancelHandle = cancelHandle;
         return cancelHandle;
@@ -1107,7 +1165,11 @@ public class AiChatPanel
     /** Routes a streamed reasoning token into the transcript's thinking card (on the EDT). */
     @Override
     public void appendReasoningToken(String token) {
+        int generation = streamGeneration.get();
         SwingUtilities.invokeLater(() -> {
+            if (generation != streamGeneration.get()) {
+                return;
+            }
             if (!firstTokenReceived) {
                 removeLoadingIndicator();
                 firstTokenReceived = true;

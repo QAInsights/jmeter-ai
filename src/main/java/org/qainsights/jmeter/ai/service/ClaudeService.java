@@ -247,10 +247,7 @@ public class ClaudeService implements AiService {
             // Limit conversation history to last 10 messages to avoid token limits
             List<String> limitedConversation = conversation;
             if (conversation.size() > maxHistorySize) {
-                limitedConversation = conversation.subList(
-                    conversation.size() - maxHistorySize,
-                    conversation.size()
-                );
+                limitedConversation = HistoryWindow.lastTurns(conversation, maxHistorySize);
                 log.info(
                     "Limiting conversation to last {} messages",
                     limitedConversation.size()
@@ -437,10 +434,7 @@ public class ClaudeService implements AiService {
 
         List<String> limitedConversation = conversation;
         if (conversation.size() > maxHistorySize) {
-            limitedConversation = conversation.subList(
-                conversation.size() - maxHistorySize,
-                conversation.size()
-            );
+            limitedConversation = HistoryWindow.lastTurns(conversation, maxHistorySize);
         }
 
         boolean thinkingOn = thinkingApplies(modelToUse);
