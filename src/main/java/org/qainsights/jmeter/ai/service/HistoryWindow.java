@@ -18,9 +18,12 @@ public final class HistoryWindow {
         if (size <= max) {
             return new ArrayList<>(conversation);
         }
-        int from = size - Math.max(1, max);
+        if (max <= 0) {
+            return new ArrayList<>();
+        }
+        int from = size - max;
         if (from % 2 == 1) {
-            from = from + 1 < size ? from + 1 : from - 1;
+            from++;
         }
         return new ArrayList<>(conversation.subList(from, size));
     }

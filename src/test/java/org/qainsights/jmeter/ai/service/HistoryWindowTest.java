@@ -52,4 +52,10 @@ class HistoryWindowTest {
     void windowOfOneKeepsTheLatestUserTurn() {
         assertEquals(List.of("user10"), HistoryWindow.lastTurns(turns(11), 1));
     }
+
+    @Test
+    void windowNeverExceedsTheLimit() {
+        assertEquals(List.of(), HistoryWindow.lastTurns(turns(12), 1));
+        assertEquals(List.of(), HistoryWindow.lastTurns(turns(12), 0));
+    }
 }
