@@ -675,7 +675,7 @@ The cards are named after the model's vendor: **Microsoft Decision** (for exampl
 
 #### Local Ollama embeddings backend (EmbeddingGemma)
 
-Smart routing can also run entirely on your machine, with no API key and nothing sent to a cloud service, using an embedding model served by your local [Ollama](https://ollama.com/). Feather Wand embeds the request with Ollama's `POST /api/embed` and compares it with a handful of example requests for each tool pack; the closest pack wins. The similarity scores become per-pack probabilities, so the same confidence threshold, expansion and all-tools fallback apply:
+Smart routing runs locally with no API key when Ollama is served on the default `localhost` endpoint; request text and embeddings stay on your machine. Feather Wand reports the selected backend in its separate anonymous telemetry; see [Privacy and telemetry](#-privacy-and-telemetry). Ollama's `POST /api/embed` compares the request with example requests for each tool pack; the closest pack wins. The similarity scores become per-pack probabilities, so the same confidence threshold, expansion and all-tools fallback apply:
 
 ```properties
 jmeter.ai.judgment.provider=ollama
