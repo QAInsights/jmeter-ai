@@ -136,4 +136,23 @@ class AgentLoopTest {
         // Executed tools on iterations 1 and 2; iteration 3 stopped before executing again.
         assertEquals(2, echoCalls.size());
     }
+
+    @Test
+    void run_interrupted_stopsBeforeRunningMoreTools() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("c1"));
+        model.turns.add(toolTurn("c2"));
+
+        Thread.currentThread().interrupt();
+        AgentLoop.AgentResult result;
+        try {
+            result = new AgentLoop(model, executorWithEcho(), 5).run("go", null);
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertFalse(result.isCompleted());
+        assertTrue(echoCalls.isEmpty());
+        assertTrue(model.received.isEmpty());
+    }
 }

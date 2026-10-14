@@ -8,8 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * One-time welcome tip for installs with a working cloud provider but Agent Mode switched
- * off. It only explains how to turn the mode on; it never changes the setting. Showing it
+ * One-time welcome tip for installs with a working cloud provider that switched Agent Mode
+ * off (it is on by default). It only explains how to turn the mode on; it never changes the setting. Showing it
  * writes a marker file so the tip does not come back.
  */
 final class AgentModeNudge {
@@ -18,7 +18,7 @@ final class AgentModeNudge {
 
     static final String TIP = "\n\n**Tip: let Feather Wand edit the plan for you.** Agent Mode can add and "
             + "configure elements, correlate dynamic values, run the test and fix what fails, all from this "
-            + "chat. To turn it on, add `jmeter.ai.agent.enabled=true` to `user.properties`, restart JMeter, "
+            + "chat. To turn it back on, change `jmeter.ai.agent.enabled=false` to `true` in `user.properties`, restart JMeter, "
             + "then pick **Agent** under the message box. You'll see this tip only once.";
 
     private final Path marker;

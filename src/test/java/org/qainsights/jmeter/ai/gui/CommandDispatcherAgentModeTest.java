@@ -88,7 +88,7 @@ class CommandDispatcherAgentModeTest {
         };
         commandDispatcher = new CommandDispatcher(cb, agentFactory);
         aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(false);
-        aiConfigMockedStatic.when(() -> AiConfig.getProperty(JMeterAgent.ENABLED_KEY, "false")).thenReturn("true");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty(JMeterAgent.ENABLED_KEY, "true")).thenReturn("true");
         when(cb.isAgentModeSelected()).thenReturn(true);
         when(cb.getSelectedModel()).thenReturn("openai:gpt-4o");
         when(cb.getConversationHistory()).thenReturn(new ArrayList<>(List.of(MESSAGE)));

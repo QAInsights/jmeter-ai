@@ -24,7 +24,7 @@ final class InteractionModeSelector extends JPanel {
         ButtonGroup group = new ButtonGroup();
         group.add(chatButton);
         group.add(agentButton);
-        chatButton.setSelected(true);
+        (agentAvailable ? agentButton : chatButton).setSelected(true);
 
         add(chatButton);
         add(agentButton);

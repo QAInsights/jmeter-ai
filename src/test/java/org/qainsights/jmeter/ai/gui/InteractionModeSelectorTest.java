@@ -9,13 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InteractionModeSelectorTest {
 
     @Test
-    void defaultsToChatAndSwitchesImmediately() {
+    void defaultsToAgentAndSwitchesImmediately() {
         InteractionModeSelector selector = new InteractionModeSelector(true);
-
-        assertTrue(selector.chatButton().isSelected());
-        assertFalse(selector.isAgentSelected());
-
-        selector.agentButton().doClick();
 
         assertFalse(selector.chatButton().isSelected());
         assertTrue(selector.isAgentSelected());
@@ -24,6 +19,10 @@ class InteractionModeSelectorTest {
 
         assertTrue(selector.chatButton().isSelected());
         assertFalse(selector.isAgentSelected());
+
+        selector.agentButton().doClick();
+
+        assertTrue(selector.isAgentSelected());
         assertEquals("Interaction mode",
                 selector.getAccessibleContext().getAccessibleName());
     }
@@ -33,6 +32,7 @@ class InteractionModeSelectorTest {
         InteractionModeSelector selector = new InteractionModeSelector(false);
 
         assertFalse(selector.agentButton().isEnabled());
+        assertTrue(selector.chatButton().isSelected());
         selector.agentButton().doClick();
         assertFalse(selector.isAgentSelected());
     }

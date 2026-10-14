@@ -106,7 +106,7 @@ final class AgentCommandRunner {
         boolean streamFinalText = AiConfig.isStreamingEnabled();
         String selectedModel = cb.getSelectedModel();
 
-        new SwingWorker<String, AgentChunk>() {
+        SwingWorker<String, AgentChunk> worker = new SwingWorker<>() {
             @Override
             protected String doInBackground() {
                 try {
@@ -146,6 +146,9 @@ final class AgentCommandRunner {
                     log.warn("Agent run aborted: {}", cliError.getMessage());
                     return finish("Error: " + cliError.getMessage());
                 } catch (RuntimeException agentError) {
+                    if (isCancelled()) {
+                        return "";
+                    }
                     if (RateLimitErrors.isRateLimited(agentError)) {
                         Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                         Telemetry.recordError(agentError);
@@ -198,6 +201,10 @@ final class AgentCommandRunner {
 
             @Override
             protected void done() {
+                if (isCancelled()) {
+                    return;
+                }
+                cb.hideStopButton();
                 try {
                     String response = get();
                     if (streamFinalText) {
@@ -212,6 +219,9 @@ final class AgentCommandRunner {
                             ProviderErrors.describe(e, "running the agent", true));
                 }
             }
-        }.execute();
+        };
+        cb.setCancelHandle(() -> worker.cancel(true));
+        cb.showStopButton();
+        worker.execute();
     }
 }

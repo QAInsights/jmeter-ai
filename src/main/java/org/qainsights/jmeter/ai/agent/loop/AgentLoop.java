@@ -115,6 +115,10 @@ public final class AgentLoop {
             if (!turn.hasToolCalls()) {
                 return AgentResult.completed(turn.getText(), iterations);
             }
+            if (Thread.currentThread().isInterrupted()) {
+                log.info("Agent loop stopped by the user after {} turn(s)", iterations);
+                return AgentResult.exhausted(turn.getText(), iterations);
+            }
             if (iterations >= maxIterations) {
                 log.warn("Agent loop hit iteration cap ({})", maxIterations);
                 return AgentResult.exhausted(turn.getText(), iterations);
@@ -122,6 +126,9 @@ public final class AgentLoop {
 
             List<ToolOutcome> outcomes = new ArrayList<>();
             for (AssistantTurn.ToolCall call : turn.getToolCalls()) {
+                if (Thread.currentThread().isInterrupted()) {
+                    return AgentResult.exhausted(turn.getText(), iterations);
+                }
                 toolSink.accept(call);
                 sink.accept("\u2192 " + call.getName() + " " + call.getArguments());
                 ToolResult result = executor.execute(call.getName(), call.getArguments());

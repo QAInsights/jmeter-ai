@@ -216,7 +216,7 @@ class AiChatPanelTest {
     }
 
     @Test
-    void chatModeDefaultsSafelyAndAppearsBeforeAttachmentAction() {
+    void agentModeIsPreselectedAndAppearsBeforeAttachmentAction() {
         AiChatPanel panel = new AiChatPanel();
         InteractionModeSelector selector = findComponent(panel, InteractionModeSelector.class);
         javax.swing.JButton attach = findButton(
@@ -224,7 +224,7 @@ class AiChatPanelTest {
 
         assertNotNull(selector);
         assertNotNull(attach);
-        assertFalse(panel.isAgentModeSelected());
+        assertTrue(panel.isAgentModeSelected());
         assertSame(selector.getParent(), attach.getParent());
         assertTrue(selector.getParent().getComponentZOrder(selector)
                 < attach.getParent().getComponentZOrder(attach));

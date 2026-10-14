@@ -33,8 +33,9 @@ class AgentModeNudgeTest {
     }
 
     @Test
-    void tipExplainsHowToTurnItOnWithoutEmDashes() {
-        assertTrue(AgentModeNudge.TIP.contains("jmeter.ai.agent.enabled=true"));
+    void tipExplainsHowToTurnItBackOnWithoutEmDashes() {
+        assertTrue(AgentModeNudge.TIP.contains("jmeter.ai.agent.enabled=false"));
+        assertTrue(AgentModeNudge.TIP.contains("to `true`"));
         assertFalse(AgentModeNudge.TIP.contains("\u2014"));
     }
 }
