@@ -433,4 +433,40 @@ class AiChatPanelTest {
         assertEquals("a.txt", session.attachments().get(0).fileName());
         assertEquals("raw", session.attachments().get(0).mode());
     }
+
+    @Test
+    void stopDropsLateStreamCallbacksAndKeepsHistoryAlternating() {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+        java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        panel.setCancelHandle(() -> cancelled.set(true));
+        java.util.List<Object> delivered = new java.util.ArrayList<>();
+        int generation = panel.beginStream();
+        java.util.function.Consumer<String> tokens = panel.ifStreamCurrent(generation, delivered::add);
+        java.util.function.Consumer<Exception> errors = panel.ifStreamCurrent(generation, delivered::add);
+        Runnable complete = panel.runIfStreamCurrent(generation, () -> delivered.add("complete"));
+
+        tokens.accept("early");
+        panel.stopCurrentResponse();
+        tokens.accept("late");
+        errors.accept(new Exception("Stream failed"));
+        complete.run();
+
+        assertTrue(cancelled.get());
+        assertEquals(java.util.List.of("early"), delivered);
+        assertEquals(java.util.List.of("question", AiChatPanel.STOPPED_REPLY), panel.getConversationHistory());
+    }
+
+    @Test
+    void newStreamAfterStopDeliversNormally() {
+        AiChatPanel panel = new AiChatPanel();
+        panel.setCancelHandle(() -> { });
+        panel.stopCurrentResponse();
+        java.util.List<String> delivered = new java.util.ArrayList<>();
+        int generation = panel.beginStream();
+
+        panel.<String>ifStreamCurrent(generation, delivered::add).accept("token");
+
+        assertEquals(java.util.List.of("token"), delivered);
+    }
 }

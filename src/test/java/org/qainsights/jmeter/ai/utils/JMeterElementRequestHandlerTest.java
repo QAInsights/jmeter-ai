@@ -77,7 +77,12 @@ class JMeterElementRequestHandlerTest {
             "Explain the csv data set and the http request",
             "thread group, is it the same as a user group?",
             "optimize my test plan",
-            "hello there"
+            "hello there",
+            "Write a detailed numbered list of 100 distinct JMeter test-plan review checks, each with two sentences of explanation. Do not edit or execute the plan.",
+            "Write a guide to correlation and include examples of a regex extractor",
+            "List the timers, controllers and listeners",
+            "don't add a thread group",
+            "summarize the thread group and the http request"
     })
     void returnsNullWhenMessageIsNotAnAddRequest(String message) {
         assertNull(JMeterElementRequestHandler.processElementRequest(message));
@@ -327,5 +332,14 @@ class JMeterElementRequestHandlerTest {
                 java.util.List.of("thread group", "http request")));
         assertTrue(JMeterElementRequestHandler.isQuestion("In one short sentence, what does HTTP status 503 mean?",
                 java.util.List.of("In one short sentence", "what does HTTP status 503 mean?")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "please add a thread group", "can you add a thread group", "Could you please create a thread group" })
+    void politeAddRequestsStillAddElements(String message) {
+        String response = JMeterElementRequestHandler.processElementRequest(message);
+
+        assertEquals(1, addedElements.size(), response);
+        assertEquals("threadgroup", addedElements.get(0)[0]);
     }
 }
