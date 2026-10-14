@@ -99,7 +99,7 @@ public final class LocalEmbeddingModel {
         String dir = AiConfig.getProperty(DIR_KEY, "");
         Path root = dir == null || dir.isBlank()
                 ? Path.of(System.getProperty("user.home"), ".jmeter-ai", "models")
-                : Path.of(dir.trim().replaceFirst("^~", System.getProperty("user.home")));
+                : root(dir.trim(), System.getProperty("user.home"));
         String revision = PINNED_REVISIONS.getOrDefault(repo, "main");
         List<FileSpec> files = PINNED_FILES.getOrDefault(repo, List.of(
                 new FileSpec(MODEL_FILE, -1, null), new FileSpec(DATA_FILE, -1, null),
@@ -108,6 +108,17 @@ public final class LocalEmbeddingModel {
         return new LocalEmbeddingModel(repo, revision, files,
                 root, baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim(),
                 !"false".equalsIgnoreCase(String.valueOf(AiConfig.getProperty(DOWNLOAD_KEY, "true")).trim()));
+    }
+
+    /** Resolves a leading {@code ~} against the home folder without touching Windows separators. */
+    static Path root(String dir, String home) {
+        if (dir.equals("~")) {
+            return Path.of(home);
+        }
+        if (dir.startsWith("~/") || dir.startsWith("~\\")) {
+            return Path.of(home).resolve(dir.substring(2));
+        }
+        return Path.of(dir);
     }
 
     /** The configured Hugging Face repo id, or the default when blank. */

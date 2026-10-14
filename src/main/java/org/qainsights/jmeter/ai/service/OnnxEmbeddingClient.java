@@ -88,11 +88,13 @@ public final class OnnxEmbeddingClient implements AutoCloseable {
         long start = System.nanoTime();
         try {
             GemmaTokenizer loadedTokenizer = GemmaTokenizer.load(model.tokenizerFile());
-            OrtSession.SessionOptions options = new OrtSession.SessionOptions();
-            options.setIntraOpNumThreads(threads);
-            options.setInterOpNumThreads(1);
-            options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-            OrtSession created = OrtEnvironment.getEnvironment().createSession(model.modelFile().toString(), options);
+            OrtSession created;
+            try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
+                options.setIntraOpNumThreads(threads);
+                options.setInterOpNumThreads(1);
+                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+                created = OrtEnvironment.getEnvironment().createSession(model.modelFile().toString(), options);
+            }
             if (!created.getOutputNames().contains(SENTENCE_EMBEDDING)) {
                 created.close();
                 throw new TypeSafeJudgmentProvider.JudgmentException(model.repo()

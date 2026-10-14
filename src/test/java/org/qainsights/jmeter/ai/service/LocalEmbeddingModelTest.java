@@ -172,4 +172,13 @@ class LocalEmbeddingModelTest {
         assertEquals("bytes of tokenizer.json", Files.readString(model.tokenizerFile()));
         assertEquals("bytes of onnx/model_q4.onnx", Files.readString(model.modelFile()));
     }
+
+    @Test
+    void tildeResolvesUnderHomeWithoutMangling() {
+        Path home = root.resolve("C:\\Users\\Alice");
+        assertEquals(home.resolve(".jmeter-ai/models"), LocalEmbeddingModel.root("~/.jmeter-ai/models", home.toString()));
+        assertEquals(home.resolve("models"), LocalEmbeddingModel.root("~\\models", home.toString()));
+        assertEquals(home, LocalEmbeddingModel.root("~", home.toString()));
+        assertEquals(Path.of("/opt/models"), LocalEmbeddingModel.root("/opt/models", home.toString()));
+    }
 }
