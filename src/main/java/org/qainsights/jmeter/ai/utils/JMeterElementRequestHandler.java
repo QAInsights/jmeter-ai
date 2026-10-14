@@ -31,7 +31,12 @@ public class JMeterElementRequestHandler {
             "(?i)^\\s*(what|why|how|when|where|which|who|whose|explain|describe|tell me)\\b");
 
     private static final Pattern COMMAND_START = Pattern.compile(
-            "(?i)^\\s*(?:please\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?)?(?:add|create|insert|include)\\b");
+            "(?i)^\\s*(?:please\\s+)?(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?)?(?:add|create|insert)\\b");
+
+    private static final Pattern INCLUDE_START = Pattern.compile(
+            "(?i)^\\s*(?:please\\s+)?include\\s+(.+?)\\s*[.!]?\\s*$");
+
+    private static final Pattern NAME_CLAUSE = Pattern.compile("(?i)\\b(?:called|named|with (?:the )?name)\\b.*$");
 
     private static final Pattern NEGATION = Pattern.compile("(?i)\\b(?:not|never)\\b|n't\\b");
 
@@ -338,16 +343,23 @@ public class JMeterElementRequestHandler {
 
     /**
      * True when the message is a request to add elements: it starts with an
-     * add verb ("add ...", "please create ...", "can you insert ..."), or every
+     * add verb ("add ...", "please create ...", "can you insert ..."), starts with
+     * "include" followed only by an element name ("include a regex extractor",
+     * not "include an example of ... in my guide"), or every
      * clause is just an element name ("thread group and http request"). Prose
      * that only mentions elements, or says not to change anything, goes to the AI.
      */
     static boolean isElementCommand(String message, List<String> instructions) {
-        if (NEGATION.matcher(message).find()) {
+        String withoutName = NAME_CLAUSE.matcher(message).replaceFirst("");
+        if (NEGATION.matcher(withoutName).find()) {
             return false;
         }
         if (COMMAND_START.matcher(message).find()) {
             return true;
+        }
+        Matcher include = INCLUDE_START.matcher(withoutName);
+        if (include.find()) {
+            return isBareElementName(include.group(1).replaceAll("\\s+(?:to|in)\\s+.*$", ""));
         }
         for (String instruction : instructions) {
             if (!isBareElementName(instruction)) {

@@ -190,6 +190,9 @@ final class AgentCommandRunner {
 
             @Override
             protected void process(List<AgentChunk> chunks) {
+                if (isCancelled()) {
+                    return;
+                }
                 for (AgentChunk chunk : chunks) {
                     if (chunk.isToken()) {
                         cb.appendStreamToken(chunk.getText());

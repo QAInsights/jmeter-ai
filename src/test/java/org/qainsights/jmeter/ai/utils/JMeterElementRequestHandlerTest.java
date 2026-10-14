@@ -82,7 +82,8 @@ class JMeterElementRequestHandlerTest {
             "Write a guide to correlation and include examples of a regex extractor",
             "List the timers, controllers and listeners",
             "don't add a thread group",
-            "summarize the thread group and the http request"
+            "summarize the thread group and the http request",
+            "Include an example of a regex extractor in my guide"
     })
     void returnsNullWhenMessageIsNotAnAddRequest(String message) {
         assertNull(JMeterElementRequestHandler.processElementRequest(message));
@@ -335,7 +336,7 @@ class JMeterElementRequestHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "please add a thread group", "can you add a thread group", "Could you please create a thread group" })
+    @ValueSource(strings = { "please add a thread group", "can you add a thread group", "Could you please create a thread group", "add a thread group named Not Found" })
     void politeAddRequestsStillAddElements(String message) {
         String response = JMeterElementRequestHandler.processElementRequest(message);
 

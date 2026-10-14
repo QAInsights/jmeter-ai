@@ -469,4 +469,45 @@ class AiChatPanelTest {
 
         assertEquals(java.util.List.of("token"), delivered);
     }
+
+    @Test
+    void stopAddsAReplyOnlyWhenTheRunningRequestHasNone() {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("add a thread group");
+        panel.addToConversationHistory("question");
+        panel.beginStream();
+        panel.setCancelHandle(() -> { });
+        panel.stopCurrentResponse();
+
+        assertEquals(java.util.List.of("add a thread group", "question", AiChatPanel.STOPPED_REPLY),
+                panel.getConversationHistory());
+    }
+
+    @Test
+    void completionQueuedBeforeStopIsDroppedOnTheEdt() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+        panel.beginStream();
+        panel.setCancelHandle(() -> { });
+        javax.swing.SwingUtilities.invokeAndWait(() -> panel.appendStreamToken("partial"));
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            panel.onStreamComplete("partial and the rest");
+            panel.stopCurrentResponse();
+        });
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("transcript");
+        field.setAccessible(true);
+        TranscriptView transcript = (TranscriptView) field.get(panel);
+        java.util.List<String> texts = new java.util.ArrayList<>();
+        try {
+            for (int i = 0; ; i++) {
+                texts.add(transcript.getCard(i).getText());
+            }
+        } catch (IndexOutOfBoundsException end) {
+            // no more cards
+        }
+        assertTrue(texts.contains("partial"), texts.toString());
+        assertTrue(texts.stream().noneMatch(text -> text.contains("the rest")), texts.toString());
+    }
 }
