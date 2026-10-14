@@ -596,7 +596,7 @@ Agent Mode lets the AI **autonomously edit your live JMeter test plan** through 
 
 ### Enabling Agent Mode
 
-Agent Mode is **on by default**: with a supported model selected, **Agent** is preselected under the message box, and you can switch to **Chat** at any time for questions and snippets (plain chat costs far fewer tokens, see [token quotas](#token-quotas-and-429-errors)). Delete, move, open plan and apply correlation still ask for confirmation in JMeter. If a cloud provider key is set and you have switched Agent Mode off, the welcome message shows a one-time tip explaining how to turn it back on (it never changes the setting for you; the marker lives at `~/.jmeter-ai/agent-mode-tip-shown`). To switch it off for everyone on the machine:
+Agent Mode is **on by default**: with a supported model selected, **Agent** is preselected under the message box, and you can switch to **Chat** at any time for questions and snippets (plain chat costs far fewer tokens, see [token quotas](#token-quotas-and-429-errors)). By default, delete, move, open plan and apply correlation ask for confirmation in JMeter; set `jmeter.ai.agent.confirm.destructive=false` to disable these prompts. If a cloud provider key is set and you have switched Agent Mode off, the welcome message shows a one-time tip explaining how to turn it back on (it never changes the setting for you; the marker lives at `~/.jmeter-ai/agent-mode-tip-shown`). To switch it off for everyone on the machine:
 
 ```properties
 # In user.properties or jmeter.properties
