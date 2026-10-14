@@ -404,7 +404,7 @@ th { background: #f5f5f5; }
 <div class="card"><div class="n">${esc(s.mau)}</div>MAU</div>
 <div class="card"><div class="n">${esc(s.totalInstalls)}</div>Total installs</div>
 </div>
-<p class="note">Excludes ${esc(s.testInstalls)} installs that were the plugin's own test runs.
+<p class="note">Excludes ${esc(s.testInstalls)} installs that were the plugin's own test runs (installs that reported a test-only tool). Older test runs that pinged before reaching those tools can still be counted, so treat this as a lower bound.
 DAU, WAU and MAU count installs active today, in the last 7 days and in the last 30 days (UTC).</p>
 ${table("Weekly growth (last 7 days vs the 7 before)", ["metric", "last 7 days", "previous 7 days", "change"], [
 		["New installs", g.newThisWeek, g.newPrevWeek, change(g.newThisWeek, g.newPrevWeek)],

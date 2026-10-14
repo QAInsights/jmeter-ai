@@ -69,4 +69,9 @@ class TelemetryConfigTest {
         props.setProperty(TelemetryConfig.URL_PROPERTY, "https://example.com/ping");
         assertEquals("https://example.com/ping", config(Map.of()).endpoint());
     }
+
+    @org.junit.jupiter.api.Test
+    void testJvmsAreDetectedSoTheyNeverPing() {
+        org.junit.jupiter.api.Assertions.assertTrue(Telemetry.runningUnderTests());
+    }
 }

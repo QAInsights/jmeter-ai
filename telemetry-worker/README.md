@@ -55,6 +55,8 @@ Older plugin versions keep working: new ping fields are optional and unknown fie
 Every number leaves out installs that ever reported a tool from `TEST_ONLY_FEATURES` in `src/index.ts`
 (`tool_boom`, `tool_nullish`, `tool_echo`). Those names exist only in the plugin's unit tests, and before
 the plugin's Surefire config set `DO_NOT_TRACK=1`, each `mvn verify` run (CI included) pinged as a fresh install.
+The plugin now also skips telemetry in any JUnit Platform test JVM (Maven, Gradle or an IDE). The filter is a lower
+bound: an old test run that pinged before reaching a fake tool is still counted.
 The page shows how many were hidden, plus week-over-week growth and messages per active install.
 
 ## Testing
