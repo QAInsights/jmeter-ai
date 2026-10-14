@@ -133,7 +133,7 @@ class GoogleAiServiceHttpStreamingTest {
         for (int i = 1; i <= 12; i++) {
             history.add("m" + i);
         }
-        history.set(4, "Error: quota exceeded");
+        history.set(5, "Error: quota exceeded");
         StreamCallbacks callbacks = new StreamCallbacks();
 
         service.generateStreamResponse(history, null,
@@ -141,9 +141,10 @@ class GoogleAiServiceHttpStreamingTest {
         callbacks.awaitTerminal();
 
         JsonNode contents = fixture.onlyRequest().json().get("contents");
-        // last 10 = m3..m12, "Error:" (m5) removed, roles re-derived from the filtered index.
-        assertEquals(List.of("m3", "m4", "m6", "m7", "m8", "m9", "m10", "m11", "m12"), texts(contents));
-        assertEquals(List.of("user", "model", "user", "model", "user", "model", "user", "model", "user"),
+        // last 10 = m3..m12; the failed reply (m6) keeps its model slot as a placeholder.
+        assertEquals(List.of("m3", "m4", "m5", HistoryWindow.FAILED_REPLY, "m7", "m8", "m9", "m10", "m11", "m12"),
+                texts(contents));
+        assertEquals(List.of("user", "model", "user", "model", "user", "model", "user", "model", "user", "model"),
                 roles(contents));
     }
 

@@ -388,7 +388,7 @@ public class BedrockAiService implements AiService {
         }
         List<String> clean = new ArrayList<>();
         for (String msg : HistoryWindow.maskFailedReplies(conversation)) {
-            if (msg != null && !msg.startsWith("Error:")) {
+            if (msg != null) {
                 clean.add(msg);
             }
         }

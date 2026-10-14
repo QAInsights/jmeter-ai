@@ -104,9 +104,9 @@ class OpenAiServiceHttpStreamingTest {
     void requestAlternatesRolesFiltersErrorsAndTruncatesHistory() throws Exception {
         fixture.respondSse(COMPLETIONS, StreamingFixtureServer.openAiSse(chunk("ok")));
         StreamCallbacks callbacks = new StreamCallbacks();
-        // max history 4: the first two turns are dropped, then the Error: entry is filtered.
-        List<String> history = List.of("old question", "old answer",
-                "Add a sampler", "Added HTTP sampler", "Error: request timed out", "Now add a timer");
+        // max history 4 on 7 entries: the window moves forward to start on a user turn.
+        List<String> history = List.of("old question", "old answer", "Add a sampler", "Added HTTP sampler",
+                "Add a timer", "Error: request timed out", "Now add a listener");
 
         service.generateStreamResponse(history, "gpt-4o",
                 callbacks.onToken, callbacks.onComplete, callbacks.onError);
@@ -120,8 +120,8 @@ class OpenAiServiceHttpStreamingTest {
             contents.add(m.get("content").asText());
         });
         assertEquals(List.of("system", "user", "system", "user"), roles);
-        assertEquals(List.of(SYSTEM_PROMPT, "Add a sampler", "Assistant: Added HTTP sampler", "Now add a timer"),
-                contents);
+        assertEquals(List.of(SYSTEM_PROMPT, "Add a timer", "Assistant: " + HistoryWindow.FAILED_REPLY,
+                "Now add a listener"), contents);
     }
 
     @Test

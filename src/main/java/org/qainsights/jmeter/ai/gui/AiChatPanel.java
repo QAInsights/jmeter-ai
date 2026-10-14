@@ -875,6 +875,8 @@ public class AiChatPanel
      */
     void startNewConversation() {
         log.info("Starting new conversation");
+        // a reply still streaming belongs to the outgoing session, not the new one
+        stopCurrentResponse();
 
         // Archive the outgoing session (autosave keeps it current), then start a fresh id
         conversationTracker.rotate(modelSelectorPanel.getSelectedModel(), attachmentRegistry.all());
@@ -1137,6 +1139,10 @@ public class AiChatPanel
             }
             firstTokenReceived = false;
             hideStopButton();
+            String partial = transcript.abandonStream();
+            if (!partial.isBlank() && conversationTracker.history().size() % 2 == 1) {
+                addToConversationHistory(partial);
+            }
             onWorkerError(logMessage, e, userMessage);
         });
     }

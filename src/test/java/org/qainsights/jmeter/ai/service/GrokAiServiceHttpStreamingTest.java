@@ -107,7 +107,7 @@ class GrokAiServiceHttpStreamingTest {
         for (int i = 1; i <= 12; i++) {
             history.add("m" + i);
         }
-        history.set(10, "Error: upstream failed");
+        history.set(9, "Error: upstream failed");
         StreamCallbacks callbacks = new StreamCallbacks();
 
         service.generateStreamResponse(history, "grok-4.5",
@@ -115,11 +115,11 @@ class GrokAiServiceHttpStreamingTest {
         callbacks.awaitTerminal();
 
         JsonNode messages = fixture.onlyRequest().json().get("messages");
-        // last 10 = m3..m12, then "Error:" (m11) is dropped -> 9 history entries after the system prompt.
-        assertEquals(List.of(SYSTEM_PROMPT, "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m12"),
-                contents(messages));
+        // last 10 = m3..m12; the failed reply (m10) keeps its assistant slot as a placeholder.
+        assertEquals(List.of(SYSTEM_PROMPT, "m3", "m4", "m5", "m6", "m7", "m8", "m9",
+                HistoryWindow.FAILED_REPLY, "m11", "m12"), contents(messages));
         assertEquals(List.of("system", "user", "assistant", "user", "assistant", "user", "assistant",
-                "user", "assistant", "user"), roles(messages));
+                "user", "assistant", "user", "assistant"), roles(messages));
     }
 
     @Test
@@ -127,7 +127,7 @@ class GrokAiServiceHttpStreamingTest {
         fixture.respondSse(COMPLETIONS, StreamingFixtureServer.openAiSse(chunk("{\"content\":\"hi\"}")));
         StreamCallbacks callbacks = new StreamCallbacks();
 
-        service.generateStreamResponse(List.of("Error: previous failure"), null,
+        service.generateStreamResponse(List.of(), null,
                 callbacks.onToken, callbacks.onComplete, callbacks.onError);
         callbacks.awaitTerminal();
 
