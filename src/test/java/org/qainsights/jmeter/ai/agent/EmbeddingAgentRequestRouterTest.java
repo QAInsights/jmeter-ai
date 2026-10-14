@@ -99,6 +99,32 @@ class EmbeddingAgentRequestRouterTest {
     }
 
     @Test
+    void compoundRequestSpanningTwoPacksUsesAllTools() {
+        FakeEmbedder embedder = new FakeEmbedder();
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(embedder, 0.75);
+
+        AgentRequestRouter.Decision mixed = router.route("route:PLAN_FILES right now and route:RUN_DIAGNOSE right now");
+        AgentRequestRouter.Decision same = router.route("route:PLAN_FILES right now, then route:PLAN_FILES once again");
+
+        assertEquals(AgentRequestRouter.Outcome.ALL_TOOLS, mixed.outcome());
+        assertEquals(AgentRequestRouter.Route.COMPLEX_OR_UNCLEAR, mixed.route());
+        assertTrue(same.isFocused());
+        assertEquals(AgentRequestRouter.Route.PLAN_FILES, same.route());
+        assertEquals(3, embedder.calls.get());
+    }
+
+    @Test
+    void clausesSplitOnlyCompoundRequests() {
+        assertEquals(List.of(), EmbeddingAgentRequestRouter.clauses("save the plan"));
+        assertEquals(List.of(), EmbeddingAgentRequestRouter.clauses("save and run"));
+        assertEquals(List.of(), EmbeddingAgentRequestRouter.clauses("add a json extractor and reuse it"));
+        assertEquals(List.of("save the plan", "run the test"),
+                EmbeddingAgentRequestRouter.clauses("save the plan and then run the test"));
+        assertEquals(EmbeddingAgentRequestRouter.MAX_CLAUSES,
+                EmbeddingAgentRequestRouter.clauses("a b c, d e f, g h i, j k l, m n o").size());
+    }
+
+    @Test
     void blankRequestUsesAllToolsWithoutCallingTheEmbedder() {
         FakeEmbedder embedder = new FakeEmbedder();
 

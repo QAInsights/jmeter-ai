@@ -65,6 +65,10 @@ public final class OllamaEmbeddingClient {
         return value == null || value.isBlank() ? DEFAULT_MODEL : value.trim();
     }
 
+    public String baseUrl() {
+        return host;
+    }
+
     public String model() {
         return model;
     }

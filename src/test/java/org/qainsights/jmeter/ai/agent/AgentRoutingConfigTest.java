@@ -4,12 +4,15 @@ import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
@@ -119,7 +122,13 @@ class AgentRoutingConfigTest {
 
             config.when(() -> AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false")).thenReturn("true");
             config.when(() -> AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false")).thenReturn("true");
-            assertTrue(AgentRoutingConfig.createRouter() instanceof EmbeddingAgentRequestRouter);
+            AgentRequestRouter first = AgentRoutingConfig.createRouter();
+            assertTrue(first instanceof EmbeddingAgentRequestRouter);
+            assertSame(first, AgentRoutingConfig.createRouter());
+
+            config.when(() -> AiConfig.getProperty(OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL))
+                    .thenReturn("nomic-embed-text");
+            assertNotSame(first, AgentRoutingConfig.createRouter());
         }
     }
 

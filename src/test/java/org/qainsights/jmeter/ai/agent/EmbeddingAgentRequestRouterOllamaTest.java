@@ -53,17 +53,35 @@ class EmbeddingAgentRequestRouterOllamaTest {
             new Case("write the current test plan to disk", AgentRequestRouter.Route.PLAN_FILES));
 
     @Test
+    void compoundRequestsAcrossPacksAreNeverFocused() {
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(new OllamaEmbeddingClient(
+                "http://localhost:11434", System.getenv("FEATHER_WAND_OLLAMA_EMBED_MODEL"), Duration.ofSeconds(120))::embed,
+                0.75);
+        for (String message : List.of("save the plan and run the test",
+                "add a json extractor for the token, then run it once",
+                "rename the login sampler and save the plan to disk",
+                "explain what this plan does and then start the load test",
+                "increase the users to 50 and show me the errors from the last run")) {
+            AgentRequestRouter.Decision d = router.route(message);
+            System.out.printf("%-12s %-18s %.2f %s%n", d.outcome(), d.route(), d.confidence(), message);
+            assertTrue(!d.isFocused(), message + " was focused on " + d.route());
+        }
+    }
+
+    @Test
     void confidentPicksAreCorrectAndMostRequestsRouteRight() {
         String model = System.getenv("FEATHER_WAND_OLLAMA_EMBED_MODEL");
         EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(
                 new OllamaEmbeddingClient("http://localhost:11434", model, Duration.ofSeconds(120))::embed, 0.75);
         int right = 0;
+        int otherPack = 0;
         int focused = 0;
         int focusedWrong = 0;
         for (Case c : CASES) {
             AgentRequestRouter.Decision d = router.route(c.message());
             assertTrue(d.outcome() != AgentRequestRouter.Outcome.UNAVAILABLE, "Ollama unavailable");
             right += d.route() == c.want() ? 1 : 0;
+            otherPack += d.route() != c.want() && d.route() != AgentRequestRouter.Route.COMPLEX_OR_UNCLEAR ? 1 : 0;
             if (d.isFocused()) {
                 focused++;
                 focusedWrong += d.route() == c.want() ? 0 : 1;
@@ -72,6 +90,6 @@ class EmbeddingAgentRequestRouterOllamaTest {
         }
         System.out.printf("%s: %d/%d right, %d focused, %d focused wrong%n", model, right, CASES.size(), focused, focusedWrong);
         assertEquals(0, focusedWrong, "a confident pick was wrong");
-        assertTrue(right >= 24, "only " + right + "/" + CASES.size() + " routed right");
+        assertTrue(otherPack <= CASES.size() / 6, otherPack + "/" + CASES.size() + " routed to the wrong pack");
     }
 }

@@ -35,14 +35,30 @@ public final class AgentRoutingConfig {
         }
         try {
             if (AgentJudgmentConfig.OLLAMA.equals(AgentJudgmentConfig.provider())) {
-                return new EmbeddingAgentRequestRouter(OllamaEmbeddingClient.fromConfig(timeout())::embed,
-                        minConfidence());
+                return sharedEmbeddingRouter();
             }
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {
             return message -> AgentRequestRouter.Decision.unavailable();
         }
+    }
+
+    private static String embeddingRouterKey;
+    private static EmbeddingAgentRequestRouter embeddingRouter;
+
+    /**
+     * One embedding router per Ollama endpoint, model, threshold and timeout, so the example vectors are
+     * embedded once per JMeter session rather than once per Agent message.
+     */
+    private static synchronized AgentRequestRouter sharedEmbeddingRouter() {
+        OllamaEmbeddingClient client = OllamaEmbeddingClient.fromConfig(timeout());
+        String key = client.baseUrl() + "|" + client.model() + "|" + minConfidence() + "|" + timeout();
+        if (embeddingRouter == null || !key.equals(embeddingRouterKey)) {
+            embeddingRouter = new EmbeddingAgentRequestRouter(client::embed, minConfidence());
+            embeddingRouterKey = key;
+        }
+        return embeddingRouter;
     }
 
     public static boolean enabled() {

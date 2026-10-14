@@ -27,6 +27,12 @@ public final class EmbeddingAgentRequestRouter implements AgentRequestRouter {
 
     static final String PREFIX = "task: classification | query: ";
     static final double TEMPERATURE = 0.05;
+    static final int MAX_CLAUSES = 4;
+    static final int MIN_CLAUSE_WORDS = 3;
+    static final double MIN_CLAUSE_CONFIDENCE = 0.5;
+    private static final java.util.regex.Pattern CLAUSE_SPLIT = java.util.regex.Pattern.compile(
+            "\\s*(?:[,;]|\\band then\\b|\\bthen\\b|\\band\\b|\\balso\\b|\\bplus\\b)\\s*",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
     private static final Map<Route, List<String>> EXAMPLES = examples();
 
     private final Embedder embedder;
@@ -50,20 +56,62 @@ public final class EmbeddingAgentRequestRouter implements AgentRequestRouter {
                 return Decision.allTools(Route.COMPLEX_OR_UNCLEAR, Map.of(), 0);
             }
             List<float[]> examples = exampleVectors();
-            List<float[]> query = embedder.embed(List.of(PREFIX + message));
-            if (query == null || query.size() != 1) {
-                throw new IllegalStateException("no embedding was returned for the request");
+            List<String> clauses = clauses(message);
+            List<String> inputs = new ArrayList<>();
+            inputs.add(PREFIX + message);
+            clauses.forEach(clause -> inputs.add(PREFIX + clause));
+            List<float[]> vectors = embedder.embed(inputs);
+            if (vectors == null || vectors.size() != inputs.size()) {
+                throw new IllegalStateException("expected " + inputs.size() + " embeddings for the request, got "
+                        + (vectors == null ? 0 : vectors.size()));
             }
-            float[] q = normalize(query.get(0));
-            Map<Route, Double> best = new EnumMap<>(Route.class);
-            for (int i = 0; i < examples.size(); i++) {
-                best.merge(exampleRoutes.get(i), dot(q, examples.get(i)), Math::max);
+            Decision decision = decide(scores(vectors.get(0), examples));
+            if (decision.isFocused() && mixedIntent(vectors.subList(1, vectors.size()), examples)) {
+                return Decision.allTools(Route.COMPLEX_OR_UNCLEAR, decision.probabilities(), decision.confidence());
             }
-            return decide(best);
+            return decision;
         } catch (RuntimeException e) {
             log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage());
             return Decision.unavailable();
         }
+    }
+
+    /** Clauses of a compound request ("save the plan and run it"); empty for a single-purpose one. */
+    static List<String> clauses(String message) {
+        List<String> clauses = new ArrayList<>();
+        for (String part : CLAUSE_SPLIT.split(message)) {
+            String clause = part.trim();
+            if (clause.split("\\s+").length >= MIN_CLAUSE_WORDS && clauses.size() < MAX_CLAUSES) {
+                clauses.add(clause);
+            }
+        }
+        return clauses.size() > 1 ? clauses : List.of();
+    }
+
+    /** True when two clauses of a compound request clearly point at different tool packs. */
+    private boolean mixedIntent(List<float[]> clauseVectors, List<float[]> examples) {
+        Route first = null;
+        for (float[] vector : clauseVectors) {
+            Decision clause = decide(scores(vector, examples));
+            if (clause.confidence() < MIN_CLAUSE_CONFIDENCE) {
+                continue;
+            }
+            Route top = clause.route();
+            if (first != null && top != first) {
+                return true;
+            }
+            first = top;
+        }
+        return false;
+    }
+
+    private Map<Route, Double> scores(float[] vector, List<float[]> examples) {
+        float[] q = normalize(vector);
+        Map<Route, Double> best = new EnumMap<>(Route.class);
+        for (int i = 0; i < examples.size(); i++) {
+            best.merge(exampleRoutes.get(i), dot(q, examples.get(i)), Math::max);
+        }
+        return best;
     }
 
     private Decision decide(Map<Route, Double> scores) {
