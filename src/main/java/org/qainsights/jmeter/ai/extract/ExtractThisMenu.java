@@ -75,22 +75,50 @@ public final class ExtractThisMenu {
             return;
         }
         text.putClientProperty(INSTALLED_KEY, Boolean.TRUE);
-        JPopupMenu menu = text.getComponentPopupMenu();
+        addItem(text, () -> extract(text, visualizer));
+    }
+
+    /**
+     * Response headers use JMeter's JSyntaxTextArea, whose RTextArea popup is separate from the Swing
+     * component popup, so the item is appended there. Anything else gets a plain Copy / Select All popup:
+     * Darklaf's text popup refuses to open on read-only panes because all its built-in actions are disabled.
+     */
+    static JPopupMenu addItem(JTextComponent text, Runnable action) {
+        JPopupMenu menu = syntaxAreaPopup(text);
         if (menu == null) {
             menu = new JPopupMenu();
             JMenuItem copy = new JMenuItem("Copy");
             copy.addActionListener(e -> text.copy());
+            JMenuItem selectAll = new JMenuItem("Select All");
+            selectAll.addActionListener(e -> text.selectAll());
             menu.add(copy);
+            menu.add(selectAll);
+            menu.addPopupMenuListener(onShow(() -> copy.setEnabled(text.getSelectionStart() != text.getSelectionEnd())));
             text.setComponentPopupMenu(menu);
         }
         menu.addSeparator();
         JMenuItem item = new JMenuItem(LABEL);
-        item.addActionListener(e -> extract(text, visualizer));
+        item.addActionListener(e -> action.run());
         menu.add(item);
-        menu.addPopupMenuListener(new PopupMenuListener() {
+        menu.addPopupMenuListener(onShow(
+                () -> item.setEnabled(!ExtractorSuggester.normalize(text.getSelectedText()).isEmpty())));
+        return menu;
+    }
+
+    private static JPopupMenu syntaxAreaPopup(JTextComponent text) {
+        try {
+            Object menu = text.getClass().getMethod("getPopupMenu").invoke(text);
+            return menu instanceof JPopupMenu ? (JPopupMenu) menu : null;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static PopupMenuListener onShow(Runnable r) {
+        return new PopupMenuListener() {
             @Override
             public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-                item.setEnabled(!ExtractorSuggester.normalize(text.getSelectedText()).isEmpty());
+                r.run();
             }
 
             @Override
@@ -100,7 +128,7 @@ public final class ExtractThisMenu {
             @Override
             public void popupMenuCanceled(PopupMenuEvent e) {
             }
-        });
+        };
     }
 
     static void extract(JTextComponent text, Container visualizer) {
