@@ -7,6 +7,7 @@ import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.MultiProperty;
 import org.apache.jmeter.testelement.property.PropertyIterator;
 import org.apache.jmeter.testelement.property.StringProperty;
+import org.apache.jmeter.threads.AbstractThreadGroup;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,34 +29,58 @@ public final class ExtractPlacement {
     private ExtractPlacement() {
     }
 
-    /** The sampler that produced a result labelled {@code label}; redirect sub-results are labelled "Name-0". */
-    public static JMeterTreeNode findSampler(JMeterTreeNode root, String label) {
+    /**
+     * Samplers that could have produced a result labelled {@code label}; redirect sub-results are
+     * labelled "Name-0". More than one entry means the label is ambiguous and the user must choose.
+     */
+    public static List<JMeterTreeNode> findSamplers(JMeterTreeNode root, String label) {
         if (root == null || label == null) {
-            return null;
+            return Collections.emptyList();
         }
-        JMeterTreeNode exact = findSamplerNamed(root, label);
-        if (exact != null) {
+        List<JMeterTreeNode> exact = samplersNamed(root, label);
+        if (!exact.isEmpty()) {
             return exact;
         }
         String stripped = label.replaceFirst("-\\d+$", "");
-        return stripped.equals(label) ? null : findSamplerNamed(root, stripped);
+        return stripped.equals(label) ? Collections.emptyList() : samplersNamed(root, stripped);
     }
 
-    private static JMeterTreeNode findSamplerNamed(JMeterTreeNode root, String name) {
+    private static List<JMeterTreeNode> samplersNamed(JMeterTreeNode root, String name) {
+        List<JMeterTreeNode> out = new ArrayList<>();
         for (JMeterTreeNode node : preorder(root)) {
             if (node.getTestElement() instanceof Sampler && name.equals(node.getName())) {
-                return node;
+                out.add(node);
             }
         }
-        return null;
+        return out;
     }
 
-    /** Elements after {@code source} (and outside its subtree) that still contain {@code value}. */
+    /** "Users > Login" style path below the Test Plan, used to tell same-named samplers apart. */
+    public static String pathOf(JMeterTreeNode node) {
+        StringBuilder sb = new StringBuilder();
+        for (javax.swing.tree.TreeNode n = node; n instanceof JMeterTreeNode; n = n.getParent()) {
+            JMeterTreeNode j = (JMeterTreeNode) n;
+            if (j.getTestElement() instanceof org.apache.jmeter.testelement.TestPlan || j.getParent() == null) {
+                break;
+            }
+            sb.insert(0, sb.length() == 0 ? j.getName() : j.getName() + " > ");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Elements after {@code source} (and outside its subtree) in the same Thread Group that still
+     * contain {@code value}. Variables are per thread, so other Thread Groups never see the extracted value.
+     */
     public static List<JMeterTreeNode> laterUses(JMeterTreeNode root, JMeterTreeNode source, String value) {
         if (root == null || source == null || value == null || value.length() < MIN_REPLACE_LENGTH) {
             return Collections.emptyList();
         }
-        List<JMeterTreeNode> all = preorder(root);
+        JMeterTreeNode group = threadGroupOf(source);
+        if (group == null) {
+            return Collections.emptyList();
+        }
+        List<JMeterTreeNode> all = preorder(group);
         int start = all.indexOf(source);
         if (start < 0) {
             return Collections.emptyList();
@@ -69,6 +94,15 @@ public final class ExtractPlacement {
             }
         }
         return out;
+    }
+
+    private static JMeterTreeNode threadGroupOf(JMeterTreeNode node) {
+        for (javax.swing.tree.TreeNode n = node.getParent(); n instanceof JMeterTreeNode; n = n.getParent()) {
+            if (((JMeterTreeNode) n).getTestElement() instanceof AbstractThreadGroup) {
+                return (JMeterTreeNode) n;
+            }
+        }
+        return null;
     }
 
     /** Replaces {@code value} with {@code ${var}} in each node; returns how many properties changed. */

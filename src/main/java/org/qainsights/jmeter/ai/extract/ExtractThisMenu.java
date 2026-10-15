@@ -6,6 +6,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.visualizers.RequestPanel;
 import org.apache.jmeter.visualizers.ViewResultsFullVisualizer;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
@@ -70,7 +71,7 @@ public final class ExtractThisMenu {
             return;
         }
         Container visualizer = (Container) SwingUtilities.getAncestorOfClass(ViewResultsFullVisualizer.class, text);
-        if (visualizer == null) {
+        if (visualizer == null || SwingUtilities.getAncestorOfClass(RequestPanel.class, text) != null) {
             return;
         }
         text.putClientProperty(INSTALLED_KEY, Boolean.TRUE);
@@ -118,10 +119,12 @@ public final class ExtractThisMenu {
         GuiPackage gui = GuiPackage.getInstance();
         JMeterTreeModel model = gui.getTreeModel();
         JMeterTreeNode root = (JMeterTreeNode) model.getRoot();
-        JMeterTreeNode sampler = ExtractPlacement.findSampler(root, top.getSampleLabel());
+        JMeterTreeNode sampler = pickSampler(text, ExtractPlacement.findSamplers(root, top.getSampleLabel()));
         if (sampler == null) {
-            tell(text, "There is no sampler named \"" + top.getSampleLabel()
-                    + "\" in the test plan, so there is nowhere to put the extractor.");
+            if (ExtractPlacement.findSamplers(root, top.getSampleLabel()).isEmpty()) {
+                tell(text, "There is no sampler named \"" + top.getSampleLabel()
+                        + "\" in the test plan, so there is nowhere to put the extractor.");
+            }
             return;
         }
         List<ExtractorSuggestion> suggestions = ExtractorSuggester.suggest(top, selected, value);
@@ -178,6 +181,26 @@ public final class ExtractThisMenu {
             log.warn("Extract this: could not add the extractor", e);
             tell(null, "Could not add the extractor: " + e.getMessage());
         }
+    }
+
+    /** The only match, or the user's pick when several samplers share the label; null if none or cancelled. */
+    private static JMeterTreeNode pickSampler(Component parent, List<JMeterTreeNode> matches) {
+        if (matches.size() <= 1) {
+            return matches.isEmpty() ? null : matches.get(0);
+        }
+        String[] paths = new String[matches.size()];
+        for (int i = 0; i < paths.length; i++) {
+            paths[i] = (i + 1) + ". " + ExtractPlacement.pathOf(matches.get(i));
+        }
+        Object picked = JOptionPane.showInputDialog(parent,
+                matches.size() + " samplers have this name. Which one produced this response?",
+                "Extract this", JOptionPane.QUESTION_MESSAGE, null, paths, paths[0]);
+        for (int i = 0; i < paths.length; i++) {
+            if (paths[i].equals(picked)) {
+                return matches.get(i);
+            }
+        }
+        return null;
     }
 
     /** {top-level result, highlighted result}, or null when no sample is selected. */

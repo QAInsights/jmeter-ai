@@ -17,8 +17,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExtractPlacementTest {
@@ -28,6 +26,14 @@ class ExtractPlacementTest {
     private JMeterTreeNode login;
     private JMeterTreeNode orders;
     private JMeterTreeNode headers;
+    private JMeterTreeNode plan;
+
+    private static ThreadGroup threadGroup(String name) {
+        ThreadGroup tg = new ThreadGroup();
+        tg.setName(name);
+        tg.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.threads.gui.ThreadGroupGui");
+        return tg;
+    }
 
     @BeforeAll
     static void initJMeterProperties() {
@@ -48,17 +54,14 @@ class ExtractPlacementTest {
     void setUp() throws Exception {
         model = new JMeterTreeModel();
         root = (JMeterTreeNode) model.getRoot();
-        JMeterTreeNode plan = null;
+        plan = null;
         for (int i = 0; i < root.getChildCount(); i++) {
             JMeterTreeNode child = (JMeterTreeNode) root.getChildAt(i);
             if (child.getTestElement() instanceof TestPlan) {
                 plan = child;
             }
         }
-        ThreadGroup tg = new ThreadGroup();
-        tg.setName("Users");
-        tg.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.threads.gui.ThreadGroupGui");
-        JMeterTreeNode tgNode = model.addComponent(tg, plan);
+        JMeterTreeNode tgNode = model.addComponent(threadGroup("Users"), plan);
         login = model.addComponent(http("Login", "/login?seed=abcd1234"), tgNode);
         orders = model.addComponent(http("Orders", "/orders?token=abcd1234"), tgNode);
         HeaderManager hm = new HeaderManager();
@@ -74,9 +77,25 @@ class ExtractPlacementTest {
 
     @Test
     void findsSamplerByLabelAndRedirectSuffix() {
-        assertSame(login, ExtractPlacement.findSampler(root, "Login"));
-        assertSame(login, ExtractPlacement.findSampler(root, "Login-0"));
-        assertNull(ExtractPlacement.findSampler(root, "Logout"));
+        assertEquals(List.of(login), ExtractPlacement.findSamplers(root, "Login"));
+        assertEquals(List.of(login), ExtractPlacement.findSamplers(root, "Login-0"));
+        assertTrue(ExtractPlacement.findSamplers(root, "Logout").isEmpty());
+        assertEquals("Users > Login", ExtractPlacement.pathOf(login));
+    }
+
+    @Test
+    void sameNamedSamplersAreAllReturnedForTheUserToChoose() throws Exception {
+        JMeterTreeNode other = model.addComponent(threadGroup("Admins"), plan);
+        JMeterTreeNode adminLogin = model.addComponent(http("Login", "/admin"), other);
+        assertEquals(List.of(login, adminLogin), ExtractPlacement.findSamplers(root, "Login"));
+        assertEquals("Admins > Login", ExtractPlacement.pathOf(adminLogin));
+    }
+
+    @Test
+    void laterUsesStayInsideTheSourceThreadGroup() throws Exception {
+        JMeterTreeNode other = model.addComponent(threadGroup("Admins"), plan);
+        model.addComponent(http("Admin orders", "/orders?token=abcd1234"), other);
+        assertEquals(List.of(orders, headers), ExtractPlacement.laterUses(root, login, "abcd1234"));
     }
 
     @Test
