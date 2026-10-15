@@ -510,4 +510,59 @@ class AiChatPanelTest {
         assertTrue(texts.contains("partial"), texts.toString());
         assertTrue(texts.stream().noneMatch(text -> text.contains("the rest")), texts.toString());
     }
+
+    @Test
+    void failedRequestSavesAPlaceholderReplySoRolesKeepAlternating() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+
+        panel.onWorkerError("failed", new Exception("boom"), "Could not reach the provider");
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question", org.qainsights.jmeter.ai.service.HistoryWindow.FAILED_REPLY),
+                panel.getConversationHistory());
+    }
+
+    @Test
+    void errorWithNoPendingUserTurnAddsNothing() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+        panel.addToConversationHistory("answer");
+
+        panel.onWorkerError("failed", new Exception("boom"), "Could not reach the provider");
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question", "answer"), panel.getConversationHistory());
+    }
+
+    @Test
+    void streamFailureKeepsThePartialReplyInsteadOfThePlaceholder() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question");
+        panel.beginStream();
+        javax.swing.SwingUtilities.invokeAndWait(() -> panel.appendStreamToken("Partial answer"));
+
+        panel.onStreamError("failed", new Exception("timeout"), "Provider timed out");
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question", "Partial answer"), panel.getConversationHistory());
+    }
+
+    @Test
+    void newConversationStopsTheRunningStreamSoItsLateFailureStaysOut() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        panel.addToConversationHistory("question A");
+        int generation = panel.beginStream();
+        panel.setCancelHandle(() -> { });
+        java.util.function.Consumer<Exception> errors = panel.ifStreamCurrent(generation,
+                e -> panel.onStreamError("failed", e, "Provider timed out"));
+
+        javax.swing.SwingUtilities.invokeAndWait(panel::startNewConversation);
+        panel.addToConversationHistory("question B");
+        errors.accept(new Exception("timeout"));
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals(java.util.List.of("question B"), panel.getConversationHistory());
+    }
 }

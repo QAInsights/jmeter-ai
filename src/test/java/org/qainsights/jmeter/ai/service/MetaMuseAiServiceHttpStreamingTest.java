@@ -91,7 +91,7 @@ class MetaMuseAiServiceHttpStreamingTest {
         StreamCallbacks callbacks = new StreamCallbacks();
 
         service.generateStreamResponse(
-                List.of("Add a sampler", "Added HTTP sampler", "Error: stream reset", "Now add a timer"), null,
+                List.of("Add a sampler", "Error: stream reset", "Now add a timer"), null,
                 callbacks.onToken, callbacks.onReasoning, callbacks.onComplete, callbacks.onError);
         callbacks.awaitTerminal();
 
@@ -119,7 +119,7 @@ class MetaMuseAiServiceHttpStreamingTest {
             contents.add(item.get("content").asText());
         });
         assertEquals(List.of("user", "assistant", "user"), roles);
-        assertEquals(List.of("Add a sampler", "Added HTTP sampler", "Now add a timer"), contents);
+        assertEquals(List.of("Add a sampler", HistoryWindow.FAILED_REPLY, "Now add a timer"), contents);
     }
 
     @Test

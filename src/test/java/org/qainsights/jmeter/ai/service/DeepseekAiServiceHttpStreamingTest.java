@@ -28,7 +28,7 @@ class DeepseekAiServiceHttpStreamingTest {
 
     private static final String SYSTEM_PROMPT = "You are a DeepSeek test assistant.";
     private static final List<String> HISTORY =
-            List.of("Add a sampler", "Added HTTP sampler", "Error: rate limited", "Now add a timer");
+            List.of("Add a sampler", "Error: rate limited", "Now add a timer");
 
     private StreamingFixtureServer fixture;
 
@@ -96,7 +96,7 @@ class DeepseekAiServiceHttpStreamingTest {
             JsonNode body = request.json();
             assertEquals("deepseek-reasoner", body.get("model").asText());
             assertEquals(List.of("system", "user", "assistant", "user"), field(body.get("messages"), "role"));
-            assertEquals(List.of(SYSTEM_PROMPT, "Add a sampler", "Added HTTP sampler", "Now add a timer"),
+            assertEquals(List.of(SYSTEM_PROMPT, "Add a sampler", HistoryWindow.FAILED_REPLY, "Now add a timer"),
                     field(body.get("messages"), "content"));
         }
 
@@ -170,7 +170,7 @@ class DeepseekAiServiceHttpStreamingTest {
             assertEquals(SYSTEM_PROMPT, body.get("system").asText());
             assertEquals(0.5, body.get("temperature").asDouble(), 1e-6);
             assertEquals(List.of("user", "assistant", "user"), field(body.get("messages"), "role"));
-            assertEquals(List.of("Add a sampler", "Added HTTP sampler", "Now add a timer"),
+            assertEquals(List.of("Add a sampler", HistoryWindow.FAILED_REPLY, "Now add a timer"),
                     field(body.get("messages"), "content"));
         }
 

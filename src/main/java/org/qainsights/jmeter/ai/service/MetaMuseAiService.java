@@ -306,8 +306,8 @@ public class MetaMuseAiService implements AiService {
 
     private List<String> filterErrorMessages(List<String> messages) {
         List<String> clean = new ArrayList<>();
-        for (String msg : messages) {
-            if (msg != null && !msg.startsWith("Error:")) {
+        for (String msg : HistoryWindow.maskFailedReplies(messages)) {
+            if (msg != null) {
                 clean.add(msg);
             }
         }
