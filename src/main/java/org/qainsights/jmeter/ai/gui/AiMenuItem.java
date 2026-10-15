@@ -52,6 +52,8 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 JSR223ContextMenu.initialize(null);
             }
 
+            org.qainsights.jmeter.ai.extract.ExtractThisMenu.install();
+
             // Add tree selection listener to detect when components are selected in JMeter
             // tree
             addTreeSelectionListener();

@@ -61,6 +61,7 @@
 | 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), Meta Muse, or AWS Bedrock models, or use your CLI-managed ChatGPT/Codex or Claude Code account. |
 | ⚡ **Real-Time Streaming** | Watch supported API responses appear token-by-token with a **Stop** button to cancel anytime; CLI-backed requests return one completed answer and are cancellable too. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
+| 🎯 **Extract this** | Highlight a value in a View Results Tree response, right-click and pick **Extract this (Feather Wand)**. Feather Wand builds JSON, CSS selector, regex and boundary extractors, runs each one through JMeter's own extractor code against the real response, and offers only the ones that return exactly that value. Pick one, name the variable and it lands under the sampler that produced the response, optionally replacing later hard-coded copies with `${var}`. Works without an API key. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
@@ -110,6 +111,7 @@ Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.proper
 | `jmeter.ai.streaming.enabled` | Stream AI responses token-by-token | `true` |
 | `jmeter.ai.response.chime` | Play a chime when AI finishes | `false` |
 | `jmeter.ai.refactoring.enabled` | Enable JSR223 editor AI refactoring | `true` |
+| `jmeter.ai.extract.enabled` | Add **Extract this** to the right-click menu of View Results Tree responses | `true` |
 | `jmeter.ai.service.type` | Default AI service for refactoring | `anthropic` |
 | `jmeter.ai.cli.max.history.size` | Conversation entries replayed with each one-shot Codex/Claude Code chat request | `10` |
 | `jmeter.ai.dev.menu` | Show the [AI Dev tool items](#dev-menu-items) under the Run menu | `false` |

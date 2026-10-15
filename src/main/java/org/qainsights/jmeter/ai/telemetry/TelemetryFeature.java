@@ -28,7 +28,8 @@ public enum TelemetryFeature {
     ROUTE_UNAVAILABLE("route_unavailable"),
     ROUTE_EXPANDED("route_expanded"),
     TRIAGE_RUN("triage_run"),
-    TRIAGE_UNCLASSIFIED("triage_unclassified");
+    TRIAGE_UNCLASSIFIED("triage_unclassified"),
+    EXTRACT_ADDED("extract_added");
 
     private final String wireName;
 
