@@ -91,22 +91,37 @@ class JMeterElementRequestHandlerTest {
         manager.verify(() -> JMeterElementManager.addElement(anyString(), any()), never());
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "Thread Group, a Thread Group",
+            "HTTP Request, an HTTP Request",
+            "If Controller, an If Controller",
+            "XPath Assertion, an XPath Assertion",
+            "JSR223 Sampler, a JSR223 Sampler",
+            "CSV Data Set, a CSV Data Set",
+            "User Defined Variables, a User Defined Variables",
+            "OS Process Sampler, an OS Process Sampler"
+    })
+    void withArticlePicksAOrAnBySound(String name, String expected) {
+        assertEquals(expected, JMeterElementRequestHandler.withArticle(name));
+    }
+
     @ParameterizedTest(name = "\"{0}\" -> {1}")
     @CsvSource({
-            "add a thread group, threadgroup, Thread Group",
-            "add an HTTP request, httprequest, Httprequest",
-            "create a http sampler, httpsampler, HTTP Request",
-            "add a JSR223 sampler, jsr223sampler, JSR223 Sampler",
-            "add a JSR223 preprocessor, jsr223preprocessor, JSR223 PreProcessor",
-            "add a JSR223 post processor, jsr223postprocessor, JSR223 PostProcessor",
-            "add a CSV data set, csvdataset, CSV Data Set",
-            "insert a loop controller, loopcontroller, Loop Controller",
-            "add a response assertion, responseassert, Response Assertion",
-            "add a constant timer, constanttimer, Constant Timer",
-            "add a timer, constanttimer, Constant Timer",
-            "add a listener, viewresultstree, View Results Tree",
-            "add virtual users, threadgroup, Thread Group",
-            "include a regex extractor, regexextractor, Regular Expression Extractor"
+            "add a thread group, threadgroup, a Thread Group",
+            "add an HTTP request, httprequest, an HTTP Request",
+            "create a http sampler, httpsampler, an HTTP Request",
+            "add a JSR223 sampler, jsr223sampler, a JSR223 Sampler",
+            "add a JSR223 preprocessor, jsr223preprocessor, a JSR223 PreProcessor",
+            "add a JSR223 post processor, jsr223postprocessor, a JSR223 PostProcessor",
+            "add a CSV data set, csvdataset, a CSV Data Set",
+            "insert a loop controller, loopcontroller, a Loop Controller",
+            "add a response assertion, responseassert, a Response Assertion",
+            "add a constant timer, constanttimer, a Constant Timer",
+            "add a timer, constanttimer, a Constant Timer",
+            "add a listener, viewresultstree, a View Results Tree",
+            "add virtual users, threadgroup, a Thread Group",
+            "include a regex extractor, regexextractor, a Regular Expression Extractor"
     })
     void mapsSynonymsToSupportedElementTypes(String message, String expectedType, String expectedDisplayName) {
         String response = JMeterElementRequestHandler.processElementRequest(message);
@@ -114,7 +129,7 @@ class JMeterElementRequestHandlerTest {
         assertEquals(1, addedElements.size(), "exactly one element should be added");
         assertEquals(expectedType, addedElements.get(0)[0]);
         assertNull(addedElements.get(0)[1], "no explicit name was requested");
-        assertEquals("I've added a " + expectedDisplayName
+        assertEquals("I've added " + expectedDisplayName
                 + " to your test plan. You can now configure it as needed.", response);
     }
 
@@ -132,7 +147,7 @@ class JMeterElementRequestHandlerTest {
         assertEquals(expectedType, addedElements.get(0)[0]);
         assertEquals(expectedName, addedElements.get(0)[1]);
         assertNotNull(response);
-        assertTrue(response.startsWith("I've added a "), response);
+        assertTrue(response.matches("(?s)I've added an? .*"), response);
         assertTrue(response.contains(" called \"" + expectedName + "\" to your test plan"), response);
     }
 
@@ -183,7 +198,7 @@ class JMeterElementRequestHandlerTest {
         assertNotNull(response);
         assertTrue(response.startsWith("I've made the following changes:\n\n"), response);
         assertTrue(response.contains("1. I've added a Thread Group to your test plan."), response);
-        assertTrue(response.contains("2. I've added a Httprequest called \"Login\" to your test plan."), response);
+        assertTrue(response.contains("2. I've added an HTTP Request called \"Login\" to your test plan."), response);
         assertTrue(response.contains("3. I've added a Constant Timer to your test plan."), response);
         assertFalse(response.contains("However, I encountered some issues"), response);
     }
@@ -229,7 +244,7 @@ class JMeterElementRequestHandlerTest {
         assertEquals("httpsampler", addedElements.get(1)[0]);
         assertNotNull(response);
         assertTrue(response.contains("1. I've added a Thread Group"), response);
-        assertTrue(response.contains("2. I've added a HTTP Request"), response);
+        assertTrue(response.contains("2. I've added an HTTP Request"), response);
     }
 
     @Test

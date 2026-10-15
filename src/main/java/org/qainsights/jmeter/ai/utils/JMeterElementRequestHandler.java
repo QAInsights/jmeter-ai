@@ -468,6 +468,18 @@ public class JMeterElementRequestHandler {
                 .setSelectionPath(new javax.swing.tree.TreePath(node.getPath()));
     }
 
+    /** "a Thread Group", "an HTTP Request", "an If Controller": acronyms go by how their first letter sounds. */
+    static String withArticle(String name) {
+        if (name == null || name.isEmpty()) {
+            return name;
+        }
+        String first = name.split("\\s+", 2)[0];
+        char c = Character.toUpperCase(name.charAt(0));
+        boolean acronym = first.length() > 1 && Character.isUpperCase(first.charAt(1));
+        boolean an = acronym ? "AEFHILMNORSX".indexOf(c) >= 0 : "AEIO".indexOf(c) >= 0;
+        return (an ? "an " : "a ") + name;
+    }
+
     /**
      * The element the previous instruction just added, so the next one can nest
      * inside it; {@link #placementFor} climbs out when it can't hold that type.
@@ -559,13 +571,13 @@ public class JMeterElementRequestHandler {
                 boolean success = JMeterElementManager.addElement(elementType, null);
                 if (success) {
                     String elementName = JMeterElementManager.getDefaultNameForElement(elementType);
-                    String successResponse = "I've added a " + elementName
+                    String successResponse = "I've added " + withArticle(elementName)
                             + " to your test plan. You can now configure it as needed.";
                     log.info("Successfully added element: {}", successResponse);
                     responses.add(successResponse);
                 } else {
-                    String errorResponse = "I tried to add a "
-                            + JMeterElementManager.getDefaultNameForElement(elementType) +
+                    String errorResponse = "I tried to add "
+                            + withArticle(JMeterElementManager.getDefaultNameForElement(elementType)) +
                             ", but encountered an error. " +
                             "Please make sure you have a test plan open and a node selected where the element can be added.";
                     log.info("Failed to add element: {}", errorResponse);
@@ -741,13 +753,13 @@ public class JMeterElementRequestHandler {
                 }
             }
 
-            String response = "I've added a " + JMeterElementManager.getDefaultNameForElement(elementType) +
+            String response = "I've added " + withArticle(JMeterElementManager.getDefaultNameForElement(elementType)) +
                     (elementName != null ? " called \"" + elementName + "\"" : "") +
                     " to your test plan. You can now configure it as needed.";
             log.info("Successfully added element: {}", response);
             return response;
         } else {
-            String response = "I tried to add a " + JMeterElementManager.getDefaultNameForElement(elementType) +
+            String response = "I tried to add " + withArticle(JMeterElementManager.getDefaultNameForElement(elementType)) +
                     ", but encountered an error. " +
                     "This might be due to compatibility issues with the selected node. Please try selecting a different node in your test plan.";
             log.error("Failed to add element: {}", response);

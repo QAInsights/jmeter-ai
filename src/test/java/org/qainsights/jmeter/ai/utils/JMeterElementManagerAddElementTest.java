@@ -178,6 +178,11 @@ class JMeterElementManagerAddElementTest {
     }
 
     @Test
+    void httpRequestTypeIsNamedHttpRequest() {
+        assertEquals("HTTP Request", JMeterElementManager.getDefaultNameForElement("httprequest"));
+    }
+
+    @Test
     void defaultNameFallsBackToCapitalisedTypeForUnknownTypes() {
         assertEquals("Cookiemanager", JMeterElementManager.getDefaultNameForElement("cookiemanager"));
         assertEquals("Something", JMeterElementManager.getDefaultNameForElement("Some Thing"));
