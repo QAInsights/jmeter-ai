@@ -94,7 +94,7 @@ class JMeterElementRequestHandlerTest {
     @ParameterizedTest(name = "\"{0}\" -> {1}")
     @CsvSource({
             "add a thread group, threadgroup, Thread Group",
-            "add an HTTP request, httprequest, Httprequest",
+            "add an HTTP request, httprequest, HTTP Request",
             "create a http sampler, httpsampler, HTTP Request",
             "add a JSR223 sampler, jsr223sampler, JSR223 Sampler",
             "add a JSR223 preprocessor, jsr223preprocessor, JSR223 PreProcessor",
@@ -183,7 +183,7 @@ class JMeterElementRequestHandlerTest {
         assertNotNull(response);
         assertTrue(response.startsWith("I've made the following changes:\n\n"), response);
         assertTrue(response.contains("1. I've added a Thread Group to your test plan."), response);
-        assertTrue(response.contains("2. I've added a Httprequest called \"Login\" to your test plan."), response);
+        assertTrue(response.contains("2. I've added a HTTP Request called \"Login\" to your test plan."), response);
         assertTrue(response.contains("3. I've added a Constant Timer to your test plan."), response);
         assertFalse(response.contains("However, I encountered some issues"), response);
     }

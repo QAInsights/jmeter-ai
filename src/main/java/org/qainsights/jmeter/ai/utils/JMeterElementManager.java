@@ -665,6 +665,7 @@ public class JMeterElementManager {
             case "httptestsample":
                 return "HTTP Request";
             case "httpsampler":
+            case "httprequest":
                 return "HTTP Request";
             case "loopcontroller":
                 return "Loop Controller";
@@ -899,7 +900,7 @@ public class JMeterElementManager {
             // Thread group can have all types of elements, except test plan and another
             // thread group
             if (isAddingThreadGroup) {
-                log.error("Cannot add a Thread Group to another Thread Group");
+                log.debug("Cannot add a Thread Group to another Thread Group");
                 return false;
             }
             return !isAddingTestPlan;
