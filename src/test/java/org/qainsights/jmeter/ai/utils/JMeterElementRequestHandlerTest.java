@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.utils;
 
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -342,5 +343,100 @@ class JMeterElementRequestHandlerTest {
 
         assertEquals(1, addedElements.size(), response);
         assertEquals("threadgroup", addedElements.get(0)[0]);
+    }
+
+    private JMeterTreeNode[] fakeTree(JMeterTreeNode selected) {
+        JMeterTreeNode[] current = { selected };
+        GuiPackage gui = org.mockito.Mockito.mock(GuiPackage.class);
+        org.apache.jmeter.gui.tree.JMeterTreeListener listener =
+                org.mockito.Mockito.mock(org.apache.jmeter.gui.tree.JMeterTreeListener.class);
+        javax.swing.JTree tree = org.mockito.Mockito.mock(javax.swing.JTree.class);
+        org.mockito.Mockito.when(gui.getTreeListener()).thenReturn(listener);
+        org.mockito.Mockito.when(listener.getJTree()).thenReturn(tree);
+        org.mockito.Mockito.when(listener.getCurrentNode()).thenAnswer(invocation -> current[0]);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            current[0] = (JMeterTreeNode) ((javax.swing.tree.TreePath) invocation.getArgument(0))
+                    .getLastPathComponent();
+            return null;
+        }).when(tree).setSelectionPath(any());
+        guiPackage.when(GuiPackage::getInstance).thenReturn(gui);
+        manager.when(() -> JMeterElementManager.addElement(anyString(), any())).thenAnswer(invocation -> {
+            String type = invocation.getArgument(0);
+            org.apache.jmeter.testelement.TestElement element;
+            if (type.contains("thread")) {
+                element = new org.apache.jmeter.threads.ThreadGroup();
+            } else if (type.contains("assert")) {
+                element = new org.apache.jmeter.assertions.ResponseAssertion();
+            } else if (type.contains("runtime")) {
+                element = new org.apache.jmeter.control.RunTime();
+            } else {
+                element = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+            }
+            element.setName(type);
+            current[0].add(new JMeterTreeNode(element, null));
+            addedElements.add(new String[] { type, invocation.getArgument(1) });
+            return true;
+        });
+        return current;
+    }
+
+    private static String childNames(JMeterTreeNode node) {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < node.getChildCount(); i++) {
+            JMeterTreeNode child = (JMeterTreeNode) node.getChildAt(i);
+            names.add(child.getName() + (child.getChildCount() > 0 ? childNames(child) : ""));
+        }
+        return names.toString();
+    }
+
+    @Test
+    void bareListPutsTheSamplerInsideTheNewThreadGroup() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("thread group and http request");
+
+        assertEquals("[threadgroup[httpsampler]]", childNames(plan));
+    }
+
+    @Test
+    void secondThreadGroupGoesBackUnderTheTestPlan() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest(
+                "thread group, http request, thread group and http request");
+
+        assertEquals("[threadgroup[httpsampler], threadgroup[httpsampler]]", childNames(plan));
+    }
+
+    @Test
+    void consecutiveSamplersStaySiblings() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("add a thread group, an http request and an http request");
+
+        assertEquals("[threadgroup[httprequest, httprequest]]", childNames(plan));
+    }
+
+    @Test
+    void assertionAfterASamplerIsScopedToThatSampler() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("thread group, http request and response assertion");
+
+        assertEquals("[threadgroup[httpsampler[responseassert]]]", childNames(plan));
+    }
+
+    @Test
+    void samplerAfterARuntimeControllerGoesInsideIt() {
+        JMeterTreeNode plan = new JMeterTreeNode(new org.apache.jmeter.testelement.TestPlan(), null);
+        fakeTree(plan);
+
+        JMeterElementRequestHandler.processElementRequest("thread group, runtime controller and http request");
+
+        assertEquals("[threadgroup[runtimecontroller[httpsampler]]]", childNames(plan));
     }
 }
