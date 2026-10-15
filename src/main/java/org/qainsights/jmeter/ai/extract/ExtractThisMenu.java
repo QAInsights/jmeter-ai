@@ -6,7 +6,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestElement;
-import org.apache.jmeter.visualizers.RequestPanel;
+import org.apache.jmeter.util.JMeterUtils;
 import org.apache.jmeter.visualizers.ViewResultsFullVisualizer;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
@@ -71,11 +72,24 @@ public final class ExtractThisMenu {
             return;
         }
         Container visualizer = (Container) SwingUtilities.getAncestorOfClass(ViewResultsFullVisualizer.class, text);
-        if (visualizer == null || SwingUtilities.getAncestorOfClass(RequestPanel.class, text) != null) {
+        if (visualizer == null || inTab(text, JMeterUtils.getResString("view_results_tab_request"))) {
             return;
         }
         text.putClientProperty(INSTALLED_KEY, Boolean.TRUE);
         addItem(text, () -> extract(text, visualizer));
+    }
+
+    /** True when {@code c} sits under a tab titled {@code title}; RequestPanel itself is not a Swing component. */
+    static boolean inTab(Component c, String title) {
+        for (Component child = c, p = c.getParent(); p != null; child = p, p = p.getParent()) {
+            if (p instanceof JTabbedPane) {
+                int i = ((JTabbedPane) p).indexOfComponent(child);
+                if (i >= 0 && title.equals(((JTabbedPane) p).getTitleAt(i))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -239,7 +253,10 @@ public final class ExtractThisMenu {
         }
         SampleResult top = null;
         SampleResult selected = null;
-        for (Object o : path.getPath()) {
+        Object[] nodes = path.getPath();
+        // Index 0 is View Results Tree's hidden root, which holds a synthetic "Root" SampleResult.
+        for (int i = 1; i < nodes.length; i++) {
+            Object o = nodes[i];
             Object user = o instanceof DefaultMutableTreeNode ? ((DefaultMutableTreeNode) o).getUserObject() : null;
             if (user instanceof SampleResult) {
                 if (top == null) {

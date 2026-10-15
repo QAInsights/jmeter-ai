@@ -22,7 +22,9 @@ class ExtractThisMenuTest {
     void subResultSelectionKeepsTheTopLevelResult() {
         SampleResult top = new SampleResult();
         SampleResult sub = new SampleResult();
-        DefaultMutableTreeNode root = new DefaultMutableTreeNode("root");
+        SampleResult syntheticRoot = new SampleResult();
+        syntheticRoot.setSampleLabel("Root");
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode(syntheticRoot);
         DefaultMutableTreeNode topNode = new DefaultMutableTreeNode(top);
         DefaultMutableTreeNode subNode = new DefaultMutableTreeNode(sub);
         root.add(topNode);
@@ -73,6 +75,20 @@ class ExtractThisMenuTest {
         assertSame(menu, pane.getComponentPopupMenu());
         assertEquals("Copy", ((JMenuItem) menu.getComponent(0)).getText());
         assertEquals(ExtractThisMenu.LABEL, ((JMenuItem) menu.getComponent(menu.getComponentCount() - 1)).getText());
+    }
+
+    @Test
+    void requestTabIsDetectedThroughNestedTabs() {
+        JEditorPane requestBody = new JEditorPane();
+        javax.swing.JTabbedPane requestViews = new javax.swing.JTabbedPane();
+        requestViews.addTab("Request Body", new javax.swing.JScrollPane(requestBody));
+        javax.swing.JTabbedPane outer = new javax.swing.JTabbedPane();
+        outer.addTab("Sampler result", new JPanel());
+        outer.addTab("Request", requestViews);
+        JEditorPane responseBody = new JEditorPane();
+        outer.addTab("Response data", new javax.swing.JScrollPane(responseBody));
+        org.junit.jupiter.api.Assertions.assertTrue(ExtractThisMenu.inTab(requestBody, "Request"));
+        org.junit.jupiter.api.Assertions.assertFalse(ExtractThisMenu.inTab(responseBody, "Request"));
     }
 
     @Test
