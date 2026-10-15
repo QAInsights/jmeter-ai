@@ -468,10 +468,6 @@ public class JMeterElementRequestHandler {
                 .setSelectionPath(new javax.swing.tree.TreePath(node.getPath()));
     }
 
-    /**
-     * The element the previous instruction just added, so the next one can nest
-     * inside it; {@link #placementFor} climbs out when it can't hold that type.
-     */
     /** "a Thread Group", "an HTTP Request", "an If Controller": acronyms go by how their first letter sounds. */
     static String withArticle(String name) {
         if (name == null || name.isEmpty()) {
@@ -484,6 +480,10 @@ public class JMeterElementRequestHandler {
         return (an ? "an " : "a ") + name;
     }
 
+    /**
+     * The element the previous instruction just added, so the next one can nest
+     * inside it; {@link #placementFor} climbs out when it can't hold that type.
+     */
     private static JMeterTreeNode nextTarget(JMeterTreeNode target, JMeterTreeNode lastParent, int lastChildCount) {
         if (lastParent == null || lastParent.getChildCount() <= lastChildCount) {
             return target;
