@@ -6,8 +6,7 @@
 		{
 			"binding": "DB",
 			"database_name": "feather-wand-telemetry",
-			// Replace with the id printed by `wrangler d1 create feather-wand-telemetry`.
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "ed858ae8-45ec-4932-b7a1-df5090bfbb1f",
 			"migrations_dir": "migrations"
 		}
 	],
