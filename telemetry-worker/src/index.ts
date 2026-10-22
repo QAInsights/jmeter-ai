@@ -379,7 +379,13 @@ function statsPage(s: Record<string, unknown>): string {
 	const judgment = features.filter(r => name(r).startsWith("route_") || name(r).startsWith("triage_"));
 	const usage = features.filter(r => !errors.includes(r) && !outcomes.includes(r)
 		&& !tools.includes(r) && !toolFailures.includes(r) && !judgment.includes(r));
-	const callsByTool = new Map(tools.map(r => [name(r).slice("tool_".length), Number(r.total)]));
+	// toolfail_ keys keep 31 name characters and tool_ keys keep 35, so join on the shorter prefix.
+	const failNameLength = 40 - "toolfail_".length;
+	const callsByTool = new Map<string, number>();
+	for (const r of tools) {
+		const tool = name(r).slice("tool_".length, "tool_".length + failNameLength);
+		callsByTool.set(tool, (callsByTool.get(tool) ?? 0) + Number(r.total));
+	}
 	const failureRows = toolFailures.map(r => {
 		const tool = name(r).slice("toolfail_".length);
 		return [tool, r.total, r.installs, pct(Number(r.total), callsByTool.get(tool) ?? 0)];

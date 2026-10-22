@@ -153,6 +153,8 @@ describe("extended stats", () => {
 			`INSERT INTO feature_counts (install_id, day, feature, count) VALUES
 			 ('a', ?1, 'err_openai_not_found', 3), ('a', ?1, 'outcome_completed', 4),
 			 ('a', ?1, 'tool_add_element', 6), ('a', ?1, 'toolfail_add_element', 3),
+			 ('a', ?1, 'tool_abcdefghijklmnopqrstuvwxyzabcdefghi', 4),
+			 ('a', ?1, 'toolfail_abcdefghijklmnopqrstuvwxyzabcde', 1),
 			 ('a', ?1, 'route_focused', 2), ('a', ?1, 'chat_message', 9)`
 		).bind(day(0)).run();
 
@@ -166,6 +168,7 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>openai</td><td>not_found</td><td>3</td>");
 		expect(html).toContain("<td>add_element</td><td>6</td><td>1</td><td>6.0</td>");
 		expect(html).toContain("<td>add_element</td><td>3</td><td>1</td><td>50%</td>");
+		expect(html).toContain("<td>abcdefghijklmnopqrstuvwxyzabcde</td><td>1</td><td>1</td><td>25%</td>");
 		expect(html).not.toContain("<td>toolfail_add_element</td>");
 		expect(html).toContain("<td>completed</td><td>4</td>");
 		expect(html).toContain("<td>route_focused</td><td>2</td>");
