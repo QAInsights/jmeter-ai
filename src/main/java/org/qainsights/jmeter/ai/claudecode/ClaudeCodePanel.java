@@ -17,6 +17,7 @@ import javax.swing.*;
 import javax.swing.Timer;
 import java.awt.*;
 import java.io.File;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
@@ -363,14 +364,25 @@ public class ClaudeCodePanel extends JPanel {
      * terminal.
      */
     private void sendTestPlanContext() {
-        if (ptyProcess == null || !ptyProcess.isAlive()) {
+        PtyProcess process = ptyProcess;
+        if (process == null || !process.isAlive()) {
             return;
         }
         try {
             String context = TestPlanSerializer.serializeTestPlan();
             String message = "Here is the updated JMeter test plan context:\n" + context + "\n";
-            ptyProcess.getOutputStream().write(message.getBytes(StandardCharsets.UTF_8));
-            ptyProcess.getOutputStream().flush();
+            byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+            Thread contextWriter = new Thread(() -> {
+                try {
+                    OutputStream outputStream = process.getOutputStream();
+                    outputStream.write(messageBytes);
+                    outputStream.flush();
+                } catch (Exception e) {
+                    log.error("Failed to send context to Claude Code", e);
+                }
+            }, "feather-wand-cli-context");
+            contextWriter.setDaemon(true);
+            contextWriter.start();
         } catch (Exception e) {
             log.error("Failed to send context to Claude Code", e);
         }

@@ -5,6 +5,7 @@ import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
 import org.qainsights.jmeter.ai.gui.ComponentFinder;
 import org.qainsights.jmeter.ai.gui.FeatherWandToolbar;
+import org.qainsights.jmeter.ai.gui.SidePanelDock;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
@@ -59,20 +60,9 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
         GuiPackage instance = GuiPackage.getInstance();
         if (instance != null) {
             final MainFrame mf = instance.getMainFrame();
-            final ComponentFinder<JMeterToolBar> finder = new ComponentFinder<>(JMeterToolBar.class);
-            SwingUtilities.invokeLater(new Runnable() {
-                @Override
-                public void run() {
-                    JMeterToolBar toolbar = null;
-                    while (toolbar == null) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            log.debug("Couldn't add Claude Code button to toolbar", e);
-                        }
-                        log.debug("Searching for toolbar for Claude Code icon...");
-                        toolbar = finder.findComponentIn(mf);
-                    }
+            SwingUtilities.invokeLater(() -> {
+                log.debug("Searching for toolbar for Claude Code icon...");
+                ComponentFinder.whenFound(mf, JMeterToolBar.class, 500, 120, toolbar -> {
                     // Insert right after the last button (which should include the Feather Wand
                     // button)
                     int pos = getPositionAfterFeatherWand(toolbar.getComponents());
@@ -81,7 +71,7 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
                     toolbarButton
                             .setSize(toolbar.getComponent(Math.min(pos, toolbar.getComponentCount() - 1)).getSize());
                     toolbar.add(toolbarButton, pos);
-                }
+                });
             });
         }
     }
@@ -149,13 +139,7 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
         MainFrame mainFrame = guiPackage.getMainFrame();
 
         if (currentPanel != null && splitPane != null && splitPane.isShowing()) {
-            // Panel is currently shown — remove it
-            Container contentPane = mainFrame.getContentPane();
-            contentPane.remove(splitPane);
-
-            Component mainComponent = splitPane.getLeftComponent();
-            contentPane.add(mainComponent, BorderLayout.CENTER);
-
+            SidePanelDock.undock(splitPane);
             // Stop the Claude process when hiding
             currentPanel.stopClaudeCode();
             splitPane = null;
@@ -169,28 +153,8 @@ public class ClaudeCodeMenuItem extends JMenuItem implements ActionListener {
             }
 
             Container contentPane = mainFrame.getContentPane();
-            Component centerComp = null;
-            for (Component comp : contentPane.getComponents()) {
-                if (contentPane.getLayout() instanceof BorderLayout &&
-                        ((BorderLayout) contentPane.getLayout()).getConstraints(comp) == BorderLayout.CENTER) {
-                    centerComp = comp;
-                    break;
-                }
-            }
-
-            if (centerComp != null) {
-                contentPane.remove(centerComp);
-
-                splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centerComp, currentPanel);
-                splitPane.setResizeWeight(0.65);
-                splitPane.setOneTouchExpandable(true);
-                splitPane.setContinuousLayout(true);
-
-                int preferredWidth = currentPanel.getPreferredSize().width;
-                int totalWidth = mainFrame.getWidth();
-                splitPane.setDividerLocation(totalWidth - preferredWidth - 10);
-
-                contentPane.add(splitPane, BorderLayout.CENTER);
+            splitPane = SidePanelDock.dock(contentPane, currentPanel, 0.65, mainFrame.getWidth());
+            if (splitPane != null) {
                 log.info("Claude Code panel displayed");
             }
         }
