@@ -447,6 +447,7 @@ public class CommandDispatcher {
                 && !selectedModel.startsWith("grok:")
                 && !selectedModel.startsWith("meta:")
                 && !selectedModel.startsWith("bedrock:")
+                && !selectedModel.startsWith("apple:")
                 && !selectedModel.startsWith("codex:")
                 && !selectedModel.startsWith("claude-code:");
     }

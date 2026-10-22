@@ -11,6 +11,8 @@ import com.openai.models.models.Model;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
 import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
+import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
@@ -191,6 +193,16 @@ public class Models {
             }
         } catch (Exception e) {
             log.error("Error adding Claude Code CLI models: {}", e.getMessage(), e);
+        }
+
+        if (Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"))) {
+            AppleFoundationHelper.Status status = AppleFoundationHelper.status();
+            if (status.isAvailable()) {
+                allModels.add(AppleFoundationAiService.MODEL_ID);
+                log.info("Added Apple on-device model to selector");
+            } else {
+                log.info("Apple on-device model is unavailable: {}", status.getReason());
+            }
         }
 
         return allModels;

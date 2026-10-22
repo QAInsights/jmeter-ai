@@ -5,6 +5,8 @@ import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
 import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
@@ -110,6 +112,11 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                         && !apiKey.equals("YOUR_API_KEY") && model != null && !model.isEmpty()) {
                     Client googleClient = Client.builder().apiKey(apiKey).build();
                     return new GoogleAiService(googleClient);
+                }
+            } else if ("apple".equalsIgnoreCase(serviceType)) {
+                boolean enabled = Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"));
+                if (enabled && AppleFoundationHelper.status().isAvailable()) {
+                    return new AppleFoundationAiService();
                 }
             }
         } catch (Exception e) {

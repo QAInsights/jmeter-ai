@@ -41,6 +41,7 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -106,6 +107,7 @@ public class AiChatPanel
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
     private ClaudeCodeAiService claudeCodeService;
+    private AppleFoundationAiService appleFoundationAiService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private JPanel headerPanel;
@@ -175,6 +177,7 @@ public class AiChatPanel
         bedrockService = new BedrockAiService();
         codexService = new CodexAiService();
         claudeCodeService = new ClaudeCodeAiService();
+        appleFoundationAiService = new AppleFoundationAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
@@ -799,6 +802,7 @@ public class AiChatPanel
         holder.setBedrockService(bedrockService);
         holder.setCodexService(codexService);
         holder.setClaudeCodeService(claudeCodeService);
+        holder.setAppleFoundationAiService(appleFoundationAiService);
         return holder;
     }
 

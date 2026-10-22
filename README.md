@@ -119,7 +119,7 @@ That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-s
 | `jmeter.ai.response.chime` | Play a chime when AI finishes | `false` |
 | `jmeter.ai.refactoring.enabled` | Enable JSR223 editor AI refactoring | `true` |
 | `jmeter.ai.extract.enabled` | Add **Extract this** to the right-click menu of View Results Tree responses | `true` |
-| `jmeter.ai.service.type` | Default AI service for refactoring | `anthropic` |
+| `jmeter.ai.service.type` | Default AI service for refactoring (`anthropic`, `openai`, `ollama`, `deepseek`, `apple`, and others) | `anthropic` |
 | `jmeter.ai.cli.max.history.size` | Conversation entries replayed with each one-shot Codex/Claude Code chat request | `10` |
 | `jmeter.ai.dev.menu` | Show the [AI Dev tool items](#dev-menu-items) under the Run menu | `false` |
 
@@ -160,6 +160,27 @@ That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-s
 | `openai.max.history.size` | Conversation history size | `10` |
 | `openai.system.prompt` | System prompt | See sample file |
 | `openai.log.level` | Logging (`INFO`/`DEBUG`) | *(empty)* |
+
+</details>
+
+<details>
+<summary><b>Apple on-device (macOS)</b></summary>
+
+Apple on-device is available in the chat model picker and for JSR223 Refactor. It is not available in Agent Mode or Record Mode. It uses Apple's FoundationModels framework locally, so no API key or network inference service is required. The model has an approximately 4K-token context window.
+
+Requirements: macOS 26 or later, Apple silicon, and Apple Intelligence enabled in System Settings. The model appears in the picker only when the helper reports it is available.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `apple.enabled` | Enable Apple on-device model discovery | `true` |
+| `apple.fm.helper.path` | Override the bundled native helper executable path | *(bundled helper)* |
+| `apple.max.history.size` | Conversation entries replayed with each request | `6` |
+| `apple.system.prompt` | Instructions sent separately from the conversation | JMeter default |
+| `apple.temperature` | Optional generation temperature | *(system default)* |
+| `apple.max.tokens` | Optional maximum response tokens | *(system default)* |
+| `jmeter.ai.service.type` | Select Apple on-device for JSR223 Refactor | Set to `apple` |
+
+The bundled helper is for macOS arm64. See [`native/apple-fm/README.md`](native/apple-fm/README.md) to rebuild it.
 
 </details>
 

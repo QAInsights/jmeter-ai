@@ -16,6 +16,7 @@ class TelemetryModelsTest {
         assertEquals("anthropic.claude-3-5-sonnet-20240620-v1:0",
                 TelemetryModels.publicName("bedrock:anthropic.claude-3-5-sonnet-20240620-v1:0"));
         assertEquals("deepseek-chat", TelemetryModels.publicName("deepseek:deepseek-chat"));
+        assertEquals("on-device", TelemetryModels.publicName("apple:on-device"));
     }
 
     @Test
@@ -38,6 +39,7 @@ class TelemetryModelsTest {
         assertEquals("openai", TelemetryModels.provider("openai:gpt-4o"));
         assertEquals("claude-code", TelemetryModels.provider("claude-code:sonnet"));
         assertEquals("anthropic", TelemetryModels.provider("claude-sonnet-4-5"));
+        assertEquals("apple", TelemetryModels.provider("apple:on-device"));
     }
 
     @Test
