@@ -121,6 +121,19 @@ class AppleFoundationAiServiceTest {
     }
 
     @Test
+    void contextExceededAfterPartialOutputDoesNotRetry() {
+        ScriptedRunner runner = new ScriptedRunner(script(1, "{\"delta\":\"partial\"}",
+                "{\"error\":\"too long\",\"code\":\"context_exceeded\"}"));
+
+        AppleFoundationException error = assertThrows(AppleFoundationException.class,
+                () -> service(runner).generateResponse(List.of("question")));
+
+        assertTrue(error.getMessage().contains("too long"));
+        assertTrue(error.getMessage().contains("Start a New conversation"));
+        assertEquals(1, runner.requests.size());
+    }
+
+    @Test
     void repeatedContextExceededAsksUserToStartNewConversation() {
         ScriptedRunner runner = new ScriptedRunner(
                 script(1, "{\"error\":\"too long\",\"code\":\"context_exceeded\"}"),

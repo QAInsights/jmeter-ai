@@ -91,24 +91,35 @@ public class AppleFoundationAiService implements AiService {
         String instructions = systemPrompt();
         List<String> history = HistoryWindow.maskFailedReplies(
                 HistoryWindow.lastTurns(conversation == null ? List.of() : conversation, maxHistorySize()));
+        AtomicBoolean emittedDeltas = new AtomicBoolean(false);
         try {
-            invoke(buildPrompt(history), instructions, deltaConsumer);
+            invoke(buildPrompt(history), instructions, delta -> {
+                emittedDeltas.set(true);
+                deltaConsumer.accept(delta);
+            });
         } catch (AppleFoundationException e) {
             if (!"context_exceeded".equals(e.getCode())) {
                 throw e;
+            }
+            if (emittedDeltas.get()) {
+                throw conversationTooLong(e);
             }
             try {
                 String lastUserMessage = lastUserMessage(history);
                 invoke(buildPrompt(List.of(lastUserMessage)), instructions, deltaConsumer);
             } catch (AppleFoundationException retryError) {
                 if ("context_exceeded".equals(retryError.getCode())) {
-                    throw new AppleFoundationException(
-                            "This conversation is too long for Apple's on-device model. Start a New conversation and try again.",
-                            "context_exceeded", retryError);
+                    throw conversationTooLong(retryError);
                 }
                 throw retryError;
             }
         }
+    }
+
+    private static AppleFoundationException conversationTooLong(AppleFoundationException cause) {
+        return new AppleFoundationException(
+                "This conversation is too long for Apple's on-device model. Start a New conversation and try again.",
+                "context_exceeded", cause);
     }
 
     private void invoke(String prompt, String instructions, Consumer<String> deltaConsumer) {
