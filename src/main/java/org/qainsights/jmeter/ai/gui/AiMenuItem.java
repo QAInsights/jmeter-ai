@@ -137,29 +137,17 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         if (instance != null) {
             final MainFrame mf = instance.getMainFrame();
             // Register the global toggle shortcut independently of the toolbar
-            // search below: the busy-wait only exits once JMeterToolBar is found,
-            // and the shortcut must not depend on that.
+            // search below, so the shortcut does not depend on toolbar discovery.
             SwingUtilities.invokeLater(() -> registerToggleShortcut(mf));
-            final ComponentFinder<JMeterToolBar> finder = new ComponentFinder<>(JMeterToolBar.class);
-            SwingUtilities.invokeLater(new Runnable() {
-                @Override
-                public void run() {
-                    JMeterToolBar toolbar = null;
-                    while (toolbar == null) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            log.debug("Couldn't add button to menubar", e);
-                        }
-                        log.debug("Searching for toolbar ... ");
-                        toolbar = finder.findComponentIn(mf);
-                    }
+            SwingUtilities.invokeLater(() -> {
+                log.debug("Searching for toolbar ... ");
+                ComponentFinder.whenFound(mf, JMeterToolBar.class, 500, 120, toolbar -> {
                     int pos = getPositionForIcon(toolbar.getComponents());
                     log.debug("validate rootPos: " + String.valueOf(pos));
                     Component toolbarButton = getToolbarButton();
                     toolbarButton.setSize(toolbar.getComponent(pos).getSize());
                     toolbar.add(toolbarButton, pos);
-                }
+                });
             });
         }
     }
@@ -220,55 +208,19 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
             MainFrame mainFrame = guiPackage.getMainFrame();
 
             if (currentChatPanel != null && splitPane != null && splitPane.isShowing()) {
-                // Panel is currently shown, remove it
-                Container contentPane = mainFrame.getContentPane();
-                contentPane.remove(splitPane);
+                SidePanelDock.undock(splitPane);
 
-                // Get the left component (main JMeter component) from the split pane
-                Component mainComponent = splitPane.getLeftComponent();
-
-                // Add it back to the content pane
-                contentPane.add(mainComponent, BorderLayout.CENTER);
-
-                // Clear references
                 splitPane = null;
                 log.info("AI Chat Panel hidden");
             } else {
-                // Panel is not shown, add it
                 if (currentChatPanel == null) {
-                    // Only create a new panel if one doesn't exist
                     currentChatPanel = new AiChatPanel();
                     log.info("Created new AI Chat Panel");
                 }
 
-                // Get the current center component
                 Container contentPane = mainFrame.getContentPane();
-                Component centerComp = null;
-                for (Component comp : contentPane.getComponents()) {
-                    if (contentPane.getLayout() instanceof BorderLayout &&
-                            ((BorderLayout) contentPane.getLayout()).getConstraints(comp) == BorderLayout.CENTER) {
-                        centerComp = comp;
-                        break;
-                    }
-                }
-
-                if (centerComp != null) {
-                    // Remove the center component
-                    contentPane.remove(centerComp);
-
-                    // Create a split pane with the center component and chat panel
-                    splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centerComp, currentChatPanel);
-                    splitPane.setResizeWeight(0.7); // Give more space to the main component
-                    splitPane.setOneTouchExpandable(true);
-                    splitPane.setContinuousLayout(true);
-
-                    // Set divider location to give appropriate space to the chat panel
-                    int preferredWidth = currentChatPanel.getPreferredSize().width;
-                    int totalWidth = mainFrame.getWidth();
-                    splitPane.setDividerLocation(totalWidth - preferredWidth - 10);
-
-                    // Add the split pane to the content pane
-                    contentPane.add(splitPane, BorderLayout.CENTER);
+                splitPane = SidePanelDock.dock(contentPane, currentChatPanel, 0.7, mainFrame.getWidth());
+                if (splitPane != null) {
                     log.info("AI Chat Panel displayed");
                 }
             }

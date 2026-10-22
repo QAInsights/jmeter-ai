@@ -17,10 +17,12 @@ import javax.swing.*;
 import javax.swing.Timer;
 import java.awt.*;
 import java.io.File;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A JPanel that embeds a full terminal emulator (JediTerm) running Claude Code.
@@ -47,6 +49,7 @@ public class ClaudeCodePanel extends JPanel {
     private JediTermWidget terminalWidget;
     private JLabel statusLabel;
     private PtyProcess ptyProcess;
+    private final AtomicReference<PtyProcess> contextWriteProcess = new AtomicReference<>();
     private volatile String testPlanFilePath;
     private Timer fileWatchTimer;
     private long lastKnownModified;
@@ -363,15 +366,34 @@ public class ClaudeCodePanel extends JPanel {
      * terminal.
      */
     private void sendTestPlanContext() {
-        if (ptyProcess == null || !ptyProcess.isAlive()) {
+        PtyProcess process = ptyProcess;
+        if (process == null || !process.isAlive()) {
+            return;
+        }
+        PtyProcess pending = contextWriteProcess.get();
+        if (pending == process || !contextWriteProcess.compareAndSet(pending, process)) {
+            log.info("Test plan context send already in progress; skipping");
             return;
         }
         try {
             String context = TestPlanSerializer.serializeTestPlan();
             String message = "Here is the updated JMeter test plan context:\n" + context + "\n";
-            ptyProcess.getOutputStream().write(message.getBytes(StandardCharsets.UTF_8));
-            ptyProcess.getOutputStream().flush();
+            byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+            Thread contextWriter = new Thread(() -> {
+                try {
+                    OutputStream outputStream = process.getOutputStream();
+                    outputStream.write(messageBytes);
+                    outputStream.flush();
+                } catch (Exception e) {
+                    log.error("Failed to send context to Claude Code", e);
+                } finally {
+                    contextWriteProcess.compareAndSet(process, null);
+                }
+            }, "feather-wand-cli-context");
+            contextWriter.setDaemon(true);
+            contextWriter.start();
         } catch (Exception e) {
+            contextWriteProcess.compareAndSet(process, null);
             log.error("Failed to send context to Claude Code", e);
         }
     }
@@ -484,6 +506,7 @@ public class ClaudeCodePanel extends JPanel {
             actionBridge.stopWatching();
             actionBridge = null;
         }
+        contextWriteProcess.set(null);
         if (ptyProcess != null && ptyProcess.isAlive()) {
             ptyProcess.destroyForcibly();
             SwingUtilities.invokeLater(() -> {
