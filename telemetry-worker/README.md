@@ -17,8 +17,9 @@ IP addresses are used only for rate limiting and are never stored.
 cd telemetry-worker
 npm ci
 
-# 1. Create the database and paste the printed id into wrangler.jsonc
-#    (d1_databases[0].database_id).
+# 1. First-time setup only (the production id is already committed in
+#    wrangler.jsonc): create the database and paste the printed id into
+#    d1_databases[0].database_id.
 npx wrangler d1 create feather-wand-telemetry
 
 # 2. Apply migrations.
