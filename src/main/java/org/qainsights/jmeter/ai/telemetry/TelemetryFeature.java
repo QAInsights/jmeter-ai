@@ -23,6 +23,7 @@ public enum TelemetryFeature {
     OUTCOME_ERROR("outcome_error"),
     OUTCOME_FALLBACK("outcome_fallback"),
     OUTCOME_TOOL_FAILED("outcome_tool_failed"),
+    OUTCOME_TOOL_DECLINED("outcome_tool_declined"),
     ROUTE_FOCUSED("route_focused"),
     ROUTE_ALL_TOOLS("route_all_tools"),
     ROUTE_UNAVAILABLE("route_unavailable"),

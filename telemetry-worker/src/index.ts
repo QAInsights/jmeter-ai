@@ -388,6 +388,7 @@ function statsPage(s: Record<string, unknown>): string {
 	}
 	const failureRows = toolFailures.map(r => {
 		const tool = name(r).slice("toolfail_".length);
+		if (tool === "_unknown") return ["(unknown tool)", r.total, r.installs, "-"];
 		return [tool, r.total, r.installs, pct(Number(r.total), callsByTool.get(tool) ?? 0)];
 	});
 	const usageRows = (list: StatsRow[], strip = "") =>

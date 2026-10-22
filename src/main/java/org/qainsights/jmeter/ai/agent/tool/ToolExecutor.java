@@ -62,6 +62,7 @@ public final class ToolExecutor {
     public ToolResult execute(String toolName, Map<String, Object> arguments) {
         Tool tool = registry.get(toolName);
         if (tool == null) {
+            Telemetry.recordUnknownTool();
             return ToolResult.error(ERR_UNKNOWN_TOOL, "No tool registered with name: " + toolName);
         }
 
@@ -69,6 +70,7 @@ public final class ToolExecutor {
 
         for (ToolParameter required : tool.getSpec().getRequiredParameters()) {
             if (!args.containsKey(required.getName()) || args.get(required.getName()) == null) {
+                Telemetry.recordTool(toolName, false);
                 return ToolResult.error(ERR_MISSING_PARAMETER,
                         "Missing required parameter '" + required.getName() + "' for tool '" + toolName + "'");
             }
@@ -76,6 +78,7 @@ public final class ToolExecutor {
 
         if (confirmationGate != null && confirmationRequiredTools.contains(toolName)
                 && !confirmationGate.confirm(toolName, args)) {
+            Telemetry.recordToolDeclined();
             return ToolResult.error(ERR_DECLINED, "The user declined to confirm '" + toolName
                     + "'. Do not retry this call automatically; tell the user it was skipped and ask how "
                     + "they'd like to proceed.");

@@ -23,6 +23,8 @@ public final class Telemetry {
     private static volatile TelemetryState state;
     private static volatile String lastSelectedModel;
     private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
+    /** Failure key for calls to a tool name that is not registered; the model's name is never sent. */
+    static final String UNKNOWN_TOOL_FAIL_KEY = "toolfail__unknown";
 
     private Telemetry() {
     }
@@ -109,6 +111,24 @@ public final class Telemetry {
             record(TelemetryFeature.OUTCOME_TOOL_FAILED);
             recordKey(toolFailKey(toolName));
         }
+    }
+
+    /** Counts a call to a tool name that is not registered, without sending the name the model asked for. */
+    public static void recordUnknownTool() {
+        record(TelemetryFeature.OUTCOME_TOOL_FAILED);
+        recordKey(UNKNOWN_TOOL_FAIL_KEY);
+    }
+
+    /** Counts a gated tool call the user declined; the tool never ran, so it is neither a call nor a failure. */
+    public static void recordToolDeclined() {
+        record(TelemetryFeature.OUTCOME_TOOL_DECLINED);
+    }
+
+    /** Swaps in the counters that record calls write to, returning the previous ones. Tests only. */
+    static TelemetryCounters swapCountersForTesting(TelemetryCounters replacement) {
+        TelemetryCounters previous = counters;
+        counters = replacement;
+        return previous;
     }
 
     /** Counts a provider failure as err_&lt;provider&gt;_&lt;category&gt;; never the message itself. */
