@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A JPanel that embeds a full terminal emulator (JediTerm) running Claude Code.
@@ -49,7 +49,7 @@ public class ClaudeCodePanel extends JPanel {
     private JediTermWidget terminalWidget;
     private JLabel statusLabel;
     private PtyProcess ptyProcess;
-    private final java.util.concurrent.atomic.AtomicBoolean contextWriteInFlight = new AtomicBoolean();
+    private final AtomicReference<PtyProcess> contextWriteProcess = new AtomicReference<>();
     private volatile String testPlanFilePath;
     private Timer fileWatchTimer;
     private long lastKnownModified;
@@ -370,7 +370,8 @@ public class ClaudeCodePanel extends JPanel {
         if (process == null || !process.isAlive()) {
             return;
         }
-        if (!contextWriteInFlight.compareAndSet(false, true)) {
+        PtyProcess pending = contextWriteProcess.get();
+        if (pending == process || !contextWriteProcess.compareAndSet(pending, process)) {
             log.info("Test plan context send already in progress; skipping");
             return;
         }
@@ -386,13 +387,13 @@ public class ClaudeCodePanel extends JPanel {
                 } catch (Exception e) {
                     log.error("Failed to send context to Claude Code", e);
                 } finally {
-                    contextWriteInFlight.set(false);
+                    contextWriteProcess.compareAndSet(process, null);
                 }
             }, "feather-wand-cli-context");
             contextWriter.setDaemon(true);
             contextWriter.start();
         } catch (Exception e) {
-            contextWriteInFlight.set(false);
+            contextWriteProcess.compareAndSet(process, null);
             log.error("Failed to send context to Claude Code", e);
         }
     }
@@ -505,6 +506,7 @@ public class ClaudeCodePanel extends JPanel {
             actionBridge.stopWatching();
             actionBridge = null;
         }
+        contextWriteProcess.set(null);
         if (ptyProcess != null && ptyProcess.isAlive()) {
             ptyProcess.destroyForcibly();
             SwingUtilities.invokeLater(() -> {
