@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A JPanel that embeds a full terminal emulator (JediTerm) running Claude Code.
@@ -48,6 +49,7 @@ public class ClaudeCodePanel extends JPanel {
     private JediTermWidget terminalWidget;
     private JLabel statusLabel;
     private PtyProcess ptyProcess;
+    private final java.util.concurrent.atomic.AtomicBoolean contextWriteInFlight = new AtomicBoolean();
     private volatile String testPlanFilePath;
     private Timer fileWatchTimer;
     private long lastKnownModified;
@@ -368,6 +370,10 @@ public class ClaudeCodePanel extends JPanel {
         if (process == null || !process.isAlive()) {
             return;
         }
+        if (!contextWriteInFlight.compareAndSet(false, true)) {
+            log.info("Test plan context send already in progress; skipping");
+            return;
+        }
         try {
             String context = TestPlanSerializer.serializeTestPlan();
             String message = "Here is the updated JMeter test plan context:\n" + context + "\n";
@@ -379,11 +385,14 @@ public class ClaudeCodePanel extends JPanel {
                     outputStream.flush();
                 } catch (Exception e) {
                     log.error("Failed to send context to Claude Code", e);
+                } finally {
+                    contextWriteInFlight.set(false);
                 }
             }, "feather-wand-cli-context");
             contextWriter.setDaemon(true);
             contextWriter.start();
         } catch (Exception e) {
+            contextWriteInFlight.set(false);
             log.error("Failed to send context to Claude Code", e);
         }
     }
