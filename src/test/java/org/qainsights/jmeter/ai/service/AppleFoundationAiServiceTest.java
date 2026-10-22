@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.cli.CliProcessResult;
 import org.qainsights.jmeter.ai.cli.CliProcessRunner;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -123,13 +124,16 @@ class AppleFoundationAiServiceTest {
     @Test
     void contextExceededAfterPartialOutputDoesNotRetry() {
         ScriptedRunner runner = new ScriptedRunner(script(1, "{\"delta\":\"partial\"}",
-                "{\"error\":\"too long\",\"code\":\"context_exceeded\"}"));
+                "{\"error\":\"fixture context overflow.\",\"code\":\"context_exceeded\"}"));
 
         AppleFoundationException error = assertThrows(AppleFoundationException.class,
                 () -> service(runner).generateResponse(List.of("question")));
 
         assertTrue(error.getMessage().contains("too long"));
         assertTrue(error.getMessage().contains("Start a New conversation"));
+        String described = ProviderErrors.describe(error);
+        assertTrue(described.contains("Start a New conversation"));
+        assertFalse(described.contains("fixture context overflow."));
         assertEquals(1, runner.requests.size());
     }
 
@@ -137,11 +141,14 @@ class AppleFoundationAiServiceTest {
     void repeatedContextExceededAsksUserToStartNewConversation() {
         ScriptedRunner runner = new ScriptedRunner(
                 script(1, "{\"error\":\"too long\",\"code\":\"context_exceeded\"}"),
-                script(1, "{\"error\":\"still too long\",\"code\":\"context_exceeded\"}"));
+                script(1, "{\"error\":\"fixture context overflow.\",\"code\":\"context_exceeded\"}"));
 
         AppleFoundationException error = assertThrows(AppleFoundationException.class,
                 () -> service(runner).generateResponse(List.of("question")));
         assertTrue(error.getMessage().contains("Start a New conversation"));
+        String described = ProviderErrors.describe(error);
+        assertTrue(described.contains("Start a New conversation"));
+        assertFalse(described.contains("fixture context overflow."));
         assertEquals(2, runner.requests.size());
     }
 

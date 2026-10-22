@@ -117,9 +117,10 @@ public class AppleFoundationAiService implements AiService {
     }
 
     private static AppleFoundationException conversationTooLong(AppleFoundationException cause) {
+        log.info("Apple context exceeded: {}", cause.getMessage());
         return new AppleFoundationException(
                 "This conversation is too long for Apple's on-device model. Start a New conversation and try again.",
-                "context_exceeded", cause);
+                "context_exceeded");
     }
 
     private void invoke(String prompt, String instructions, Consumer<String> deltaConsumer) {
@@ -139,7 +140,8 @@ public class AppleFoundationAiService implements AiService {
         try {
             input = MAPPER.writeValueAsString(request);
         } catch (Exception e) {
-            throw new AppleFoundationException("Could not encode the Apple on-device request.", "other", e);
+            log.debug("Could not encode the Apple on-device request", e);
+            throw new AppleFoundationException("Could not encode the Apple on-device request.", "other");
         }
 
         CliProcessResult result;
@@ -151,7 +153,8 @@ public class AppleFoundationAiService implements AiService {
                     });
         } catch (RuntimeException e) {
             if (Thread.currentThread().isInterrupted()) {
-                throw new AppleFoundationException("The Apple on-device request was interrupted.", "other", e);
+                log.debug("The Apple on-device request was interrupted", e);
+                throw new AppleFoundationException("The Apple on-device request was interrupted.", "other");
             }
             throw unavailable("Could not run the Apple on-device helper: " + e.getMessage());
         }
@@ -187,7 +190,8 @@ public class AppleFoundationAiService implements AiService {
                 failure.set(new AppleFoundationException(messageFor(code, json.get("error").asText()), code));
             }
         } catch (Exception e) {
-            failure.set(new AppleFoundationException("The Apple on-device helper returned invalid output.", "other", e));
+            log.debug("The Apple on-device helper returned invalid output", e);
+            failure.set(new AppleFoundationException("The Apple on-device helper returned invalid output.", "other"));
         }
     }
 
