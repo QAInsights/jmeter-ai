@@ -322,6 +322,16 @@
                         <configuration>
                             <createDependencyReducedPom>false
                             </createDependencyReducedPom>
+                            <!-- Relocate bundled Netty to avoid older plugin jars in JMeter's lib/ (issue #183). -->
+                            <relocations>
+                                <relocation>
+                                    <pattern>io.netty</pattern>
+                                    <shadedPattern>org.qainsights.jmeter.ai.shaded.io.netty</shadedPattern>
+                                </relocation>
+                            </relocations>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
