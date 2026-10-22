@@ -8,6 +8,7 @@ import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -101,13 +102,21 @@ class SidePanelDockTest {
 
     @Test
     void undockingInnerSplitPreservesOuterDividerLocation() {
+        main.setPreferredSize(new Dimension(700, 600));
         JSplitPane cliSplit = dock(cli, 0.65);
         JSplitPane chatSplit = dock(chat, 0.7);
+        chatSplit.setResizeWeight(0.25);
+        contentPane.setSize(1000, 600);
+        layoutTree(contentPane);
         chatSplit.setDividerLocation(420);
+        layoutTree(contentPane);
+        int before = chatSplit.getDividerLocation();
 
+        assertEquals(420, before);
         SidePanelDock.undock(cliSplit);
+        layoutTree(contentPane);
 
-        assertEquals(420, chatSplit.getDividerLocation());
+        assertEquals(before, chatSplit.getDividerLocation());
     }
 
     private JSplitPane dock(Component panel, double resizeWeight) {
@@ -116,6 +125,15 @@ class SidePanelDockTest {
 
     private Object centerConstraint(Component component) {
         return ((BorderLayout) contentPane.getLayout()).getConstraints(component);
+    }
+
+    private void layoutTree(Container container) {
+        container.doLayout();
+        for (Component component : container.getComponents()) {
+            if (component instanceof Container) {
+                layoutTree((Container) component);
+            }
+        }
     }
 
     private void assertRestoredMain() {
