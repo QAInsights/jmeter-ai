@@ -1225,6 +1225,7 @@ These counters are also sent, again as counts only:
 | `outcome_completed`, `outcome_step_limit`, `outcome_error`, `outcome_fallback` | How each Agent run ended: finished, stopped at the step limit, failed with a provider or configuration error, or fell back to a plain AI response. |
 | `outcome_tool_failed` | Agent tool calls that returned an error. |
 | `tool_<name>` | Agent tool calls per built-in tool, for example `tool_add_element`. Tool arguments and results are never sent. |
+| `toolfail_<name>` | Agent tool calls per built-in tool that returned an error, for example `toolfail_update_element_property`. The error message is never sent. |
 | `route_focused`, `route_all_tools`, `route_unavailable`, `route_expanded` | Smart routing cards: a focused tool pack, all tools (low confidence), backend unavailable, and mid-run tool expansion. |
 | `triage_run`, `triage_unclassified` | Failure triage advisories, and those where no failure could be classified. |
 | `err_<provider>_<type>` | Provider errors, for example `err_openai_auth`. Types: `auth`, `forbidden`, `not_found`, `bad_request`, `rate_limit`, `server`, `timeout`, `unreachable`, `other`. The error message is never sent. |

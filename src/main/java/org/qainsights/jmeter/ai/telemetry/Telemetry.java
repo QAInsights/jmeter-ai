@@ -102,11 +102,12 @@ public final class Telemetry {
         return lastSelectedModel;
     }
 
-    /** Counts one call of an Agent tool by its built-in name, plus a failure counter when it failed. */
+    /** Counts one call of an Agent tool by its built-in name, plus total and per-tool failure counters when it failed. */
     public static void recordTool(String toolName, boolean success) {
         recordKey(toolKey(toolName));
         if (!success) {
             record(TelemetryFeature.OUTCOME_TOOL_FAILED);
+            recordKey(toolFailKey(toolName));
         }
     }
 
@@ -123,8 +124,17 @@ public final class Telemetry {
     }
 
     static String toolKey(String toolName) {
+        return prefixedToolKey("tool_", toolName);
+    }
+
+    static String toolFailKey(String toolName) {
+        return prefixedToolKey("toolfail_", toolName);
+    }
+
+    private static String prefixedToolKey(String prefix, String toolName) {
         String name = toolName == null ? "" : toolName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
-        return "tool_" + (name.length() > 35 ? name.substring(0, 35) : name);
+        int max = 40 - prefix.length();
+        return prefix + (name.length() > max ? name.substring(0, max) : name);
     }
 
     static String errorKey(String provider, String category) {
