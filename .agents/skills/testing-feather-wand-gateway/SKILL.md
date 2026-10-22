@@ -11,7 +11,7 @@ None for local stub testing. Use a non-secret dummy OpenAI API key, never a real
 ## Setup
 - Build the requested revision with `mvn -q -DskipTests package`.
 - Locate a JMeter installation; this environment has `/home/ubuntu/apache-jmeter-5.6.3`.
-- Copy only the freshly built shaded `target/jmeter-agent-<version>.jar` (the artifact `run.sh` installs and Central publishes; the `-jar-with-dependencies` assembly is not relocated) into `lib/ext`, removing duplicate older plugin versions if present.
+- Copy only the freshly built shaded `target/jmeter-agent-<version>.jar` (the artifact `run.sh` installs and Central publishes) into `lib/ext`, removing duplicate older plugin versions if present.
 - Configure `openai.api.key`, `openai.base.url=http://127.0.0.1:<port>/v1`, `openai.models=gpt-4o`, `openai.default.model=gpt-4o`, and `jmeter.ai.agent.enabled=true`.
 - Load the dedicated properties file explicitly: `bin/jmeter -q /absolute/path/to/jmeter-ai.properties -j /absolute/path/to/evidence/jmeter.log`. A file named `jmeter-ai.properties` is not automatically loaded just because it resides in `bin`.
 - Retry clients are constructed from properties, so restart JMeter after changing `openai.max.retries`.
