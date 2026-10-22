@@ -19,6 +19,7 @@ final class ModelDisplay {
         { "grok:", "Grok" },
         { "meta:", "Meta" },
         { "bedrock:", "AWS Bedrock" },
+        { "apple:", "Apple" },
         { "codex:", "ChatGPT / Codex" },
         { "claude-code:", "Claude Code" },
     };

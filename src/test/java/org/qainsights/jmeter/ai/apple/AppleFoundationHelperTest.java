@@ -32,6 +32,26 @@ class AppleFoundationHelperTest {
     }
 
     @Test
+    void replacesSameLengthCorruptHelper() throws Exception {
+        Path helper = AppleFoundationHelper.resolveExecutable("Mac OS X", "aarch64", "", tempDir)
+                .orElseThrow();
+        byte[] resourceBytes;
+        try (var resource = AppleFoundationHelperTest.class.getResourceAsStream(
+                "/org/qainsights/jmeter/ai/native/macos-arm64/feather-wand-afm")) {
+            assertNotNull(resource);
+            resourceBytes = resource.readAllBytes();
+        }
+        byte[] corruptBytes = resourceBytes.clone();
+        corruptBytes[0] ^= 0x01;
+        Files.write(helper, corruptBytes);
+        assertEquals(resourceBytes.length, Files.size(helper));
+
+        assertEquals(Optional.of(helper),
+                AppleFoundationHelper.resolveExecutable("Mac OS X", "aarch64", "", tempDir));
+        assertArrayEquals(resourceBytes, Files.readAllBytes(helper));
+    }
+
+    @Test
     void statusParserHandlesAvailableAndKnownUnavailableReasons() {
         assertTrue(AppleFoundationHelper.parseStatus("{\"available\":true}\n", true).isAvailable());
         for (String reason : List.of("deviceNotEligible", "appleIntelligenceNotEnabled", "modelNotReady")) {
@@ -68,5 +88,20 @@ class AppleFoundationHelperTest {
         assertFalse(status.isAvailable());
         assertEquals("unsupportedPlatform", status.getReason());
         assertEquals(0, runs.get());
+    }
+
+    @Test
+    void statusCachePermanenceMatchesAvailabilityAndReason() {
+        assertTrue(AppleFoundationHelper.isPermanent(AppleFoundationHelper.Status.available()));
+        assertTrue(AppleFoundationHelper.isPermanent(
+                AppleFoundationHelper.Status.unavailable("deviceNotEligible")));
+        assertTrue(AppleFoundationHelper.isPermanent(
+                AppleFoundationHelper.Status.unavailable("unsupportedPlatform")));
+        assertFalse(AppleFoundationHelper.isPermanent(
+                AppleFoundationHelper.Status.unavailable("modelNotReady")));
+        assertFalse(AppleFoundationHelper.isPermanent(
+                AppleFoundationHelper.Status.unavailable("appleIntelligenceNotEnabled")));
+        assertFalse(AppleFoundationHelper.isPermanent(
+                AppleFoundationHelper.Status.unavailable("unknown")));
     }
 }

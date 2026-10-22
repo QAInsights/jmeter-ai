@@ -27,6 +27,8 @@ class ModelDisplayTest {
             ModelDisplay.parse("meta:llama-3"));
         assertArrayEquals(new String[] { "claude-3-7", "AWS Bedrock" },
             ModelDisplay.parse("bedrock:claude-3-7"));
+        assertArrayEquals(new String[] { "on-device", "Apple" },
+            ModelDisplay.parse("apple:on-device"));
     }
 
     @Test
@@ -46,6 +48,7 @@ class ModelDisplayTest {
     @Test
     void formatLabelJoinsNameAndProvider() {
         assertEquals("gpt-4o  ·  OpenAI", ModelDisplay.formatLabel("openai:gpt-4o"));
+        assertEquals("on-device  ·  Apple", ModelDisplay.formatLabel("apple:on-device"));
         assertEquals("claude-sonnet-4  ·  Anthropic", ModelDisplay.formatLabel("claude-sonnet-4"));
     }
 

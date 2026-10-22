@@ -26,8 +26,9 @@ public final class AppleFoundationHelper {
     private static final Logger log = LoggerFactory.getLogger(AppleFoundationHelper.class);
     private static final String RESOURCE =
             "/org/qainsights/jmeter/ai/native/macos-arm64/feather-wand-afm";
+    private static final long STATUS_CACHE_TTL_NANOS = Duration.ofSeconds(60).toNanos();
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static volatile Status cachedStatus;
+    private static volatile CachedStatus cachedStatus;
 
     private AppleFoundationHelper() {
     }
@@ -66,7 +67,9 @@ public final class AppleFoundationHelper {
             Path executable = userHome.resolve(".jmeter-ai").resolve("bin")
                     .resolve("feather-wand-afm-" + versionToken);
             Files.createDirectories(executable.getParent());
-            if (!Files.isRegularFile(executable) || Files.size(executable) != bytes.length) {
+            String resourceHash = sha256(bytes);
+            if (!Files.isRegularFile(executable)
+                    || !sha256(Files.readAllBytes(executable)).equals(resourceHash)) {
                 Files.write(executable, bytes);
             }
             if (!executable.toFile().setExecutable(true, true) && !Files.isExecutable(executable)) {
@@ -81,18 +84,27 @@ public final class AppleFoundationHelper {
     }
 
     public static Status status() {
-        Status status = cachedStatus;
-        if (status != null) {
-            return status;
+        CachedStatus cached = cachedStatus;
+        if (cached != null && cached.isFresh()) {
+            return cached.status;
         }
         synchronized (AppleFoundationHelper.class) {
-            if (cachedStatus == null) {
-                cachedStatus = probeStatus(new DefaultCliProcessRunner(), resolveExecutable(),
+            cached = cachedStatus;
+            if (cached == null || !cached.isFresh()) {
+                Status status = probeStatus(new DefaultCliProcessRunner(), resolveExecutable(),
                         isSupportedPlatform(System.getProperty("os.name", ""),
                                 System.getProperty("os.arch", "")));
+                cached = new CachedStatus(status, System.nanoTime());
+                cachedStatus = cached;
             }
-            return cachedStatus;
+            return cached.status;
         }
+    }
+
+    static boolean isPermanent(Status status) {
+        return status != null && (status.isAvailable()
+                || "unsupportedPlatform".equals(status.getReason())
+                || "deviceNotEligible".equals(status.getReason()));
     }
 
     static Status probeStatus(CliProcessRunner runner, Optional<Path> executable, boolean supportedPlatform) {
@@ -144,6 +156,20 @@ public final class AppleFoundationHelper {
 
     static void resetStatusCache() {
         cachedStatus = null;
+    }
+
+    private static final class CachedStatus {
+        private final Status status;
+        private final long probedAtNanos;
+
+        private CachedStatus(Status status, long probedAtNanos) {
+            this.status = status;
+            this.probedAtNanos = probedAtNanos;
+        }
+
+        private boolean isFresh() {
+            return isPermanent(status) || System.nanoTime() - probedAtNanos < STATUS_CACHE_TTL_NANOS;
+        }
     }
 
     private static String sha256(byte[] bytes) {
