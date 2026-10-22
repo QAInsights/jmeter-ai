@@ -95,7 +95,7 @@
 1. Download the latest JAR from Releases
 2. Drop it into JMeter's lib/ext directory
 3. Paste jmeter-ai-quickstart.properties into JMeter's bin/user.properties
-4. Uncomment one provider (Claude, OpenAI or Ollama), add its key, then restart JMeter
+4. Uncomment one provider (Claude, OpenAI, Gemini or Ollama), add its key, then restart JMeter
 ```
 
 See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest JAR.

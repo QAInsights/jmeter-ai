@@ -73,7 +73,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
             if ("openai".equalsIgnoreCase(serviceType)) {
                 // Check if OpenAI API key is configured
                 String apiKey = AiConfig.getProperty("openai.api.key", "");
-                String model = AiConfig.getProperty("openai.default.model", "");
+                String model = AiConfig.getProperty("openai.default.model", "gpt-4o");
                 boolean apiKeyOk = apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY");
                 if ((apiKeyOk || GatewayConfig.hasOpenAiGatewayCredentials())
                         && model != null && !model.isEmpty()) {
@@ -85,7 +85,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 String model = firstConfigured(
                         AiConfig.getProperty("anthropic.default.model", ""),
                         AiConfig.getProperty("claude.default.model", ""),
-                        AiConfig.getProperty("anthropic.model", ""));
+                        AiConfig.getProperty("anthropic.model", "claude-sonnet-4-6"));
                 boolean apiKeyOk = apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY");
                 if ((apiKeyOk || GatewayConfig.hasAnthropicGatewayCredentials())
                         && model != null && !model.isEmpty()) {

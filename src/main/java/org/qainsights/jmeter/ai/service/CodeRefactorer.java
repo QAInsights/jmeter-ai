@@ -100,7 +100,7 @@ public class CodeRefactorer {
                 model = firstConfigured(
                         AiConfig.getProperty("anthropic.default.model", ""),
                         AiConfig.getProperty("claude.default.model", ""),
-                        AiConfig.getProperty("anthropic.model", "claude-3-sonnet-20240229"));
+                        AiConfig.getProperty("anthropic.model", "claude-sonnet-4-6"));
             } else if ("google".equalsIgnoreCase(aiServiceType)) {
                 model = AiConfig.getProperty("google.default.model", "gemini-2.5-flash");
             } else if ("ollama".equalsIgnoreCase(aiServiceType)) {

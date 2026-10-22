@@ -58,7 +58,7 @@ public final class WelcomeMessages {
         return "# Welcome to Feather Wand\n\n"
                 + "Your AI assistant for Apache JMeter is installed, but **no API key is configured yet**.\n\n"
                 + "**To get started:**\n"
-                + "1. Paste [`jmeter-ai-quickstart.properties`](" + QUICKSTART_URL + ") into JMeter's `bin/user.properties`\n"
+                + "1. Paste the quick-start settings from " + QUICKSTART_URL + " into JMeter's `bin/user.properties`\n"
                 + "2. Uncomment one provider and add its key, for example `anthropic.api.key` or `openai.api.key`\n"
                 + "3. Restart JMeter and open this panel again\n\n"
                 + "**Prefer free/local?** Install [Ollama](https://ollama.com/), pull a chat model, "
