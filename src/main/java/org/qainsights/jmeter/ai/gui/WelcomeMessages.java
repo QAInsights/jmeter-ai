@@ -11,6 +11,9 @@ import org.qainsights.jmeter.ai.utils.Constants;
  */
 public final class WelcomeMessages {
 
+    static final String QUICKSTART_URL =
+            "https://github.com/QAInsights/jmeter-ai/blob/main/jmeter-ai-quickstart.properties";
+
     private WelcomeMessages() {
     }
 
@@ -55,8 +58,8 @@ public final class WelcomeMessages {
         return "# Welcome to Feather Wand\n\n"
                 + "Your AI assistant for Apache JMeter is installed, but **no API key is configured yet**.\n\n"
                 + "**To get started:**\n"
-                + "1. Copy `jmeter-ai-sample.properties` into your `user.properties` (or `jmeter.properties`)\n"
-                + "2. Set at least one key, for example `anthropic.api.key` or `openai.api.key`\n"
+                + "1. Paste the quick-start settings from " + QUICKSTART_URL + " into JMeter's `bin/user.properties`\n"
+                + "2. Uncomment one provider and add its key, for example `anthropic.api.key` (Ollama needs no key)\n"
                 + "3. Restart JMeter and open this panel again\n\n"
                 + "**Prefer free/local?** Install [Ollama](https://ollama.com/), pull a chat model, "
                 + "set `jmeter.ai.service.type=ollama`, and restart. No cloud key needed.\n\n"

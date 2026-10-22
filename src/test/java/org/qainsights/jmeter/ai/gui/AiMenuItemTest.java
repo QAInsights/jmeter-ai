@@ -35,16 +35,16 @@ class AiMenuItemTest {
             String defaultValue = invocation.getArgument(1);
             if (key.equals("jmeter.ai.service.type")) return configuredServiceType;
             if (key.equals("openai.api.key")) return configuredApiKey;
-            if (key.equals("openai.default.model")) return configuredModel;
+            if (key.equals("openai.default.model")) return configuredModel != null ? configuredModel : defaultValue;
             if (key.equals("anthropic.api.key")) return configuredApiKey;
-            if (key.equals("anthropic.default.model")) return configuredModel;
-            if (key.equals("claude.default.model")) return configuredModel;
-            if (key.equals("anthropic.model")) return configuredModel;
-            if (key.equals("ollama.default.model")) return configuredModel;
+            if (key.equals("anthropic.default.model")) return configuredModel != null ? configuredModel : defaultValue;
+            if (key.equals("claude.default.model")) return configuredModel != null ? configuredModel : defaultValue;
+            if (key.equals("anthropic.model")) return configuredModel != null ? configuredModel : defaultValue;
+            if (key.equals("ollama.default.model")) return configuredModel != null ? configuredModel : defaultValue;
             if (key.equals("deepseek.api.key")) return configuredApiKey;
-            if (key.equals("deepseek.default.model")) return configuredModel;
+            if (key.equals("deepseek.default.model")) return configuredModel != null ? configuredModel : defaultValue;
             if (key.equals("google.api.key")) return configuredApiKey;
-            if (key.equals("google.default.model")) return configuredModel;
+            if (key.equals("google.default.model")) return configuredModel != null ? configuredModel : defaultValue;
             return defaultValue;
         });
     }
@@ -153,6 +153,15 @@ class AiMenuItemTest {
         AiService service = AiMenuItem.createAiService("anthropic");
 
         assertInstanceOf(ClaudeService.class, service);
+    }
+
+    @Test
+    void createAiServiceFallsBackToServiceDefaultModelsWhenOnlyAKeyIsSet() {
+        configuredApiKey = "test-key";
+        configuredModel = null;
+
+        assertInstanceOf(OpenAiService.class, AiMenuItem.createAiService("openai"));
+        assertInstanceOf(ClaudeService.class, AiMenuItem.createAiService("anthropic"));
     }
 
     @Test

@@ -63,9 +63,10 @@ class WelcomeMessagesTest {
     }
 
     @Test
-    void setupWelcome_mentionsSamplePropertiesAndRestart() {
+    void setupWelcome_linksQuickstartPropertiesAndRestart() {
         String setup = WelcomeMessages.setupWelcome();
-        assertTrue(setup.contains("jmeter-ai-sample.properties"));
+        assertTrue(setup.contains("jmeter-ai-quickstart.properties"));
+        assertTrue(setup.contains(WelcomeMessages.QUICKSTART_URL));
         assertTrue(setup.contains("Restart JMeter"));
     }
 }

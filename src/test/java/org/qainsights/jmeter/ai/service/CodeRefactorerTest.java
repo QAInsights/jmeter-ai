@@ -170,8 +170,8 @@ class CodeRefactorerTest {
         aiConfigMockedStatic.when(() -> AiConfig.getProperty("jmeter.ai.service.type", "openai")).thenReturn("anthropic");
         aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.default.model", "")).thenReturn("claude-sonnet-4-6");
         aiConfigMockedStatic.when(() -> AiConfig.getProperty("claude.default.model", "")).thenReturn("");
-        aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.model", "claude-3-sonnet-20240229"))
-                .thenReturn("claude-3-sonnet-20240229");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty("anthropic.model", "claude-sonnet-4-6"))
+                .thenReturn("claude-sonnet-4-6");
         when(textArea.getSelectedText()).thenReturn(selectedCode);
         when(aiService.generateResponse(any(), any())).thenReturn(refactoredCode);
 
