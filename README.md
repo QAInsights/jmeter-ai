@@ -94,15 +94,22 @@
 ```text
 1. Download the latest JAR from Releases
 2. Drop it into JMeter's lib/ext directory
-3. Copy jmeter-ai-sample.properties into jmeter.properties (or user.properties)
-4. Add API keys and/or enable a local subscription CLI provider, then restart JMeter
+3. Paste jmeter-ai-quickstart.properties into JMeter's bin/user.properties
+4. Uncomment one provider (Claude, OpenAI or Ollama), add its key, then restart JMeter
 ```
 
 See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest JAR.
 
 ## ⚙️ Configuration
 
-Copy `jmeter-ai-sample.properties` into your `jmeter.properties` or `user.properties` and adjust the values below.
+**First time?** Paste [`jmeter-ai-quickstart.properties`](jmeter-ai-quickstart.properties) into JMeter's `bin/user.properties`, uncomment one provider and add its key:
+
+```properties
+jmeter.ai.service.type=anthropic
+anthropic.api.key=YOUR_ANTHROPIC_API_KEY
+```
+
+That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-sample.properties`](jmeter-ai-sample.properties) is the full reference: copy only the settings you want to change from it into `user.properties` (or `jmeter.properties`). The tables below list each setting and its default.
 
 ### General Settings
 
