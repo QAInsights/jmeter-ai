@@ -23,6 +23,8 @@ public final class Telemetry {
     private static volatile TelemetryState state;
     private static volatile String lastSelectedModel;
     private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
+    /** Failure key for calls to a tool name that is not registered; the model's name is never sent. */
+    static final String UNKNOWN_TOOL_FAIL_KEY = "toolfail__unknown";
 
     private Telemetry() {
     }
@@ -102,12 +104,31 @@ public final class Telemetry {
         return lastSelectedModel;
     }
 
-    /** Counts one call of an Agent tool by its built-in name, plus a failure counter when it failed. */
+    /** Counts one call of an Agent tool by its built-in name, plus total and per-tool failure counters when it failed. */
     public static void recordTool(String toolName, boolean success) {
         recordKey(toolKey(toolName));
         if (!success) {
             record(TelemetryFeature.OUTCOME_TOOL_FAILED);
+            recordKey(toolFailKey(toolName));
         }
+    }
+
+    /** Counts a call to a tool name that is not registered, without sending the name the model asked for. */
+    public static void recordUnknownTool() {
+        record(TelemetryFeature.OUTCOME_TOOL_FAILED);
+        recordKey(UNKNOWN_TOOL_FAIL_KEY);
+    }
+
+    /** Counts a gated tool call the user declined; the tool never ran, so it is neither a call nor a failure. */
+    public static void recordToolDeclined() {
+        record(TelemetryFeature.OUTCOME_TOOL_DECLINED);
+    }
+
+    /** Swaps in the counters that record calls write to, returning the previous ones. Tests only. */
+    static TelemetryCounters swapCountersForTesting(TelemetryCounters replacement) {
+        TelemetryCounters previous = counters;
+        counters = replacement;
+        return previous;
     }
 
     /** Counts a provider failure as err_&lt;provider&gt;_&lt;category&gt;; never the message itself. */
@@ -123,8 +144,17 @@ public final class Telemetry {
     }
 
     static String toolKey(String toolName) {
+        return prefixedToolKey("tool_", toolName);
+    }
+
+    static String toolFailKey(String toolName) {
+        return prefixedToolKey("toolfail_", toolName);
+    }
+
+    private static String prefixedToolKey(String prefix, String toolName) {
         String name = toolName == null ? "" : toolName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
-        return "tool_" + (name.length() > 35 ? name.substring(0, 35) : name);
+        int max = 40 - prefix.length();
+        return prefix + (name.length() > max ? name.substring(0, max) : name);
     }
 
     static String errorKey(String provider, String category) {

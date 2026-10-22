@@ -375,9 +375,22 @@ function statsPage(s: Record<string, unknown>): string {
 	const errors = features.filter(r => parseErrorKey(name(r)) !== null);
 	const outcomes = features.filter(r => name(r).startsWith("outcome_"));
 	const tools = features.filter(r => name(r).startsWith("tool_"));
+	const toolFailures = features.filter(r => name(r).startsWith("toolfail_"));
 	const judgment = features.filter(r => name(r).startsWith("route_") || name(r).startsWith("triage_"));
 	const usage = features.filter(r => !errors.includes(r) && !outcomes.includes(r)
-		&& !tools.includes(r) && !judgment.includes(r));
+		&& !tools.includes(r) && !toolFailures.includes(r) && !judgment.includes(r));
+	// toolfail_ keys keep 31 name characters and tool_ keys keep 35, so join on the shorter prefix.
+	const failNameLength = 40 - "toolfail_".length;
+	const callsByTool = new Map<string, number>();
+	for (const r of tools) {
+		const tool = name(r).slice("tool_".length, "tool_".length + failNameLength);
+		callsByTool.set(tool, (callsByTool.get(tool) ?? 0) + Number(r.total));
+	}
+	const failureRows = toolFailures.map(r => {
+		const tool = name(r).slice("toolfail_".length);
+		if (tool === "_unknown") return ["(unknown tool)", r.total, r.installs, "-"];
+		return [tool, r.total, r.installs, pct(Number(r.total), callsByTool.get(tool) ?? 0)];
+	});
 	const usageRows = (list: StatsRow[], strip = "") =>
 		list.map(r => [name(r).slice(strip.length), r.total, r.installs, perInstall(r)]);
 	const retention = s.retention as { days: number; cohort: number; retained: number }[];
@@ -434,6 +447,7 @@ ${table("Decisions backend (30d)", ["backend", "installs"], rows(bd.judgmentProv
 ${table("Feature usage (30d)", ["feature", "total", "installs", "per install"], usageRows(usage))}
 ${table("Agent outcomes (30d)", ["outcome", "total", "installs", "per install"], usageRows(outcomes, "outcome_"))}
 ${table("Agent tool calls (30d)", ["tool", "total", "installs", "per install"], usageRows(tools, "tool_"))}
+${table("Agent tool failures (30d)", ["tool", "failures", "installs", "of calls"], failureRows)}
 ${table("Smart routing and triage (30d)", ["event", "total", "installs", "per install"], usageRows(judgment))}
 ${table("Provider errors (30d)", ["provider", "error", "total", "installs"],
 		errors.map(r => { const [prov, cat] = parseErrorKey(name(r))!; return [prov, cat, r.total, r.installs]; }))}

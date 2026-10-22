@@ -48,5 +48,8 @@ class TelemetryModelsTest {
         assertEquals("err_unknown_other", Telemetry.errorKey(null, "other"));
         assertEquals(40, ("tool_" + "x".repeat(35)).length());
         assertEquals("tool_" + "x".repeat(35), Telemetry.toolKey("x".repeat(80)));
+        assertEquals("toolfail_add_element", Telemetry.toolFailKey("add_element"));
+        assertEquals("toolfail_bad_name_", Telemetry.toolFailKey("Bad Name!"));
+        assertEquals("toolfail_" + "x".repeat(31), Telemetry.toolFailKey("x".repeat(80)));
     }
 }
