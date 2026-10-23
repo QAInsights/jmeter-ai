@@ -10,9 +10,12 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 final class InteractionModeSelector extends JPanel {
     private final JRadioButton chatButton = new JRadioButton("Chat");
     private final JRadioButton agentButton = new JRadioButton("Agent");
+    private final boolean agentAvailable;
+    private boolean agentWasSelected;
 
     InteractionModeSelector(boolean agentAvailable) {
         super(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
+        this.agentAvailable = agentAvailable;
         setOpaque(false);
 
         configure(chatButton, "Use plain chat without JMeter tools");
@@ -36,6 +39,29 @@ final class InteractionModeSelector extends JPanel {
 
     boolean isAgentSelected() {
         return agentButton.isSelected();
+    }
+
+    void setModelSupportsAgent(boolean supported) {
+        if (!agentAvailable) {
+            return;
+        }
+        if (supported) {
+            agentButton.setEnabled(true);
+            agentButton.setToolTipText("Allow the AI to use JMeter tools");
+            if (agentWasSelected) {
+                agentButton.setSelected(true);
+                agentWasSelected = false;
+            }
+        } else {
+            if (agentButton.isSelected()) {
+                agentWasSelected = true;
+            }
+            chatButton.setSelected(true);
+            agentButton.setEnabled(false);
+            agentButton.setToolTipText(
+                    "Agent mode isn't available for Apple's on-device model. Pick a cloud model, Codex or Claude Code to use Agent");
+        }
+        applyTheme();
     }
 
     JRadioButton chatButton() {

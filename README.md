@@ -166,7 +166,7 @@ That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-s
 <details>
 <summary><b>Apple on-device (macOS)</b></summary>
 
-Apple on-device is available in the chat model picker and for JSR223 Refactor. It is not available in Agent Mode or Record Mode. It uses Apple's FoundationModels framework locally, so no API key or network inference service is required. The model has an approximately 4K-token context window.
+Apple on-device is available in the chat model picker and for JSR223 Refactor. The Agent option is disabled while Apple on-device is selected, and Apple on-device is not available in Record Mode. It uses Apple's FoundationModels framework locally, so no API key or network inference service is required. The model has an approximately 4K-token context window.
 
 Requirements: macOS 26 or later, Apple silicon, and Apple Intelligence enabled in System Settings. The model appears in the picker only when the helper reports it is available.
 

@@ -342,6 +342,10 @@ public class AiChatPanel
      */
     private void onModelSelected(String selectedModel) {
         log.info("Model selected: {}", selectedModel);
+        if (interactionModeSelector != null && selectedModel != null) {
+            interactionModeSelector.setModelSupportsAgent(
+                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+        }
         resolveAiService(selectedModel);
         reasoningControls.updateForModel(selectedModel);
         refreshContextStats();
@@ -645,6 +649,11 @@ public class AiChatPanel
         // The trailing Send button swaps to Stop while the AI is processing.
         QuietButton attachButton = new QuietButton("").iconOnly();
         interactionModeSelector = new InteractionModeSelector(JMeterAgent.isEnabled());
+        String selectedModel = modelSelectorPanel.getSelectedModel();
+        if (selectedModel != null) {
+            interactionModeSelector.setModelSupportsAgent(
+                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+        }
         inputOptionsRow = new InputOptionsRow(
                 this, attachmentBar, attachButton, interactionModeSelector, this::sendMessage);
         inputOptionsRow.setModelRow(createToolbarRow());

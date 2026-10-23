@@ -35,5 +35,45 @@ class InteractionModeSelectorTest {
         assertTrue(selector.chatButton().isSelected());
         selector.agentButton().doClick();
         assertFalse(selector.isAgentSelected());
+
+        selector.setModelSupportsAgent(true);
+
+        assertFalse(selector.agentButton().isEnabled());
+        assertEquals("Agent mode is off. Set jmeter.ai.agent.enabled=true in user.properties and restart JMeter",
+                selector.agentButton().getToolTipText());
+    }
+
+    @Test
+    void restoresAgentSelectionAfterAppleModelIsDeselected() {
+        InteractionModeSelector selector = new InteractionModeSelector(true);
+        assertTrue(selector.isAgentSelected());
+
+        selector.setModelSupportsAgent(false);
+
+        assertTrue(selector.chatButton().isSelected());
+        assertFalse(selector.agentButton().isEnabled());
+        assertEquals("Agent mode isn't available for Apple's on-device model. "
+                + "Pick a cloud model, Codex or Claude Code to use Agent",
+                selector.agentButton().getToolTipText());
+        selector.agentButton().doClick();
+        assertTrue(selector.chatButton().isSelected());
+
+        selector.setModelSupportsAgent(true);
+
+        assertTrue(selector.agentButton().isEnabled());
+        assertTrue(selector.isAgentSelected());
+        assertEquals("Allow the AI to use JMeter tools", selector.agentButton().getToolTipText());
+    }
+
+    @Test
+    void keepsChatSelectedWhenUserChoseChatBeforeAppleModel() {
+        InteractionModeSelector selector = new InteractionModeSelector(true);
+        selector.chatButton().doClick();
+
+        selector.setModelSupportsAgent(false);
+        selector.setModelSupportsAgent(true);
+
+        assertTrue(selector.chatButton().isSelected());
+        assertFalse(selector.isAgentSelected());
     }
 }
