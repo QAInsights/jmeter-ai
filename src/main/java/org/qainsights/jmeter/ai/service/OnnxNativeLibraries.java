@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -27,6 +28,19 @@ public final class OnnxNativeLibraries {
     static final String SHA256 = "ca7664d1bec1527606629cdae0803beb124ef47cadd90e2f0201b092141ec107";
     static final String NATIVE_PATH_PROPERTY = "onnxruntime.native.path";
     static final String URL_PROPERTY = "jmeter.ai.onnx.runtime.url";
+    static final Map<String, Map<String, String>> NATIVE_SHA256 = Map.of(
+            "linux-x64", Map.of(
+                    "libonnxruntime4j_jni.so", "0a23ec69a8714fcdf6074fe8251f872639862e02386b6add668ccf87981c8b81",
+                    "libonnxruntime.so", "bc33abfd6154771fe4cb4268d8a8323ce86ab5ee3e110f87f36d26eb1126079c"),
+            "linux-aarch64", Map.of(
+                    "libonnxruntime4j_jni.so", "a74ec281a55e7fce7401a16c3ad9fe16957c96846e1d61d6bf589ecdcb375454",
+                    "libonnxruntime.so", "33032cb5b91c12edbf028d7c69fa40a31848d66c0095448758af237d5e0b07db"),
+            "osx-aarch64", Map.of(
+                    "libonnxruntime4j_jni.dylib", "a395a01e4ff7046ef81dcef677b0e92c43f04fd56b7ee073364fda3532df35de",
+                    "libonnxruntime.dylib", "1b7be3237620da964940db54a00d2a5886105f1831afd1e9e62e20dff50325e7"),
+            "win-x64", Map.of(
+                    "onnxruntime4j_jni.dll", "22c101a9c74c5baa0e74ca33150980799f1a76d267ea77a996655c2b1f680b02",
+                    "onnxruntime.dll", "8690b5024992a4e84c62df536da0f163576e81121499138a39d97412912529a7"));
     private static final String RESOURCE_ROOT = "/ai/onnxruntime/native/";
     private static final Set<String> SUPPORTED = Set.of(
             "linux-x64", "linux-aarch64", "osx-aarch64", "win-x64");
@@ -39,6 +53,7 @@ public final class OnnxNativeLibraries {
     private final String url;
     private final String platform;
     private final boolean classpathNativePresent;
+    private final Map<String, Map<String, String>> nativeHashes;
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30))
@@ -49,16 +64,23 @@ public final class OnnxNativeLibraries {
     private volatile long lastFailureMillis;
 
     private OnnxNativeLibraries(Path home, String checksum, String url,
-                                String platform, boolean classpathNativePresent) {
+                                String platform, boolean classpathNativePresent,
+                                Map<String, Map<String, String>> nativeHashes) {
         this.home = home;
         this.checksum = checksum;
         this.url = url;
         this.platform = platform;
         this.classpathNativePresent = classpathNativePresent;
+        this.nativeHashes = nativeHashes;
     }
 
     OnnxNativeLibraries(Path home, String checksum, String url, String platform) {
-        this(home, checksum, url, platform, false);
+        this(home, checksum, url, platform, false, NATIVE_SHA256);
+    }
+
+    OnnxNativeLibraries(Path home, String checksum, String url, String platform,
+                        Map<String, String> platformHashes) {
+        this(home, checksum, url, platform, false, Map.of(platform, platformHashes));
     }
 
     public static void ensureAvailable() {
@@ -73,7 +95,7 @@ public final class OnnxNativeLibraries {
                     String url = AiConfig.getProperty(URL_PROPERTY,
                             System.getProperty(URL_PROPERTY, defaultUrl));
                     loader = new OnnxNativeLibraries(Path.of(System.getProperty("user.home"), ".jmeter-ai",
-                            "onnxruntime"), SHA256, url, platform, classpathNativePresent(platform));
+                            "onnxruntime"), SHA256, url, platform, classpathNativePresent(platform), NATIVE_SHA256);
                     configured = loader;
                 }
             }
@@ -94,14 +116,18 @@ public final class OnnxNativeLibraries {
                     "ONNX Runtime " + VERSION + " has no bundled native libraries for " + platform);
         }
         Path target = home.resolve(VERSION).resolve(platform);
-        try {
-            if (hasNativeLibraries(target)) {
-                System.setProperty(NATIVE_PATH_PROPERTY, target.toString());
-                return;
+        if (Files.exists(target)) {
+            try {
+                if (hasNativeLibraries(target)) {
+                    System.setProperty(NATIVE_PATH_PROPERTY, target.toString());
+                    return;
+                }
+                log.warn("Cached ONNX Runtime native libraries failed verification for {} in {}",
+                        platform, target);
+            } catch (IOException e) {
+                log.warn("Cached ONNX Runtime native libraries failed verification for {} in {}: {}",
+                        platform, target, e.getMessage());
             }
-        } catch (IOException e) {
-            throw new TypeSafeJudgmentProvider.JudgmentException(
-                    "Could not inspect ONNX Runtime native libraries in " + target + ": " + e.getMessage(), e);
         }
         if (downloader != null && downloader.isAlive()) {
             throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
@@ -125,6 +151,20 @@ public final class OnnxNativeLibraries {
         }
         if (thread != null) {
             thread.join(timeout.toMillis());
+        }
+    }
+
+    static void awaitConfiguredDownloadForTests(Duration timeout) throws InterruptedException {
+        OnnxNativeLibraries loader = configured;
+        if (loader == null) {
+            throw new IllegalStateException("ONNX Runtime loader has not been configured");
+        }
+        loader.awaitDownloadForTests(timeout);
+        if (loader.downloader != null && loader.downloader.isAlive()) {
+            throw new IllegalStateException("ONNX Runtime download did not finish within " + timeout);
+        }
+        if (loader.lastError != null) {
+            throw new IllegalStateException("ONNX Runtime download failed: " + loader.lastError);
         }
     }
 
@@ -233,8 +273,17 @@ public final class OnnxNativeLibraries {
     }
 
     private boolean hasNativeLibraries(Path directory) throws IOException {
-        return Files.isRegularFile(directory.resolve(jniLibraryName(platform)))
-                && Files.isRegularFile(directory.resolve(runtimeLibraryName(platform)));
+        Map<String, String> expected = nativeHashes.get(platform);
+        if (expected == null || expected.isEmpty()) {
+            return false;
+        }
+        for (Map.Entry<String, String> library : expected.entrySet()) {
+            Path file = directory.resolve(library.getKey());
+            if (!Files.isRegularFile(file) || !library.getValue().equalsIgnoreCase(hashOf(file))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean classpathNativePresent(String platform) {

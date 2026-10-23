@@ -10,6 +10,7 @@ import ai.onnxruntime.OrtEnvironment;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,8 +18,10 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +70,18 @@ class OnnxNativeLibrariesTest {
                 .getLocation().toURI());
         assertTrue(jar.toString().contains(OnnxNativeLibraries.VERSION), jar.toString());
         assertEquals(OnnxNativeLibraries.SHA256, OnnxNativeLibraries.sha256(jar));
+        try (ZipFile onnxRuntime = new ZipFile(jar.toFile())) {
+            for (Map.Entry<String, Map<String, String>> platform : OnnxNativeLibraries.NATIVE_SHA256.entrySet()) {
+                for (Map.Entry<String, String> library : platform.getValue().entrySet()) {
+                    String entryName = "ai/onnxruntime/native/" + platform.getKey() + "/" + library.getKey();
+                    ZipEntry entry = onnxRuntime.getEntry(entryName);
+                    assertNotNull(entry, entryName);
+                    try (InputStream content = onnxRuntime.getInputStream(entry)) {
+                        assertEquals(library.getValue(), sha256(content), entryName);
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -100,10 +115,10 @@ class OnnxNativeLibrariesTest {
 
     @Test
     void existingNativeLibrariesAvoidDownload() throws Exception {
-        OnnxNativeLibraries loader = loader(OnnxNativeLibraries.SHA256);
+        OnnxNativeLibraries loader = loader(sha256(archive));
         Files.createDirectories(loader.targetDirectory());
-        Files.writeString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so"), "ready");
-        Files.writeString(loader.targetDirectory().resolve("libonnxruntime.so"), "ready");
+        Files.writeString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so"), "jni");
+        Files.writeString(loader.targetDirectory().resolve("libonnxruntime.so"), "runtime");
 
         loader.ensureAvailableInternal();
 
@@ -116,12 +131,27 @@ class OnnxNativeLibrariesTest {
     void incompleteNativeCacheIsDownloadedAgain() throws Exception {
         OnnxNativeLibraries loader = loader(sha256(archive));
         Files.createDirectories(loader.targetDirectory());
-        Files.writeString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so"), "ready");
+        Files.writeString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so"), "jni");
 
         assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
         loader.awaitDownloadForTests(Duration.ofSeconds(10));
 
         assertTrue(Files.isRegularFile(loader.targetDirectory().resolve("libonnxruntime.so")));
+        assertEquals(1, requests.get());
+    }
+
+    @Test
+    void tamperedCachedLibraryIsRedownloadedAndReplaced() throws Exception {
+        OnnxNativeLibraries loader = loader(sha256(archive));
+        Files.createDirectories(loader.targetDirectory());
+        Files.writeString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so"), "tampered");
+        Files.writeString(loader.targetDirectory().resolve("libonnxruntime.so"), "runtime");
+
+        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        loader.awaitDownloadForTests(Duration.ofSeconds(10));
+
+        assertEquals("jni", Files.readString(loader.targetDirectory().resolve("libonnxruntime4j_jni.so")));
+        assertEquals("runtime", Files.readString(loader.targetDirectory().resolve("libonnxruntime.so")));
         assertEquals(1, requests.get());
     }
 
@@ -137,7 +167,10 @@ class OnnxNativeLibrariesTest {
 
     private OnnxNativeLibraries loader(String checksum) {
         String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/runtime.jar";
-        return new OnnxNativeLibraries(home.resolve("cache"), checksum, url, PLATFORM);
+        Map<String, String> hashes = Map.of(
+                "libonnxruntime4j_jni.so", sha256Unchecked("jni"),
+                "libonnxruntime.so", sha256Unchecked("runtime"));
+        return new OnnxNativeLibraries(home.resolve("cache"), checksum, url, PLATFORM, hashes);
     }
 
     private static byte[] fakeArchive() throws Exception {
@@ -153,6 +186,23 @@ class OnnxNativeLibrariesTest {
 
     private static String sha256(byte[] bytes) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    private static String sha256(InputStream input) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] buffer = new byte[1 << 16];
+        for (int read; (read = input.read(buffer)) != -1; ) {
+            digest.update(buffer, 0, read);
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static String sha256Unchecked(String value) {
+        try {
+            return sha256(value.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static void add(ZipOutputStream zip, String name, String value) throws IOException {

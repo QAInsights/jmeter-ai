@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JMETER_HOME="${JMETER_HOME:-$HOME/apache-jmeter-5.6.3}"
+export JMETER_HOME
 
 candidate_jars=()
 for candidate in "$ROOT"/target/jmeter-agent-*.jar; do
