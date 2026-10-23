@@ -8,10 +8,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,10 +45,20 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
     private static final long SHUTDOWN_GRACE_SECONDS = 5;
 
     private final Process process;
+    private final Set<ProcessHandle> knownDescendants = ConcurrentHashMap.newKeySet();
+    private final ScheduledExecutorService descendantTracker;
     private final Thread stderrPump;
 
     PlaywrightMcpServerProcess(Process process) {
         this.process = process;
+        rememberDescendants();
+        this.descendantTracker = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "playwright-mcp-descendants");
+            thread.setDaemon(true);
+            return thread;
+        });
+        this.descendantTracker.scheduleAtFixedRate(
+                this::rememberDescendants, 1, 1, TimeUnit.SECONDS);
         this.stderrPump = new Thread(this::pumpStderr, "playwright-mcp-stderr");
         this.stderrPump.setDaemon(true);
         this.stderrPump.start();
@@ -140,6 +154,7 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
 
     /** Creates a client speaking to this process, using the default request timeout. */
     public StdioMcpClient newClient() {
+        rememberDescendants();
         return new StdioMcpClient(process.getInputStream(), process.getOutputStream());
     }
 
@@ -148,11 +163,23 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
      * a session, when npx may download the package before the handshake can complete.
      */
     public StdioMcpClient newClient(long timeoutMillis) {
+        rememberDescendants();
         return new StdioMcpClient(process.getInputStream(), process.getOutputStream(), timeoutMillis);
     }
 
     public boolean isAlive() {
+        rememberDescendants();
         return process.isAlive();
+    }
+
+    void rememberDescendants() {
+        try {
+            if (process.isAlive()) {
+                process.descendants().forEach(knownDescendants::add);
+            }
+        } catch (Exception e) {
+            log.debug("Could not remember Playwright MCP descendant processes", e);
+        }
     }
 
     private void pumpStderr() {
@@ -175,12 +202,19 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
      * {@code cmd /c npx ...}, so the direct child is {@code cmd.exe} and destroying it
      * leaves the actual Node server - and the browser it drives - running. The orphan then
      * holds the recording proxy port and the user sees a stale browser window. The same
-     * applies to the {@code npx} shim on Unix. Descendants are captured <em>before</em> the
-     * parent dies, because afterwards the tree is no longer reachable from it.
+     * applies to the {@code npx} shim on Unix. Descendants are remembered while the launcher
+     * is alive because the operating system may reparent them after the launcher exits.
      */
     @Override
     public void close() {
-        List<ProcessHandle> descendants = process.descendants().collect(Collectors.toList());
+        descendantTracker.shutdownNow();
+        rememberDescendants();
+        Set<ProcessHandle> descendants = new LinkedHashSet<>(knownDescendants);
+        try {
+            process.descendants().forEach(descendants::add);
+        } catch (Exception e) {
+            log.debug("Could not inspect Playwright MCP descendants during shutdown", e);
+        }
 
         if (process.isAlive()) {
             process.destroy();
