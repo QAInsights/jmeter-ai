@@ -17,12 +17,26 @@ class DisabledRecordChipTest {
         assertEquals("Record", button.getText());
         assertFalse(button.isEnabled());
         assertFalse(button.isSelected());
-        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH,
-                button.getPreferredSize().width);
+        assertTrue(button.getPreferredSize().width
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
         assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
                 button.getPreferredSize().height);
         assertEquals(DisabledRecordChip.TOOLTIP, button.getToolTipText());
         assertTrue(button.getToolTipText().contains("jmeter.ai.record.enabled=true"));
+    }
+
+    @Test
+    void preferredWidthExpandsToFitLargeFont() {
+        JToggleButton button = (JToggleButton) DisabledRecordChip.create();
+        button.setFont(button.getFont().deriveFont(30f));
+
+        int textWidthWithInsets = button.getFontMetrics(button.getFont()).stringWidth(button.getText())
+                + button.getInsets().left + button.getInsets().right;
+        assertTrue(button.getPreferredSize().width
+                > org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
+        assertTrue(button.getPreferredSize().width >= textWidthWithInsets);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                button.getPreferredSize().height);
     }
 
     @Test

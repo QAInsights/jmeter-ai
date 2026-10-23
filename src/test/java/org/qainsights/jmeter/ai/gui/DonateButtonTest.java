@@ -18,13 +18,27 @@ class DonateButtonTest {
         assertEquals("Donate", button.getText());
         assertNull(button.getIcon());
         assertEquals(new Insets(2, 6, 2, 6), button.getMargin());
-        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH,
-                button.getPreferredSize().width);
+        assertTrue(button.getPreferredSize().width
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
         assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
                 button.getPreferredSize().height);
         assertTrue(button.isContentAreaFilled());
         assertTrue(button.isBorderPainted());
         assertTrue(button.getToolTipText().contains("Support this project"));
+    }
+
+    @Test
+    void preferredWidthExpandsToFitLargeFont() {
+        DonateButton button = new DonateButton();
+        button.setFont(button.getFont().deriveFont(30f));
+
+        int textWidthWithInsets = button.getFontMetrics(button.getFont()).stringWidth(button.getText())
+                + button.getInsets().left + button.getInsets().right;
+        assertTrue(button.getPreferredSize().width
+                > org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
+        assertTrue(button.getPreferredSize().width >= textWidthWithInsets);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                button.getPreferredSize().height);
     }
 
     @Test

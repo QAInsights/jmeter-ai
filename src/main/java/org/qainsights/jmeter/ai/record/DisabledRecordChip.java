@@ -1,10 +1,9 @@
 package org.qainsights.jmeter.ai.record;
 
-import java.awt.Dimension;
 import java.awt.Insets;
 import javax.swing.JComponent;
 import javax.swing.JToggleButton;
-import org.qainsights.jmeter.ai.gui.theme.UiTokens;
+import org.qainsights.jmeter.ai.gui.theme.HeaderButtonSizing;
 
 /**
  * Dimmed Record control shown when {@code jmeter.ai.record.enabled} is false,
@@ -25,11 +24,7 @@ public final class DisabledRecordChip {
         button.setEnabled(false);
         button.setSelected(false);
         button.setMargin(new Insets(2, 6, 2, 6));
-        Dimension size = new Dimension(
-                UiTokens.HEADER_TEXT_BUTTON_WIDTH, UiTokens.HEADER_CONTROL_HEIGHT);
-        button.setPreferredSize(size);
-        button.setMinimumSize(size);
-        button.setMaximumSize(size);
+        HeaderButtonSizing.apply(button);
         button.setToolTipText(TOOLTIP);
         button.setFocusable(false);
         return button;

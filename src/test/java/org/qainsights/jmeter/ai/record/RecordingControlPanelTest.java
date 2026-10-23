@@ -28,8 +28,8 @@ class RecordingControlPanelTest {
         }
 
         assertNotNull(recordButton);
-        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH,
-                recordButton.getPreferredSize().width);
+        assertTrue(recordButton.getPreferredSize().width
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
         assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
                 recordButton.getPreferredSize().height);
         assertNotNull(statusLabel);
@@ -47,5 +47,33 @@ class RecordingControlPanelTest {
         controller.transitionTo(RecordingSessionState.OFF);
         Thread.sleep(100);
         assertEquals("🔴 OFF", statusLabel.getText());
+    }
+
+    @Test
+    void recordButtonPreferredWidthExpandsToFitLargeFont() {
+        RecordingControlPanel panel = new RecordingControlPanel(
+                new RecordingSessionController(), mock(RecordingArtifactStore.class));
+        JToggleButton recordButton = findRecordButton(panel);
+        assertNotNull(recordButton);
+
+        recordButton.setFont(recordButton.getFont().deriveFont(30f));
+
+        int textWidthWithInsets = recordButton.getFontMetrics(recordButton.getFont())
+                .stringWidth(recordButton.getText())
+                + recordButton.getInsets().left + recordButton.getInsets().right;
+        assertTrue(recordButton.getPreferredSize().width
+                > org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
+        assertTrue(recordButton.getPreferredSize().width >= textWidthWithInsets);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
+                recordButton.getPreferredSize().height);
+    }
+
+    private static JToggleButton findRecordButton(RecordingControlPanel panel) {
+        for (java.awt.Component component : panel.getComponents()) {
+            if (component instanceof JToggleButton) {
+                return (JToggleButton) component;
+            }
+        }
+        return null;
     }
 }
