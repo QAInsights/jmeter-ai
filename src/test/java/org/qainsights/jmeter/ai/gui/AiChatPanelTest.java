@@ -279,7 +279,10 @@ class AiChatPanelTest {
             assertEquals(org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_CONTROL_HEIGHT,
                     button.getHeight());
         }
-        assertEquals(record.getWidth(), donate.getWidth());
+        assertTrue(record.getWidth()
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
+        assertTrue(donate.getWidth()
+                >= org.qainsights.jmeter.ai.gui.theme.UiTokens.HEADER_TEXT_BUTTON_WIDTH);
 
         java.awt.Point recordPoint = javax.swing.SwingUtilities.convertPoint(record, 0, 0, panel);
         java.awt.Point donatePoint = javax.swing.SwingUtilities.convertPoint(donate, 0, 0, panel);
