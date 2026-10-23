@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +19,12 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -45,6 +53,9 @@ public final class OnnxNativeLibraries {
     private static final Set<String> SUPPORTED = Set.of(
             "linux-x64", "linux-aarch64", "osx-aarch64", "win-x64");
     private static final Duration RETRY_AFTER = Duration.ofMinutes(1);
+    private static final Duration DOWNLOAD_STALL_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration DOWNLOAD_TOTAL_TIMEOUT = Duration.ofMinutes(30);
+    private static final Object DOWNLOAD_COMPLETED = new Object();
     private static final Logger log = LoggerFactory.getLogger(OnnxNativeLibraries.class);
     private static volatile OnnxNativeLibraries configured;
 
@@ -54,6 +65,8 @@ public final class OnnxNativeLibraries {
     private final String platform;
     private final boolean classpathNativePresent;
     private final Map<String, Map<String, String>> nativeHashes;
+    private final Duration stallTimeout;
+    private final Duration totalTimeout;
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(30))
@@ -66,12 +79,26 @@ public final class OnnxNativeLibraries {
     private OnnxNativeLibraries(Path home, String checksum, String url,
                                 String platform, boolean classpathNativePresent,
                                 Map<String, Map<String, String>> nativeHashes) {
+        this(home, checksum, url, platform, classpathNativePresent, nativeHashes,
+                DOWNLOAD_STALL_TIMEOUT, DOWNLOAD_TOTAL_TIMEOUT);
+    }
+
+    private OnnxNativeLibraries(Path home, String checksum, String url,
+                                String platform, boolean classpathNativePresent,
+                                Map<String, Map<String, String>> nativeHashes,
+                                Duration stallTimeout, Duration totalTimeout) {
         this.home = home;
         this.checksum = checksum;
         this.url = url;
         this.platform = platform;
         this.classpathNativePresent = classpathNativePresent;
         this.nativeHashes = nativeHashes;
+        if (stallTimeout.isZero() || stallTimeout.isNegative()
+                || totalTimeout.isZero() || totalTimeout.isNegative()) {
+            throw new IllegalArgumentException("ONNX Runtime download timeouts must be positive");
+        }
+        this.stallTimeout = stallTimeout;
+        this.totalTimeout = totalTimeout;
     }
 
     OnnxNativeLibraries(Path home, String checksum, String url, String platform) {
@@ -80,7 +107,15 @@ public final class OnnxNativeLibraries {
 
     OnnxNativeLibraries(Path home, String checksum, String url, String platform,
                         Map<String, String> platformHashes) {
-        this(home, checksum, url, platform, false, Map.of(platform, platformHashes));
+        this(home, checksum, url, platform, platformHashes,
+                DOWNLOAD_STALL_TIMEOUT, DOWNLOAD_TOTAL_TIMEOUT);
+    }
+
+    OnnxNativeLibraries(Path home, String checksum, String url, String platform,
+                        Map<String, String> platformHashes,
+                        Duration stallTimeout, Duration totalTimeout) {
+        this(home, checksum, url, platform, false, Map.of(platform, platformHashes),
+                stallTimeout, totalTimeout);
     }
 
     public static void ensureAvailable() {
@@ -144,7 +179,7 @@ public final class OnnxNativeLibraries {
         throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
     }
 
-    void awaitDownloadForTests(Duration timeout) throws InterruptedException {
+    boolean awaitDownloadForTests(Duration timeout) throws InterruptedException {
         Thread thread;
         synchronized (this) {
             thread = downloader;
@@ -152,6 +187,7 @@ public final class OnnxNativeLibraries {
         if (thread != null) {
             thread.join(timeout.toMillis());
         }
+        return thread == null || !thread.isAlive();
     }
 
     static void awaitConfiguredDownloadForTests(Duration timeout) throws InterruptedException {
@@ -159,8 +195,7 @@ public final class OnnxNativeLibraries {
         if (loader == null) {
             throw new IllegalStateException("ONNX Runtime loader has not been configured");
         }
-        loader.awaitDownloadForTests(timeout);
-        if (loader.downloader != null && loader.downloader.isAlive()) {
+        if (!loader.awaitDownloadForTests(timeout)) {
             throw new IllegalStateException("ONNX Runtime download did not finish within " + timeout);
         }
         if (loader.lastError != null) {
@@ -215,21 +250,121 @@ public final class OnnxNativeLibraries {
     }
 
     private void downloadArchive(Path target) throws IOException, InterruptedException {
+        long startedNanos = System.nanoTime();
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofMinutes(30)).GET().build();
-        HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                .timeout(totalTimeout).GET().build();
+        HttpResponse<InputStream> response;
+        try {
+            response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (HttpConnectTimeoutException e) {
+            throw e;
+        } catch (HttpTimeoutException e) {
+            throw new IOException(totalTimeoutMessage(), e);
+        }
         try (InputStream in = response.body()) {
             if (response.statusCode() != 200) {
                 throw new IOException("HTTP " + response.statusCode() + " for " + url);
             }
-            try (var out = Files.newOutputStream(target)) {
-                byte[] buffer = new byte[1 << 16];
-                for (int read; (read = in.read(buffer)) != -1; ) {
-                    out.write(buffer, 0, read);
-                    downloadedBytes += read;
+            long remainingTotalNanos = totalTimeout.toNanos() - (System.nanoTime() - startedNanos);
+            if (remainingTotalNanos <= 0) {
+                throw new IOException(totalTimeoutMessage());
+            }
+            ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(task -> {
+                Thread thread = new Thread(task, "feather-wand-onnx-runtime-watchdog");
+                thread.setDaemon(true);
+                return thread;
+            });
+            AtomicReference<Object> outcome = new AtomicReference<>();
+            AtomicLong lastByteNanos = new AtomicLong(System.nanoTime());
+            ScheduledFuture<?> totalTask = null;
+            ScheduledFuture<?> stallTask = null;
+            try {
+                totalTask = watchdog.schedule(
+                        () -> abortDownload(in, outcome, totalTimeoutMessage()),
+                        remainingTotalNanos, TimeUnit.NANOSECONDS);
+                long checkIntervalNanos = Math.min(TimeUnit.SECONDS.toNanos(1),
+                        Math.max(TimeUnit.MILLISECONDS.toNanos(10), stallTimeout.toNanos() / 4));
+                stallTask = watchdog.scheduleAtFixedRate(() -> {
+                    if (System.nanoTime() - lastByteNanos.get() >= stallTimeout.toNanos()) {
+                        abortDownload(in, outcome, stalledDownloadMessage());
+                    }
+                }, checkIntervalNanos, checkIntervalNanos, TimeUnit.NANOSECONDS);
+                try (var out = Files.newOutputStream(target)) {
+                    byte[] buffer = new byte[1 << 16];
+                    for (;;) {
+                        int read;
+                        try {
+                            read = in.read(buffer);
+                        } catch (IOException e) {
+                            String timeoutMessage = timeoutMessage(outcome);
+                            if (timeoutMessage != null) {
+                                throw new IOException(timeoutMessage, e);
+                            }
+                            throw e;
+                        }
+                        if (read == -1) {
+                            if (!outcome.compareAndSet(null, DOWNLOAD_COMPLETED)) {
+                                String timeoutMessage = timeoutMessage(outcome);
+                                throw new IOException(timeoutMessage == null
+                                        ? totalTimeoutMessage() : timeoutMessage);
+                            }
+                            break;
+                        }
+                        String timeoutMessage = timeoutMessage(outcome);
+                        if (timeoutMessage != null) {
+                            throw new IOException(timeoutMessage);
+                        }
+                        if (read == 0) {
+                            continue;
+                        }
+                        lastByteNanos.set(System.nanoTime());
+                        out.write(buffer, 0, read);
+                        downloadedBytes += read;
+                    }
                 }
+            } finally {
+                if (totalTask != null) {
+                    totalTask.cancel(true);
+                }
+                if (stallTask != null) {
+                    stallTask.cancel(true);
+                }
+                watchdog.shutdownNow();
             }
         }
+    }
+
+    private static void abortDownload(InputStream in, AtomicReference<Object> outcome, String message) {
+        if (outcome.compareAndSet(null, message)) {
+            try {
+                in.close();
+            } catch (IOException ignored) {
+            }
+        }
+    }
+
+    private static String timeoutMessage(AtomicReference<Object> outcome) {
+        Object result = outcome.get();
+        return result instanceof String message ? message : null;
+    }
+
+    private String stalledDownloadMessage() {
+        return "ONNX Runtime download stalled for " + formatDuration(stallTimeout);
+    }
+
+    private String totalTimeoutMessage() {
+        return "ONNX Runtime download exceeded " + formatDuration(totalTimeout);
+    }
+
+    private static String formatDuration(Duration duration) {
+        long millis = duration.toMillis();
+        if (millis > 0 && millis % TimeUnit.MINUTES.toMillis(1) == 0) {
+            return millis / TimeUnit.MINUTES.toMillis(1) + " min";
+        }
+        if (millis > 0 && millis % TimeUnit.SECONDS.toMillis(1) == 0) {
+            return millis / TimeUnit.SECONDS.toMillis(1) + " s";
+        }
+        return millis + " ms";
     }
 
     private void extractPlatform(Path archive, Path destination) throws IOException {

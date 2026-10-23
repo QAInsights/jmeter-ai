@@ -11,6 +11,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,6 +20,8 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -114,6 +117,45 @@ class OnnxNativeLibrariesTest {
     }
 
     @Test
+    void stalledResponseAbortsDownloadAndCleansTemporaryFiles() throws Exception {
+        CountDownLatch bytesSent = new CountDownLatch(1);
+        CountDownLatch releaseServer = new CountDownLatch(1);
+        server.createContext("/stall.jar", exchange -> {
+            requests.incrementAndGet();
+            try {
+                exchange.sendResponseHeaders(200, 1_000_000);
+                OutputStream body = exchange.getResponseBody();
+                body.write(new byte[] {1, 2, 3, 4});
+                body.flush();
+                bytesSent.countDown();
+                releaseServer.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                exchange.close();
+            }
+        });
+        OnnxNativeLibraries loader = loader(sha256(archive), "/stall.jar",
+                Duration.ofSeconds(1), Duration.ofSeconds(10));
+
+        try {
+            assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+            assertTrue(bytesSent.await(2, TimeUnit.SECONDS), "stub should send initial response bytes");
+            assertTrue(loader.awaitDownloadForTests(Duration.ofSeconds(3)),
+                    "stalled download should finish within a few seconds");
+            assertNotNull(loader.lastError());
+            assertTrue(loader.lastError().contains("stalled"), loader.lastError());
+            assertFalse(Files.exists(loader.targetDirectory()));
+            try (var files = Files.list(loader.targetDirectory().getParent())) {
+                assertTrue(files.findAny().isEmpty());
+            }
+            assertEquals(1, requests.get());
+        } finally {
+            releaseServer.countDown();
+        }
+    }
+
+    @Test
     void existingNativeLibrariesAvoidDownload() throws Exception {
         OnnxNativeLibraries loader = loader(sha256(archive));
         Files.createDirectories(loader.targetDirectory());
@@ -166,11 +208,16 @@ class OnnxNativeLibrariesTest {
     }
 
     private OnnxNativeLibraries loader(String checksum) {
-        String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/runtime.jar";
+        return loader(checksum, "/runtime.jar", Duration.ofSeconds(60), Duration.ofMinutes(30));
+    }
+
+    private OnnxNativeLibraries loader(String checksum, String path, Duration stallTimeout, Duration totalTimeout) {
+        String url = "http://127.0.0.1:" + server.getAddress().getPort() + path;
         Map<String, String> hashes = Map.of(
                 "libonnxruntime4j_jni.so", sha256Unchecked("jni"),
                 "libonnxruntime.so", sha256Unchecked("runtime"));
-        return new OnnxNativeLibraries(home.resolve("cache"), checksum, url, PLATFORM, hashes);
+        return new OnnxNativeLibraries(home.resolve("cache"), checksum, url, PLATFORM, hashes,
+                stallTimeout, totalTimeout);
     }
 
     private static byte[] fakeArchive() throws Exception {
