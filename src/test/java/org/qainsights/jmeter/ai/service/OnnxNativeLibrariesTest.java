@@ -94,7 +94,7 @@ class OnnxNativeLibrariesTest {
         assertTrue(Files.isRegularFile(target.resolve("libonnxruntime4j_jni.so")));
         assertTrue(Files.isRegularFile(target.resolve("libonnxruntime.so")));
         assertFalse(Files.exists(target.resolve("libonnxruntime4j_jni.dylib")));
-        assertFalse(Files.exists(target.resolve("unrelated.txt")));
+        assertFalse(Files.exists(target.resolve("some/other/file.txt")));
         assertEquals(target.toString(), System.getProperty(OnnxNativeLibraries.NATIVE_PATH_PROPERTY));
         assertEquals(1, requests.get());
     }
