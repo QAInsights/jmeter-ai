@@ -3,12 +3,27 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JMETER_HOME="${JMETER_HOME:-$HOME/apache-jmeter-5.6.3}"
-JAR="$ROOT/target/jmeter-agent-3.9.0.jar"
 
-if [ ! -f "$JAR" ]; then
-    echo "Shaded JAR not found: $JAR" >&2
+candidate_jars=()
+for candidate in "$ROOT"/target/jmeter-agent-*.jar; do
+    [ -f "$candidate" ] || continue
+    case "$(basename "$candidate")" in
+        *-sources.jar|*-javadoc.jar|original-*|*-original-*.jar) continue ;;
+    esac
+    candidate_jars[${#candidate_jars[@]}]="$candidate"
+done
+
+if (( ${#candidate_jars[@]} == 0 )); then
+    echo "No shaded JAR found in $ROOT/target; expected one jmeter-agent-*.jar excluding sources, javadoc, and original artifacts." >&2
     exit 1
 fi
+if (( ${#candidate_jars[@]} > 1 )); then
+    printf "Expected exactly one shaded JAR in %s/target, found %d:\n" "$ROOT" "${#candidate_jars[@]}" >&2
+    printf '  %s\n' "${candidate_jars[@]}" >&2
+    exit 1
+fi
+JAR="${candidate_jars[0]}"
+
 if [ ! -d "$JMETER_HOME/lib" ] || [ ! -d "$JMETER_HOME/lib/ext" ]; then
     echo "Set JMETER_HOME to a JMeter 5.6.3 installation" >&2
     exit 1
