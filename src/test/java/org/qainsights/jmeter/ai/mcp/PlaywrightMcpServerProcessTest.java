@@ -1,14 +1,22 @@
 package org.qainsights.jmeter.ai.mcp;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link PlaywrightMcpServerProcess} command construction and preflight.
@@ -122,6 +130,74 @@ class PlaywrightMcpServerProcessTest {
         assertFalse(server.isAlive(),
                 "a lingering server would hold the browser open and the proxy port busy");
         assertDoesNotThrow(server::close, "close must be idempotent");
+    }
+
+    @Test
+    void should_sweepDescendants_whenLauncherAlreadyExited() {
+        Process process = mock(Process.class);
+        ProcessHandle descendant = mock(ProcessHandle.class);
+        AtomicBoolean launcherAlive = new AtomicBoolean(true);
+        when(process.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.isAlive()).thenAnswer(invocation -> launcherAlive.get());
+        when(process.descendants()).thenAnswer(invocation ->
+                launcherAlive.get() ? Stream.of(descendant) : Stream.empty());
+        when(descendant.isAlive()).thenReturn(true, true, false);
+
+        PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
+
+        server.rememberDescendants();
+        launcherAlive.set(false);
+        server.close();
+
+        verify(process, never()).destroy();
+        verify(descendant).destroy();
+    }
+
+    @Test
+    void should_sweepDescendantDiscoveredOnlyDuringClose() {
+        Process process = mock(Process.class);
+        ProcessHandle descendant = mock(ProcessHandle.class);
+        AtomicBoolean launcherAlive = new AtomicBoolean(false);
+        AtomicInteger descendantCalls = new AtomicInteger();
+        when(process.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.isAlive()).thenAnswer(invocation -> launcherAlive.get());
+        when(process.descendants()).thenAnswer(invocation ->
+                descendantCalls.getAndIncrement() == 0
+                        ? Stream.empty() : Stream.of(descendant));
+        when(descendant.isAlive()).thenReturn(true, true, false);
+
+        PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
+
+        launcherAlive.set(true);
+        server.close();
+
+        verify(process).destroy();
+        verify(descendant).destroy();
+    }
+
+    @Test
+    void should_sweepRememberedGrandchildren_whenLauncherAlreadyExited() {
+        Process process = mock(Process.class);
+        ProcessHandle descendant = mock(ProcessHandle.class);
+        ProcessHandle grandchild = mock(ProcessHandle.class);
+        AtomicBoolean launcherAlive = new AtomicBoolean(true);
+        when(process.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.isAlive()).thenAnswer(invocation -> launcherAlive.get());
+        when(process.descendants()).thenAnswer(invocation ->
+                launcherAlive.get() ? Stream.of(descendant) : Stream.empty());
+        when(descendant.isAlive()).thenReturn(true, true, false);
+        when(descendant.descendants()).thenAnswer(invocation -> Stream.of(grandchild));
+        when(grandchild.isAlive()).thenReturn(true, false);
+
+        PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
+
+        server.rememberDescendants();
+        launcherAlive.set(false);
+        server.close();
+
+        verify(process, never()).destroy();
+        verify(descendant).destroy();
+        verify(grandchild).destroy();
     }
 
     @Test

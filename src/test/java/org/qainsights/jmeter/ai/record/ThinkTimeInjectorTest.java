@@ -65,6 +65,35 @@ class ThinkTimeInjectorTest {
     }
 
     @Test
+    void should_rejectExternalEntityAndLeaveJmxUnchanged() throws Exception {
+        Path secret = tempDir.resolve("external-secret.txt");
+        Files.writeString(secret, "external content");
+        String xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE jmeterTestPlan [
+              <!ENTITY secret SYSTEM "%s">
+            ]>
+            <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+              <hashTree>
+                <TestPlan testname="test">
+                  <stringProp name="description">&secret;</stringProp>
+                </TestPlan>
+                <hashTree/>
+              </hashTree>
+            </jmeterTestPlan>
+            """.formatted(secret.toUri());
+        File jmxFile = tempDir.resolve("external-entity.jmx").toFile();
+        Files.writeString(jmxFile.toPath(), xml);
+
+        RecordingException exception = assertThrows(RecordingException.class,
+                () -> new ThinkTimeInjector().injectThinkTimes(jmxFile, List.of()));
+
+        assertTrue(exception.getMessage().contains("Failed to inject think times"));
+        assertEquals(xml, Files.readString(jmxFile.toPath()));
+        assertFalse(Files.readString(jmxFile.toPath()).contains("external content"));
+    }
+
+    @Test
     void should_fallBackToDefaults_when_thinkTimePropertiesAreMalformed() throws Exception {
         try (MockedStatic<AiConfig> aiConfig = mockStatic(AiConfig.class)) {
             aiConfig.when(() -> AiConfig.getProperty(anyString(), anyString()))

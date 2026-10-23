@@ -22,6 +22,7 @@ class RecordingSecurityTest {
         String url = "https://example.com/login";
         String baseUri = "https://example.com";
         assertTrue(RecordingSecurity.isAllowedOrigin(url, baseUri, ""));
+        assertTrue(RecordingSecurity.isAllowedOrigin("HTTPS://example.com/x", baseUri, ""));
     }
 
     @Test
@@ -41,6 +42,28 @@ class RecordingSecurityTest {
     @Test
     void should_rejectOrigin_when_urlIsMalformed() {
         assertFalse(RecordingSecurity.isAllowedOrigin("ht tp://bad uri", "https://example.com", ""));
+    }
+
+    @Test
+    void should_rejectNonHttpSchemes() {
+        assertFalse(RecordingSecurity.isAllowedOrigin("javascript:alert(1)", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin("data:text/html,x", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin("mailto:a@b.c", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin(
+                "javascript://example.com/%0aalert(1)", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin("data://example.com/x", "https://example.com", ""));
+    }
+
+    @Test
+    void should_allowSchemelessRelativeReferences() {
+        assertTrue(RecordingSecurity.isAllowedOrigin("/checkout", "https://example.com", ""));
+        assertTrue(RecordingSecurity.isAllowedOrigin("page.html?x=1", "https://example.com", ""));
+    }
+
+    @Test
+    void should_validateProtocolRelativeOrigins() {
+        assertFalse(RecordingSecurity.isAllowedOrigin("//evil.com/x", "https://example.com", ""));
+        assertTrue(RecordingSecurity.isAllowedOrigin("//example.com/x", "https://example.com", ""));
     }
 
     @Test
