@@ -43,7 +43,7 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
     private final Process process;
     private final Thread stderrPump;
 
-    private PlaywrightMcpServerProcess(Process process) {
+    PlaywrightMcpServerProcess(Process process) {
         this.process = process;
         this.stderrPump = new Thread(this::pumpStderr, "playwright-mcp-stderr");
         this.stderrPump.setDaemon(true);
@@ -180,20 +180,19 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
      */
     @Override
     public void close() {
-        if (!process.isAlive()) {
-            return;
-        }
         List<ProcessHandle> descendants = process.descendants().collect(Collectors.toList());
 
-        process.destroy();
-        try {
-            if (!process.waitFor(SHUTDOWN_GRACE_SECONDS, TimeUnit.SECONDS)) {
-                log.warn("Playwright MCP did not exit gracefully; killing it");
+        if (process.isAlive()) {
+            process.destroy();
+            try {
+                if (!process.waitFor(SHUTDOWN_GRACE_SECONDS, TimeUnit.SECONDS)) {
+                    log.warn("Playwright MCP did not exit gracefully; killing it");
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 process.destroyForcibly();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            process.destroyForcibly();
         }
 
         for (ProcessHandle child : descendants) {

@@ -1,14 +1,20 @@
 package org.qainsights.jmeter.ai.mcp;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link PlaywrightMcpServerProcess} command construction and preflight.
@@ -122,6 +128,24 @@ class PlaywrightMcpServerProcessTest {
         assertFalse(server.isAlive(),
                 "a lingering server would hold the browser open and the proxy port busy");
         assertDoesNotThrow(server::close, "close must be idempotent");
+    }
+
+    @Test
+    void should_sweepDescendants_whenLauncherAlreadyExited() {
+        Process process = mock(Process.class);
+        ProcessHandle descendant = mock(ProcessHandle.class);
+        when(process.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.isAlive()).thenReturn(false);
+        when(process.descendants()).thenReturn(Stream.of(descendant));
+        when(descendant.isAlive()).thenReturn(true, false);
+
+        PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
+
+        server.close();
+
+        verify(process).descendants();
+        verify(process, never()).destroy();
+        verify(descendant).destroy();
     }
 
     @Test

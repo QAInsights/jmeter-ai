@@ -234,7 +234,7 @@ public class JSR223ContextMenu {
      */
     public static void addContextMenuToCurrentEditor() {
         if (!initialized) {
-            log.warn("Cannot add context menu - not initialized");
+            log.debug("Cannot add context menu - not initialized");
             return;
         }
 

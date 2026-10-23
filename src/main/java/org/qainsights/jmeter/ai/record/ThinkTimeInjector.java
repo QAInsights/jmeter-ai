@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.record;
 
 import java.io.File;
 import java.util.List;
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -22,7 +23,14 @@ public final class ThinkTimeInjector {
         try {
             Document doc;
             try (java.io.InputStream is = new java.io.FileInputStream(jmxFile)) {
-                doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is);
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+                factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+                factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+                factory.setXIncludeAware(false);
+                factory.setExpandEntityReferences(false);
+                doc = factory.newDocumentBuilder().parse(is);
             }
             doc.getDocumentElement().normalize();
 
@@ -128,7 +136,11 @@ public final class ThinkTimeInjector {
     }
 
     private void writeDocument(Document doc, File file) throws Exception {
-        Transformer transformer = TransformerFactory.newInstance().newTransformer();
+        TransformerFactory factory = TransformerFactory.newDefaultInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        Transformer transformer = factory.newTransformer();
         transformer.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
         try (java.io.OutputStream os = new java.io.FileOutputStream(file)) {
             transformer.transform(new DOMSource(doc), new StreamResult(os));

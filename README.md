@@ -79,6 +79,9 @@
 
 ## 📥 Installation
 
+**Requirements:** Apache JMeter 5.6.3+ running on Java 17 or newer. Feather Wand is compiled for Java 17 (class version 61), although JMeter itself runs on Java 8+. On Java 8 or 11, JMeter cannot load the plugin and its toolbar button will not appear.
+Check with `java -version` or in JMeter's `jmeter.log`.
+
 ### Plugins Manager *(Recommended)*
 
 ```text

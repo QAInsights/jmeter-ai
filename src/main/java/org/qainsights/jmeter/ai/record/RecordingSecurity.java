@@ -32,8 +32,11 @@ public final class RecordingSecurity {
         try {
             URI targetUri = new URI(url);
             URI base = new URI(baseUri);
-            if (targetUri.getHost() == null) {
+            if (targetUri.getScheme() == null) {
                 return true;
+            }
+            if (targetUri.getHost() == null) {
+                return false;
             }
             if (targetUri.getHost().equalsIgnoreCase(base.getHost())) {
                 return true;

@@ -44,6 +44,19 @@ class RecordingSecurityTest {
     }
 
     @Test
+    void should_rejectSchemesWithoutAHost() {
+        assertFalse(RecordingSecurity.isAllowedOrigin("javascript:alert(1)", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin("data:text/html,x", "https://example.com", ""));
+        assertFalse(RecordingSecurity.isAllowedOrigin("mailto:a@b.c", "https://example.com", ""));
+    }
+
+    @Test
+    void should_allowSchemelessRelativeReferences() {
+        assertTrue(RecordingSecurity.isAllowedOrigin("/checkout", "https://example.com", ""));
+        assertTrue(RecordingSecurity.isAllowedOrigin("page.html?x=1", "https://example.com", ""));
+    }
+
+    @Test
     void should_resolveSecret_when_propertyExists() {
         JMeterUtils.setProperty("MY_SECRET", "super-secret");
         String resolved = RecordingSecurity.resolveSecret("${MY_SECRET}");
