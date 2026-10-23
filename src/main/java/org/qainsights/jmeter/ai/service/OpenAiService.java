@@ -183,16 +183,10 @@ public class OpenAiService implements AiService {
                 log.info("Limiting conversation to last {} messages", limitedConversation.size());
             }
 
-            // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
-            // Detect these by model ID prefix and skip setting temperature for them.
-            boolean supportsCustomTemperature = !currentModelId.startsWith("o1")
-                    && !currentModelId.startsWith("o3")
-                    && !currentModelId.startsWith("o4")
-                    && !currentModelId.startsWith("gpt-5")
-                    && !currentModelId.contains("-chat-latest");
+            boolean supportsCustomTemperature = supportsCustomTemperature(currentModelId);
 
             long actualMaxTokens = maxTokens;
-            if (!supportsCustomTemperature && actualMaxTokens < 4096) {
+            if (isReasoningModel(currentModelId) && actualMaxTokens < 4096) {
                 actualMaxTokens = 4096;
                 log.info("Automatically increased maxCompletionTokens to {} for reasoning model {}", actualMaxTokens, currentModelId);
             }
@@ -395,12 +389,7 @@ public class OpenAiService implements AiService {
 
         String modelToUse = (model != null && !model.isEmpty()) ? model : currentModelId;
 
-        // Some newer OpenAI models (o1, o3, o4, gpt-5, etc.) only support temperature=1.
-        boolean supportsCustomTemperature = !modelToUse.startsWith("o1")
-                && !modelToUse.startsWith("o3")
-                && !modelToUse.startsWith("o4")
-                && !modelToUse.startsWith("gpt-5")
-                && !modelToUse.contains("-chat-latest");
+        boolean supportsCustomTemperature = supportsCustomTemperature(modelToUse);
 
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
@@ -559,5 +548,21 @@ public class OpenAiService implements AiService {
 
     public String getName() {
         return "OpenAI";
+    }
+
+    /** Reasoning models (o1, o3, o4, gpt-5...) only accept the default temperature and need room to think. */
+    static boolean isReasoningModel(String modelId) {
+        String id = normalizedModelId(modelId);
+        return id.startsWith("o1") || id.startsWith("o3") || id.startsWith("o4") || id.startsWith("gpt-5");
+    }
+
+    /** False for reasoning models and the {@code chat-latest} aliases, which reject a custom temperature. */
+    static boolean supportsCustomTemperature(String modelId) {
+        String id = normalizedModelId(modelId);
+        return !isReasoningModel(id) && !id.equals("chat-latest") && !id.endsWith("-chat-latest");
+    }
+
+    private static String normalizedModelId(String modelId) {
+        return modelId == null ? "" : modelId.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

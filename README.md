@@ -1213,12 +1213,12 @@ Set `jmeter.ai.service.type=ollama` to switch to a local model. All other provid
 
 Feather Wand automatically hides non-chat models so you only see useful options:
 
-- **OpenAI**: hides audio, TTS, whisper, davinci, search, realtime, and instruct models.
+- **OpenAI**: shows `gpt-*`, o-series (`o<digit>*`, e.g. `o1`, `o3`, `o4-mini`) and `chat-latest` chat models; hides audio, TTS, whisper, davinci, search, realtime, instruct, embedding, moderation and image models, plus models that only work on `/v1/responses` (`*-pro`, `*codex*`, deep research, computer use).
 - **Claude**: shows only the latest available models.
 - **Gemini**: shows only `gemini-*` and `gemma-*` chat models.
 - **Grok**: shows only `grok-*` chat models.
 - **AWS Bedrock**: shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
-- **Corporate gateways**: with `openai.base.url` or `anthropic.base.url` set, gateway-specific model names are kept (embedding models are still hidden), or listed verbatim from `openai.models` / `anthropic.models`.
+- **Corporate gateways**: with `openai.base.url` or `anthropic.base.url` set, gateway-specific model names are kept (audio, embedding, moderation, image and other non-chat models are still hidden), or listed verbatim from `openai.models` / `anthropic.models`.
 
 Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 

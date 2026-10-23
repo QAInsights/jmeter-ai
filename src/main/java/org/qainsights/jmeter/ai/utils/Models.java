@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Models {
@@ -340,9 +342,11 @@ public class Models {
     public static ModelListPage getAnthropicModels(AnthropicClient client) {
         try {
             log.info("Fetching available models from Anthropic API");
-            client = GatewayConfig.apply(AnthropicOkHttpClient.builder()
-                    .apiKey(AiConfig.getProperty("anthropic.api.key", "YOUR_API_KEY")))
-                    .build();
+            if (client == null) {
+                client = GatewayConfig.apply(AnthropicOkHttpClient.builder()
+                        .apiKey(AiConfig.getProperty("anthropic.api.key", "YOUR_API_KEY")))
+                        .build();
+            }
 
             ModelListParams modelListParams = ModelListParams.builder().build();
             ModelListPage models = client.models().list(modelListParams);
@@ -388,9 +392,11 @@ public class Models {
     public static com.openai.models.models.ModelListPage getOpenAiModels(OpenAIClient client) {
         try {
             log.info("Fetching available models from OpenAI API");
-            client = GatewayConfig.apply(OpenAIOkHttpClient.builder(),
-                    AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
-                    .build();
+            if (client == null) {
+                client = GatewayConfig.apply(OpenAIOkHttpClient.builder(),
+                        AiConfig.getProperty("openai.api.key", "YOUR_API_KEY"))
+                        .build();
+            }
 
             com.openai.models.models.ModelListPage models = client.models().list();
 
@@ -428,17 +434,26 @@ public class Models {
         return new ArrayList<>();
     }
 
-    private static boolean isOpenAiModelIncluded(String modelId, boolean gateway) {
-        return (gateway || modelId.startsWith("gpt"))
-                && !modelId.contains("audio")
-                && !modelId.contains("tts")
-                && !modelId.contains("whisper")
-                && !modelId.contains("davinci")
-                && !modelId.contains("search")
-                && !modelId.contains("transcribe")
-                && !modelId.contains("realtime")
-                && !modelId.contains("instruct")
-                && (!gateway || !modelId.contains("embedding"));
+    private static final List<String> NON_CHAT_MODEL_MARKERS = List.of(
+            "audio", "tts", "whisper", "davinci", "search", "transcribe", "realtime", "instruct",
+            "embedding", "moderation", "image", "dall-e", "sora");
+
+    /** Official OpenAI models that only work on {@code /v1/responses}, not chat completions. */
+    private static final Pattern RESPONSES_ONLY_MODEL = Pattern.compile(
+            "codex|deep-research|computer-use|^gpt-live|-pro(-|$)");
+
+    private static final Pattern OPENAI_CHAT_FAMILY = Pattern.compile("^(gpt-|o\\d|chat-latest$)");
+
+    static boolean isOpenAiModelIncluded(String modelId, boolean gateway) {
+        if (modelId == null || modelId.isBlank()) {
+            return false;
+        }
+        String id = modelId.toLowerCase(Locale.ROOT);
+        if (NON_CHAT_MODEL_MARKERS.stream().anyMatch(id::contains)) {
+            return false;
+        }
+        return gateway
+                || (OPENAI_CHAT_FAMILY.matcher(id).find() && !RESPONSES_ONLY_MODEL.matcher(id).find());
     }
 
     private static List<String> getDeepSeekModelIds(DeepseekAiService deepseekService) {
