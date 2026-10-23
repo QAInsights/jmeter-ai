@@ -8,8 +8,8 @@ import org.qainsights.jmeter.ai.utils.GatewayConfig;
 /**
  * Read-only snapshot of which AI providers look configured from JMeter
  * properties. No network calls: Ollama is treated as "available to try"
- * without probing, and Apple availability comes from its cached local helper
- * process probe.
+ * without probing, and Apple availability comes only from the helper's cached
+ * status. This class never starts the helper process.
  */
 public final class ProviderStatus {
 
@@ -28,10 +28,13 @@ public final class ProviderStatus {
 
     /** Loads status from the current {@link AiConfig} / JMeter properties. */
     public static ProviderStatus fromConfig() {
-        return fromConfig(() -> AppleFoundationHelper.status().isAvailable());
+        return fromConfig(() -> AppleFoundationHelper.cachedStatus()
+                .map(AppleFoundationHelper.Status::isAvailable)
+                .orElse(false));
     }
 
-    static ProviderStatus fromConfig(BooleanSupplier appleOnDeviceAvailable) {
+    /** Loads status using the supplied Apple on-device availability value. */
+    public static ProviderStatus fromConfig(BooleanSupplier appleOnDeviceAvailable) {
         boolean agentCapable = isApiKeyConfigured("anthropic.api.key")
                 || isApiKeyConfigured("openai.api.key")
                 || isApiKeyConfigured("google.api.key")

@@ -19,6 +19,13 @@ class AppleFoundationHelperTest {
     Path tempDir;
 
     @Test
+    void cachedStatusIsEmptyAfterReset() {
+        AppleFoundationHelper.resetStatusCache();
+
+        assertTrue(AppleFoundationHelper.cachedStatus().isEmpty());
+    }
+
+    @Test
     void unsupportedPlatformDoesNotExtractHelper() {
         assertTrue(AppleFoundationHelper.resolveExecutable("Linux", "x86_64", "", tempDir).isEmpty());
         assertFalse(Files.exists(tempDir.resolve(".jmeter-ai")));

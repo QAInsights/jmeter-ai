@@ -130,6 +130,7 @@ public class AiChatPanel
     private final ConversationTracker conversationTracker = new ConversationTracker(sessionStore);
     /** Model carried by a restored session; reselected once the model list loads. */
     private String restoredSessionModel;
+    private String lastShownWelcome;
 
     // Context stats (F9): session token/cost accumulator injected into every
     // service; the label renders in the input options row.
@@ -838,6 +839,7 @@ public class AiChatPanel
                     if (restoredSessionModel != null) {
                         modelSelectorPanel.applyIfAvailable(restoredSessionModel);
                     }
+                    refreshWelcomeIfReady();
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
                 }
@@ -868,6 +870,19 @@ public class AiChatPanel
         String welcome = WelcomeMessages.forCurrentConfig();
         transcript.showWelcome(welcome);
         WelcomeMessages.onShown(welcome);
+        lastShownWelcome = welcome;
+    }
+
+    private void refreshWelcomeIfReady() {
+        if (!transcript.isWelcomeShowing()) {
+            return;
+        }
+        String welcome = WelcomeMessages.forCurrentConfig();
+        if (!welcome.equals(lastShownWelcome)) {
+            transcript.showWelcome(welcome);
+            WelcomeMessages.onShown(welcome);
+            lastShownWelcome = welcome;
+        }
     }
 
     /** The session attachment registry (package-private for tests). */

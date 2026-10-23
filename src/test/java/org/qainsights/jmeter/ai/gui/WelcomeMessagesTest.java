@@ -35,7 +35,7 @@ class WelcomeMessagesTest {
 
     @Test
     void forStatus_nullOrNotReady_returnsSetupCta() {
-        String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig());
+        String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig(() -> false));
         assertTrue(msg.contains("no API key is configured"));
         assertTrue(msg.contains("user.properties"));
         assertTrue(msg.contains("Ollama"));
@@ -52,9 +52,16 @@ class WelcomeMessagesTest {
             }
             return def;
         });
-        String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig());
+        String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig(() -> false));
         assertEquals(Constants.WELCOME_MESSAGE, msg);
         assertTrue(msg.contains("@this"));
+    }
+
+    @Test
+    void forCurrentConfig_appleAvailableWithoutKeys_returnsFullWelcome() {
+        String msg = WelcomeMessages.forCurrentConfig(new AgentModeNudge(), () -> true);
+
+        assertEquals(Constants.WELCOME_MESSAGE, msg);
     }
 
     @Test
