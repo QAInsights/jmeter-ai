@@ -4,6 +4,7 @@ import java.awt.*;
 import java.io.File;
 import javax.swing.*;
 import org.apache.jmeter.gui.GuiPackage;
+import org.qainsights.jmeter.ai.gui.theme.HeaderButtonSizing;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -34,11 +35,7 @@ public final class RecordingControlPanel extends JPanel {
 
     private void setupToggleBtn() {
         toggleBtn.setMargin(new Insets(2, 6, 2, 6));
-        Dimension size = new Dimension(
-                UiTokens.HEADER_TEXT_BUTTON_WIDTH, UiTokens.HEADER_CONTROL_HEIGHT);
-        toggleBtn.setPreferredSize(size);
-        toggleBtn.setMinimumSize(size);
-        toggleBtn.setMaximumSize(size);
+        HeaderButtonSizing.apply(toggleBtn);
         toggleBtn.addActionListener(e -> {
             if (toggleBtn.isSelected()) {
                 handleStartSession();

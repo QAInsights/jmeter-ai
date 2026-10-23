@@ -1,12 +1,12 @@
 package org.qainsights.jmeter.ai.gui;
 
-import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import javax.swing.JButton;
 import javax.swing.Timer;
+import org.qainsights.jmeter.ai.gui.theme.HeaderButtonSizing;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 /**
@@ -24,11 +24,7 @@ class DonateButton extends JButton {
     DonateButton() {
         super("Donate");
         setMargin(new Insets(2, 6, 2, 6));
-        Dimension size = new Dimension(
-                UiTokens.HEADER_TEXT_BUTTON_WIDTH, UiTokens.HEADER_CONTROL_HEIGHT);
-        setPreferredSize(size);
-        setMinimumSize(size);
-        setMaximumSize(size);
+        HeaderButtonSizing.apply(this);
         setAlignmentY(CENTER_ALIGNMENT);
         setToolTipText("Support this project as it takes time, tokens and resources to build and maintain");
         getAccessibleContext().setAccessibleName("Donate to support Feather Wand");
