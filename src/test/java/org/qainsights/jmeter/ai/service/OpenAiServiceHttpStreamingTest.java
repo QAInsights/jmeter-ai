@@ -176,6 +176,20 @@ class OpenAiServiceHttpStreamingTest {
     }
 
     @Test
+    void chatLatestAliasOmitsTemperature() throws Exception {
+        fixture.respondSse(COMPLETIONS, StreamingFixtureServer.openAiSse(chunk("hi")));
+        StreamCallbacks callbacks = new StreamCallbacks();
+
+        service.generateStreamResponse(List.of("hi"), "chat-latest",
+                callbacks.onToken, callbacks.onComplete, callbacks.onError);
+        callbacks.awaitTerminal();
+
+        JsonNode body = fixture.onlyRequest().json();
+        assertEquals("chat-latest", body.get("model").asText());
+        assertFalse(body.has("temperature"));
+    }
+
+    @Test
     void unauthorizedFailsWithoutCompletingOrRecordingUsage() throws Exception {
         fixture.respondJson(COMPLETIONS, 401, "{\"error\":{\"message\":\"Incorrect API key provided\","
                 + "\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"invalid_api_key\"}}");

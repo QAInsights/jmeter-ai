@@ -189,7 +189,7 @@ public class OpenAiService implements AiService {
                     && !currentModelId.startsWith("o3")
                     && !currentModelId.startsWith("o4")
                     && !currentModelId.startsWith("gpt-5")
-                    && !currentModelId.contains("-chat-latest");
+                    && !currentModelId.contains("chat-latest");
 
             long actualMaxTokens = maxTokens;
             if (!supportsCustomTemperature && actualMaxTokens < 4096) {
@@ -400,7 +400,7 @@ public class OpenAiService implements AiService {
                 && !modelToUse.startsWith("o3")
                 && !modelToUse.startsWith("o4")
                 && !modelToUse.startsWith("gpt-5")
-                && !modelToUse.contains("-chat-latest");
+                && !modelToUse.contains("chat-latest");
 
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
