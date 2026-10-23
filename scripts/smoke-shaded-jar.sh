@@ -25,6 +25,15 @@ if (( ${#candidate_jars[@]} > 1 )); then
 fi
 JAR="${candidate_jars[0]}"
 
+MAVEN_LOCAL_REPOSITORY="$(
+    cd "$ROOT"
+    mvn -B -ntp -q help:evaluate -Dexpression=settings.localRepository -DforceStdout
+)"
+if [ -z "$MAVEN_LOCAL_REPOSITORY" ] || [ ! -d "$MAVEN_LOCAL_REPOSITORY" ]; then
+    echo "Could not resolve the configured Maven local repository: $MAVEN_LOCAL_REPOSITORY" >&2
+    exit 1
+fi
+
 if [ ! -d "$JMETER_HOME/lib" ] || [ ! -d "$JMETER_HOME/lib/ext" ]; then
     echo "Set JMETER_HOME to a JMeter 5.6.3 installation" >&2
     exit 1
@@ -38,5 +47,6 @@ while IFS= read -r -d '' dependency; do
     classpath="$classpath:$dependency"
 done < <(find "$JMETER_HOME/lib" "$JMETER_HOME/lib/ext" -type f -name '*.jar' -print0)
 
-java --add-modules jdk.httpserver -Djava.awt.headless=true -cp "$classpath" \
+java --add-modules jdk.httpserver -Djava.awt.headless=true \
+    -Dmaven.repo.local="$MAVEN_LOCAL_REPOSITORY" -cp "$classpath" \
     org.qainsights.jmeter.ai.service.ShadedJarSmoke

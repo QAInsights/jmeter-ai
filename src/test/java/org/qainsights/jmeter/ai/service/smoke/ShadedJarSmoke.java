@@ -246,8 +246,10 @@ public final class ShadedJarSmoke {
     }
 
     private static void onnxRuntime() throws Exception {
-        Path mavenHome = Path.of(System.getProperty("user.home"));
-        onnxRuntimeJar = mavenHome.resolve(".m2/repository/com/microsoft/onnxruntime/onnxruntime/")
+        String mavenLocalRepository = System.getProperty("maven.repo.local");
+        require(mavenLocalRepository != null && !mavenLocalRepository.isBlank(),
+                "Maven local repository path");
+        onnxRuntimeJar = Path.of(mavenLocalRepository).resolve("com/microsoft/onnxruntime/onnxruntime/")
                 .resolve(OnnxNativeLibraries.VERSION)
                 .resolve("onnxruntime-" + OnnxNativeLibraries.VERSION + ".jar");
         require(Files.isRegularFile(onnxRuntimeJar), "ONNX Runtime Maven artifact at " + onnxRuntimeJar);
