@@ -1213,7 +1213,7 @@ Set `jmeter.ai.service.type=ollama` to switch to a local model. All other provid
 
 Feather Wand automatically hides non-chat models so you only see useful options:
 
-- **OpenAI**: shows `gpt-*`, `o1`/`o3`/`o4-mini` and `chat-latest` chat models; hides audio, TTS, whisper, davinci, search, realtime, instruct, embedding, moderation and image models, plus models that only work on `/v1/responses` (`*-pro`, `*codex*`, deep research, computer use).
+- **OpenAI**: shows `gpt-*`, o-series (`o<digit>*`, e.g. `o1`, `o3`, `o4-mini`) and `chat-latest` chat models; hides audio, TTS, whisper, davinci, search, realtime, instruct, embedding, moderation and image models, plus models that only work on `/v1/responses` (`*-pro`, `*codex*`, deep research, computer use).
 - **Claude**: shows only the latest available models.
 - **Gemini**: shows only `gemini-*` and `gemma-*` chat models.
 - **Grok**: shows only `grok-*` chat models.
