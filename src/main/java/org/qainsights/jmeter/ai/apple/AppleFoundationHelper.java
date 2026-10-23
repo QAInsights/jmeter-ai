@@ -28,7 +28,7 @@ public final class AppleFoundationHelper {
             "/org/qainsights/jmeter/ai/native/macos-arm64/feather-wand-afm";
     private static final long STATUS_CACHE_TTL_NANOS = Duration.ofSeconds(60).toNanos();
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static volatile CachedStatus cachedStatus;
+    private static volatile CachedStatus statusCache;
 
     private AppleFoundationHelper() {
     }
@@ -84,21 +84,28 @@ public final class AppleFoundationHelper {
     }
 
     public static Status status() {
-        CachedStatus cached = cachedStatus;
+        CachedStatus cached = statusCache;
         if (cached != null && cached.isFresh()) {
             return cached.status;
         }
         synchronized (AppleFoundationHelper.class) {
-            cached = cachedStatus;
+            cached = statusCache;
             if (cached == null || !cached.isFresh()) {
                 Status status = probeStatus(new DefaultCliProcessRunner(), resolveExecutable(),
                         isSupportedPlatform(System.getProperty("os.name", ""),
                                 System.getProperty("os.arch", "")));
                 cached = new CachedStatus(status, System.nanoTime());
-                cachedStatus = cached;
+                statusCache = cached;
             }
             return cached.status;
         }
+    }
+
+    public static Optional<Status> cachedStatus() {
+        CachedStatus cached = statusCache;
+        return cached != null && cached.isFresh()
+                ? Optional.of(cached.status)
+                : Optional.empty();
     }
 
     static boolean isPermanent(Status status) {
@@ -155,7 +162,7 @@ public final class AppleFoundationHelper {
     }
 
     static void resetStatusCache() {
-        cachedStatus = null;
+        statusCache = null;
     }
 
     private static final class CachedStatus {

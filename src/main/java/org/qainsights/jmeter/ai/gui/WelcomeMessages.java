@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.util.function.BooleanSupplier;
+import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.service.ProviderStatus;
 import org.qainsights.jmeter.ai.utils.Constants;
@@ -24,7 +26,13 @@ public final class WelcomeMessages {
 
     /** Adds the one-time Agent Mode tip when {@code nudge} says it is due. Has no side effects. */
     static String forCurrentConfig(AgentModeNudge nudge) {
-        ProviderStatus status = ProviderStatus.fromConfig();
+        return forCurrentConfig(nudge, () -> AppleFoundationHelper.cachedStatus()
+                .map(AppleFoundationHelper.Status::isAvailable)
+                .orElse(false));
+    }
+
+    static String forCurrentConfig(AgentModeNudge nudge, BooleanSupplier appleAvailable) {
+        ProviderStatus status = ProviderStatus.fromConfig(appleAvailable);
         String welcome = forStatus(status);
         if (nudge.shouldShow(status.hasAgentCapableProvider(), JMeterAgent.isEnabled())) {
             return welcome + AgentModeNudge.TIP;

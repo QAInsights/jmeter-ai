@@ -11,6 +11,7 @@ import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -61,15 +62,48 @@ class ProviderStatusTest {
 
     @Test
     void fromConfig_notReadyWithoutKeys() {
-        ProviderStatus status = ProviderStatus.fromConfig();
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false);
         assertFalse(status.isReady());
         assertFalse(status.hasAnyCloudProvider());
     }
 
     @Test
+    void fromConfig_readyWithAppleOnDeviceAvailableWithoutCloudProviders() {
+        ProviderStatus status = ProviderStatus.fromConfig(() -> true);
+
+        assertTrue(status.isReady());
+        assertTrue(status.isAppleAvailable());
+        assertFalse(status.hasAgentCapableProvider());
+        assertFalse(status.hasAnyCloudProvider());
+    }
+
+    @Test
+    void fromConfig_notReadyWhenAppleOnDeviceUnavailableWithoutCloudProviders() {
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false);
+
+        assertFalse(status.isReady());
+        assertFalse(status.isAppleAvailable());
+    }
+
+    @Test
+    void fromConfig_doesNotProbeAppleWhenDisabled() {
+        props.put("apple.enabled", "false");
+        AtomicBoolean supplierCalled = new AtomicBoolean();
+
+        ProviderStatus status = ProviderStatus.fromConfig(() -> {
+            supplierCalled.set(true);
+            return true;
+        });
+
+        assertFalse(status.isReady());
+        assertFalse(status.isAppleAvailable());
+        assertFalse(supplierCalled.get());
+    }
+
+    @Test
     void fromConfig_readyWithAnthropicKey() {
         props.put("anthropic.api.key", "sk-ant-test");
-        ProviderStatus status = ProviderStatus.fromConfig();
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false);
         assertTrue(status.isReady());
         assertTrue(status.hasAnyCloudProvider());
     }
@@ -81,7 +115,7 @@ class ProviderStatusTest {
         props.put("anthropic.base.url", "https://anthropic.example");
         props.put("anthropic.extra.headers", "X-Corp-Token=abc123");
 
-        ProviderStatus status = ProviderStatus.fromConfig();
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false);
 
         assertTrue(status.isReady());
         assertTrue(status.hasAnyCloudProvider());
@@ -90,7 +124,7 @@ class ProviderStatusTest {
     @Test
     void fromConfig_readyWhenOllamaServiceType() {
         props.put("jmeter.ai.service.type", "ollama");
-        ProviderStatus status = ProviderStatus.fromConfig();
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false);
         assertTrue(status.isReady());
         assertTrue(status.isOllamaPreferred());
         assertFalse(status.hasAnyCloudProvider());
@@ -100,12 +134,12 @@ class ProviderStatusTest {
     void fromConfig_readyWithBedrockAccessPair() {
         props.put("bedrock.aws.access.key", "AKIA...");
         props.put("bedrock.aws.secret.key", "secret");
-        assertTrue(ProviderStatus.fromConfig().isReady());
+        assertTrue(ProviderStatus.fromConfig(() -> false).isReady());
     }
 
     @Test
     void placeholderKey_notReady() {
         props.put("openai.api.key", "YOUR_OPENAI_API_KEY");
-        assertFalse(ProviderStatus.fromConfig().isReady());
+        assertFalse(ProviderStatus.fromConfig(() -> false).isReady());
     }
 }
