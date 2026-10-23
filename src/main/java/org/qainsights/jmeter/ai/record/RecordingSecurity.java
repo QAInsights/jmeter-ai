@@ -35,6 +35,10 @@ public final class RecordingSecurity {
             if (targetUri.getHost() == null) {
                 return targetUri.getScheme() == null;
             }
+            String scheme = targetUri.getScheme();
+            if (scheme != null && !scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
+                return false;
+            }
             if (targetUri.getHost().equalsIgnoreCase(base.getHost())) {
                 return true;
             }
