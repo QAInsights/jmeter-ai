@@ -57,6 +57,12 @@ class RecordingSecurityTest {
     }
 
     @Test
+    void should_validateProtocolRelativeOrigins() {
+        assertFalse(RecordingSecurity.isAllowedOrigin("//evil.com/x", "https://example.com", ""));
+        assertTrue(RecordingSecurity.isAllowedOrigin("//example.com/x", "https://example.com", ""));
+    }
+
+    @Test
     void should_resolveSecret_when_propertyExists() {
         JMeterUtils.setProperty("MY_SECRET", "super-secret");
         String resolved = RecordingSecurity.resolveSecret("${MY_SECRET}");

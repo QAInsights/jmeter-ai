@@ -141,7 +141,7 @@ class PlaywrightMcpServerProcessTest {
         when(process.isAlive()).thenAnswer(invocation -> launcherAlive.get());
         when(process.descendants()).thenAnswer(invocation ->
                 launcherAlive.get() ? Stream.of(descendant) : Stream.empty());
-        when(descendant.isAlive()).thenReturn(true, false);
+        when(descendant.isAlive()).thenReturn(true, true, false);
 
         PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
 
@@ -164,7 +164,7 @@ class PlaywrightMcpServerProcessTest {
         when(process.descendants()).thenAnswer(invocation ->
                 descendantCalls.getAndIncrement() == 0
                         ? Stream.empty() : Stream.of(descendant));
-        when(descendant.isAlive()).thenReturn(true, false);
+        when(descendant.isAlive()).thenReturn(true, true, false);
 
         PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
 
@@ -173,6 +173,31 @@ class PlaywrightMcpServerProcessTest {
 
         verify(process).destroy();
         verify(descendant).destroy();
+    }
+
+    @Test
+    void should_sweepRememberedGrandchildren_whenLauncherAlreadyExited() {
+        Process process = mock(Process.class);
+        ProcessHandle descendant = mock(ProcessHandle.class);
+        ProcessHandle grandchild = mock(ProcessHandle.class);
+        AtomicBoolean launcherAlive = new AtomicBoolean(true);
+        when(process.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.isAlive()).thenAnswer(invocation -> launcherAlive.get());
+        when(process.descendants()).thenAnswer(invocation ->
+                launcherAlive.get() ? Stream.of(descendant) : Stream.empty());
+        when(descendant.isAlive()).thenReturn(true, true, false);
+        when(descendant.descendants()).thenAnswer(invocation -> Stream.of(grandchild));
+        when(grandchild.isAlive()).thenReturn(true, false);
+
+        PlaywrightMcpServerProcess server = new PlaywrightMcpServerProcess(process);
+
+        server.rememberDescendants();
+        launcherAlive.set(false);
+        server.close();
+
+        verify(process, never()).destroy();
+        verify(descendant).destroy();
+        verify(grandchild).destroy();
     }
 
     @Test

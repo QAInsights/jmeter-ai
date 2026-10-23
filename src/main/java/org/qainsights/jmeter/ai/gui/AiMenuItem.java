@@ -49,7 +49,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
                 JSR223ContextMenu.initialize(aiService);
                 log.info("Initialized JSR223 context menu with {} service", aiServiceType);
             } else {
-                log.info("No AI provider configured yet; JSR223 AI refactor menu stays disabled until one is set");
+                log.info("No AI provider configured; JSR223 AI refactor menu stays disabled until JMeter restarts with one set");
                 // Still initialize context menu, but it will show the disabled state
                 JSR223ContextMenu.initialize(null);
             }

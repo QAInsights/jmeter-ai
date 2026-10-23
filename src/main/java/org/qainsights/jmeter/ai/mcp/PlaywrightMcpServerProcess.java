@@ -58,7 +58,7 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
             return thread;
         });
         this.descendantTracker.scheduleAtFixedRate(
-                this::rememberDescendants, 1, 1, TimeUnit.SECONDS);
+                this::rememberDescendants, 0, 250, TimeUnit.MILLISECONDS);
         this.stderrPump = new Thread(this::pumpStderr, "playwright-mcp-stderr");
         this.stderrPump.setDaemon(true);
         this.stderrPump.start();
@@ -208,12 +208,26 @@ public final class PlaywrightMcpServerProcess implements AutoCloseable {
     @Override
     public void close() {
         descendantTracker.shutdownNow();
+        try {
+            descendantTracker.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         rememberDescendants();
         Set<ProcessHandle> descendants = new LinkedHashSet<>(knownDescendants);
         try {
             process.descendants().forEach(descendants::add);
         } catch (Exception e) {
             log.debug("Could not inspect Playwright MCP descendants during shutdown", e);
+        }
+        for (ProcessHandle descendant : new LinkedHashSet<>(descendants)) {
+            if (descendant.isAlive()) {
+                try {
+                    descendant.descendants().forEach(descendants::add);
+                } catch (Exception e) {
+                    log.debug("Could not inspect descendants of remembered Playwright MCP process", e);
+                }
+            }
         }
 
         if (process.isAlive()) {
