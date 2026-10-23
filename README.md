@@ -23,6 +23,10 @@
 
 <div align="center">
 
+<img src="./images/feather-wand-agent-demo.gif" alt="Feather Wand Agent Mode building a JMeter load test from one prompt" width="800">
+
+<sub>Agent Mode builds a 20-user load test with an assertion and a Summary Report from a single prompt (sped up 3x).</sub>
+
 <img src="./images/Feather-Wand-AI-Agent-JMeter.png" alt="Feather Wand Chat UI" width="700">
 
 </div>
