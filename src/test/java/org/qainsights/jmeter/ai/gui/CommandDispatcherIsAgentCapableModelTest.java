@@ -74,6 +74,12 @@ class CommandDispatcherIsAgentCapableModelTest {
     }
 
     @Test
+    void appleModelUsesPlainChatEvenWhenAgentModeIsSelected() {
+        assertFalse(CommandDispatcher.isAgentCapableModel("apple:on-device"));
+        assertFalse(CommandDispatcher.shouldUseAgent(true, true, "apple:on-device"));
+    }
+
+    @Test
     void chatSelectionNeverUsesAgent() {
         assertFalse(CommandDispatcher.shouldUseAgent(true, false, "openai:gpt-4o"));
     }

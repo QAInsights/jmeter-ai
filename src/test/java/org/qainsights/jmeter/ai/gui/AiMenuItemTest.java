@@ -10,6 +10,8 @@ import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
+import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
@@ -102,6 +104,26 @@ class AiMenuItemTest {
         AiMenuItem item = new AiMenuItem(parent);
 
         assertNotNull(item);
+    }
+
+    @Test
+    void createAppleServiceWhenHelperReportsAvailable() {
+        AppleFoundationHelper.Status status = org.mockito.Mockito.mock(AppleFoundationHelper.Status.class);
+        org.mockito.Mockito.when(status.isAvailable()).thenReturn(true);
+        try (MockedStatic<AppleFoundationHelper> helper = mockStatic(AppleFoundationHelper.class)) {
+            helper.when(AppleFoundationHelper::status).thenReturn(status);
+            assertInstanceOf(AppleFoundationAiService.class, AiMenuItem.createAiService("apple"));
+        }
+    }
+
+    @Test
+    void createAppleServiceReturnsNullWhenHelperIsUnavailable() {
+        AppleFoundationHelper.Status status = org.mockito.Mockito.mock(AppleFoundationHelper.Status.class);
+        org.mockito.Mockito.when(status.isAvailable()).thenReturn(false);
+        try (MockedStatic<AppleFoundationHelper> helper = mockStatic(AppleFoundationHelper.class)) {
+            helper.when(AppleFoundationHelper::status).thenReturn(status);
+            assertNull(AiMenuItem.createAiService("apple"));
+        }
     }
 
     @Test

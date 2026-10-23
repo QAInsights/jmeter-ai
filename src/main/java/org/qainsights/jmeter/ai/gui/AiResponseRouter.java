@@ -16,6 +16,8 @@ import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
+import org.qainsights.jmeter.ai.service.AppleFoundationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +41,7 @@ public class AiResponseRouter {
     private final BedrockAiService bedrockService;
     private final CodexAiService codexService;
     private final ClaudeCodeAiService claudeCodeService;
+    private final AppleFoundationAiService appleFoundationAiService;
     private org.qainsights.jmeter.ai.service.attach.AttachmentRegistry attachmentRegistry;
 
     public AiResponseRouter(AiServiceHolder serviceHolder) {
@@ -52,6 +55,7 @@ public class AiResponseRouter {
         this.bedrockService = serviceHolder.getBedrockService();
         this.codexService = serviceHolder.getCodexService();
         this.claudeCodeService = serviceHolder.getClaudeCodeService();
+        this.appleFoundationAiService = serviceHolder.getAppleFoundationAiService();
     }
 
     /**
@@ -135,6 +139,16 @@ public class AiResponseRouter {
             return "Error: Bedrock service not configured. Set bedrock.api.key or "
                     + "bedrock.aws.access.key and bedrock.aws.secret.key in user.properties "
                     + "(or jmeter.properties) and restart JMeter.";
+        } else if (selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX)) {
+            try {
+                return appleFoundationAiService == null
+                        ? "Error: Apple on-device service is not available in this session."
+                        : appleFoundationAiService.generateResponse(conversationHistory,
+                                selectedModel.substring(AppleFoundationAiService.MODEL_PREFIX.length()));
+            } catch (AppleFoundationException e) {
+                log.warn("Apple on-device request failed: {}", e.getMessage());
+                return "Error: " + e.getMessage();
+            }
         } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
             String codexModelId = selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length());
             log.info("Using Codex CLI model: {}", codexModelId);
@@ -216,6 +230,15 @@ public class AiResponseRouter {
             if (bedrockService != null) {
                 return bedrockService.generateStreamResponse(conversationHistory, bedrockModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
+            return () -> {};
+        } else if (selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX)) {
+            if (appleFoundationAiService != null) {
+                return appleFoundationAiService.generateStreamResponse(conversationHistory,
+                        selectedModel.substring(AppleFoundationAiService.MODEL_PREFIX.length()),
+                        tokenConsumer, onComplete, onError);
+            }
+            onError.accept(new AppleFoundationException(
+                    "Apple on-device service is not available in this session.", "unavailable"));
             return () -> {};
         } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
             String codexModelId = selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length());
@@ -308,6 +331,8 @@ public class AiResponseRouter {
                 bedrockService.setModel(bedrockModelId);
             }
             return bedrockService;
+        } else if (selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX)) {
+            return appleFoundationAiService;
         } else if (selectedModel.startsWith(CodexCliProvider.MODEL_PREFIX)) {
             if (codexService != null) {
                 codexService.setModel(selectedModel.substring(CodexCliProvider.MODEL_PREFIX.length()));

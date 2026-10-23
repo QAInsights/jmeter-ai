@@ -107,6 +107,8 @@ public class CodeRefactorer {
                 model = AiConfig.getProperty("ollama.default.model", "deepseek-r1:1.5b");
             } else if ("deepseek".equalsIgnoreCase(aiServiceType)) {
                 model = AiConfig.getProperty("deepseek.default.model", "deepseek-chat");
+            } else if ("apple".equalsIgnoreCase(aiServiceType)) {
+                model = "on-device";
             } else {
                 model = AiConfig.getProperty("openai.default.model", "gpt-4o");
             }

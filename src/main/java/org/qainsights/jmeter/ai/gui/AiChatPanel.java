@@ -41,6 +41,7 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -106,6 +107,7 @@ public class AiChatPanel
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
     private ClaudeCodeAiService claudeCodeService;
+    private AppleFoundationAiService appleFoundationAiService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private JPanel headerPanel;
@@ -175,6 +177,7 @@ public class AiChatPanel
         bedrockService = new BedrockAiService();
         codexService = new CodexAiService();
         claudeCodeService = new ClaudeCodeAiService();
+        appleFoundationAiService = new AppleFoundationAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
@@ -339,6 +342,10 @@ public class AiChatPanel
      */
     private void onModelSelected(String selectedModel) {
         log.info("Model selected: {}", selectedModel);
+        if (interactionModeSelector != null && selectedModel != null) {
+            interactionModeSelector.setModelSupportsAgent(
+                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+        }
         resolveAiService(selectedModel);
         reasoningControls.updateForModel(selectedModel);
         refreshContextStats();
@@ -642,6 +649,11 @@ public class AiChatPanel
         // The trailing Send button swaps to Stop while the AI is processing.
         QuietButton attachButton = new QuietButton("").iconOnly();
         interactionModeSelector = new InteractionModeSelector(JMeterAgent.isEnabled());
+        String selectedModel = modelSelectorPanel.getSelectedModel();
+        if (selectedModel != null) {
+            interactionModeSelector.setModelSupportsAgent(
+                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+        }
         inputOptionsRow = new InputOptionsRow(
                 this, attachmentBar, attachButton, interactionModeSelector, this::sendMessage);
         inputOptionsRow.setModelRow(createToolbarRow());
@@ -799,6 +811,7 @@ public class AiChatPanel
         holder.setBedrockService(bedrockService);
         holder.setCodexService(codexService);
         holder.setClaudeCodeService(claudeCodeService);
+        holder.setAppleFoundationAiService(appleFoundationAiService);
         return holder;
     }
 
