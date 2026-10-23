@@ -87,6 +87,7 @@ public final class OnnxEmbeddingClient implements AutoCloseable {
         model.requireReady();
         long start = System.nanoTime();
         try {
+            OnnxNativeLibraries.ensureAvailable();
             GemmaTokenizer loadedTokenizer = GemmaTokenizer.load(model.tokenizerFile());
             OrtSession created;
             try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {

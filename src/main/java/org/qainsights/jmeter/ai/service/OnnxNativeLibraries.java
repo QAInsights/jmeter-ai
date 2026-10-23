@@ -1,0 +1,334 @@
+package org.qainsights.jmeter.ai.service;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class OnnxNativeLibraries {
+    static final String VERSION = "1.24.3";
+    static final String SHA256 = "ca7664d1bec1527606629cdae0803beb124ef47cadd90e2f0201b092141ec107";
+    static final String NATIVE_PATH_PROPERTY = "onnxruntime.native.path";
+    static final String URL_PROPERTY = "jmeter.ai.onnx.runtime.url";
+    private static final String RESOURCE_ROOT = "/ai/onnxruntime/native/";
+    private static final Set<String> SUPPORTED = Set.of(
+            "linux-x64", "linux-aarch64", "osx-aarch64", "win-x64");
+    private static final Duration RETRY_AFTER = Duration.ofMinutes(1);
+    private static final Logger log = LoggerFactory.getLogger(OnnxNativeLibraries.class);
+    private static volatile OnnxNativeLibraries configured;
+
+    private final Path home;
+    private final String checksum;
+    private final String url;
+    private final String platform;
+    private final boolean classpathNativePresent;
+    private final HttpClient http = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(Duration.ofSeconds(30))
+            .build();
+    private Thread downloader;
+    private volatile long downloadedBytes;
+    private volatile String lastError;
+    private volatile long lastFailureMillis;
+
+    private OnnxNativeLibraries(Path home, String checksum, String url,
+                                String platform, boolean classpathNativePresent) {
+        this.home = home;
+        this.checksum = checksum;
+        this.url = url;
+        this.platform = platform;
+        this.classpathNativePresent = classpathNativePresent;
+    }
+
+    OnnxNativeLibraries(Path home, String checksum, String url, String platform) {
+        this(home, checksum, url, platform, false);
+    }
+
+    public static void ensureAvailable() {
+        OnnxNativeLibraries loader = configured;
+        if (loader == null) {
+            synchronized (OnnxNativeLibraries.class) {
+                loader = configured;
+                if (loader == null) {
+                    String platform = platform();
+                    String defaultUrl = "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/"
+                            + VERSION + "/onnxruntime-" + VERSION + ".jar";
+                    String url = AiConfig.getProperty(URL_PROPERTY,
+                            System.getProperty(URL_PROPERTY, defaultUrl));
+                    loader = new OnnxNativeLibraries(Path.of(System.getProperty("user.home"), ".jmeter-ai",
+                            "onnxruntime"), SHA256, url, platform, classpathNativePresent(platform));
+                    configured = loader;
+                }
+            }
+        }
+        loader.ensureAvailableInternal();
+    }
+
+    synchronized void ensureAvailableInternal() {
+        String configuredPath = System.getProperty(NATIVE_PATH_PROPERTY);
+        if (configuredPath != null) {
+            return;
+        }
+        if (classpathNativePresent) {
+            return;
+        }
+        if (!SUPPORTED.contains(platform)) {
+            throw new TypeSafeJudgmentProvider.JudgmentException(
+                    "ONNX Runtime " + VERSION + " has no bundled native libraries for " + platform);
+        }
+        Path target = home.resolve(VERSION).resolve(platform);
+        try {
+            if (hasNativeLibraries(target)) {
+                System.setProperty(NATIVE_PATH_PROPERTY, target.toString());
+                return;
+            }
+        } catch (IOException e) {
+            throw new TypeSafeJudgmentProvider.JudgmentException(
+                    "Could not inspect ONNX Runtime native libraries in " + target + ": " + e.getMessage(), e);
+        }
+        if (downloader != null && downloader.isAlive()) {
+            throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+        }
+        if (lastError != null && System.currentTimeMillis() - lastFailureMillis < RETRY_AFTER.toMillis()) {
+            throw new TypeSafeJudgmentProvider.JudgmentException("downloading ONNX Runtime " + VERSION
+                    + " failed: " + lastError + " (retrying in a minute; set " + URL_PROPERTY + " for a mirror)");
+        }
+        downloadedBytes = 0;
+        lastError = null;
+        downloader = new Thread(() -> download(target), "feather-wand-onnx-runtime-download");
+        downloader.setDaemon(true);
+        downloader.start();
+        throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+    }
+
+    void awaitDownloadForTests(Duration timeout) throws InterruptedException {
+        Thread thread;
+        synchronized (this) {
+            thread = downloader;
+        }
+        if (thread != null) {
+            thread.join(timeout.toMillis());
+        }
+    }
+
+    String lastError() {
+        return lastError;
+    }
+
+    Path targetDirectory() {
+        return home.resolve(VERSION).resolve(platform);
+    }
+
+    private String progress(Path target) {
+        return "downloading ONNX Runtime " + VERSION + " (" + downloadedBytes / 1_000_000
+                + " MB) into " + target + "; local routing will be available when it is ready";
+    }
+
+    private void download(Path target) {
+        Path parent = target.getParent();
+        Path archive = null;
+        Path extracted = null;
+        try {
+            Files.createDirectories(parent);
+            archive = Files.createTempFile(parent, ".onnxruntime-", ".jar");
+            downloadArchive(archive);
+            if (!checksum.equalsIgnoreCase(hashOf(archive))) {
+                throw new IOException("downloaded ONNX Runtime JAR failed its SHA-256 check");
+            }
+            extracted = Files.createTempDirectory(parent, ".onnxruntime-");
+            extractPlatform(archive, extracted);
+            if (!hasNativeLibraries(extracted)) {
+                throw new IOException("Maven artifact contains no native libraries for " + platform);
+            }
+            replaceDirectory(extracted, target);
+            extracted = null;
+            System.setProperty(NATIVE_PATH_PROPERTY, target.toString());
+            log.info("Installed ONNX Runtime {} native libraries for {} in {}", VERSION, platform, target);
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            lastFailureMillis = System.currentTimeMillis();
+            log.warn("Downloading ONNX Runtime {} native libraries failed: {}", VERSION, lastError);
+        } finally {
+            deleteQuietly(archive);
+            deleteTreeQuietly(extracted);
+        }
+    }
+
+    private void downloadArchive(Path target) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofMinutes(30)).GET().build();
+        HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream in = response.body()) {
+            if (response.statusCode() != 200) {
+                throw new IOException("HTTP " + response.statusCode() + " for " + url);
+            }
+            try (var out = Files.newOutputStream(target)) {
+                byte[] buffer = new byte[1 << 16];
+                for (int read; (read = in.read(buffer)) != -1; ) {
+                    out.write(buffer, 0, read);
+                    downloadedBytes += read;
+                }
+            }
+        }
+    }
+
+    private void extractPlatform(Path archive, Path destination) throws IOException {
+        String prefix = "ai/onnxruntime/native/" + platform + "/";
+        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(archive))) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
+                if (entry.isDirectory() || !entry.getName().startsWith(prefix)) {
+                    continue;
+                }
+                String name = entry.getName().substring(prefix.length());
+                if (name.isBlank() || name.contains("/")) {
+                    continue;
+                }
+                Path file = destination.resolve(name).normalize();
+                if (!file.startsWith(destination)) {
+                    throw new IOException("invalid native library path in ONNX Runtime artifact");
+                }
+                Files.copy(zip, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    private void replaceDirectory(Path source, Path target) throws IOException {
+        Path backup = null;
+        if (Files.exists(target)) {
+            backup = Files.createTempDirectory(target.getParent(), ".onnxruntime-old-");
+            Files.delete(backup);
+            move(target, backup);
+        }
+        try {
+            move(source, target);
+            if (backup != null) {
+                deleteTreeQuietly(backup);
+            }
+        } catch (IOException e) {
+            if (backup != null && Files.exists(backup) && !Files.exists(target)) {
+                move(backup, target);
+            }
+            throw e;
+        }
+    }
+
+    private boolean hasNativeLibraries(Path directory) throws IOException {
+        return Files.isRegularFile(directory.resolve(jniLibraryName(platform)))
+                && Files.isRegularFile(directory.resolve(runtimeLibraryName(platform)));
+    }
+
+    private static boolean classpathNativePresent(String platform) {
+        try {
+            return OnnxNativeLibraries.class.getResource(RESOURCE_ROOT + platform + "/" + jniLibraryName(platform))
+                    != null
+                    && OnnxNativeLibraries.class.getResource(
+                            RESOURCE_ROOT + platform + "/" + runtimeLibraryName(platform)) != null;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private static String runtimeLibraryName(String platform) {
+        if (platform.startsWith("win-")) {
+            return "onnxruntime.dll";
+        }
+        if (platform.startsWith("osx-")) {
+            return "libonnxruntime.dylib";
+        }
+        return "libonnxruntime.so";
+    }
+
+    private static String jniLibraryName(String platform) {
+        if (platform.startsWith("win-")) {
+            return "onnxruntime4j_jni.dll";
+        }
+        if (platform.startsWith("osx-")) {
+            return "libonnxruntime4j_jni.dylib";
+        }
+        return "libonnxruntime4j_jni.so";
+    }
+
+    static String platform() {
+        String os = System.getProperty("os.name", "generic").toLowerCase(Locale.ROOT);
+        String arch = System.getProperty("os.arch", "generic").toLowerCase(Locale.ROOT);
+        String osName = os.contains("mac") || os.contains("darwin") ? "osx"
+                : os.contains("win") ? "win"
+                : os.contains("nux") ? "linux"
+                : os.contains("android") ? "android" : "unsupported";
+        String archName = arch.startsWith("amd64") || arch.startsWith("x86_64") ? "x64"
+                : arch.startsWith("x86") ? "x86"
+                : arch.startsWith("aarch64") ? "aarch64"
+                : arch.startsWith("ppc64") ? "ppc64"
+                : arch.startsWith("loongarch64") ? "loongarch64" : "unsupported";
+        return osName + "-" + archName;
+    }
+
+    private static String hashOf(Path file) throws IOException {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buffer = new byte[1 << 16];
+            for (int read; (read = in.read(buffer)) != -1; ) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    static String sha256(Path file) throws IOException {
+        return hashOf(file);
+    }
+
+    private static void move(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(source, target);
+        }
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file != null) {
+            try {
+                Files.deleteIfExists(file);
+            } catch (IOException ignored) {
+                log.debug("Could not remove temporary ONNX Runtime file {}", file);
+            }
+        }
+    }
+
+    private static void deleteTreeQuietly(Path directory) {
+        if (directory == null || !Files.exists(directory)) {
+            return;
+        }
+        try (var files = Files.walk(directory)) {
+            files.sorted(java.util.Comparator.reverseOrder()).forEach(OnnxNativeLibraries::deleteQuietly);
+        } catch (IOException e) {
+            log.debug("Could not remove temporary ONNX Runtime directory {}", directory);
+        }
+    }
+}
