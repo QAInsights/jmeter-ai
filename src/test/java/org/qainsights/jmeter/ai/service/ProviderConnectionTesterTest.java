@@ -236,9 +236,7 @@ class ProviderConnectionTesterTest {
                     ProviderConnectionTester.Result result =
                             new ProviderConnectionTester().testSmartRouting(backend, "dummy-test-key");
                     assertEquals(expected.getValue(), result.outcome(), backend + " " + expected.getKey());
-                    if (expected.getKey() != 200) {
-                        assertEquals(expected.getKey(), result.httpCode());
-                    }
+                    assertEquals(expected.getKey(), result.httpCode());
                     assertEquals(1, requests.get(), backend + " should send one request for one choose call");
                     assertNoKey(result, "dummy-test-key");
                 } finally {

@@ -65,6 +65,7 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
+import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -110,6 +111,8 @@ final class ProviderSetupDialog extends JDialog {
     private ProviderConnectionTester.Result lastResult;
     private LinkedHashMap<String, String> lastSettings = new LinkedHashMap<>();
     private String smartBackend;
+    private boolean routingSelection;
+    private boolean lastTriageChoice = true;
     private JCheckBox routingEnabled;
     private JCheckBox triageEnabled;
     private JLabel triageHint;
@@ -161,6 +164,10 @@ final class ProviderSetupDialog extends JDialog {
         this.appleSupportedPlatform = appleSupportedPlatform == null ? () -> false : appleSupportedPlatform;
         this.appleStatusSupplier = appleStatusSupplier == null ? AppleFoundationHelper::status : appleStatusSupplier;
         smartBackend = configuredSmartBackend();
+        routingSelection = initialRoutingSelection(
+                smartBackend, configuredFlag(AgentRoutingConfig.ROUTING_ENABLED_KEY, false));
+        lastTriageChoice = initialTriageChoice(
+                smartBackend, configuredFlag(AgentTriageConfig.TRIAGE_ENABLED_KEY, false));
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_4, UiTokens.SPACE_4));
@@ -359,13 +366,15 @@ final class ProviderSetupDialog extends JDialog {
             updateSmartBackendControls();
         } else if (option == ProviderSetupOption.APPLE_ON_DEVICE) {
             contentCard.add(buildApplePane(), BorderLayout.CENTER);
-            probeAppleStatus();
         } else {
             contentCard.add(buildProviderPane(option), BorderLayout.CENTER);
         }
         setStatus(" ", ThemeColors.secondaryText());
         copySettingsButton.setVisible(false);
         updateActionButtons();
+        if (option == ProviderSetupOption.APPLE_ON_DEVICE) {
+            probeAppleStatus();
+        }
         contentCard.revalidate();
         contentCard.repaint();
     }
@@ -443,10 +452,9 @@ final class ProviderSetupDialog extends JDialog {
         details.setMaximumSize(new Dimension(Integer.MAX_VALUE, details.getPreferredSize().height));
         addLeftAligned(content, details);
 
-        routingEnabled = new JCheckBox("Route Agent Mode requests", configuredFlag(
-                AgentRoutingConfig.ROUTING_ENABLED_KEY, true));
-        triageEnabled = new JCheckBox("Failure triage", triageSelectedForBackend(smartBackend, configuredFlag(
-                "jmeter.ai.typesafe.agent.triage.enabled", true)));
+        routingEnabled = new JCheckBox("Route Agent Mode requests", routingSelection);
+        triageEnabled = new JCheckBox(
+                "Failure triage", triageSelectedForBackend(smartBackend, lastTriageChoice));
         routingEnabled.setOpaque(false);
         triageEnabled.setOpaque(false);
         JPanel toggles = new JPanel();
@@ -462,8 +470,14 @@ final class ProviderSetupDialog extends JDialog {
         toggles.setMaximumSize(new Dimension(Integer.MAX_VALUE, toggles.getPreferredSize().height));
         addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_2));
         addLeftAligned(content, toggles);
-        routingEnabled.addActionListener(e -> inputChanged());
-        triageEnabled.addActionListener(e -> inputChanged());
+        routingEnabled.addActionListener(e -> {
+            routingSelection = routingEnabled.isSelected();
+            inputChanged();
+        });
+        triageEnabled.addActionListener(e -> {
+            lastTriageChoice = triageEnabled.isSelected();
+            inputChanged();
+        });
 
         JPanel bottom = buildStatusActions(true);
         addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_3));
@@ -491,12 +505,14 @@ final class ProviderSetupDialog extends JDialog {
         choices.add(choice);
         choice.addActionListener(e -> {
             if (!backend.equals(smartBackend)) {
+                String previousBackend = smartBackend;
                 smartBackend = backend;
-                routingEnabled.setSelected(!"off".equals(backend));
-                triageEnabled.setSelected(triageSelectedForBackend(backend, true));
+                routingSelection = routingSelectionAfterBackendChange(
+                        previousBackend, backend, routingSelection);
+                routingEnabled.setSelected(routingSelection);
+                triageEnabled.setSelected(triageSelectedForBackend(backend, lastTriageChoice));
                 inputChanged();
                 updateSmartBackendControls();
-                updateSmartRoutingRow();
             }
         });
     }
@@ -627,8 +643,9 @@ final class ProviderSetupDialog extends JDialog {
                 || AgentJudgmentConfig.OLLAMA.equals(smartBackend);
         boolean off = "off".equals(smartBackend);
         routingEnabled.setEnabled(!off);
+        routingEnabled.setSelected(routingSelection);
         triageEnabled.setEnabled(triageSelectedForBackend(smartBackend, true));
-        triageEnabled.setSelected(triageSelectedForBackend(smartBackend, triageEnabled.isSelected()));
+        triageEnabled.setSelected(triageSelectedForBackend(smartBackend, lastTriageChoice));
         triageHint.setVisible(local);
         if (contentCard.getComponentCount() > 0) {
             setBackendPanelVisibility((Container) contentCard.getComponent(0), smartBackend);
@@ -641,6 +658,22 @@ final class ProviderSetupDialog extends JDialog {
                 && !AgentJudgmentConfig.LOCAL.equals(backend)
                 && !AgentJudgmentConfig.OLLAMA.equals(backend);
         return selected && supportsTriage;
+    }
+
+    static boolean initialRoutingSelection(String backend, boolean storedValue) {
+        return !"off".equals(backend) && storedValue;
+    }
+
+    static boolean initialTriageChoice(String backend, boolean storedValue) {
+        return "off".equals(backend) || storedValue;
+    }
+
+    static boolean routingSelectionAfterBackendChange(
+            String previousBackend, String backend, boolean currentSelection) {
+        if ("off".equals(backend)) {
+            return false;
+        }
+        return "off".equals(previousBackend) || currentSelection;
     }
 
     private static void setBackendPanelVisibility(Container parent, String backend) {
@@ -1214,9 +1247,15 @@ final class ProviderSetupDialog extends JDialog {
         ProviderSetupOption callbackOption = callbackOptionAfterSave(selectedOption, settings);
         try {
             UserPropertiesWriter.apply(propertiesPath, settings);
+            if (selectedOption == ProviderSetupOption.SMART_ROUTING) {
+                updateSmartRoutingRow();
+            }
             onSaved.accept(callbackOption);
             dispose();
         } catch (IOException e) {
+            if (selectedOption == ProviderSetupOption.SMART_ROUTING) {
+                updateSmartRoutingRow();
+            }
             onSaved.accept(callbackOption);
             String reason = e.getMessage() == null || e.getMessage().isBlank()
                     ? e.getClass().getSimpleName() : e.getMessage();
@@ -1302,12 +1341,14 @@ final class ProviderSetupDialog extends JDialog {
             setStatus("Authentication was rejected. Check the key and try again.", ThemeColors.error());
         } else if (result.outcome() == ProviderConnectionTester.Outcome.RATE_LIMITED) {
             setStatus("Rate limited. The key can still be saved.", ThemeColors.info());
-        } else if (AgentJudgmentConfig.OLLAMA.equals(smartBackend) && result.httpCode() == 404) {
+        } else if (AgentJudgmentConfig.OLLAMA.equals(smartBackend)
+                && isOllamaModelUnavailable(result.httpCode(), result.reason(), AiConfig.getProperty(
+                        OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL))) {
             setStatus(ollamaMissingModelCopy(AiConfig.getProperty(
-                    OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL)), ThemeColors.error());
+                    OllamaEmbeddingClient.MODEL_KEY, OllamaEmbeddingClient.DEFAULT_MODEL)),
+                    ThemeColors.error());
         } else if (result.outcome() == ProviderConnectionTester.Outcome.HTTP_ERROR) {
-            setStatus("The provider returned HTTP " + result.httpCode()
-                    + ". You can save anyway.", ThemeColors.error());
+            setStatus(smartRoutingHttpErrorCopy(result), ThemeColors.error());
         } else {
             setStatus("Could not reach the provider: " + safeReason(result.reason())
                     + " You can save anyway.", ThemeColors.error());
@@ -1316,6 +1357,20 @@ final class ProviderSetupDialog extends JDialog {
 
     static String ollamaMissingModelCopy(String model) {
         return "Run ollama pull " + model + ".";
+    }
+
+    static boolean isOllamaModelUnavailable(int httpCode, String reason, String model) {
+        return httpCode == 404 || OllamaEmbeddingClient.modelUnavailableMessage(model).equals(reason);
+    }
+
+    static String unexpectedProviderResponseCopy(String reason) {
+        return "Unexpected response from the provider: " + safeReason(reason) + " You can save anyway.";
+    }
+
+    static String smartRoutingHttpErrorCopy(ProviderConnectionTester.Result result) {
+        return result.httpCode() == 0
+                ? unexpectedProviderResponseCopy(result.reason())
+                : "The provider returned HTTP " + result.httpCode() + ". You can save anyway.";
     }
 
     private void updateOllamaModels(List<String> names) {

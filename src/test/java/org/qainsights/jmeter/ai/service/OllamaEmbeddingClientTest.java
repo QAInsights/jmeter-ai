@@ -67,6 +67,18 @@ class OllamaEmbeddingClientTest {
                 () -> client("embeddinggemma").embed(List.of("x")));
 
         assertTrue(e.getMessage().contains("ollama pull embeddinggemma"), e.getMessage());
+        assertEquals(404, e.httpCode());
+    }
+
+    @Test
+    void modelNotFoundTextPreservesTheActualHttpStatus() {
+        respond(400, "{\"error\":\"model \\\"embeddinggemma\\\" not found\"}");
+
+        JudgmentException e = assertThrows(JudgmentException.class,
+                () -> client("embeddinggemma").embed(List.of("x")));
+
+        assertEquals(400, e.httpCode());
+        assertEquals(OllamaEmbeddingClient.modelUnavailableMessage("embeddinggemma"), e.getMessage());
     }
 
     @Test
