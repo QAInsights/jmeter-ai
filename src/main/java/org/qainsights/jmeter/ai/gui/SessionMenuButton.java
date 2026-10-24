@@ -18,10 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Header overflow menu for conversation-level actions. Today that's
- * "Export chat" (Markdown / HTML); future session actions (history picker,
- * rename) hang off the same popup. The heavy lifting lives in
- * {@link ConversationExporter} - this class is dialog plumbing only.
+ * Header overflow menu for provider setup and conversation export actions.
+ * The heavy lifting lives in {@link ConversationExporter}; this class is
+ * dialog plumbing only.
  */
 class SessionMenuButton extends QuietButton {
 
@@ -31,16 +30,27 @@ class SessionMenuButton extends QuietButton {
     private final transient Supplier<ConversationSession> sessionSupplier;
     private final JPopupMenu menu;
 
-    SessionMenuButton(Component dialogParent, Supplier<ConversationSession> sessionSupplier) {
+    SessionMenuButton(
+            Component dialogParent,
+            Supplier<ConversationSession> sessionSupplier,
+            Runnable connectProvider) {
         super("");
         this.dialogParent = dialogParent;
         this.sessionSupplier = sessionSupplier;
         iconOnly(UiTokens.HEADER_CONTROL_HEIGHT);
         setIcon(ActionIcons.more(16));
-        setToolTipText("Conversation actions and export");
-        getAccessibleContext().setAccessibleName("Conversation actions and export");
+        setToolTipText("More actions");
+        getAccessibleContext().setAccessibleName("More actions");
 
         menu = new JPopupMenu();
+        JMenuItem connect = new JMenuItem("Connect a provider…");
+        connect.addActionListener(e -> {
+            if (connectProvider != null) {
+                connectProvider.run();
+            }
+        });
+        menu.add(connect);
+        menu.addSeparator();
         menu.add(exportItem("Export chat as Markdown…", ConversationExporter.Format.MARKDOWN));
         menu.add(exportItem("Export chat as HTML…", ConversationExporter.Format.HTML));
         addActionListener(e -> menu.show(this, 0, getHeight()));
@@ -55,6 +65,17 @@ class SessionMenuButton extends QuietButton {
     /** Number of items in the popup (for tests). */
     int menuItemCount() {
         return menu.getComponentCount();
+    }
+
+    String menuItemLabel(int index) {
+        java.awt.Component component = menu.getComponent(index);
+        return component instanceof JMenuItem item ? item.getText() : null;
+    }
+
+    void activateMenuItem(int index) {
+        if (menu.getComponent(index) instanceof JMenuItem item) {
+            item.doClick();
+        }
     }
 
     private void exportWithDialog(ConversationExporter.Format format) {

@@ -131,7 +131,7 @@ class AiResponseRouterTest {
         AiResponseRouter nullGoogleRouter = new AiResponseRouter(holder);
         String response = nullGoogleRouter.getAiResponse("google:gemini-1.5", history);
 
-        assertTrue(response.contains("Google Gemini service not configured"));
+        assertTrue(response.contains("Google Gemini is not connected"));
         assertTrue(response.contains("google.api.key"));
         assertTrue(response.contains("user.properties"));
     }
@@ -143,7 +143,7 @@ class AiResponseRouterTest {
         AiResponseRouter nullGrokRouter = new AiResponseRouter(holder);
         String response = nullGrokRouter.getAiResponse("grok:grok-4.5", history);
 
-        assertTrue(response.contains("Grok service not configured"));
+        assertTrue(response.contains("Grok is not connected"));
         assertTrue(response.contains("grok.api.key"));
         assertTrue(response.contains("user.properties"));
     }
@@ -155,7 +155,7 @@ class AiResponseRouterTest {
         AiResponseRouter nullMetaRouter = new AiResponseRouter(holder);
         String response = nullMetaRouter.getAiResponse("meta:muse-spark-1.1", history);
 
-        assertTrue(response.contains("Meta Muse service not configured"));
+        assertTrue(response.contains("Meta Muse is not connected"));
         assertTrue(response.contains("meta.api.key"));
         assertTrue(response.contains("user.properties"));
     }
@@ -163,9 +163,12 @@ class AiResponseRouterTest {
     @Test
     void notConfiguredMessage_namesPropertyAndUserProperties() {
         String msg = AiResponseRouter.notConfiguredMessage("Grok", "grok.api.key");
-        assertTrue(msg.contains("Grok service not configured"));
+        assertTrue(msg.contains("Grok is not connected"));
+        assertTrue(msg.contains("Connect a provider"));
+        assertTrue(msg.contains("⋯"));
         assertTrue(msg.contains("grok.api.key"));
         assertTrue(msg.contains("user.properties"));
+        assertTrue(msg.contains("jmeter.properties"));
         assertTrue(msg.contains("restart JMeter"));
     }
 
