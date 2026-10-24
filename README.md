@@ -39,7 +39,9 @@
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [Corporate LLM gateways](#corporate-llm-gateways)
-- [ChatGPT / Codex & Claude Code subscriptions](#-using-feather-wand-with-chatgpt--codex)
+- [ChatGPT / Codex subscriptions](#-using-feather-wand-with-chatgpt--codex)
+- [Claude Code subscriptions](#-using-feather-wand-with-claude-code)
+- [OpenCode subscriptions](#-using-feather-wand-with-opencode)
 - [Modern Chat UI & Model Picker](#-modern-chat-ui--model-picker)
 - [Special Commands](#-special-commands)
 - [Agent Mode](#-agent-mode)
@@ -62,7 +64,7 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), OpenRouter, Meta Muse, or AWS Bedrock models, or use your CLI-managed ChatGPT/Codex or Claude Code account. |
+| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), OpenRouter, Meta Muse, or AWS Bedrock models, or use a CLI-managed ChatGPT/Codex, Claude Code, or OpenCode account. |
 | ⚡ **Real-Time Streaming** | Watch supported API responses appear token-by-token with a **Stop** button to cancel anytime; CLI-backed requests return one completed answer and are cancellable too. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
 | 🎯 **Extract this** | Highlight a value in a View Results Tree response, right-click and pick **Extract this (Feather Wand)**. Feather Wand builds JSON, CSS selector, regex and boundary extractors, runs each one through JMeter's own extractor code against the real response, and offers only the ones that return exactly that value. Pick one, name the variable and it lands under the sampler that produced the response, optionally replacing later hard-coded copies with `${var}`. Works without an API key. |
@@ -70,7 +72,7 @@
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex, Claude Code, and OpenCode CLI providers. |
 | **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, OpenRouter Decisions with Microsoft-Decision-1, or local EmbeddingGemma through Ollama) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
@@ -129,7 +131,7 @@ That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-s
 | `jmeter.ai.refactoring.enabled` | Enable JSR223 editor AI refactoring | `true` |
 | `jmeter.ai.extract.enabled` | Add **Extract this** to the right-click menu of View Results Tree responses | `true` |
 | `jmeter.ai.service.type` | Default AI service for refactoring (`anthropic`, `openai`, `ollama`, `deepseek`, `apple`, and others) | `anthropic` |
-| `jmeter.ai.cli.max.history.size` | Conversation entries replayed with each one-shot Codex/Claude Code chat request | `10` |
+| `jmeter.ai.cli.max.history.size` | Conversation entries replayed with each one-shot Codex/Claude Code/OpenCode chat request | `10` |
 | `jmeter.ai.dev.menu` | Show the [AI Dev tool items](#dev-menu-items) under the Run menu | `false` |
 
 ### AI Service Settings
@@ -222,9 +224,27 @@ Uses the authentication managed by your local [Claude Code CLI](https://docs.ant
 | `jmeter.ai.claudecode.login.timeout.seconds` | Timeout for the CLI-owned browser login flow | `300` |
 | `jmeter.ai.claudecode.models` | Comma-separated raw model ids added beside `claude-code:default` | *(empty = CLI default only)* |
 
-> These chat/Agent Mode providers are **not** the `jmeter.ai.terminal.*` integration, which controls the separate interactive terminal tab.
+</details>
+
+<details>
+<summary><b>OpenCode CLI (free models or CLI-managed providers)</b></summary>
+
+OpenCode's free models work without signing in. Other providers use credentials managed by OpenCode. Feather Wand does not read or store those credentials.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `jmeter.ai.opencode.enabled` | Show OpenCode status and models in the picker after restart | `false` |
+| `jmeter.ai.opencode.executable` | Full path to the `opencode` binary | *(PATH auto-detect)* |
+| `jmeter.ai.opencode.timeout.seconds` | Hard timeout for one `opencode run` request | `180` |
+| `jmeter.ai.opencode.models` | Comma-separated raw provider/model ids added beside `opencode:default` | *(empty = discovered models plus CLI default)* |
+
+Feather Wand runs OpenCode in an empty temporary directory. File writes, shell, and web tools are denied, as are reads outside that directory. Feather Wand's own JMeter tools do the plan editing. Enable with `jmeter.ai.opencode.enabled=true` and restart JMeter.
+
+> This Chat and Agent Mode provider is separate from `jmeter.ai.terminal.opencode.*`, which controls the interactive terminal tab.
 
 </details>
+
+> These Chat and Agent Mode providers are **not** the `jmeter.ai.terminal.*` integration, which controls the separate interactive terminal tab.
 
 <details>
 <summary><b>Google Gemini</b></summary>
@@ -540,18 +560,34 @@ The same flow works with the authentication managed by Claude Code: a **Claude P
 
 The footer offers the same **Sign in**, **Sign out**, **Refresh**, and **Custom model…** actions and reports signed-in, API-key, signed-out, missing-CLI, or unknown states.
 
+## 🔐 Using Feather Wand with OpenCode
+
+OpenCode's free models work without signing in. Other models use providers added to the local OpenCode CLI. Feather Wand does not read or store provider credentials, and adding a provider is done by you in the AI CLI terminal tab.
+
+1. Install the CLI: `npm install -g opencode-ai`.
+2. Add `jmeter.ai.opencode.enabled=true` to `user.properties` and restart JMeter.
+3. Open the model picker and select **OpenCode**. The picker offers `default`, discovered `provider/model` ids, configured ids from `jmeter.ai.opencode.models`, and **Custom model…**.
+4. To use a provider that requires sign-in, run `opencode auth login` yourself in the AI CLI terminal tab. Feather Wand never runs the interactive login command.
+
+The provider status row offers **Refresh** and **Custom model…**, but no Sign in or Sign out buttons. Free models can be used without adding a provider.
+
+### OpenCode permissions
+
+Each request runs in a new empty temporary directory with `--pure` and a permission configuration that allows read-only discovery tools while denying file writes, shell, web tools, and reads outside that directory. The temporary directory is removed after the request. In Agent Mode, Feather Wand's own JMeter tools perform plan edits; OpenCode itself cannot write to the plan files.
+
 ### What Feather Wand runs
 
 | Provider | Authentication commands | Prompt command |
 |----------|-------------------------|----------------|
 | **ChatGPT / Codex** | `codex login status`, `codex login`, `codex logout` | `codex exec` with the prompt on UTF-8 stdin, the configured sandbox, optional `--model`, and a clean last-message output file |
 | **Claude Code** | `claude auth status --json`, `claude auth login --claudeai`, `claude auth logout` | `claude -p --output-format text` with the prompt on UTF-8 stdin and optional `--model` |
+| **OpenCode** | `opencode --version`; provider sign-in is done manually in the AI CLI terminal | `opencode run --pure --format json --dir <empty temp dir>` with the prompt on UTF-8 stdin, `OPENCODE_CONFIG_CONTENT`, and optional `-m provider/model` |
 
 Commands are launched directly with `ProcessBuilder`, never through a shell, and prompt text is never interpolated into the command line. Standard output and error are drained concurrently off the Swing event thread. Each request has a hard timeout; timeout or **Stop** terminates the CLI process and its descendants.
 
 CLI-backed chat is one-shot: the most recent `jmeter.ai.cli.max.history.size` conversation entries are flattened with the JMeter system prompt and replayed on every request. The completed answer arrives as one chunk rather than token-by-token, even when `jmeter.ai.streaming.enabled=true`.
 
-Feather Wand asks each CLI for auth status and invokes its login/logout commands, but never reads, copies, logs, or deletes CLI credential files or tokens.
+Feather Wand checks CLI availability and provides the Codex and Claude Code login/logout actions, but never reads, copies, logs, or deletes CLI credential files or tokens. OpenCode provider sign-in is performed manually in its terminal tab.
 
 ### Provider modes are separate
 
@@ -561,18 +597,19 @@ Feather Wand asks each CLI for auth status and invokes its login/logout commands
 | **ChatGPT / Codex** (`codex:*`) | Session managed entirely by the Codex CLI | Whatever account Codex reports (ChatGPT or API key) |
 | **Anthropic API** (unprefixed Claude models) | `anthropic.api.key` read by Feather Wand | Anthropic API usage |
 | **Claude Code** (`claude-code:*`) | Session managed entirely by the Claude Code CLI | Whatever account Claude Code reports (subscription, API key, or cloud) |
+| **OpenCode** (`opencode:*`) | Free models or provider credentials managed by the OpenCode CLI | OpenCode's free tier or the account configured in OpenCode |
 
 Switching providers never rewrites or removes the other providers' settings.
 
 ### Picking a subscription model
 
-The CLIs publish no model list, so the picker offers `codex:default` / `claude-code:default` (let the CLI decide) plus raw ids from `jmeter.ai.codex.models` / `jmeter.ai.claudecode.models`. For an id that is not listed, click **Custom model…**, type the raw id (for example, `gpt-5.6-sol`), and it is selected immediately, with no properties edit or restart. Custom ids are remembered in `~/.jmeter-ai/model-selector.json` and passed as `--model`; an unsupported id therefore returns a CLI error instead of silently falling back. API-backed providers continue to list models from their provider APIs.
+Codex and Claude Code publish no model list, so the picker offers `codex:default` / `claude-code:default` (let the CLI decide) plus raw ids from `jmeter.ai.codex.models` / `jmeter.ai.claudecode.models`. OpenCode discovery runs `opencode models`, and the picker merges those ids with `opencode:default` and any ids in `jmeter.ai.opencode.models`. For an id that is not listed, click **Custom model…**, type the raw id, and it is selected immediately, with no properties edit or restart. Custom ids are remembered in `~/.jmeter-ai/model-selector.json` and passed to the selected CLI; an unsupported id therefore returns a CLI error instead of silently falling back. API-backed providers continue to list models from their provider APIs.
 
 ### Agent Mode with CLI providers
 
-Both CLI providers participate in the same 18-tool Agent Mode loop. Because the CLIs expose no native tool-calling API to Feather Wand, each prompt contains the available tool schemas and requests one JSON object with either `tool_calls` or a `final` answer. Tool results are replayed into the next one-shot CLI request; non-JSON output safely becomes the final plain-text answer. Existing iteration limits and destructive-tool confirmations still apply.
+All three CLI providers participate in the same 18-tool Agent Mode loop. Because the CLIs expose no native tool-calling API to Feather Wand, each prompt contains the available tool schemas and requests one JSON object with either `tool_calls` or a `final` answer. Tool results are replayed into the next one-shot CLI request; non-JSON output safely becomes the final plain-text answer. Existing iteration limits and destructive-tool confirmations still apply.
 
-The Codex child process uses `jmeter.ai.codex.sandbox` (`read-only` by default); Claude Code follows its own CLI permissions and configuration. Feather Wand's **Thinking** and effort controls do not override either CLI's reasoning budget; the CLI owns that behavior.
+The Codex child process uses `jmeter.ai.codex.sandbox` (`read-only` by default); Claude Code follows its own CLI permissions and configuration; OpenCode runs with the restricted temporary-directory configuration above. Feather Wand's **Thinking** and effort controls do not override the CLIs' reasoning budgets; each CLI owns that behavior.
 
 ## 🎨 Modern Chat UI & Model Picker
 
@@ -592,7 +629,7 @@ The redesigned chat panel uses shared spacing, typography, button, and theme tok
 - Models are ordered **pinned → recently used → all others**. Pinned order is preserved, recents are most-recent-first and capped at eight, and the remainder is alphabetical by display name.
 - Use the toolbar star or the star zone on any picker row to pin/unpin. Pins, recents, and custom subscription models persist in `~/.jmeter-ai/model-selector.json` and stay synchronized across both star controls.
 - The popup opens above or below the selector according to available screen space. Type to filter, use Down/Enter to select, Esc or an outside click to cancel, or double-click a row.
-- Enabled Codex and Claude Code providers add their asynchronous auth/status actions to the footer without blocking the UI.
+- Enabled Codex, Claude Code, and OpenCode providers add asynchronous status actions to the footer without blocking the UI. OpenCode does not show Sign in or Sign out buttons because its provider setup is managed in the AI CLI terminal tab.
 
 ### Header and transcript
 
@@ -645,7 +682,7 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done, all inside the existing chat panel.
 
-> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, **OpenRouter**, and **Meta Muse**, plus the **ChatGPT / Codex CLI** and **Claude Code CLI** providers. Ollama and Bedrock currently fall back to plain chat.
+> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, **OpenRouter**, and **Meta Muse**, plus the **ChatGPT / Codex CLI**, **Claude Code CLI**, and **OpenCode CLI** providers. Ollama and Bedrock currently fall back to plain chat.
 
 <div align="center">
 
@@ -798,6 +835,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Google Gemini** | ✅ Agent Mode | Native `FunctionDeclaration`/`functionCall` via the official `google-genai` SDK | Done |
 | **ChatGPT / Codex CLI** | ✅ Agent Mode | No native tool API; driven through a JSON tool protocol in the prompt over `codex exec` | Done |
 | **Claude Code CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `claude -p` | Done |
+| **OpenCode CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `opencode run` with restricted tools | Done |
 | **DeepSeek** | ✅ Agent Mode | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | Done |
 | **Grok (xAI)** | ✅ Agent Mode | Yes: OpenAI-style function tools | Done |
 | **OpenRouter** | ✅ Chat and Agent Mode | OpenAI-compatible Chat Completions with tool-capable model discovery | Done |
@@ -1107,7 +1145,7 @@ The input options row (the row with the paperclip) carries a live readout: `ctx 
 - **Context fill** - how much of the selected model's context window your conversation uses. When an API provider reports usage, the latest server prompt size is used; until then it falls back to an estimate over the history with attachments inlined, marked with `~`. Attachments are the usual context hogs - watch this number when you attach big logs.
 - **Session cost** - cumulative cost of API calls, priced per call at [models.dev](https://models.dev) list prices from the vendored catalog (the same daily-refreshed file that powers the model picker's metadata). Hidden when the catalog has no pricing for the model (e.g. some Grok models); local Ollama models never show cost.
 
-Codex and Claude Code do not expose token usage through these one-shot CLI commands, so their context remains locally estimated and their account charges are not added to the session-cost total.
+The one-shot CLI providers do not currently feed token usage into the session-cost total, so their context remains locally estimated. OpenCode reports token and cost fields, but Feather Wand does not yet import them.
 
 Hover the label for the exact breakdown: precise context count and percentage, session input/output tokens over N responses, and the exact estimated cost. The denominator hides for models with unknown context windows (e.g. local Ollama models), and the label resets when you start a new conversation.
 

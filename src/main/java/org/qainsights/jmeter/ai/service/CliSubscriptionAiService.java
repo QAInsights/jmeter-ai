@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Shared {@link AiService} for the CLI-backed providers (Codex, Claude Code).
+ * Shared {@link AiService} for the CLI-backed providers (Codex, Claude Code, OpenCode).
  * The transport is a one-shot non-interactive process per request, so the
  * conversation is replayed as a flat transcript on every call; the CLI keeps no
  * server-side session for us.

@@ -42,6 +42,7 @@ class TelemetryModelsTest {
         assertEquals("claude-code", TelemetryModels.provider("claude-code:sonnet"));
         assertEquals("anthropic", TelemetryModels.provider("claude-sonnet-4-5"));
         assertEquals("apple", TelemetryModels.provider("apple:on-device"));
+        assertEquals("opencode", TelemetryModels.provider("opencode:opencode/big-pickle"));
         assertEquals("openrouter", TelemetryModels.provider("openrouter:anthropic/claude-sonnet-5.5"));
     }
 

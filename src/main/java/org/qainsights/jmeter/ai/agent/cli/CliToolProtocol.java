@@ -17,7 +17,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Text protocol that lets a CLI-backed model (Codex, Claude Code) participate in
+ * Text protocol that lets a CLI-backed model (Codex, Claude Code, OpenCode) participate in
  * the same tool-calling {@link org.qainsights.jmeter.ai.agent.loop.AgentLoop} as
  * the SDK providers. Those CLIs expose no tool-calling API, so the tools are
  * described in the prompt and the model is asked to answer with a single JSON

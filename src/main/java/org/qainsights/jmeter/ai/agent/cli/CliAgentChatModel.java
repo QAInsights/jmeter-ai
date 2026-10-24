@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link ChatModel} backed by a subscription CLI (Codex, Claude Code). The CLIs
+ * {@link ChatModel} backed by a subscription CLI (Codex, Claude Code, OpenCode). The CLIs
  * are one-shot and keep no session for us, so this model owns the transcript and
  * replays it - system prompt, {@link CliToolProtocol} instructions, prior turns,
  * tool results - on every invocation. Stateful for a single agent run: create

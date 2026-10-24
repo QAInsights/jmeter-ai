@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.gui;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Component;
@@ -10,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,22 @@ class CliProviderStatusPanelTest {
         assertTrue(provider.refreshed.await(2, TimeUnit.SECONDS));
     }
 
+    @Test
+    void hidesSignInActionsAndShowsProviderHintWhenProviderManagesItsOwnSignIn() throws Exception {
+        FakeProvider provider = new FakeProvider();
+        provider.managesSignIn = false;
+        provider.signInHint = "Add providers in the AI CLI terminal tab.";
+        AtomicReference<CliProviderStatusPanel> panel = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() ->
+                panel.set(new CliProviderStatusPanel(List.of(provider), ignored -> { })));
+
+        assertFalse(findButton(panel.get(), "Sign in").isVisible());
+        assertFalse(findButton(panel.get(), "Sign out").isVisible());
+        assertTrue(findButton(panel.get(), "Refresh").isVisible());
+        assertTrue(findButton(panel.get(), "Custom model…").isVisible());
+        assertEquals(provider.signInHint, findLabelWithTooltip(panel.get(), provider.signInHint).getToolTipText());
+    }
+
     private static JButton findButton(Container container, String text) {
         for (Component component : container.getComponents()) {
             if (component instanceof JButton button && text.equals(button.getText())) {
@@ -41,6 +60,21 @@ class CliProviderStatusPanelTest {
                 JButton button = findButton(child, text);
                 if (button != null) {
                     return button;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static JLabel findLabelWithTooltip(Container container, String tooltip) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JLabel label && tooltip.equals(label.getToolTipText())) {
+                return label;
+            }
+            if (component instanceof Container child) {
+                JLabel label = findLabelWithTooltip(child, tooltip);
+                if (label != null) {
+                    return label;
                 }
             }
         }
@@ -63,6 +97,8 @@ class CliProviderStatusPanelTest {
     private static final class FakeProvider implements SubscriptionCliProvider {
 
         private final CountDownLatch refreshed = new CountDownLatch(1);
+        private boolean managesSignIn = true;
+        private String signInHint;
 
         @Override
         public void refresh() {
@@ -132,6 +168,16 @@ class CliProviderStatusPanelTest {
         @Override
         public String signInActionLabel() {
             return "Sign in";
+        }
+
+        @Override
+        public boolean managesSignIn() {
+            return managesSignIn;
+        }
+
+        @Override
+        public String signInHint() {
+            return signInHint;
         }
 
         @Override

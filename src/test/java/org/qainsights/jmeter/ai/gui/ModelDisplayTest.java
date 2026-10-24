@@ -31,6 +31,8 @@ class ModelDisplayTest {
             ModelDisplay.parse("bedrock:claude-3-7"));
         assertArrayEquals(new String[] { "on-device", "Apple" },
             ModelDisplay.parse("apple:on-device"));
+        assertArrayEquals(new String[] { "opencode/big-pickle", "OpenCode" },
+            ModelDisplay.parse("opencode:opencode/big-pickle"));
     }
 
     @Test
@@ -51,6 +53,8 @@ class ModelDisplayTest {
     void formatLabelJoinsNameAndProvider() {
         assertEquals("gpt-4o  ·  OpenAI", ModelDisplay.formatLabel("openai:gpt-4o"));
         assertEquals("on-device  ·  Apple", ModelDisplay.formatLabel("apple:on-device"));
+        assertEquals("opencode/big-pickle  ·  OpenCode",
+            ModelDisplay.formatLabel("opencode:opencode/big-pickle"));
         assertEquals("claude-sonnet-4  ·  Anthropic", ModelDisplay.formatLabel("claude-sonnet-4"));
     }
 

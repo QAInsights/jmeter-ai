@@ -3,7 +3,7 @@ package org.qainsights.jmeter.ai.cli;
 import java.util.List;
 
 /**
- * A locally installed coding-agent CLI (OpenAI Codex, Claude Code) used as an
+ * A locally installed coding-agent CLI (OpenAI Codex, Claude Code, OpenCode) used as an
  * AI backend through the subscription the user already signed into with that
  * CLI. The CLI owns the whole OAuth/browser flow and every network call:
  * Feather Wand never collects credentials and never reads the CLI's
@@ -49,6 +49,16 @@ public interface SubscriptionCliProvider {
 
     /** Label for the sign-in action, e.g. {@code "Sign in with ChatGPT"}. */
     String signInActionLabel();
+
+    /** Whether the provider exposes its own sign-in and sign-out actions in the picker. */
+    default boolean managesSignIn() {
+        return true;
+    }
+
+    /** Optional status tooltip explaining how to sign in outside Feather Wand. */
+    default String signInHint() {
+        return null;
+    }
 
     /** Selector-id prefix identifying this provider, e.g. {@code "codex:"}. */
     String modelPrefix();

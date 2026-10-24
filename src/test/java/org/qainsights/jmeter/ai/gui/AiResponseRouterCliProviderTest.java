@@ -29,6 +29,7 @@ import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 
 /**
@@ -47,6 +48,9 @@ class AiResponseRouterCliProviderTest {
     private ClaudeCodeAiService claudeCodeService;
 
     @Mock
+    private OpenCodeAiService openCodeService;
+
+    @Mock
     private OpenAiService openAiService;
 
     @Mock
@@ -62,6 +66,7 @@ class AiResponseRouterCliProviderTest {
         holder.setClaudeService(claudeService);
         holder.setCodexService(codexService);
         holder.setClaudeCodeService(claudeCodeService);
+        holder.setOpenCodeService(openCodeService);
         router = new AiResponseRouter(holder);
     }
 
@@ -83,6 +88,18 @@ class AiResponseRouterCliProviderTest {
         assertEquals("claude code answer", router.getAiResponse("claude-code:default", history));
 
         verify(claudeCodeService).generateResponse(anyList(), anyString());
+        verify(claudeService, never()).generateResponse(anyList(), anyString());
+    }
+
+    @Test
+    void openCodePrefixRoutesToTheOpenCodeServiceOnly() {
+        when(openCodeService.generateResponse(anyList(), anyString())).thenReturn("OpenCode answer");
+
+        assertEquals("OpenCode answer", router.getAiResponse("opencode:opencode/big-pickle", history));
+
+        verify(openCodeService).generateResponse(anyList(), anyString());
+        verify(codexService, never()).generateResponse(anyList(), anyString());
+        verify(claudeCodeService, never()).generateResponse(anyList(), anyString());
         verify(claudeService, never()).generateResponse(anyList(), anyString());
     }
 
@@ -127,6 +144,22 @@ class AiResponseRouterCliProviderTest {
     }
 
     @Test
+    void openCodeStreamingStripsThePrefixAndForwardsTheCallbacks() {
+        Runnable expectedHandle = () -> { };
+        Consumer<String> tokens = token -> { };
+        Runnable complete = () -> { };
+        Consumer<Exception> error = e -> { };
+        when(openCodeService.generateStreamResponse(eq(history), eq("opencode/big-pickle"), same(tokens), any(),
+                same(complete), same(error))).thenReturn(expectedHandle);
+
+        Runnable handle = router.generateStreamResponse(
+                "opencode:opencode/big-pickle", history, tokens, complete, error);
+
+        assertSame(expectedHandle, handle);
+        verifyNoInteractions(openAiService, claudeService, codexService, claudeCodeService);
+    }
+
+    @Test
     void claudeCodeStreamingDoesNotFallThroughToTheAnthropicApi() {
         // "claude-code:" also starts with "claude", the Anthropic fallback family
         router.generateStreamResponse("claude-code:opus", history, token -> { }, () -> { }, e -> { });
@@ -146,11 +179,15 @@ class AiResponseRouterCliProviderTest {
                 token -> callbacks.incrementAndGet(), callbacks::incrementAndGet, e -> callbacks.incrementAndGet());
         Runnable claudeCodeHandle = bare.generateStreamResponse("claude-code:default", history,
                 token -> callbacks.incrementAndGet(), callbacks::incrementAndGet, e -> callbacks.incrementAndGet());
+        Runnable openCodeHandle = bare.generateStreamResponse("opencode:default", history,
+                token -> callbacks.incrementAndGet(), callbacks::incrementAndGet, e -> callbacks.incrementAndGet());
 
         assertNotNull(codexHandle);
         assertNotNull(claudeCodeHandle);
+        assertNotNull(openCodeHandle);
         codexHandle.run();
         claudeCodeHandle.run();
+        openCodeHandle.run();
         assertEquals(0, callbacks.get());
         verifyNoInteractions(claudeService);
     }
@@ -159,6 +196,7 @@ class AiResponseRouterCliProviderTest {
     void resolveAiServicePicksTheCliServices() {
         assertSame(codexService, router.resolveAiService("codex:default"));
         assertSame(claudeCodeService, router.resolveAiService("claude-code:default"));
+        assertSame(openCodeService, router.resolveAiService("opencode:opencode/big-pickle"));
         assertSame(openAiService, router.resolveAiService("openai:gpt-4o"));
         assertSame(claudeService, router.resolveAiService("claude-3-7-sonnet-latest"));
     }
@@ -167,13 +205,16 @@ class AiResponseRouterCliProviderTest {
     void cliModelsAreAgentCapableAndDoNotFallThroughToTheAnthropicApi() {
         assertTrue(CommandDispatcher.isAgentCapableModel("codex:default"));
         assertTrue(CommandDispatcher.isAgentCapableModel("claude-code:default"));
+        assertTrue(CommandDispatcher.isAgentCapableModel("opencode:default"));
         assertTrue(!CommandDispatcher.isClaudeModel("claude-code:default"));
         assertTrue(!CommandDispatcher.isClaudeModel("codex:default"));
+        assertTrue(!CommandDispatcher.isClaudeModel("opencode:default"));
     }
 
     @Test
     void agentModeWiresTheCliServices() {
         assertTrue(JMeterAgent.forService(new CodexAiService()) != null);
         assertTrue(JMeterAgent.forService(new ClaudeCodeAiService()) != null);
+        assertTrue(JMeterAgent.forService(new OpenCodeAiService()) != null);
     }
 }

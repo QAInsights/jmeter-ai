@@ -75,4 +75,9 @@ class CommandDispatcherIsClaudeModelTest {
         assertFalse(CommandDispatcher.isClaudeModel("bedrock:anthropic.claude-3-5-sonnet-20241022-v2:0"),
                 "Bedrock model should not be treated as Claude (agent mode deferred)");
     }
+
+    @Test
+    void openCodeModel_returnsFalse() {
+        assertFalse(CommandDispatcher.isClaudeModel("opencode:opencode/big-pickle"));
+    }
 }

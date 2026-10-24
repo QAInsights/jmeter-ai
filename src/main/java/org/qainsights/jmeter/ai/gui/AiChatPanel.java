@@ -45,6 +45,7 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
@@ -112,6 +113,7 @@ public class AiChatPanel
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
     private ClaudeCodeAiService claudeCodeService;
+    private OpenCodeAiService openCodeService;
     private AppleFoundationAiService appleFoundationAiService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
@@ -237,6 +239,7 @@ public class AiChatPanel
         bedrockService = new BedrockAiService();
         codexService = new CodexAiService();
         claudeCodeService = new ClaudeCodeAiService();
+        openCodeService = new OpenCodeAiService();
         appleFoundationAiService = new AppleFoundationAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
@@ -831,6 +834,7 @@ public class AiChatPanel
         holder.setBedrockService(bedrockService);
         holder.setCodexService(codexService);
         holder.setClaudeCodeService(claudeCodeService);
+        holder.setOpenCodeService(openCodeService);
         holder.setAppleFoundationAiService(appleFoundationAiService);
         return holder;
     }
@@ -962,7 +966,7 @@ public class AiChatPanel
 
     private List<SubscriptionCliProvider> enabledCliProviders() {
         List<SubscriptionCliProvider> providers = new ArrayList<>();
-        for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService)) {
+        for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService, openCodeService)) {
             if (service.getProvider().isEnabled()) {
                 providers.add(service.getProvider());
             }

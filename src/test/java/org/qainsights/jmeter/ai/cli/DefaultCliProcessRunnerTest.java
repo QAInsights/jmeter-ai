@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -68,6 +69,23 @@ class DefaultCliProcessRunnerTest {
         CliProcessResult result = runner.run(javaCommand(program), "caf\u00e9 latte", Duration.ofSeconds(60));
         assertTrue(result.isSuccess());
         assertEquals("got:café latte", result.getStdout().trim());
+    }
+
+    @Test
+    void forwardsEnvironmentVariablesToTheChild(@TempDir Path dir) throws IOException {
+        Path program = program(dir, "Environment", """
+                public class Environment {
+                    public static void main(String[] args) {
+                        System.out.print(System.getenv("X"));
+                    }
+                }
+                """);
+
+        CliProcessResult result = runner.run(
+                javaCommand(program), null, Duration.ofSeconds(60), Map.of("X", "from-runner"));
+
+        assertTrue(result.isSuccess());
+        assertEquals("from-runner", result.getStdout().trim());
     }
 
     @Test
