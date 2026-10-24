@@ -13,6 +13,8 @@ import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
@@ -120,6 +122,18 @@ class ProviderConnectionTesterTest {
     }
 
     @Test
+    void twoArgumentTestUsesConfiguredOllamaHostAndPort() {
+        properties.put("ollama.host", "http://127.0.0.3");
+        properties.put("ollama.port", "23456");
+        AtomicReference<HttpRequest> captured = new AtomicReference<>();
+        ProviderConnectionTester tester = tester(captured, 200, "{\"models\":[]}");
+
+        tester.test(ProviderSetupOption.OLLAMA, null);
+
+        assertEquals("http://127.0.0.3:23456/api/tags", captured.get().uri().toString());
+    }
+
+    @Test
     void normalizesOllamaHostsAndExtractsInlinePorts() {
         assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://localhost", null),
                 ProviderConnectionTester.normalizeOllamaHost("localhost"));
@@ -129,6 +143,33 @@ class ProviderConnectionTesterTest {
                 ProviderConnectionTester.normalizeOllamaHost("192.0.2.10:11500"));
         assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://localhost", null),
                 ProviderConnectionTester.normalizeOllamaHost("http://localhost/"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ProviderConnectionTester.normalizeOllamaHost("http://localhost/ollama"));
+    }
+
+    @Test
+    void mapsGeminiInvalidKey400ToAuthenticationRejected() {
+        String key = "gemini-test-key";
+        ProviderConnectionTester.Result result = tester(
+                new AtomicReference<>(), 400, "{\"error\":{\"status\":\"API_KEY_INVALID\","
+                        + "\"message\":\"API key not valid\"}}")
+                .test(ProviderSetupOption.GEMINI, key);
+
+        assertEquals(ProviderConnectionTester.Outcome.AUTH_REJECTED, result.outcome());
+        assertNoKey(result, key);
+    }
+
+    @Test
+    void serviceTypesAreOnlySetForTypesSupportedByBothRefactorPaths() {
+        java.util.Set<String> supported = java.util.Set.of(
+                "openai", "anthropic", "google", "deepseek", "ollama", "apple");
+        for (ProviderSetupOption option : ProviderSetupOption.values()) {
+            if (option.serviceType() != null) {
+                assertTrue(supported.contains(option.serviceType()), option.name());
+            }
+        }
+        assertNull(ProviderSetupOption.GROK.serviceType());
+        assertNull(ProviderSetupOption.META_MUSE.serviceType());
     }
 
     @Test

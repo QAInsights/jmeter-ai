@@ -283,7 +283,8 @@ public class AiResponseRouter {
     static String notConfiguredMessage(String providerDisplayName, String propertyKey) {
         return "Error: " + providerDisplayName
                 + " is not connected. Open the ⋯ menu in the Feather Wand panel and choose "
-                + "Connect a provider, or set " + propertyKey + " in user.properties and restart JMeter.";
+                + "Connect a provider, or set " + propertyKey
+                + " in user.properties (or jmeter.properties) and restart JMeter.";
     }
 
     /**

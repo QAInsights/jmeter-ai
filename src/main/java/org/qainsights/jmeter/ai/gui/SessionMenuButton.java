@@ -18,10 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Header overflow menu for conversation-level actions. Today that's
- * "Export chat" (Markdown / HTML); future session actions (history picker,
- * rename) hang off the same popup. The heavy lifting lives in
- * {@link ConversationExporter} - this class is dialog plumbing only.
+ * Header overflow menu for provider setup and conversation export actions.
+ * The heavy lifting lives in {@link ConversationExporter}; this class is
+ * dialog plumbing only.
  */
 class SessionMenuButton extends QuietButton {
 

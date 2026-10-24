@@ -14,6 +14,7 @@ import java.net.URI;
 import java.text.AttributedCharacterIterator;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.*;
 import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
@@ -137,6 +138,7 @@ public class AiChatPanel
     private boolean ollamaDetected;
     private boolean ollamaProbeStarted;
     private ProviderSetupOption pendingProviderSelection;
+    private final AtomicInteger modelLoadGeneration = new AtomicInteger();
 
     // Context stats (F9): session token/cost accumulator injected into every
     // service; the label renders in the input options row.
@@ -832,6 +834,7 @@ public class AiChatPanel
      * Loads the available models in the background.
      */
     private void loadModelsInBackground() {
+        int generation = modelLoadGeneration.incrementAndGet();
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() {
@@ -840,6 +843,9 @@ public class AiChatPanel
 
             @Override
             protected void done() {
+                if (generation != modelLoadGeneration.get()) {
+                    return;
+                }
                 try {
                     List<String> models = get();
                     // Get the default model ID

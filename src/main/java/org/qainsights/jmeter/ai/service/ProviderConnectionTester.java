@@ -78,6 +78,10 @@ public final class ProviderConnectionTester {
             HttpRequest request = requestFor(option, key, ollamaHost, ollamaPort);
             Response response = sender.send(request);
             int code = response.statusCode();
+            if (option == ProviderSetupOption.GEMINI && code == 400
+                    && isGeminiKeyRejected(response.body())) {
+                return new Result(Outcome.AUTH_REJECTED, 0, List.of(), code, "Authentication was rejected");
+            }
             if (code == 401 || code == 403) {
                 return new Result(Outcome.AUTH_REJECTED, 0, List.of(), code, "Authentication was rejected");
             }
@@ -108,7 +112,10 @@ public final class ProviderConnectionTester {
         if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
                 || uri.getHost() == null
                 || uri.getRawQuery() != null
-                || uri.getRawFragment() != null) {
+                || uri.getRawFragment() != null
+                || (uri.getRawPath() != null
+                        && !uri.getRawPath().isEmpty()
+                        && !"/".equals(uri.getRawPath()))) {
             throw new IllegalArgumentException("Invalid Ollama host");
         }
 
@@ -192,6 +199,14 @@ public final class ProviderConnectionTester {
         } catch (IOException | RuntimeException e) {
             return new Result(Outcome.HTTP_ERROR, 0, List.of(), code, "Unexpected model-list response");
         }
+    }
+
+    private static boolean isGeminiKeyRejected(String body) {
+        if (body == null) {
+            return false;
+        }
+        return body.contains("API_KEY_INVALID")
+                || body.toLowerCase(Locale.ROOT).contains("api key not valid");
     }
 
     private static Result networkError(Exception error, String key) {

@@ -37,7 +37,7 @@ class WelcomeMessagesTest {
     void forStatus_nullOrNotReady_returnsSetupCta() {
         String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig(() -> false));
         assertTrue(msg.contains("Click **Connect a provider** below"));
-        assertTrue(msg.contains("pick a provider and paste its key"));
+        assertTrue(msg.contains("pick a provider. Cloud providers need an API key."));
         assertTrue(msg.contains("user.properties"));
         assertTrue(msg.contains("Ollama"));
         assertNotEquals(Constants.WELCOME_MESSAGE, msg);
@@ -87,6 +87,7 @@ class WelcomeMessagesTest {
         assertTrue(setup.contains("Click **Connect a provider** below"));
         assertTrue(setup.contains(
                 "Ollama is running on this machine. Click **Connect a provider** to use it, no key needed."));
+        assertTrue(setup.contains("Cloud providers need an API key."));
         assertTrue(setup.contains("Prefer editing files?"));
         assertFalse(setup.contains("Prefer local?"));
     }

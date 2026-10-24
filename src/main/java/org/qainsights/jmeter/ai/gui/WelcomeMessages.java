@@ -85,7 +85,7 @@ public final class WelcomeMessages {
     public static String setupWelcome(boolean ollamaDetected) {
         return "# Welcome to Feather Wand\n\n"
                 + "Your AI assistant for Apache JMeter is installed. No provider is connected yet.\n\n"
-                + "Click **Connect a provider** below, pick a provider and paste its key.\n\n"
+                + "Click **Connect a provider** below and pick a provider. Cloud providers need an API key.\n\n"
                 + (ollamaDetected
                         ? "Ollama is running on this machine. Click **Connect a provider** to use it, no key needed.\n\n"
                         : "")

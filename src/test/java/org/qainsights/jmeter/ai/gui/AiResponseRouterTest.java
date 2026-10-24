@@ -168,6 +168,7 @@ class AiResponseRouterTest {
         assertTrue(msg.contains("⋯"));
         assertTrue(msg.contains("grok.api.key"));
         assertTrue(msg.contains("user.properties"));
+        assertTrue(msg.contains("jmeter.properties"));
         assertTrue(msg.contains("restart JMeter"));
     }
 

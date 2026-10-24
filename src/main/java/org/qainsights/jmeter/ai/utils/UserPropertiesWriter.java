@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
 import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileOwnerAttributeView;
 import java.nio.file.attribute.PosixFileAttributeView;
@@ -80,7 +82,10 @@ public final class UserPropertiesWriter {
     }
 
     private static void write(Path path, LinkedHashMap<String, String> values) throws IOException {
-        Path target = path.toAbsolutePath();
+        Path target = path.toAbsolutePath().normalize();
+        if (Files.isSymbolicLink(target)) {
+            target = target.toRealPath();
+        }
         Path parent = target.getParent();
         if (parent == null) {
             throw new IOException("The properties file has no parent directory");
@@ -125,13 +130,11 @@ public final class UserPropertiesWriter {
             }
         }
 
-        Path temporary = createTemporaryFile(parent, targetExists);
+        Path temporary = createTemporaryFile(parent);
         try {
-            if (protection != null) {
-                copyAccess(temporary, protection);
-            }
             Files.writeString(temporary, updated, StandardCharsets.UTF_8);
             if (protection != null) {
+                copyAccess(temporary, protection);
                 copyOwner(temporary, protection.owner());
             }
             try {
@@ -166,10 +169,9 @@ public final class UserPropertiesWriter {
         }
     }
 
-    private static Path createTemporaryFile(Path parent, boolean targetExists) throws IOException {
+    private static Path createTemporaryFile(Path parent) throws IOException {
         try {
-            if (!targetExists
-                    && Files.getFileAttributeView(parent, PosixFileAttributeView.class) != null) {
+            if (Files.getFileAttributeView(parent, PosixFileAttributeView.class) != null) {
                 return Files.createTempFile(
                         parent,
                         ".feather-wand-user-properties-",
@@ -180,7 +182,42 @@ public final class UserPropertiesWriter {
         } catch (UnsupportedOperationException | SecurityException e) {
             throw new IOException("Could not create a private properties file", e);
         }
-        return Files.createTempFile(parent, ".feather-wand-user-properties-", ".tmp");
+        Path temporary = Files.createTempFile(parent, ".feather-wand-user-properties-", ".tmp");
+        try {
+            AclFileAttributeView aclView =
+                    Files.getFileAttributeView(temporary, AclFileAttributeView.class);
+            FileOwnerAttributeView ownerView =
+                    Files.getFileAttributeView(temporary, FileOwnerAttributeView.class);
+            if (aclView == null || ownerView == null) {
+                throw new IOException("Could not create a private properties file");
+            }
+            UserPrincipal owner = ownerView.getOwner();
+            if (owner == null) {
+                throw new IOException("Could not determine the temporary file owner");
+            }
+            AclEntry ownerEntry = AclEntry.newBuilder()
+                    .setType(AclEntryType.ALLOW)
+                    .setPrincipal(owner)
+                    .setPermissions(EnumSet.allOf(AclEntryPermission.class))
+                    .build();
+            aclView.setAcl(List.of(ownerEntry));
+            return temporary;
+        } catch (IOException e) {
+            deleteTemporaryAfterFailure(temporary, e);
+            throw e;
+        } catch (SecurityException | UnsupportedOperationException e) {
+            IOException failure = new IOException("Could not create a private properties file", e);
+            deleteTemporaryAfterFailure(temporary, failure);
+            throw failure;
+        }
+    }
+
+    private static void deleteTemporaryAfterFailure(Path temporary, IOException failure) {
+        try {
+            Files.deleteIfExists(temporary);
+        } catch (IOException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
     }
 
     private static void copyAccess(Path temporary, FileProtection protection) throws IOException {
@@ -229,7 +266,7 @@ public final class UserPropertiesWriter {
     }
 
     private static Pattern propertyPattern(String key) {
-        return Pattern.compile("^(\\s*" + Pattern.quote(key) + "\\s*[=:]\\s*).*$");
+        return Pattern.compile("^(\\s*" + Pattern.quote(key) + "(\\s*[=:]\\s*|\\s+)).*$");
     }
 
     private static String escapeValue(String value) {

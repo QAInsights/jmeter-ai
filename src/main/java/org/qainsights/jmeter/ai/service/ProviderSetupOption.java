@@ -34,14 +34,14 @@ public enum ProviderSetupOption {
             "Chat and Agent Mode",
             "Connect xAI models through its OpenAI-compatible API.",
             "grok.api.key",
-            "grok",
+            null,
             "https://console.x.ai"),
     META_MUSE(
             "Meta Muse",
             "Chat and Agent Mode",
             "Connect Muse Spark through its OpenAI-compatible API.",
             "meta.api.key",
-            "meta",
+            null,
             null),
     OLLAMA(
             "Ollama",

@@ -41,6 +41,7 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
+import org.qainsights.jmeter.ai.service.ProviderStatus;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.SafeText;
 import org.qainsights.jmeter.ai.utils.UserPropertiesWriter;
@@ -53,6 +54,7 @@ final class ProviderSetupDialog extends JDialog {
     private final Consumer<ProviderSetupOption> onSaved;
     private final ProviderConnectionTester connectionTester;
     private final Path propertiesPath;
+    private final Runnable testCompletionCallback;
     private final JPanel contentCard = new JPanel(new BorderLayout());
     private final JPanel providerRows = new JPanel();
     private final JTextArea statusText = new JTextArea(" ");
@@ -84,10 +86,21 @@ final class ProviderSetupDialog extends JDialog {
             boolean ollamaDetected,
             ProviderConnectionTester connectionTester,
             Path propertiesPath) {
+        this(owner, onSaved, ollamaDetected, connectionTester, propertiesPath, () -> { });
+    }
+
+    ProviderSetupDialog(
+            Window owner,
+            Consumer<ProviderSetupOption> onSaved,
+            boolean ollamaDetected,
+            ProviderConnectionTester connectionTester,
+            Path propertiesPath,
+            Runnable testCompletionCallback) {
         super(owner, "Connect a provider", ModalityType.APPLICATION_MODAL);
         this.onSaved = onSaved == null ? option -> { } : onSaved;
         this.connectionTester = connectionTester;
         this.propertiesPath = propertiesPath;
+        this.testCompletionCallback = testCompletionCallback == null ? () -> { } : testCompletionCallback;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_4, UiTokens.SPACE_4));
@@ -283,6 +296,7 @@ final class ProviderSetupDialog extends JDialog {
         fields.add(keyLabel, BorderLayout.NORTH);
 
         keyField = new PlaceholderPasswordField();
+        keyLabel.setLabelFor(keyField);
         boolean configured = isConfigured(option);
         keyField.setPlaceholder(configured
                 ? "A key is already saved. Paste a new one to replace it." : "Paste your API key");
@@ -347,6 +361,7 @@ final class ProviderSetupDialog extends JDialog {
         hostLabel.setFont(UiTokens.label(hostLabel.getFont()));
         hostLabel.setForeground(ThemeColors.foreground());
         ollamaHostField = new JTextField(AiConfig.getProperty("ollama.host", DEFAULT_OLLAMA_HOST));
+        hostLabel.setLabelFor(ollamaHostField);
         styleInput(ollamaHostField);
         hostBox.add(hostLabel, BorderLayout.NORTH);
         hostBox.add(ollamaHostField, BorderLayout.CENTER);
@@ -356,6 +371,7 @@ final class ProviderSetupDialog extends JDialog {
         portLabel.setFont(UiTokens.label(portLabel.getFont()));
         portLabel.setForeground(ThemeColors.foreground());
         ollamaPortField = new JTextField(AiConfig.getProperty("ollama.port", DEFAULT_OLLAMA_PORT), 6);
+        portLabel.setLabelFor(ollamaPortField);
         styleInput(ollamaPortField);
         portBox.add(portLabel, BorderLayout.NORTH);
         portBox.add(ollamaPortField, BorderLayout.CENTER);
@@ -367,6 +383,7 @@ final class ProviderSetupDialog extends JDialog {
         modelLabel.setFont(UiTokens.label(modelLabel.getFont()));
         modelLabel.setForeground(ThemeColors.foreground());
         ollamaModelCombo = new JComboBox<>();
+        modelLabel.setLabelFor(ollamaModelCombo);
         ollamaModelCombo.setEditable(true);
         ollamaModelCombo.setPreferredSize(new Dimension(420, 36));
         ollamaModelCombo.setBackground(ThemeColors.surface());
@@ -417,7 +434,8 @@ final class ProviderSetupDialog extends JDialog {
             try {
                 endpoint = ProviderConnectionTester.normalizeOllamaHost(ollamaHostField.getText());
             } catch (IllegalArgumentException e) {
-                setStatus("Enter a valid Ollama host.", ThemeColors.error());
+                setStatus("Enter the Ollama host without a path, e.g. http://localhost.",
+                        ThemeColors.error());
                 return;
             }
             host = endpoint.host();
@@ -439,13 +457,15 @@ final class ProviderSetupDialog extends JDialog {
         ProviderSetupOption option = selectedOption;
         String hostForRequest = host;
         int portForRequest = resolvedPort;
+        String keyForRequest = key;
+        resultCurrent = false;
+        lastResult = null;
         testing = true;
         setStatus("Testing connection...", ThemeColors.info());
         updateActionButtons();
         for (ProviderRow row : rows) {
             row.setEnabled(false);
         }
-        final String keyForRequest = key;
         new SwingWorker<ProviderConnectionTester.Result, Void>() {
             @Override
             protected ProviderConnectionTester.Result doInBackground() {
@@ -454,7 +474,15 @@ final class ProviderSetupDialog extends JDialog {
 
             @Override
             protected void done() {
+                if (!isDisplayable()) {
+                    return;
+                }
                 try {
+                    if (!requestInputsMatch(option, keyForRequest, hostForRequest, portForRequest)) {
+                        setStatus("Inputs changed during the test. Test again before saving.",
+                                ThemeColors.info());
+                        return;
+                    }
                     presentResult(option, get());
                     resultCurrent = true;
                     if (saveAfterTest && (lastResult.outcome() == ProviderConnectionTester.Outcome.OK
@@ -470,9 +498,32 @@ final class ProviderSetupDialog extends JDialog {
                         row.setEnabled(true);
                     }
                     updateActionButtons();
+                    testCompletionCallback.run();
                 }
             }
         }.execute();
+    }
+
+    private boolean requestInputsMatch(
+            ProviderSetupOption option, String key, String host, int port) {
+        if (selectedOption != option) {
+            return false;
+        }
+        if (option.requiresKey()) {
+            return key.equals(readKey());
+        }
+        try {
+            ProviderConnectionTester.OllamaEndpoint endpoint =
+                    ProviderConnectionTester.normalizeOllamaHost(ollamaHostField.getText());
+            String portValue = endpoint.port() == null
+                    ? ollamaPortField.getText().trim() : endpoint.port();
+            if (portValue.isBlank()) {
+                portValue = DEFAULT_OLLAMA_PORT;
+            }
+            return host.equals(endpoint.host()) && port == Integer.parseInt(portValue);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     void presentResult(ProviderSetupOption option, ProviderConnectionTester.Result result) {
@@ -597,6 +648,10 @@ final class ProviderSetupDialog extends JDialog {
         if (names.contains(prefilled)) {
             return prefilled;
         }
+        if (!prefilled.isBlank() && !prefilled.contains(":")
+                && names.contains(prefilled + ":latest")) {
+            return prefilled;
+        }
         return names.isEmpty() ? prefilled : names.get(0);
     }
 
@@ -676,8 +731,7 @@ final class ProviderSetupDialog extends JDialog {
 
     private boolean isConfigured(ProviderSetupOption option) {
         if (option.requiresKey()) {
-            String value = AiConfig.getProperty(option.keyProperty(), "");
-            return value != null && !value.isBlank() && !"YOUR_API_KEY".equals(value);
+            return ProviderStatus.isApiKeyConfigured(option.keyProperty());
         }
         return "ollama".equalsIgnoreCase(AiConfig.getProperty("jmeter.ai.service.type", ""));
     }
