@@ -69,6 +69,29 @@ class AiChatPanelTest {
     }
 
     @Test
+    void reloadProvidersRebuildsTheRouterWithRuntimeOpenAiKey() throws Exception {
+        org.apache.jmeter.util.JMeterUtils.loadJMeterProperties(
+                "src/test/resources/org/apache/jmeter/jmeter.properties");
+        String previousKey = org.apache.jmeter.util.JMeterUtils.getProperty("openai.api.key");
+        try {
+            AiChatPanel panel = new AiChatPanel();
+            aiConfigMockedStatic.when(() -> AiConfig.getProperty(
+                    org.mockito.ArgumentMatchers.eq("openai.api.key"), anyString()))
+                    .thenAnswer(invocation ->
+                            org.apache.jmeter.util.JMeterUtils.getProperty("openai.api.key"));
+            org.apache.jmeter.util.JMeterUtils.setProperty("openai.api.key", "sk-test");
+
+            javax.swing.SwingUtilities.invokeAndWait(panel::reloadProviders);
+
+            assertTrue(panel.aiResponseRouter().resolveAiService("openai:gpt-4o")
+                    instanceof org.qainsights.jmeter.ai.service.OpenAiService);
+        } finally {
+            org.apache.jmeter.util.JMeterUtils.setProperty(
+                    "openai.api.key", previousKey == null ? "" : previousKey);
+        }
+    }
+
+    @Test
     void testConversationHistory() {
         AiChatPanel panel = new AiChatPanel();
         
@@ -267,7 +290,7 @@ class AiChatPanelTest {
 
         javax.swing.AbstractButton record = findButtonByText(panel, "Record");
         javax.swing.AbstractButton donate = findButtonByText(panel, "Donate");
-        javax.swing.JButton overflow = findButton(panel, "Conversation actions and export");
+        javax.swing.JButton overflow = findButton(panel, "More actions");
         javax.swing.JButton newConversation = findButton(panel, "Start a new conversation");
         assertNotNull(record);
         assertNotNull(donate);

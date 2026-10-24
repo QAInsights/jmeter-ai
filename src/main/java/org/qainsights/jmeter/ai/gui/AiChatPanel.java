@@ -27,6 +27,8 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.intellisense.InputBoxIntellisense;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.ProviderSetupOption;
+import org.qainsights.jmeter.ai.service.ProviderStatus;
 import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
@@ -131,6 +133,10 @@ public class AiChatPanel
     /** Model carried by a restored session; reselected once the model list loads. */
     private String restoredSessionModel;
     private String lastShownWelcome;
+    private boolean lastWelcomeHasConnectButton;
+    private boolean ollamaDetected;
+    private boolean ollamaProbeStarted;
+    private ProviderSetupOption pendingProviderSelection;
 
     // Context stats (F9): session token/cost accumulator injected into every
     // service; the label renders in the input options row.
@@ -143,7 +149,7 @@ public class AiChatPanel
 
     // Component managers
     private final ElementInfoProvider elementInfoProvider;
-    private final AiResponseRouter aiResponseRouter;
+    private AiResponseRouter aiResponseRouter;
     private final CommandDispatcher commandDispatcher;
     private final UndoRedoDispatcher undoRedoDispatcher;
 
@@ -168,30 +174,9 @@ public class AiChatPanel
      * Constructs a new AiChatPanel.
      */
     public AiChatPanel() {
-        // Initialize services and utilities
-        claudeService = new ClaudeService();
-        openAiService = new OpenAiService();
-        ollamaService = new OllamaAiService();
-        deepseekService = new DeepseekAiService();
-        grokService = new GrokAiService();
-        metaMuseService = new MetaMuseAiService();
-        bedrockService = new BedrockAiService();
-        codexService = new CodexAiService();
-        claudeCodeService = new ClaudeCodeAiService();
-        appleFoundationAiService = new AppleFoundationAiService();
-
-        String googleApiKey = AiConfig.getProperty("google.api.key", "");
-        if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
-            Client googleClient = Client.builder().apiKey(googleApiKey).build();
-            googleService = new GoogleAiService(googleClient);
-        }
-
-        injectReasoningSettings();
-        injectUsageStats();
+        initProviderServices();
 
         elementInfoProvider = new ElementInfoProvider();
-        aiResponseRouter = new AiResponseRouter(getServiceHolder());
-        aiResponseRouter.setAttachmentRegistry(attachmentRegistry);
         commandDispatcher = new CommandDispatcher(this);
         undoRedoDispatcher = new UndoRedoDispatcher(this);
 
@@ -235,6 +220,32 @@ public class AiChatPanel
         if (!restoreLastSessionIfEnabled()) {
             displayWelcomeMessage();
         }
+    }
+
+    private void initProviderServices() {
+        claudeService = new ClaudeService();
+        openAiService = new OpenAiService();
+        ollamaService = new OllamaAiService();
+        deepseekService = new DeepseekAiService();
+        grokService = new GrokAiService();
+        metaMuseService = new MetaMuseAiService();
+        bedrockService = new BedrockAiService();
+        codexService = new CodexAiService();
+        claudeCodeService = new ClaudeCodeAiService();
+        appleFoundationAiService = new AppleFoundationAiService();
+
+        String googleApiKey = AiConfig.getProperty("google.api.key", "");
+        googleService = null;
+        if (googleApiKey != null && !googleApiKey.isEmpty() && !googleApiKey.equals("YOUR_API_KEY")) {
+            Client googleClient = Client.builder().apiKey(googleApiKey).build();
+            googleService = new GoogleAiService(googleClient);
+        }
+
+        injectReasoningSettings();
+        injectUsageStats();
+
+        aiResponseRouter = new AiResponseRouter(getServiceHolder());
+        aiResponseRouter.setAttachmentRegistry(attachmentRegistry);
     }
 
     /**
@@ -755,7 +766,8 @@ public class AiChatPanel
         donateButton.addActionListener(e -> openDonateLink());
         panel.add(donateButton);
 
-        SessionMenuButton sessionMenu = new SessionMenuButton(this, this::buildSession);
+        SessionMenuButton sessionMenu =
+                new SessionMenuButton(this, this::buildSession, this::openProviderSetup);
         panel.add(sessionMenu);
 
         QuietButton newChatButton = createStyledButton("", 16);
@@ -839,6 +851,7 @@ public class AiChatPanel
                     if (restoredSessionModel != null) {
                         modelSelectorPanel.applyIfAvailable(restoredSessionModel);
                     }
+                    selectFirstModelForPendingProvider(models);
                     refreshWelcomeIfReady();
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
@@ -852,6 +865,66 @@ public class AiChatPanel
      * The subscription CLI providers offered in the model picker footer. A
      * provider that is switched off in the properties is hidden entirely.
      */
+    void reloadProviders() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::reloadProviders);
+            return;
+        }
+        initProviderServices();
+        modelSelectorPanel.setCliProviders(enabledCliProviders());
+        loadModelsInBackground();
+    }
+
+    private void reloadProvidersAfterSave(ProviderSetupOption option) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> reloadProvidersAfterSave(option));
+            return;
+        }
+        pendingProviderSelection = option;
+        reloadProviders();
+    }
+
+    void openProviderSetup() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::openProviderSetup);
+            return;
+        }
+        ProviderSetupDialog dialog = new ProviderSetupDialog(
+                SwingUtilities.getWindowAncestor(this),
+                this::reloadProvidersAfterSave,
+                ollamaDetected);
+        dialog.setVisible(true);
+    }
+
+    AiResponseRouter aiResponseRouter() {
+        return aiResponseRouter;
+    }
+
+    private void selectFirstModelForPendingProvider(List<String> models) {
+        if (pendingProviderSelection == null) {
+            return;
+        }
+        for (String model : models) {
+            if (modelBelongsToProvider(model, pendingProviderSelection)) {
+                modelSelectorPanel.applyIfAvailable(model);
+                pendingProviderSelection = null;
+                return;
+            }
+        }
+    }
+
+    private static boolean modelBelongsToProvider(String model, ProviderSetupOption option) {
+        return switch (option) {
+            case ANTHROPIC -> !model.contains(":");
+            case OPENAI -> model.startsWith("openai:");
+            case GEMINI -> model.startsWith("google:");
+            case DEEPSEEK -> model.startsWith("deepseek:");
+            case GROK -> model.startsWith("grok:");
+            case META_MUSE -> model.startsWith("meta:");
+            case OLLAMA -> model.startsWith("ollama:");
+        };
+    }
+
     private List<SubscriptionCliProvider> enabledCliProviders() {
         List<SubscriptionCliProvider> providers = new ArrayList<>();
         for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService)) {
@@ -867,22 +940,59 @@ public class AiChatPanel
      */
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
-        String welcome = WelcomeMessages.forCurrentConfig();
-        transcript.showWelcome(welcome);
-        WelcomeMessages.onShown(welcome);
-        lastShownWelcome = welcome;
+        showWelcomeForCurrentConfig();
+        if (!ProviderStatus.fromConfig().isReady()) {
+            probeOllamaAvailability();
+        }
     }
 
     private void refreshWelcomeIfReady() {
         if (!transcript.isWelcomeShowing()) {
             return;
         }
-        String welcome = WelcomeMessages.forCurrentConfig();
-        if (!welcome.equals(lastShownWelcome)) {
-            transcript.showWelcome(welcome);
+        boolean showConnect = !ProviderStatus.fromConfig().isReady();
+        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected);
+        if (!welcome.equals(lastShownWelcome) || showConnect != lastWelcomeHasConnectButton) {
+            transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
             WelcomeMessages.onShown(welcome);
             lastShownWelcome = welcome;
+            lastWelcomeHasConnectButton = showConnect;
         }
+    }
+
+    private void showWelcomeForCurrentConfig() {
+        boolean showConnect = !ProviderStatus.fromConfig().isReady();
+        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected);
+        transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
+        WelcomeMessages.onShown(welcome);
+        lastShownWelcome = welcome;
+        lastWelcomeHasConnectButton = showConnect;
+    }
+
+    private void probeOllamaAvailability() {
+        if (ollamaProbeStarted) {
+            return;
+        }
+        ollamaProbeStarted = true;
+        OllamaAiService service = ollamaService;
+        new SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() {
+                return service.isReachable();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    if (get() && !ProviderStatus.fromConfig().isReady()) {
+                        ollamaDetected = true;
+                        refreshWelcomeIfReady();
+                    }
+                } catch (Exception ignored) {
+                    // Keep the setup welcome when the local probe fails.
+                }
+            }
+        }.execute();
     }
 
     /** The session attachment registry (package-private for tests). */

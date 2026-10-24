@@ -36,7 +36,8 @@ class WelcomeMessagesTest {
     @Test
     void forStatus_nullOrNotReady_returnsSetupCta() {
         String msg = WelcomeMessages.forStatus(ProviderStatus.fromConfig(() -> false));
-        assertTrue(msg.contains("no API key is configured"));
+        assertTrue(msg.contains("Click **Connect a provider** below"));
+        assertTrue(msg.contains("pick a provider and paste its key"));
         assertTrue(msg.contains("user.properties"));
         assertTrue(msg.contains("Ollama"));
         assertNotEquals(Constants.WELCOME_MESSAGE, msg);
@@ -66,7 +67,7 @@ class WelcomeMessagesTest {
 
     @Test
     void forStatus_nullStatus_treatedAsNotReady() {
-        assertTrue(WelcomeMessages.forStatus(null).contains("no API key is configured"));
+        assertTrue(WelcomeMessages.forStatus(null).contains("Connect a provider"));
     }
 
     @Test
@@ -74,6 +75,19 @@ class WelcomeMessagesTest {
         String setup = WelcomeMessages.setupWelcome();
         assertTrue(setup.contains("jmeter-ai-quickstart.properties"));
         assertTrue(setup.contains(WelcomeMessages.QUICKSTART_URL));
-        assertTrue(setup.contains("Restart JMeter"));
+        assertTrue(setup.contains("restart JMeter"));
+        assertTrue(setup.contains("Prefer local?"));
+    }
+
+    @Test
+    void setupWelcomeExplainsDetectedOllamaAndConnectAction() {
+        String setup = WelcomeMessages.setupWelcome(true);
+
+        assertTrue(setup.startsWith("# Welcome to Feather Wand"));
+        assertTrue(setup.contains("Click **Connect a provider** below"));
+        assertTrue(setup.contains(
+                "Ollama is running on this machine. Click **Connect a provider** to use it, no key needed."));
+        assertTrue(setup.contains("Prefer editing files?"));
+        assertFalse(setup.contains("Prefer local?"));
     }
 }
