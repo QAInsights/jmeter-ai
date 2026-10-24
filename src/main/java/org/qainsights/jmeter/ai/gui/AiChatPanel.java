@@ -886,6 +886,9 @@ public class AiChatPanel
             SwingUtilities.invokeLater(() -> reloadProvidersAfterSave(option));
             return;
         }
+        if (option == null) {
+            return;
+        }
         pendingProviderSelection = option;
         reloadProviders();
     }
@@ -928,6 +931,8 @@ public class AiChatPanel
             case GROK -> model.startsWith("grok:");
             case META_MUSE -> model.startsWith("meta:");
             case OLLAMA -> model.startsWith("ollama:");
+            case APPLE_ON_DEVICE -> model.startsWith(AppleFoundationAiService.MODEL_PREFIX);
+            case SMART_ROUTING -> false;
         };
     }
 

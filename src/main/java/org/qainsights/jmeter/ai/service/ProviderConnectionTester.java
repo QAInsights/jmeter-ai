@@ -11,7 +11,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import com.openai.errors.OpenAIServiceException;
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
+import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.qainsights.jmeter.ai.utils.SafeText;
@@ -50,20 +54,35 @@ public final class ProviderConnectionTester {
         Response send(HttpRequest request) throws IOException, InterruptedException;
     }
 
+    @FunctionalInterface
+    public interface SmartRoutingTester {
+        Result test(String backend, String key);
+    }
+
     private final HttpSender sender;
+    private final SmartRoutingTester smartRoutingTester;
 
     public ProviderConnectionTester() {
+        this(defaultSender(), null);
+    }
+
+    private static HttpSender defaultSender() {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(TIMEOUT)
                 .build();
-        this.sender = request -> {
+        return request -> {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             return new Response(response.statusCode(), response.body());
         };
     }
 
     public ProviderConnectionTester(HttpSender sender) {
+        this(sender, null);
+    }
+
+    public ProviderConnectionTester(HttpSender sender, SmartRoutingTester smartRoutingTester) {
         this.sender = Objects.requireNonNull(sender);
+        this.smartRoutingTester = smartRoutingTester == null ? this::testSmartRoutingReal : smartRoutingTester;
     }
 
     public Result test(ProviderSetupOption option, String key) {
@@ -100,6 +119,81 @@ public final class ProviderConnectionTester {
         } catch (RuntimeException e) {
             return networkError(e, key);
         }
+    }
+
+    public Result testSmartRouting(String backend, String key) {
+        return smartRoutingTester.test(backend, key);
+    }
+
+    private Result testSmartRoutingReal(String backend, String key) {
+        try {
+            JudgmentProvider provider = switch (backend) {
+                case "typesafe" -> new TypeSafeJudgmentProvider(
+                        key,
+                        AiConfig.getProperty(AgentRoutingConfig.BASE_URL_KEY,
+                                TypeSafeJudgmentProvider.DEFAULT_BASE_URL),
+                        AiConfig.getProperty(AgentRoutingConfig.MODEL_KEY,
+                                TypeSafeJudgmentProvider.DEFAULT_MODEL),
+                        AgentRoutingConfig.timeout());
+                case "openai" -> new OpenAiDecisionsJudgmentProvider(
+                        key,
+                        AiConfig.getProperty(AgentJudgmentConfig.OPENAI_MODEL_KEY,
+                                OpenAiDecisionsJudgmentProvider.DEFAULT_MODEL),
+                        AgentRoutingConfig.timeout());
+                case "openrouter" -> new OpenRouterDecisionsJudgmentProvider(
+                        key,
+                        AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_BASE_URL_KEY,
+                                OpenRouterDecisionsJudgmentProvider.DEFAULT_BASE_URL),
+                        AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_MODEL_KEY,
+                                OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL),
+                        AgentRoutingConfig.timeout());
+                default -> throw new IllegalArgumentException("Unsupported smart routing backend");
+            };
+            provider.choose(
+                    Map.of("message", "Choose the first option for this connection check."),
+                    "Select the preferred option for this connection check.",
+                    Map.of("FIRST", "Select the first option.", "SECOND", "Select the second option."));
+            return new Result(Outcome.OK, 0, List.of(), 200, null);
+        } catch (RuntimeException e) {
+            return judgmentError(e, key);
+        }
+    }
+
+    public Result testOllamaEmbeddings() {
+        try {
+            OllamaEmbeddingClient client = OllamaEmbeddingClient.fromConfig(AgentRoutingConfig.timeout());
+            client.embed(List.of("Connection check"));
+            return new Result(Outcome.OK, 0, List.of(), 200, null);
+        } catch (RuntimeException e) {
+            return judgmentError(e, null);
+        }
+    }
+
+    private static Result judgmentError(RuntimeException error, String key) {
+        int code = 0;
+        boolean ioFailure = false;
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof TypeSafeJudgmentProvider.JudgmentException judgment
+                    && judgment.httpCode() != 0) {
+                code = judgment.httpCode();
+            } else if (cause instanceof OpenAIServiceException openAiError) {
+                code = openAiError.statusCode();
+            }
+            ioFailure |= cause instanceof IOException;
+        }
+        Outcome outcome = code == 401 || code == 403 ? Outcome.AUTH_REJECTED
+                : code == 429 ? Outcome.RATE_LIMITED
+                : code != 0 ? Outcome.HTTP_ERROR
+                : ioFailure ? Outcome.NETWORK_ERROR : Outcome.HTTP_ERROR;
+        String reason = SafeText.redactUrls(error.getMessage() == null
+                ? "Connection test failed" : error.getMessage());
+        if (key != null && !key.isEmpty()) {
+            reason = reason.replace(key, "***");
+        }
+        if (reason.length() > 300) {
+            reason = reason.substring(0, 297) + "...";
+        }
+        return new Result(outcome, 0, List.of(), code, reason);
     }
 
     public static OllamaEndpoint normalizeOllamaHost(String value) {

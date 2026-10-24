@@ -156,7 +156,7 @@ public final class AppleFoundationHelper {
         return Status.unavailable("unknown");
     }
 
-    static boolean isSupportedPlatform(String osName, String architecture) {
+    public static boolean isSupportedPlatform(String osName, String architecture) {
         return osName != null && osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
                 && architecture != null && architecture.equalsIgnoreCase("aarch64");
     }
@@ -196,11 +196,11 @@ public final class AppleFoundationHelper {
             this.reason = reason;
         }
 
-        static Status available() {
+        public static Status available() {
             return new Status(true, null);
         }
 
-        static Status unavailable(String reason) {
+        public static Status unavailable(String reason) {
             return new Status(false, reason);
         }
 

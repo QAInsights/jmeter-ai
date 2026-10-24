@@ -1,10 +1,14 @@
 package org.qainsights.jmeter.ai.service;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.http.HttpRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -207,6 +211,100 @@ class ProviderConnectionTesterTest {
         assertEquals(ProviderConnectionTester.Outcome.NETWORK_ERROR, result.outcome());
         assertTrue(result.reason().contains("https://***@example.test/models?***"));
         assertNoKey(result, key);
+    }
+
+    @Test
+    void testsRealDecisionProvidersAndClassifiesHttpStatuses() throws Exception {
+        Map<Integer, ProviderConnectionTester.Outcome> outcomes = Map.of(
+                200, ProviderConnectionTester.Outcome.OK,
+                401, ProviderConnectionTester.Outcome.AUTH_REJECTED,
+                403, ProviderConnectionTester.Outcome.AUTH_REJECTED,
+                429, ProviderConnectionTester.Outcome.RATE_LIMITED,
+                500, ProviderConnectionTester.Outcome.HTTP_ERROR);
+        for (String backend : java.util.List.of("typesafe", "openai", "openrouter")) {
+            for (Map.Entry<Integer, ProviderConnectionTester.Outcome> expected : outcomes.entrySet()) {
+                AtomicInteger requests = new AtomicInteger();
+                HttpServer server = decisionServer(expected.getKey(), requests);
+                server.start();
+                try {
+                    String base = "http://127.0.0.1:" + server.getAddress().getPort();
+                    properties.put("typesafe.base.url", base);
+                    properties.put("openai.base.url", base + "/v1");
+                    properties.put("openai.max.retries", "0");
+                    properties.put("openrouter.base.url", base + "/api");
+                    ProviderConnectionTester.Result result =
+                            new ProviderConnectionTester().testSmartRouting(backend, "dummy-test-key");
+                    assertEquals(expected.getValue(), result.outcome(), backend + " " + expected.getKey());
+                    if (expected.getKey() != 200) {
+                        assertEquals(expected.getKey(), result.httpCode());
+                    }
+                    assertEquals(1, requests.get(), backend + " should send one request for one choose call");
+                    assertNoKey(result, "dummy-test-key");
+                } finally {
+                    server.stop(0);
+                }
+            }
+        }
+    }
+
+    @Test
+    void decisionProviderIoFailuresAreNetworkErrors() {
+        properties.put("typesafe.base.url", "http://127.0.0.1:1");
+        ProviderConnectionTester.Result result =
+                new ProviderConnectionTester().testSmartRouting("typesafe", "dummy-test-key");
+        assertEquals(ProviderConnectionTester.Outcome.NETWORK_ERROR, result.outcome());
+        assertNoKey(result, "dummy-test-key");
+    }
+
+    @Test
+    void testsConfiguredOllamaEmbeddingModelOnceAndReportsPullInstruction() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            byte[] body = "{\"error\":\"model not found\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(404, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        server.start();
+        try {
+            properties.put("ollama.host", "http://127.0.0.1");
+            properties.put("ollama.port", Integer.toString(server.getAddress().getPort()));
+            properties.put(OllamaEmbeddingClient.MODEL_KEY, "embeddinggemma-test");
+            ProviderConnectionTester.Result result = new ProviderConnectionTester().testOllamaEmbeddings();
+            assertEquals(ProviderConnectionTester.Outcome.HTTP_ERROR, result.outcome());
+            assertEquals(404, result.httpCode());
+            assertTrue(result.reason().contains("ollama pull embeddinggemma-test"));
+            assertEquals(1, requests.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private static HttpServer decisionServer(int status, AtomicInteger requests) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            String path = exchange.getRequestURI().getPath();
+            String body = status == 200 && path.equals("/v1/decisions")
+                    ? "{\"id\":\"test\",\"object\":\"decision\",\"model\":\"test\","
+                            + "\"answers\":[{\"type\":\"choice\",\"name\":\"route\",\"choice\":\"FIRST\","
+                            + "\"confidence\":0.9,\"probabilities\":[{\"value\":\"FIRST\","
+                            + "\"probability\":0.9},{\"value\":\"SECOND\",\"probability\":0.1}]}]}"
+                    : status == 200
+                            ? "{\"answers\":{\"route\":{\"type\":\"choice\",\"choice\":\"FIRST\","
+                                    + "\"probabilities\":{\"FIRST\":0.9,\"SECOND\":0.1},\"confidence\":0.9}}}"
+                            : "{\"error\":{\"message\":\"request rejected\",\"type\":\"invalid_request_error\"}}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(status, bytes.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(bytes);
+            }
+        });
+        return server;
     }
 
     private void assertRequest(
