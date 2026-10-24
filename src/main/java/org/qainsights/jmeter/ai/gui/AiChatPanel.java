@@ -834,6 +834,10 @@ public class AiChatPanel
      * Loads the available models in the background.
      */
     private void loadModelsInBackground() {
+        loadModelsInBackground(null);
+    }
+
+    private void loadModelsInBackground(String modelToPreserve) {
         int generation = modelLoadGeneration.incrementAndGet();
         new SwingWorker<List<String>, Void>() {
             @Override
@@ -857,6 +861,9 @@ public class AiChatPanel
                     if (restoredSessionModel != null) {
                         modelSelectorPanel.applyIfAvailable(restoredSessionModel);
                     }
+                    if (modelToPreserve != null) {
+                        modelSelectorPanel.applyIfAvailable(modelToPreserve);
+                    }
                     selectFirstModelForPendingProvider(models);
                     refreshWelcomeIfReady();
                 } catch (Exception e) {
@@ -872,18 +879,30 @@ public class AiChatPanel
      * provider that is switched off in the properties is hidden entirely.
      */
     void reloadProviders() {
+        reloadProviders(null);
+    }
+
+    private void reloadProviders(String modelToPreserve) {
         if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater(this::reloadProviders);
+            SwingUtilities.invokeLater(() -> reloadProviders(modelToPreserve));
             return;
         }
         initProviderServices();
         modelSelectorPanel.setCliProviders(enabledCliProviders());
-        loadModelsInBackground();
+        loadModelsInBackground(modelToPreserve);
     }
 
-    private void reloadProvidersAfterSave(ProviderSetupOption option) {
+    void reloadProvidersAfterSave(ProviderSetupOption option) {
         if (!SwingUtilities.isEventDispatchThread()) {
             SwingUtilities.invokeLater(() -> reloadProvidersAfterSave(option));
+            return;
+        }
+        if (option == null) {
+            return;
+        }
+        if (option == ProviderSetupOption.SMART_ROUTING) {
+            pendingProviderSelection = null;
+            reloadProviders(modelSelectorPanel.getSelectedModel());
             return;
         }
         pendingProviderSelection = option;
@@ -928,6 +947,8 @@ public class AiChatPanel
             case GROK -> model.startsWith("grok:");
             case META_MUSE -> model.startsWith("meta:");
             case OLLAMA -> model.startsWith("ollama:");
+            case APPLE_ON_DEVICE -> model.startsWith(AppleFoundationAiService.MODEL_PREFIX);
+            case SMART_ROUTING -> false;
         };
     }
 

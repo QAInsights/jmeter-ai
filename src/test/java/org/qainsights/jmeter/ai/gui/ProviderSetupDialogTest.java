@@ -12,25 +12,33 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.accessibility.AccessibleRole;
 import javax.swing.BoxLayout;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.apache.jmeter.util.JMeterUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
+import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
+import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
@@ -61,6 +69,389 @@ class ProviderSetupDialogTest {
     void keepsUntaggedConfiguredModelWhenLatestTagIsListed() {
         assertEquals("llama3.2", ProviderSetupDialog.modelAfterRefresh(
                 "llama3.2", "llama3.2", List.of("llama3.2:latest", "qwen2.5:latest")));
+    }
+
+    @Test
+    void smartRoutingSavesOnlyTheSelectedBackendSettings() {
+        assertEquals(java.util.Map.of(
+                        "jmeter.ai.typesafe.agent.routing.enabled", "false",
+                        "jmeter.ai.typesafe.agent.triage.enabled", "false"),
+                ProviderSetupDialog.smartRoutingSettings("off", true, true, "unused"));
+        assertEquals(java.util.Map.of(
+                        "jmeter.ai.typesafe.enabled", "true",
+                        "jmeter.ai.typesafe.agent.routing.enabled", "true",
+                        "jmeter.ai.typesafe.agent.triage.enabled", "true",
+                        "jmeter.ai.judgment.provider", "typesafe",
+                        "typesafe.api.key", "entered-typesafe-key"),
+                ProviderSetupDialog.smartRoutingSettings("typesafe", true, true, "entered-typesafe-key"));
+        assertEquals(java.util.Map.of(
+                        "jmeter.ai.typesafe.enabled", "true",
+                        "jmeter.ai.typesafe.agent.routing.enabled", "true",
+                        "jmeter.ai.typesafe.agent.triage.enabled", "true",
+                        "jmeter.ai.judgment.provider", "openai"),
+                ProviderSetupDialog.smartRoutingSettings("openai", true, true, null));
+        assertEquals("entered-openai-key", ProviderSetupDialog.smartRoutingSettings(
+                "openai", true, true, "entered-openai-key").get("openai.api.key"));
+        assertEquals(java.util.Map.of(
+                        "jmeter.ai.typesafe.enabled", "true",
+                        "jmeter.ai.typesafe.agent.routing.enabled", "true",
+                        "jmeter.ai.typesafe.agent.triage.enabled", "true",
+                        "jmeter.ai.judgment.provider", "openrouter",
+                        "openrouter.api.key", "entered-openrouter-key"),
+                ProviderSetupDialog.smartRoutingSettings(
+                        "openrouter", true, true, "entered-openrouter-key"));
+        var disabledJev = ProviderSetupDialog.smartRoutingSettings("typesafe", false, false, "");
+        assertEquals("false", disabledJev.get("jmeter.ai.typesafe.agent.routing.enabled"));
+        assertEquals("false", disabledJev.get("jmeter.ai.typesafe.agent.triage.enabled"));
+        assertFalse(disabledJev.containsKey("typesafe.api.key"));
+        assertTrue(ProviderSetupDialog.smartRoutingFeaturesDisabled(false, false));
+        assertFalse(ProviderSetupDialog.smartRoutingFeaturesDisabled(true, false));
+        assertFalse(ProviderSetupDialog.smartRoutingFeaturesDisabled(false, true));
+        for (String backend : List.of("local", "ollama")) {
+            assertEquals(java.util.Map.of(
+                            "jmeter.ai.typesafe.enabled", "true",
+                            "jmeter.ai.typesafe.agent.routing.enabled", "true",
+                            "jmeter.ai.typesafe.agent.triage.enabled", "false",
+                            "jmeter.ai.judgment.provider", backend),
+                    ProviderSetupDialog.smartRoutingSettings(backend, true, true, null));
+        }
+        for (String backend : List.of("off", "local", "ollama")) {
+            assertFalse(ProviderSetupDialog.triageSelectedForBackend(backend, true));
+        }
+        assertTrue(ProviderSetupDialog.triageSelectedForBackend("typesafe", true));
+        assertEquals("true", ProviderSetupDialog.appleSettings().get("apple.enabled"));
+        assertEquals("Run ollama pull embeddinggemma.",
+                ProviderSetupDialog.ollamaMissingModelCopy("embeddinggemma"));
+    }
+
+    @Test
+    void smartRoutingToggleDefaultsAndBackendTransitionsUseTheStoredState() {
+        assertFalse(ProviderSetupDialog.initialRoutingSelection("typesafe", false));
+        assertTrue(ProviderSetupDialog.initialRoutingSelection("typesafe", true));
+        assertFalse(ProviderSetupDialog.initialRoutingSelection("off", true));
+        assertTrue(ProviderSetupDialog.initialTriageChoice("off", false));
+        assertFalse(ProviderSetupDialog.initialTriageChoice("typesafe", false));
+        assertTrue(ProviderSetupDialog.initialTriageChoice("typesafe", true));
+        assertTrue(ProviderSetupDialog.routingSelectionAfterBackendChange("off", "typesafe", false));
+        assertFalse(ProviderSetupDialog.routingSelectionAfterBackendChange("typesafe", "off", true));
+        assertFalse(ProviderSetupDialog.routingSelectionAfterBackendChange("typesafe", "openai", false));
+        assertTrue(ProviderSetupDialog.routingSelectionAfterBackendChange("typesafe", "openai", true));
+        assertFalse(ProviderSetupDialog.triageSelectedForBackend("local", true));
+        assertTrue(ProviderSetupDialog.triageSelectedForBackend("typesafe", true));
+    }
+
+    @Test
+    void smartRoutingInitialFlagsAndBackendSwitchesPreserveTheExpectedChoices() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        String[] keys = {
+                AgentRoutingConfig.TYPESAFE_ENABLED_KEY,
+                AgentRoutingConfig.ROUTING_ENABLED_KEY,
+                AgentTriageConfig.TRIAGE_ENABLED_KEY,
+                AgentJudgmentConfig.PROVIDER_KEY,
+                AgentRoutingConfig.API_KEY
+        };
+        Map<String, String> original = snapshotProperties(keys);
+        ProviderSetupDialog[] dialogs = new ProviderSetupDialog[3];
+        try {
+            JMeterUtils.setProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "true");
+            JMeterUtils.setProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "true");
+            JMeterUtils.setProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false");
+            JMeterUtils.setProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE);
+            JMeterUtils.setProperty(AgentRoutingConfig.API_KEY, "saved-typesafe-test-key");
+
+            SwingUtilities.invokeAndWait(() -> {
+                dialogs[0] = newDialog(tempDir.resolve("routing-state.properties"));
+                dialogs[0].selectOption(ProviderSetupOption.SMART_ROUTING);
+                JCheckBox routing = checkbox(dialogs[0], "routingEnabled");
+                JCheckBox triage = checkbox(dialogs[0], "triageEnabled");
+                assertTrue(routing.isSelected());
+                assertFalse(triage.isSelected());
+
+                clickBackend(dialogs[0], "OpenRouter Decisions");
+                assertTrue(routing.isSelected());
+                assertFalse(triage.isSelected());
+                clickBackend(dialogs[0], "EmbeddingGemma");
+                assertFalse(triage.isSelected());
+                assertFalse(triage.isEnabled());
+                clickBackend(dialogs[0], "Jev by TypeSafe");
+                assertFalse(triage.isSelected());
+                assertTrue(triage.isEnabled());
+
+                triage.doClick();
+                assertTrue(triage.isSelected());
+                clickBackend(dialogs[0], "Ollama embeddings");
+                assertFalse(triage.isSelected());
+                assertFalse(triage.isEnabled());
+                clickBackend(dialogs[0], "OpenAI Decisions");
+                assertTrue(triage.isSelected());
+                assertTrue(triage.isEnabled());
+                clickBackend(dialogs[0], "Off");
+                assertFalse(routing.isSelected());
+                assertFalse(triage.isSelected());
+                assertFalse(triage.isEnabled());
+                clickBackend(dialogs[0], "OpenRouter Decisions");
+                assertTrue(routing.isSelected());
+                assertTrue(triage.isSelected());
+            });
+
+            JMeterUtils.setProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "true");
+            JMeterUtils.getJMeterProperties().remove(AgentRoutingConfig.ROUTING_ENABLED_KEY);
+            JMeterUtils.setProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "true");
+            SwingUtilities.invokeAndWait(() -> {
+                dialogs[1] = newDialog(tempDir.resolve("routing-triage-only.properties"));
+                dialogs[1].selectOption(ProviderSetupOption.SMART_ROUTING);
+                JCheckBox routing = checkbox(dialogs[1], "routingEnabled");
+                JCheckBox triage = checkbox(dialogs[1], "triageEnabled");
+                assertFalse(routing.isSelected());
+                assertTrue(triage.isSelected());
+                clickBackend(dialogs[1], "OpenAI Decisions");
+                assertFalse(routing.isSelected());
+                assertTrue(triage.isSelected());
+            });
+
+            JMeterUtils.setProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false");
+            JMeterUtils.setProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false");
+            JMeterUtils.setProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false");
+            SwingUtilities.invokeAndWait(() -> {
+                dialogs[2] = newDialog(tempDir.resolve("routing-off.properties"));
+                dialogs[2].selectOption(ProviderSetupOption.SMART_ROUTING);
+                JCheckBox routing = checkbox(dialogs[2], "routingEnabled");
+                JCheckBox triage = checkbox(dialogs[2], "triageEnabled");
+                assertFalse(routing.isSelected());
+                assertFalse(triage.isSelected());
+                clickBackend(dialogs[2], "OpenAI Decisions");
+                assertTrue(routing.isSelected());
+                assertTrue(triage.isSelected());
+            });
+        } finally {
+            try {
+                SwingUtilities.invokeAndWait(() -> {
+                    for (ProviderSetupDialog dialog : dialogs) {
+                        if (dialog != null) {
+                            dialog.dispose();
+                        }
+                    }
+                });
+            } finally {
+                restoreProperties(original);
+            }
+        }
+    }
+
+    @Test
+    void smartRoutingNavigationReflectsSavedSettingsUntilSave() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        String[] keys = {
+                AgentRoutingConfig.TYPESAFE_ENABLED_KEY,
+                AgentRoutingConfig.ROUTING_ENABLED_KEY,
+                AgentTriageConfig.TRIAGE_ENABLED_KEY,
+                AgentJudgmentConfig.PROVIDER_KEY,
+                AgentRoutingConfig.API_KEY,
+                AgentJudgmentConfig.OPENAI_API_KEY
+        };
+        Map<String, String> original = snapshotProperties(keys);
+        AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
+        try {
+            JMeterUtils.setProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "true");
+            JMeterUtils.setProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "true");
+            JMeterUtils.setProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false");
+            JMeterUtils.setProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE);
+            JMeterUtils.setProperty(AgentRoutingConfig.API_KEY, "saved-typesafe-test-key");
+            JMeterUtils.getJMeterProperties().remove(AgentJudgmentConfig.OPENAI_API_KEY);
+
+            SwingUtilities.invokeAndWait(() -> {
+                ProviderSetupDialog dialog = newDialog(tempDir.resolve("routing-nav.properties"));
+                dialogRef.set(dialog);
+                dialog.selectOption(ProviderSetupOption.SMART_ROUTING);
+                ProviderSetupDialog.ProviderRow row = smartRoutingRow(dialog);
+                assertTrue(row.getAccessibleContext().getAccessibleName().contains("Jev"));
+                assertTrue(row.hasConfiguredBadge());
+
+                clickBackend(dialog, "OpenAI Decisions");
+                assertTrue(row.getAccessibleContext().getAccessibleName().contains("Jev"));
+                assertTrue(row.hasConfiguredBadge());
+                try {
+                    Field fields = ProviderSetupDialog.class.getDeclaredField("smartKeyFields");
+                    fields.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    Map<String, javax.swing.JTextField> smartKeys =
+                            (Map<String, javax.swing.JTextField>) fields.get(dialog);
+                    smartKeys.get(AgentJudgmentConfig.OPENAI).setText("entered-openai-test-key");
+                    Method saveSettings = ProviderSetupDialog.class.getDeclaredMethod("saveSettings");
+                    saveSettings.setAccessible(true);
+                    saveSettings.invoke(dialog);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+
+                assertTrue(row.getAccessibleContext().getAccessibleName().contains("OpenAI Decisions"));
+                assertTrue(row.hasConfiguredBadge());
+            });
+        } finally {
+            try {
+                ProviderSetupDialog dialog = dialogRef.get();
+                if (dialog != null) {
+                    SwingUtilities.invokeAndWait(dialog::dispose);
+                }
+            } finally {
+                restoreProperties(original);
+            }
+        }
+    }
+
+    @Test
+    void ollamaMissingModelRecognitionAndUnexpectedHttpErrorCopyAreSpecific() {
+        String model = "embeddinggemma";
+        String missingModelMessage = OllamaEmbeddingClient.modelUnavailableMessage(model);
+        assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(400, missingModelMessage, model));
+        assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(404, "unrelated 404 response", model));
+        assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(
+                400, OllamaEmbeddingClient.modelUnavailableMessage(OllamaEmbeddingClient.DEFAULT_MODEL), ""));
+        assertFalse(ProviderSetupDialog.isOllamaModelUnavailable(
+                500, OllamaEmbeddingClient.modelUnavailableMessage("other-model"), model));
+        assertEquals("Run ollama pull embeddinggemma.", ProviderSetupDialog.ollamaMissingModelCopy(""));
+        assertEquals("Run ollama pull embeddinggemma.", ProviderSetupDialog.ollamaMissingModelCopy("  "));
+
+        ProviderConnectionTester.Result malformedResponse = new ProviderConnectionTester.Result(
+                ProviderConnectionTester.Outcome.HTTP_ERROR, 0, List.of(), 0, "invalid decision payload");
+        String copy = ProviderSetupDialog.smartRoutingHttpErrorCopy(malformedResponse);
+        assertEquals("Unexpected response from the provider: invalid decision payload You can save anyway.", copy);
+        assertFalse(copy.contains("HTTP 0"));
+    }
+
+    @Test
+    void appleSelectionKeepsTheCheckingStatusVisibleUntilTheProbeCompletes() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            ProviderSetupDialog dialog = new ProviderSetupDialog(
+                    null, option -> { }, false, new ProviderConnectionTester(),
+                    tempDir.resolve("apple-checking.properties"), () -> { },
+                    () -> true, org.qainsights.jmeter.ai.apple.AppleFoundationHelper.Status::available);
+            dialogRef.set(dialog);
+            dialog.selectOption(ProviderSetupOption.APPLE_ON_DEVICE);
+            try {
+                Field statusText = ProviderSetupDialog.class.getDeclaredField("statusText");
+                statusText.setAccessible(true);
+                assertEquals("Checking…", ((javax.swing.JTextArea) statusText.get(dialog)).getText());
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        SwingUtilities.invokeAndWait(() -> dialogRef.get().dispose());
+    }
+
+    private ProviderSetupDialog newDialog(Path propertiesPath) {
+        return new ProviderSetupDialog(
+                null, option -> { }, false, new ProviderConnectionTester(), propertiesPath,
+                () -> { }, () -> false, null);
+    }
+
+    private static JCheckBox checkbox(ProviderSetupDialog dialog, String fieldName) {
+        try {
+            Field field = ProviderSetupDialog.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return (JCheckBox) field.get(dialog);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void clickBackend(ProviderSetupDialog dialog, String label) {
+        JRadioButton button = findRadioButton(dialog.getContentPane(), label);
+        assertTrue(button != null, "Missing backend choice: " + label);
+        button.doClick();
+    }
+
+    private static JRadioButton findRadioButton(Component component, String label) {
+        if (component instanceof JRadioButton button && button.getText().contains(label)) {
+            return button;
+        }
+        if (component instanceof java.awt.Container container) {
+            for (Component child : container.getComponents()) {
+                JRadioButton button = findRadioButton(child, label);
+                if (button != null) {
+                    return button;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ProviderSetupDialog.ProviderRow smartRoutingRow(ProviderSetupDialog dialog) {
+        try {
+            Field rowsField = ProviderSetupDialog.class.getDeclaredField("rows");
+            rowsField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            List<ProviderSetupDialog.ProviderRow> rows =
+                    (List<ProviderSetupDialog.ProviderRow>) rowsField.get(dialog);
+            return rows.stream()
+                    .filter(row -> row.option() == ProviderSetupOption.SMART_ROUTING)
+                    .findFirst()
+                    .orElseThrow();
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Map<String, String> snapshotProperties(String... keys) {
+        Map<String, String> original = new java.util.LinkedHashMap<>();
+        for (String key : keys) {
+            original.put(key, JMeterUtils.getJMeterProperties().getProperty(key));
+        }
+        return original;
+    }
+
+    private static void restoreProperties(Map<String, String> original) {
+        var properties = JMeterUtils.getJMeterProperties();
+        for (Map.Entry<String, String> entry : original.entrySet()) {
+            if (entry.getValue() == null) {
+                properties.remove(entry.getKey());
+            } else {
+                JMeterUtils.setProperty(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    @Test
+    void smartRoutingSignalsChatReloadOnlyWhenOpenAiKeyIsWritten() {
+        assertEquals(ProviderSetupOption.SMART_ROUTING,
+                ProviderSetupDialog.callbackOptionAfterSave(
+                        ProviderSetupOption.SMART_ROUTING, java.util.Map.of("openai.api.key", "entered")));
+        assertNull(ProviderSetupDialog.callbackOptionAfterSave(
+                ProviderSetupOption.SMART_ROUTING, java.util.Map.of("typesafe.api.key", "entered")));
+        assertNull(ProviderSetupDialog.callbackOptionAfterSave(
+                ProviderSetupOption.SMART_ROUTING, java.util.Map.of()));
+        assertEquals(ProviderSetupOption.OPENAI,
+                ProviderSetupDialog.callbackOptionAfterSave(
+                        ProviderSetupOption.OPENAI, java.util.Map.of("openai.api.key", "entered")));
+    }
+
+    @Test
+    void appleNavigationAndReasonCopyUseInjectedPlatformAndStatus() {
+        assertFalse(ProviderSetupDialog.navigationProviderOptions(() -> false)
+                .contains(ProviderSetupOption.APPLE_ON_DEVICE));
+        assertTrue(ProviderSetupDialog.navigationProviderOptions(() -> true)
+                .contains(ProviderSetupOption.APPLE_ON_DEVICE));
+        assertEquals("This Mac doesn't support Apple Intelligence",
+                ProviderSetupDialog.appleReasonCopy("deviceNotEligible"));
+        assertEquals("Turn on Apple Intelligence in System Settings",
+                ProviderSetupDialog.appleReasonCopy("appleIntelligenceNotEnabled"));
+        assertEquals("The on-device model is still downloading. Try again in a few minutes",
+                ProviderSetupDialog.appleReasonCopy("modelNotReady"));
+        assertEquals("Not available right now", ProviderSetupDialog.appleReasonCopy("unsupportedPlatform"));
+        java.util.function.Supplier<org.qainsights.jmeter.ai.apple.AppleFoundationHelper.Status> status =
+                org.qainsights.jmeter.ai.apple.AppleFoundationHelper.Status::available;
+        assertEquals("Available on this Mac", ProviderSetupDialog.appleStatusCopy(status.get()));
+        assertEquals("This Mac doesn't support Apple Intelligence", ProviderSetupDialog.appleStatusCopy(
+                org.qainsights.jmeter.ai.apple.AppleFoundationHelper.Status.unavailable("deviceNotEligible")));
+        assertTrue(status.get().isAvailable());
     }
 
     @Test
@@ -115,7 +506,7 @@ class ProviderSetupDialogTest {
                     new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI);
 
             assertTrue(row.hasConfiguredBadge());
-            assertEquals("A key is already saved. Paste a new one to replace it.",
+            assertEquals("Saved key. Paste a replacement.",
                     ProviderSetupDialog.keyPlaceholder(ProviderSetupOption.OPENAI));
         } finally {
             if (original == null) {
@@ -247,7 +638,7 @@ class ProviderSetupDialogTest {
     }
 
     @Test
-    void providerHintsMeetContrastRequirementsInDarkAndLightPalettes() {
+    void providerHintsAndDisabledPrimaryButtonsMeetContrastRequirementsInDarkAndLightPalettes() {
         String[] keys = {
                 "Panel.background", "TextPane.background",
                 "Label.disabledForeground", "Label.foreground"
@@ -284,6 +675,12 @@ class ProviderSetupDialogTest {
         row.setRollover(false);
         row.setSelected(true);
         assertRowHintContrast(row);
+
+        QuietButton disabledPrimary = new QuietButton("Use Apple on-device", QuietButton.Kind.PRIMARY);
+        disabledPrimary.setEnabled(false);
+        Color disabledBackground = ThemeColors.blend(ThemeColors.accent(), ThemeColors.canvas(), 0.42f);
+        double buttonContrast = ThemeColors.contrastRatio(disabledPrimary.getForeground(), disabledBackground);
+        assertTrue(buttonContrast >= 3.0, "Disabled primary text contrast ratio was " + buttonContrast);
     }
 
     private static void assertRowHintContrast(ProviderSetupDialog.ProviderRow row) {
@@ -366,6 +763,87 @@ class ProviderSetupDialogTest {
                     Field keyField = ProviderSetupDialog.class.getDeclaredField("keyField");
                     keyField.setAccessible(true);
                     ((javax.swing.JTextField) keyField.get(dialogRef.get())).setText("new-test-key");
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } finally {
+            releaseRequest.countDown();
+        }
+
+        org.junit.jupiter.api.Assertions.assertTrue(testCompleted.await(5, TimeUnit.SECONDS));
+        assertFalse(saved.get());
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                Field statusText = ProviderSetupDialog.class.getDeclaredField("statusText");
+                statusText.setAccessible(true);
+                assertEquals("Inputs changed during the test. Test again before saving.",
+                        ((javax.swing.JTextArea) statusText.get(dialogRef.get())).getText());
+                Field resultCurrent = ProviderSetupDialog.class.getDeclaredField("resultCurrent");
+                resultCurrent.setAccessible(true);
+                assertFalse(resultCurrent.getBoolean(dialogRef.get()));
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        SwingUtilities.invokeAndWait(() -> dialogRef.get().dispose());
+    }
+
+    @Test
+    void ignoresStaleSmartRoutingTestAfterKeyChanges() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        CountDownLatch requestStarted = new CountDownLatch(1);
+        CountDownLatch releaseRequest = new CountDownLatch(1);
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        AtomicBoolean saved = new AtomicBoolean();
+        AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
+        ProviderConnectionTester tester = new ProviderConnectionTester(request -> null, (backend, key, triage) -> {
+                requestStarted.countDown();
+                try {
+                    releaseRequest.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return new ProviderConnectionTester.Result(
+                        ProviderConnectionTester.Outcome.OK, 0, List.of(), 200, null);
+            });
+
+        SwingUtilities.invokeAndWait(() -> {
+            ProviderSetupDialog dialog = new ProviderSetupDialog(null, option -> saved.set(true),
+                    false, tester, tempDir.resolve("routing.properties"), testCompleted::countDown);
+            dialogRef.set(dialog);
+            try {
+                Field backend = ProviderSetupDialog.class.getDeclaredField("smartBackend");
+                backend.setAccessible(true);
+                backend.set(dialog, "typesafe");
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+            dialog.selectOption(ProviderSetupOption.SMART_ROUTING);
+            try {
+                Field fields = ProviderSetupDialog.class.getDeclaredField("smartKeyFields");
+                fields.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, javax.swing.JTextField> smartKeys =
+                        (java.util.Map<String, javax.swing.JTextField>) fields.get(dialog);
+                smartKeys.get("typesafe").setText("old-routing-key");
+                Method startTest = ProviderSetupDialog.class.getDeclaredMethod("startTest", boolean.class);
+                startTest.setAccessible(true);
+                startTest.invoke(dialog, true);
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(requestStarted.await(5, TimeUnit.SECONDS));
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    Field fields = ProviderSetupDialog.class.getDeclaredField("smartKeyFields");
+                    fields.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, javax.swing.JTextField> smartKeys =
+                            (java.util.Map<String, javax.swing.JTextField>) fields.get(dialogRef.get());
+                    smartKeys.get("typesafe").setText("new-routing-key");
                 } catch (ReflectiveOperationException e) {
                     throw new RuntimeException(e);
                 }

@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.agent;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -13,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -154,6 +157,29 @@ class AgentRoutingConfigTest {
             config.when(() -> AiConfig.getProperty(LocalEmbeddingModel.MODEL_KEY, LocalEmbeddingModel.DEFAULT_MODEL))
                     .thenReturn("onnx-community/embeddinggemma-2-ONNX");
             assertNotSame(first, AgentRoutingConfig.createRouter());
+        }
+    }
+
+    @Test
+    void routerCreationReflectsPropertyChangesForTheNextAgentMessage() {
+        try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
+            Map<String, String> properties = new HashMap<>();
+            config.when(() -> AiConfig.getProperty(anyString(), anyString())).thenAnswer(invocation ->
+                    properties.getOrDefault(invocation.getArgument(0), invocation.getArgument(1)));
+            properties.put(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "true");
+            properties.put(AgentRoutingConfig.ROUTING_ENABLED_KEY, "true");
+            properties.put(AgentRoutingConfig.API_KEY, "configured-test-key");
+            properties.put(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE);
+
+            AgentRequestRouter beforeSave = AgentRoutingConfig.createRouter();
+            assertTrue(beforeSave instanceof TypeSafeAgentRequestRouter);
+
+            properties.put(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.LOCAL);
+            properties.put(LocalEmbeddingModel.DIR_KEY, System.getProperty("java.io.tmpdir") + "/fw-no-model");
+            properties.put(LocalEmbeddingModel.DOWNLOAD_KEY, "false");
+            AgentRequestRouter afterSave = AgentRoutingConfig.createRouter();
+            assertTrue(afterSave instanceof EmbeddingAgentRequestRouter);
+            assertNotSame(beforeSave, afterSave);
         }
     }
 
