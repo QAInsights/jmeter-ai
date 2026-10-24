@@ -55,6 +55,34 @@ class ProviderSetupDialogTest {
     }
 
     @Test
+    void openRouterIsVisibleRequiresAKeyAndSavesIt() throws Exception {
+        assertTrue(ProviderSetupDialog.navigationProviderOptions(() -> false)
+                .contains(ProviderSetupOption.OPENROUTER));
+        assertTrue(ProviderSetupOption.OPENROUTER.requiresKey());
+        assertEquals("OpenRouter", ProviderSetupOption.OPENROUTER.displayName());
+
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        ProviderSetupDialog dialog = new ProviderSetupDialog(
+                null, option -> { }, false, new ProviderConnectionTester(request ->
+                        new ProviderConnectionTester.Response(200, "{}")),
+                tempDir.resolve("openrouter-settings.properties"), () -> { });
+        try {
+            dialog.selectOption(ProviderSetupOption.OPENROUTER);
+            Field keyField = ProviderSetupDialog.class.getDeclaredField("keyField");
+            keyField.setAccessible(true);
+            ((javax.swing.JPasswordField) keyField.get(dialog)).setText("openrouter-test-key");
+            Method saveSettings = ProviderSetupDialog.class.getDeclaredMethod("saveSettings");
+            saveSettings.setAccessible(true);
+            saveSettings.invoke(dialog);
+
+            String persisted = java.nio.file.Files.readString(tempDir.resolve("openrouter-settings.properties"));
+            assertTrue(persisted.contains("openrouter.api.key=openrouter-test-key"));
+        } finally {
+            dialog.dispose();
+        }
+    }
+
+    @Test
     void keepsTheConfiguredModelOrUsesTheFirstAvailableModel() {
         assertEquals("llama3.1",
                 ProviderSetupDialog.modelAfterRefresh(

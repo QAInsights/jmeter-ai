@@ -62,7 +62,7 @@
 
 | | |
 |:---|:---|
-| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), Meta Muse, or AWS Bedrock models, or use your CLI-managed ChatGPT/Codex or Claude Code account. |
+| 🤖 **Multi-Model Chat** | Talk to API-backed Claude, OpenAI, Google Gemini, DeepSeek, Ollama, Grok (xAI), OpenRouter, Meta Muse, or AWS Bedrock models, or use your CLI-managed ChatGPT/Codex or Claude Code account. |
 | ⚡ **Real-Time Streaming** | Watch supported API responses appear token-by-token with a **Stop** button to cancel anytime; CLI-backed requests return one completed answer and are cancellable too. |
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
 | 🎯 **Extract this** | Highlight a value in a View Results Tree response, right-click and pick **Extract this (Feather Wand)**. Feather Wand builds JSON, CSS selector, regex and boundary extractors, runs each one through JMeter's own extractor code against the real response, and offers only the ones that return exactly that value. Pick one, name the variable and it lands under the sampler that produced the response, optionally replacing later hard-coded copies with `${var}`. Works without an API key. |
@@ -70,7 +70,7 @@
 | 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex and Claude Code CLI providers. |
 | **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, OpenRouter Decisions with Microsoft-Decision-1, or local EmbeddingGemma through Ollama) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
@@ -271,6 +271,26 @@ Uses the authentication managed by your local [Claude Code CLI](https://docs.ant
 | `grok.max.tokens` | Max response tokens | `4096` |
 | `grok.max.history.size` | Conversation history size | `10` |
 | `grok.system.prompt` | System prompt | See sample file |
+
+</details>
+
+<details>
+<summary><b>OpenRouter</b></summary>
+
+OpenRouter uses its OpenAI-compatible Chat Completions API for Chat and Agent Mode. The key is shared with OpenRouter Decisions. The model picker requests only models advertising tool support, so every listed model can be used with Agent Mode.
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| `openrouter.api.key` | OpenRouter API key, shared with OpenRouter Decisions | **Required** |
+| `openrouter.base.url` | API base URL | `https://openrouter.ai/api/v1` |
+| `openrouter.default.model` | Default model | `anthropic/claude-sonnet-5.5` |
+| `openrouter.temperature` | Temperature | `0.7` |
+| `openrouter.max.tokens` | Maximum response tokens | `4096` |
+| `openrouter.max.history.size` | Conversation history size | `10` |
+| `openrouter.system.prompt` | System prompt | JMeter default |
+| `openrouter.models` | Comma-separated featured model IDs, shown first when available | See sample file |
+
+The model list is fetched from OpenRouter with `supported_parameters=tools`. Featured IDs missing from the live tool-capable catalog are skipped. OpenRouter attribution headers identify requests as JMeter and Feather Wand.
 
 </details>
 
@@ -625,7 +645,7 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 
 Agent Mode lets the AI **autonomously edit your live JMeter test plan** through a tool-calling loop. Instead of just chatting about what you should do, the agent reads the tree, reasons about needed changes, calls tools to mutate elements, verifies the results, and iterates until the task is done, all inside the existing chat panel.
 
-> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, and **Meta Muse**, plus the **ChatGPT / Codex CLI** and **Claude Code CLI** providers. Ollama and Bedrock currently fall back to plain chat.
+> ⚠️ **Supported Agent Mode backends:** API-backed **Anthropic Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, **OpenRouter**, and **Meta Muse**, plus the **ChatGPT / Codex CLI** and **Claude Code CLI** providers. Ollama and Bedrock currently fall back to plain chat.
 
 <div align="center">
 
@@ -642,7 +662,7 @@ Agent Mode is **on by default**: with a supported model selected, **Agent** is p
 jmeter.ai.agent.enabled=false
 ```
 
-Select a **Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, or **Meta Muse** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
+Select a **Claude**, **OpenAI**, **Google Gemini**, **DeepSeek**, **Grok**, **OpenRouter**, or **Meta Muse** model from the dropdown. Then just type your request naturally in the chat box; if Agent Mode is enabled and a supported model is selected, the agent loop activates automatically.
 
 > If a model from any other provider is selected, the request is handled by the regular (non-agentic) chat path.
 
@@ -650,7 +670,7 @@ All supported providers share the same tool registry, system prompt, safety gate
 
 > 💡 **OpenAI note**: temperature is left at the model default for agent runs, so reasoning models (`o1`, `o3`, `o4`, `gpt-5`) work without extra configuration. `jmeter.ai.agent.max.tokens` maps to `max_completion_tokens`. For **gpt-5.1 and later** (`gpt-5.6-terra`, `gpt-5.6-sol`, ...) the agent automatically sends `reasoning_effort=none`, because those models reject function tools on `/v1/chat/completions` while reasoning is on, so tool calling works out of the box.
 
-> 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies. For Meta Muse, agent runs go through Chat Completions rather than the Responses API used for plain chat, so the Thoughts card is not populated during agent runs.
+> 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, OpenRouter, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies. For Meta Muse, agent runs go through Chat Completions rather than the Responses API used for plain chat, so the Thoughts card is not populated during agent runs.
 
 > 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
 
@@ -674,7 +694,7 @@ typesafe.timeout.seconds=15
 
 When enabled with a real API key, every request shows a dedicated **Jev Smart Route** card before agent activity. It identifies the selected route, confidence, focused/total tool counts, and the chat model that still performs the work. Uncertain routing shows that all tools are being used; a TypeSafe failure shows that standard Agent Mode is being used.
 
-With `jmeter.ai.typesafe.agent.routing.expansion.enabled=true`, a focused pack also advertises an `expand_tools` escape hatch: if the model realises it needs a capability outside its pack, it can ask for more tools instead of giving up. Jev re-classifies the request with the model's stated need, the live tool set grows (never shrinks, capped by `expansion.max`, never beyond the full registry), and a second **Jev Expanded Tools** card lists what was added. The grown tool set is re-advertised to the provider on the model's next request, so newly added tools are actually callable — for the API-backed models (Claude, OpenAI, Gemini, DeepSeek, Grok, Meta Muse) and for the subscription CLIs, whose tool protocol is re-issued in the next prompt. Newly exposed destructive tools still require the usual confirmation.
+With `jmeter.ai.typesafe.agent.routing.expansion.enabled=true`, a focused pack also advertises an `expand_tools` escape hatch: if the model realises it needs a capability outside its pack, it can ask for more tools instead of giving up. Jev re-classifies the request with the model's stated need, the live tool set grows (never shrinks, capped by `expansion.max`, never beyond the full registry), and a second **Jev Expanded Tools** card lists what was added. The grown tool set is re-advertised to the provider on the model's next request, so newly added tools are actually callable for the API-backed models (Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse) and the subscription CLIs, whose tool protocol is re-issued in the next prompt. Newly exposed destructive tools still require the usual confirmation.
 
 With `jmeter.ai.typesafe.agent.triage.enabled=true` (independent of routing), Jev also classifies failures reported by `get_test_results`. Each unique failure signature — sampler label, response code, and a bounded message — gets one Choice judgment into a root-cause bucket (connection, timeout, 4xx/5xx, auth/session, assertion, script, config), capped at `triage.max.failures` signatures per run. The verdicts surface in a **Jev Failure Triage** card grouped by category with a dominant-cause callout, and an advisory summary is appended to the tool result so the chat model diagnoses from a categorized picture. When at least one failure is classified, triage on every backend (Jev, OpenAI Decisions and OpenRouter Decisions) then asks one extra `score` question for the whole run and shows a **severity** of Low, Medium, High or Critical on the card and in the advisory, for example "severity: High (88%)". The score uses the same confidence threshold; a low-confidence or failed score just leaves severity out and keeps the categories. Triage is advisory only: unavailable Jev, a missing key, or a clean run leaves the result untouched.
 
@@ -710,7 +730,7 @@ openrouter.api.key=YOUR_OPENROUTER_API_KEY
 openrouter.decisions.model=microsoft/microsoft-decision-1
 ```
 
-The cards are named after the model's vendor: **Microsoft Decision** (for example "Microsoft Decision Smart Route") for `microsoft/*` models, **Jev** for `typesafe/*` models, and **OpenRouter Decisions** otherwise. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api`. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
+The cards are named after the model's vendor: **Microsoft Decision** (for example "Microsoft Decision Smart Route") for `microsoft/*` models, **Jev** for `typesafe/*` models, and **OpenRouter Decisions** otherwise. Without a real `openrouter.api.key` the backend stays off entirely; TypeSafe and OpenAI keys never switch it on. `openrouter.decisions.model` accepts any model OpenRouter serves on the Decisions API (for example `typesafe/jev-1.13`), and `openrouter.base.url` defaults to `https://openrouter.ai/api/v1`. The same key and base URL are shared with OpenRouter Chat and Agent Mode. The Decisions endpoint normalizes `/v1` before calling the alpha API. The same data boundaries apply as for Jev. Microsoft-Decision-1 bills input tokens only.
 
 #### Local Ollama embeddings backend (EmbeddingGemma)
 
@@ -780,6 +800,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | **Claude Code CLI** | ✅ Agent Mode | No native tool API; same JSON tool protocol over `claude -p` | Done |
 | **DeepSeek** | ✅ Agent Mode | Yes: OpenAI-compatible `tools`/`tool_choice` (or Anthropic-compatible via `/anthropic`) | Done |
 | **Grok (xAI)** | ✅ Agent Mode | Yes: OpenAI-style function tools | Done |
+| **OpenRouter** | ✅ Chat and Agent Mode | OpenAI-compatible Chat Completions with tool-capable model discovery | Done |
 | **Meta "Muse"** | ✅ Agent Mode | Yes: OpenAI-compatible function `tool_calls` on Chat Completions | Done |
 | **Kimi K2/K3 (Moonshot AI)** | Not yet added | Yes: standard OpenAI-shaped `tools`/`tool_calls` | 🟢 Trivial (same "point `openai-java` at a new base URL" pattern) |
 | **Poolside (Laguna models)** | Not yet added | Yes: OpenAI-compatible `tools`/`tool_choice` at `inference.poolside.ai` (also via OpenRouter/Bedrock) | 🟢 Trivial (same pattern) |
@@ -819,7 +840,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 | `openai.decisions.model` | OpenAI Decisions model when `jmeter.ai.judgment.provider=openai` | `gpt-6-luna` |
 | `openrouter.api.key` | OpenRouter API key; required when `jmeter.ai.judgment.provider=openrouter` (without a real key the backend stays off) | *(empty)* |
 | `openrouter.decisions.model` | OpenRouter Decisions model | `microsoft/microsoft-decision-1` |
-| `openrouter.base.url` | OpenRouter API root; requests go to `<root>/alpha/decisions` | `https://openrouter.ai/api` |
+| `openrouter.base.url` | OpenRouter API root, shared with Chat; requests go to the normalized Decisions endpoint | `https://openrouter.ai/api/v1` |
 
 > 💡 **Undo support**: JMeter's Undo/Redo is disabled by default (`undo.history.size=0`). Add `undo.history.size=50` to `user.properties` and restart JMeter so you can Ctrl+Z agent-made changes. The agent will remind you once if it's off.
 
@@ -893,7 +914,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Examples
 
-Try these in the chat box with Agent Mode enabled and a Claude, OpenAI, Google Gemini, DeepSeek, Grok, or Meta Muse model selected:
+Try these in the chat box with Agent Mode enabled and a Claude, OpenAI, Google Gemini, DeepSeek, Grok, OpenRouter, or Meta Muse model selected:
 
 | Request | What the agent does |
 |---------|-------------------|
@@ -1214,6 +1235,7 @@ See the [AI CLI Terminal configuration](#ai-cli-terminal) section for the full p
 | **Gemini** | Sign in at [Google AI Studio](https://aistudio.google.com/) → Get API Key | `google.api.key` |
 | **Ollama** | Install from [ollama.com](https://ollama.com/) → `ollama pull llama3.1` | No key needed |
 | **Grok (xAI)** | Sign up at [console.x.ai](https://console.x.ai/) → create API key | `grok.api.key` |
+| **OpenRouter** | Create an API key at [openrouter.ai](https://openrouter.ai/settings/keys) | `openrouter.api.key` |
 | **AWS Bedrock** | Configure a Bedrock API key or AWS IAM/default credentials in the selected Region | `bedrock.api.key` or IAM properties |
 
 Set `jmeter.ai.service.type=ollama` to switch to a local model. All other providers work side-by-side; just pick the model from the UI dropdown.
@@ -1226,10 +1248,11 @@ Feather Wand automatically hides non-chat models so you only see useful options:
 - **Claude**: shows only the latest available models.
 - **Gemini**: shows only `gemini-*` and `gemma-*` chat models.
 - **Grok**: shows only `grok-*` chat models.
+- **OpenRouter**: shows only models returned as tool-capable by OpenRouter.
 - **AWS Bedrock**: shows text-capable foundation models and active, account-authorized inference profiles matching `bedrock.model.providers`; unavailable profiles are hidden.
 - **Corporate gateways**: with `openai.base.url` or `anthropic.base.url` set, gateway-specific model names are kept (audio, embedding, moderation, image and other non-chat models are still hidden), or listed verbatim from `openai.models` / `anthropic.models`.
 
-Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
+Default models: `claude-sonnet-4-6` · `gpt-4o` · `gemini-3.5-flash` · `deepseek-chat` · `deepseek-r1:1.5b` · `grok-4.5` · `anthropic/claude-sonnet-5.5` · `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
 ---
 

@@ -261,6 +261,10 @@ public final class ProviderConnectionTester {
                     AiConfig.getProperty("deepseek.base.url", "https://api.deepseek.com"), "/models");
             case GROK -> url = appendPath(
                     AiConfig.getProperty("grok.base.url", "https://api.x.ai/v1"), "/models");
+            case OPENROUTER -> url = appendPath(
+                    OpenRouterAiService.chatBaseUrl(
+                            AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_BASE_URL_KEY,
+                                    OpenRouterAiService.DEFAULT_BASE_URL)), "/key");
             case META_MUSE -> url = appendPath(
                     AiConfig.getProperty("meta.base.url", "https://api.meta.ai/v1"), "/models");
             case OLLAMA -> {
@@ -284,10 +288,17 @@ public final class ProviderConnectionTester {
         } else if (option.requiresKey()) {
             builder.header("Authorization", "Bearer " + (key == null ? "" : key));
         }
+        if (option == ProviderSetupOption.OPENROUTER) {
+            builder.header(OpenRouterAiService.REFERER_HEADER, OpenRouterAiService.REFERER_VALUE)
+                    .header(OpenRouterAiService.TITLE_HEADER, OpenRouterAiService.TITLE_VALUE);
+        }
         return builder.build();
     }
 
     private static Result parseSuccess(ProviderSetupOption option, String body, int code) {
+        if (option == ProviderSetupOption.OPENROUTER) {
+            return new Result(Outcome.OK, 0, List.of(), code, "Key accepted");
+        }
         try {
             JsonNode root = JSON.readTree(body == null ? "{}" : body);
             JsonNode models = root.path("models");

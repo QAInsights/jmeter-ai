@@ -47,8 +47,10 @@ class ProviderConnectionTesterTest {
                 ProviderSetupOption.OPENAI,
                 ProviderSetupOption.DEEPSEEK,
                 ProviderSetupOption.GROK,
+                ProviderSetupOption.OPENROUTER,
                 ProviderSetupOption.META_MUSE)) {
-            assertEquals("Chat and Agent Mode", option.listHint());
+            assertEquals(option == ProviderSetupOption.OPENROUTER
+                    ? "Chat and Agent Mode, 300+ models" : "Chat and Agent Mode", option.listHint());
         }
         assertEquals("Chat and Agent Mode, AI Studio key", ProviderSetupOption.GEMINI.listHint());
         assertEquals("Local models, no API key", ProviderSetupOption.OLLAMA.listHint());
@@ -65,6 +67,7 @@ class ProviderConnectionTesterTest {
         properties.put("deepseek.base.url", "https://deepseek.example/v1");
         properties.put("grok.base.url", "https://grok.example/v1");
         properties.put("meta.base.url", "https://meta.example/v1");
+        properties.put("openrouter.base.url", "https://openrouter.example/api/v1/");
         assertRequest(ProviderSetupOption.ANTHROPIC, "key-one",
                 "https://anthropic.example/v1/models", "x-api-key", "key-one");
         assertRequest(ProviderSetupOption.OPENAI, "key-two",
@@ -78,6 +81,57 @@ class ProviderConnectionTesterTest {
                 "https://grok.example/v1/models", "Authorization", "Bearer key-five");
         assertRequest(ProviderSetupOption.META_MUSE, "key-six",
                 "https://meta.example/v1/models", "Authorization", "Bearer key-six");
+        assertRequest(ProviderSetupOption.OPENROUTER, "key-seven",
+                "https://openrouter.example/api/v1/key", "Authorization", "Bearer key-seven");
+    }
+
+    @Test
+    void openRouterKeyCheckAcceptsKeysAndSendsAttributionHeaders() {
+        AtomicReference<HttpRequest> captured = new AtomicReference<>();
+        ProviderConnectionTester tester = tester(captured, 200, "{}");
+
+        ProviderConnectionTester.Result result =
+                tester.test(ProviderSetupOption.OPENROUTER, "openrouter-test-key");
+
+        assertEquals(ProviderConnectionTester.Outcome.OK, result.outcome());
+        assertEquals("Key accepted", result.reason());
+        assertEquals(0, result.modelCount());
+        assertEquals("/api/v1/key", captured.get().uri().getPath());
+        assertEquals("Bearer openrouter-test-key",
+                captured.get().headers().firstValue("Authorization").orElseThrow());
+        assertEquals(OpenRouterAiService.REFERER_VALUE,
+                captured.get().headers().firstValue(OpenRouterAiService.REFERER_HEADER).orElseThrow());
+        assertEquals(OpenRouterAiService.TITLE_VALUE,
+                captured.get().headers().firstValue(OpenRouterAiService.TITLE_HEADER).orElseThrow());
+
+        ProviderConnectionTester.Result rejected =
+                new ProviderConnectionTester(request -> new ProviderConnectionTester.Response(401, "{}"))
+                        .test(ProviderSetupOption.OPENROUTER, "bad-key");
+        assertEquals(ProviderConnectionTester.Outcome.AUTH_REJECTED, rejected.outcome());
+    }
+
+    @Test
+    void openRouterKeyCheckNormalizesLegacyApiBaseUrl() throws Exception {
+        AtomicReference<String> requestPath = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            requestPath.set(exchange.getRequestURI().getPath());
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
+        });
+        server.start();
+        try {
+            String stubBaseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            properties.put("openrouter.base.url", stubBaseUrl + "/api");
+
+            ProviderConnectionTester.Result result =
+                    new ProviderConnectionTester().test(ProviderSetupOption.OPENROUTER, "test-key");
+
+            assertEquals(ProviderConnectionTester.Outcome.OK, result.outcome());
+            assertEquals("/api/v1/key", requestPath.get());
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

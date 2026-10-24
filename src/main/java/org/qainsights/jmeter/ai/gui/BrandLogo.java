@@ -97,6 +97,7 @@ final class BrandLogo {
             case DEEPSEEK -> "deepseek";
             case GROK -> "grok";
             case META_MUSE -> "meta";
+            case OPENROUTER -> "openrouter";
             case OLLAMA -> "ollama";
             case SMART_ROUTING -> logoForBackend(ProviderSetupDialog.configuredSmartBackend());
             case APPLE_ON_DEVICE -> "apple";

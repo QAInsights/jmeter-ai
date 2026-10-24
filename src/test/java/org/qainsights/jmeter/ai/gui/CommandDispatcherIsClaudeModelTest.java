@@ -60,6 +60,11 @@ class CommandDispatcherIsClaudeModelTest {
     }
 
     @Test
+    void testOpenRouterModel_returnsFalse() {
+        assertFalse(CommandDispatcher.isClaudeModel("openrouter:anthropic/claude-sonnet-5.5"));
+    }
+
+    @Test
     void testMetaModel_returnsFalse() {
         assertFalse(CommandDispatcher.isClaudeModel("meta:muse-spark-1.1"),
                 "Meta model should not be treated as Claude");

@@ -12,6 +12,7 @@ final class ModelDisplay {
 
     /** Prefix-to-provider display names, ordered longest-first for matching. */
     private static final String[][] PROVIDERS = {
+        { "openrouter:", "OpenRouter" },
         { "openai:", "OpenAI" },
         { "ollama:", "Ollama" },
         { "deepseek:", "DeepSeek" },

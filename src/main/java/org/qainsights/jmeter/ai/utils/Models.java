@@ -16,6 +16,7 @@ import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
@@ -138,6 +139,18 @@ public class Models {
             log.error("Error adding Grok models: {}", e.getMessage(), e);
         }
 
+        // Add OpenRouter models that advertise tool support
+        try {
+            if (serviceHolder.getOpenRouterService() != null) {
+                for (String modelId : serviceHolder.getOpenRouterService().listModels()) {
+                    allModels.add(OpenRouterAiService.MODEL_PREFIX + modelId);
+                    log.debug("Added OpenRouter model to selector: {}", modelId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error adding OpenRouter models: {}", e.getMessage(), e);
+        }
+
         // Add Meta Muse models
         try {
             if (serviceHolder.getMetaMuseService() != null) {
@@ -221,6 +234,10 @@ public class Models {
         return grokService.listModels();
     }
 
+    private static List<String> getOpenRouterModelIds(OpenRouterAiService openRouterService) {
+        return openRouterService == null ? new ArrayList<>() : openRouterService.listModels();
+    }
+
     private static List<String> getMetaMuseModelIds(MetaMuseAiService metaMuseService) {
         if (metaMuseService == null) {
             return new ArrayList<>();
@@ -296,6 +313,13 @@ public class Models {
                 }
             }
 
+            if (serviceHolder.getOpenRouterService() != null) {
+                List<String> openRouterModels = getOpenRouterModelIds(serviceHolder.getOpenRouterService());
+                if (openRouterModels != null) {
+                    modelIds.addAll(openRouterModels);
+                }
+            }
+
             // Get Meta Muse models
             if (serviceHolder.getMetaMuseService() != null) {
                 List<String> metaMuseModels = getMetaMuseModelIds(serviceHolder.getMetaMuseService());
@@ -312,7 +336,7 @@ public class Models {
                 }
             }
 
-            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, Grok, Meta Muse, and Bedrock", modelIds.size());
+            log.info("Combined {} models from Anthropic, OpenAI, Ollama, DeepSeek, Google, Grok, OpenRouter, Meta Muse, and Bedrock", modelIds.size());
             return modelIds;
         } catch (Exception e) {
             log.error("Error combining models: {}", e.getMessage(), e);

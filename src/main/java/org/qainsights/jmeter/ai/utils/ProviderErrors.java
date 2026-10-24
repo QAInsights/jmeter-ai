@@ -37,6 +37,11 @@ public final class ProviderErrors {
      * error while ..." for failures that are not recognised.
      */
     public static String describe(Throwable error, String action, boolean agentMode) {
+        return describe(error, action, agentMode, null);
+    }
+
+    /** User-facing text with the provider context needed for provider-specific error mappings. */
+    public static String describe(Throwable error, String action, boolean agentMode, String provider) {
         Telemetry.recordError(error);
         if (RateLimitErrors.isRateLimited(error)) {
             return "Error: " + RateLimitErrors.describe(error, agentMode);
@@ -44,7 +49,11 @@ public final class ProviderErrors {
         int status = statusCode(error);
         String detail = detail(error);
         String text;
-        if (status == 401) {
+        if (isOpenRouterToolUnsupported(provider, status, detail, agentMode)) {
+            text = "This OpenRouter model can't use tools, so Agent Mode can't drive it. "
+                    + "Pick a model from the list, which only shows tool-capable models, or "
+                    + "switch Agent Mode off for plain chat.";
+        } else if (status == 401) {
             text = "Authentication failed (HTTP 401): the provider rejected the API key. "
                     + "Check the API key for the selected provider in user.properties or "
                     + "jmeter.properties and restart JMeter.";
@@ -105,8 +114,21 @@ public final class ProviderErrors {
      * chat) would hit the same wall: a rejected key, missing permission, or unknown model.
      */
     public static boolean isConfigurationError(Throwable error) {
+        return isConfigurationError(error, null);
+    }
+
+    public static boolean isConfigurationError(Throwable error, String provider) {
         int status = statusCode(error);
-        return status == 401 || status == 403 || status == 404;
+        return status == 401 || status == 403 || status == 404
+                || isOpenRouterToolUnsupported(provider, status, detail(error), true);
+    }
+
+    private static boolean isOpenRouterToolUnsupported(
+            String provider, int status, String detail, boolean agentMode) {
+        return agentMode && "openrouter".equalsIgnoreCase(provider)
+                && (status == 400 || status == 404)
+                && detail != null
+                && detail.toLowerCase(java.util.Locale.ROOT).contains("tool");
     }
 
     /** HTTP status carried by an SDK exception anywhere in the cause chain, or -1. */

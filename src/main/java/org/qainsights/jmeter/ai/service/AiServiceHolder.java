@@ -11,6 +11,7 @@ public class AiServiceHolder {
     private DeepseekAiService deepseekService;
     private GoogleAiService googleService;
     private GrokAiService grokService;
+    private OpenRouterAiService openRouterService;
     private MetaMuseAiService metaMuseService;
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
@@ -63,6 +64,14 @@ public class AiServiceHolder {
 
     public void setGrokService(GrokAiService grokService) {
         this.grokService = grokService;
+    }
+
+    public OpenRouterAiService getOpenRouterService() {
+        return openRouterService;
+    }
+
+    public void setOpenRouterService(OpenRouterAiService openRouterService) {
+        this.openRouterService = openRouterService;
     }
 
     public MetaMuseAiService getMetaMuseService() {

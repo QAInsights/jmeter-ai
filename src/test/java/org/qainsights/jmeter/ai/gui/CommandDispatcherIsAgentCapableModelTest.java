@@ -63,6 +63,12 @@ class CommandDispatcherIsAgentCapableModelTest {
     }
 
     @Test
+    void testOpenRouterModel_returnsTrue() {
+        assertTrue(CommandDispatcher.isAgentCapableModel(
+                "openrouter:anthropic/claude-sonnet-5.5"));
+    }
+
+    @Test
     void testMetaModel_returnsTrue() {
         assertTrue(CommandDispatcher.isAgentCapableModel("meta:muse-spark-1.1"));
     }
