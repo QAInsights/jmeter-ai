@@ -57,6 +57,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
+import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -90,7 +91,7 @@ final class ProviderSetupDialog extends JDialog {
     private final JPanel routingRows = new JPanel();
     private JPanel providerNavigation;
     private JScrollPane navigationScrollPane;
-    private final JTextArea statusText = new JTextArea(" ");
+    private final JTextArea statusText = createStatusText();
     private JPanel statusPanel;
     private final QuietButton testButton = new QuietButton("Test connection", QuietButton.Kind.OUTLINED);
     private final QuietButton saveButton = new QuietButton("Save and connect", QuietButton.Kind.PRIMARY);
@@ -120,6 +121,12 @@ final class ProviderSetupDialog extends JDialog {
     private final Map<String, PlaceholderPasswordField> smartKeyFields = new LinkedHashMap<>();
     private boolean appleAvailable;
     private boolean appleStatusReady;
+
+    static JTextArea createStatusText() {
+        JTextArea text = new JTextArea(" ");
+        text.setFont(UiTokens.body(UIManager.getFont("Label.font")));
+        return text;
+    }
 
     ProviderSetupDialog(Window owner, Consumer<ProviderSetupOption> onSaved, boolean ollamaDetected) {
         this(owner, onSaved, ollamaDetected, new ProviderConnectionTester(), UserPropertiesWriter.resolve());
@@ -618,7 +625,6 @@ final class ProviderSetupDialog extends JDialog {
     private JPanel buildStatusActions(boolean includeTestButton) {
         JPanel bottom = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         bottom.setOpaque(false);
-        statusText.setFont(UiTokens.body(statusText.getFont()));
         statusText.setEditable(false);
         statusText.setFocusable(false);
         statusText.setOpaque(false);
@@ -816,7 +822,6 @@ final class ProviderSetupDialog extends JDialog {
 
         JPanel bottom = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         bottom.setOpaque(false);
-        statusText.setFont(UiTokens.body(statusText.getFont()));
         statusText.setEditable(false);
         statusText.setFocusable(false);
         statusText.setOpaque(false);
@@ -980,6 +985,12 @@ final class ProviderSetupDialog extends JDialog {
         boolean keyedSmartBackend = smart && isKeyedSmartBackend(backend);
         String key = smart ? (keyedSmartBackend ? smartKeyForRequest(backend) : null)
                 : selectedOption.requiresKey() ? readKey() : null;
+        boolean savedKeyUsed = !smart && selectedOption.requiresKey()
+                && key.isBlank()
+                && ProviderStatus.isApiKeyConfigured(selectedOption.keyProperty());
+        if (savedKeyUsed) {
+            key = AiConfig.getProperty(selectedOption.keyProperty(), "");
+        }
         if ((selectedOption.requiresKey() || keyedSmartBackend) && (key == null || key.isBlank())) {
             setStatus("Paste an API key before testing the connection.", ThemeColors.error());
             return;
@@ -1025,6 +1036,7 @@ final class ProviderSetupDialog extends JDialog {
         String keyForRequest = key;
         String backendForRequest = backend;
         boolean triageForRequest = smart && triageEnabled.isSelected();
+        boolean savedKeyUsedForRequest = savedKeyUsed;
         resultCurrent = false;
         lastResult = null;
         testing = true;
@@ -1053,13 +1065,13 @@ final class ProviderSetupDialog extends JDialog {
                 try {
                     if (!requestInputsMatch(
                             option, keyForRequest, hostForRequest, portForRequest,
-                            backendForRequest, triageForRequest)) {
+                            backendForRequest, triageForRequest, savedKeyUsedForRequest)) {
                         resultCurrent = false;
                         setStatus("Inputs changed during the test. Test again before saving.",
                                 ThemeColors.info());
                         return;
                     }
-                    presentResult(option, get());
+                    presentResult(option, get(), keyForRequest);
                     resultCurrent = true;
                     if (saveAfterTest && (lastResult.outcome() == ProviderConnectionTester.Outcome.OK
                             || lastResult.outcome() == ProviderConnectionTester.Outcome.RATE_LIMITED)) {
@@ -1081,7 +1093,13 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private boolean requestInputsMatch(
-            ProviderSetupOption option, String key, String host, int port, String backend, boolean triage) {
+            ProviderSetupOption option,
+            String key,
+            String host,
+            int port,
+            String backend,
+            boolean triage,
+            boolean savedKeyUsed) {
         if (selectedOption != option) {
             return false;
         }
@@ -1101,6 +1119,11 @@ final class ProviderSetupDialog extends JDialog {
                             && port == parsePort(AiConfig.getProperty("ollama.port", DEFAULT_OLLAMA_PORT)));
         }
         if (option.requiresKey()) {
+            if (savedKeyUsed) {
+                return readKey().isBlank()
+                        && ProviderStatus.isApiKeyConfigured(option.keyProperty())
+                        && key.equals(AiConfig.getProperty(option.keyProperty(), ""));
+            }
             return key.equals(readKey());
         }
         try {
@@ -1125,7 +1148,8 @@ final class ProviderSetupDialog extends JDialog {
         }
     }
 
-    void presentResult(ProviderSetupOption option, ProviderConnectionTester.Result result) {
+    void presentResult(
+            ProviderSetupOption option, ProviderConnectionTester.Result result, String testedKey) {
         if (option != selectedOption) {
             return;
         }
@@ -1159,7 +1183,7 @@ final class ProviderSetupDialog extends JDialog {
                                 + ". You can save anyway if a proxy is blocking the test.",
                         ThemeColors.error());
                 case NETWORK_ERROR -> setStatus(
-                        "Could not reach the provider: " + safeReason(result.reason())
+                        "Could not reach the provider: " + safeReason(result.reason(), testedKey)
                                 + " You can save anyway if a proxy is blocking the test.",
                         ThemeColors.error());
             }
@@ -1217,11 +1241,14 @@ final class ProviderSetupDialog extends JDialog {
             settings.putAll(appleSettings());
         } else if (selectedOption.requiresKey()) {
             String key = readKey();
-            if (key.isBlank()) {
+            if (key.isBlank()
+                    && !ProviderStatus.isApiKeyConfigured(selectedOption.keyProperty())) {
                 setStatus("Paste an API key before saving.", ThemeColors.error());
                 return;
             }
-            settings.put(selectedOption.keyProperty(), key);
+            if (!key.isBlank()) {
+                settings.put(selectedOption.keyProperty(), key);
+            }
             if (selectedOption.serviceType() != null) {
                 settings.put("jmeter.ai.service.type", selectedOption.serviceType());
             }
@@ -1546,7 +1573,15 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private static String safeReason(String reason) {
-        String safe = SafeText.redactUrls(reason == null ? "" : reason);
+        return safeReason(reason, null);
+    }
+
+    private static String safeReason(String reason, String secret) {
+        String redacted = reason == null ? "" : reason;
+        if (secret != null && !secret.isBlank()) {
+            redacted = redacted.replace(secret, "***");
+        }
+        String safe = SafeText.redactUrls(redacted);
         return safe.length() > 300 ? safe.substring(0, 297) + "..." : safe;
     }
 
