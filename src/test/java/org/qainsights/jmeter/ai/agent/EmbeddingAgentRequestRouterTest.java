@@ -162,6 +162,47 @@ class EmbeddingAgentRequestRouterTest {
     }
 
     @Test
+    void judgmentFailureReasonRedactsUrlCredentialsAndQueryTokens() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("HTTP 429 for https://alice:s3cret@mirror.example/onnx.jar?token=abc123 "
+                        + "(retrying in a minute)"));
+
+        assertTrue(decision.reason().contains("https://***@mirror.example/onnx.jar?***"));
+        assertTrue(decision.reason().contains("(retrying in a minute)"));
+        assertFalse(decision.reason().contains("s3cret"));
+        assertFalse(decision.reason().contains("alice"));
+        assertFalse(decision.reason().contains("abc123"));
+    }
+
+    @Test
+    void judgmentFailureReasonIsTruncatedToThreeHundredCharacters() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("x".repeat(1_000)));
+
+        assertEquals(300, decision.reason().length());
+        assertTrue(decision.reason().endsWith("..."));
+    }
+
+    @Test
+    void judgmentFailureReasonCollapsesControlCharacters() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("line one\nline\ttwo"));
+
+        assertEquals("line one line two", decision.reason());
+    }
+
+    @Test
+    void onnxProgressReasonIsUnchangedWhenShortAndSafe() {
+        String progress = "downloading ONNX Runtime 1.24.3 (12 of 40 MB) into "
+                + "/home/u/.jmeter-ai/onnxruntime/1.24.3/linux-x64; local routing will be available when it is ready";
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException(progress, true));
+
+        assertTrue(progress.length() < 300);
+        assertEquals(progress, decision.reason());
+    }
+
+    @Test
     void everyPackHasExamplesAndItsCriteriaButComplexHasNone() {
         Map<AgentRequestRouter.Route, List<String>> examples = EmbeddingAgentRequestRouter.routeExamples();
 

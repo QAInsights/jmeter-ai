@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.agent;
 
 import java.time.Duration;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.LocalEmbeddingModel;
@@ -10,6 +12,8 @@ import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 public final class AgentRoutingConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(AgentRoutingConfig.class);
 
     public static final String TYPESAFE_ENABLED_KEY = "jmeter.ai.typesafe.enabled";
     public static final String ROUTING_ENABLED_KEY = "jmeter.ai.typesafe.agent.routing.enabled";
@@ -45,6 +49,7 @@ public final class AgentRoutingConfig {
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {
+            log.warn("{} smart routing could not start", AgentJudgmentConfig.brand(), e);
             return message -> AgentRequestRouter.Decision.unavailable(e);
         }
     }

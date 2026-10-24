@@ -35,6 +35,8 @@ public interface AgentRequestRouter {
 
     record Decision(Route route, Map<String, Double> probabilities, double confidence, Outcome outcome,
                     String reason, boolean pending) {
+        private static final int MAX_REASON_LENGTH = 300;
+
         public Decision {
             route = route == null ? Route.COMPLEX_OR_UNCLEAR : route;
             probabilities = probabilities == null
@@ -66,9 +68,24 @@ public interface AgentRequestRouter {
 
         public static Decision unavailable(Throwable error) {
             if (error instanceof JudgmentException judgmentException) {
-                return unavailable(judgmentException.getMessage(), judgmentException.isPending());
+                return unavailable(safeReason(judgmentException.getMessage()), judgmentException.isPending());
             }
             return unavailable("Smart routing failed unexpectedly; details are in jmeter.log", false);
+        }
+
+        static String safeReason(String message) {
+            if (message == null || message.isBlank()) {
+                return null;
+            }
+            String safe = message.replaceAll("\\p{Cntrl}", " ").replaceAll("\\s+", " ").trim();
+            if (safe.isEmpty()) {
+                return null;
+            }
+            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://)[^/\\s@]+@", "$1***@");
+            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://[^\\s?#]+)\\?[^\\s)]*", "$1?***");
+            return safe.length() > MAX_REASON_LENGTH
+                    ? safe.substring(0, MAX_REASON_LENGTH - 3) + "..."
+                    : safe;
         }
 
         public boolean isFocused() {
