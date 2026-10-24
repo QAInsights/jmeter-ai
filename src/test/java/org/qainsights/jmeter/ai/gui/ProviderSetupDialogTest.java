@@ -591,6 +591,7 @@ class ProviderSetupDialogTest {
         assumeFalse(GraphicsEnvironment.isHeadless());
         String propertyKey = "openai.api.key";
         String savedKey = "saved-openai-test-secret";
+        String originalServiceType = getJMeterProperty("jmeter.ai.service.type");
         String original = setJMeterProperty(propertyKey, savedKey);
         CountDownLatch testCompleted = new CountDownLatch(1);
         AtomicReference<String> authorization = new AtomicReference<>();
@@ -632,6 +633,7 @@ class ProviderSetupDialogTest {
                 }
             });
             restoreJMeterProperty(propertyKey, original);
+            restoreJMeterProperty("jmeter.ai.service.type", originalServiceType);
         }
     }
 
@@ -855,11 +857,15 @@ class ProviderSetupDialogTest {
         SwingUtilities.invokeAndWait(() -> dialogRef.get().dispose());
     }
 
-    private static String setJMeterProperty(String key, String value) {
+    private static String getJMeterProperty(String key) {
         if (JMeterUtils.getJMeterProperties() == null) {
             JMeterUtils.loadJMeterProperties("nonexistent.properties");
         }
-        String original = JMeterUtils.getJMeterProperties().getProperty(key);
+        return JMeterUtils.getJMeterProperties().getProperty(key);
+    }
+
+    private static String setJMeterProperty(String key, String value) {
+        String original = getJMeterProperty(key);
         JMeterUtils.setProperty(key, value);
         return original;
     }
