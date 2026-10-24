@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -132,6 +133,32 @@ class EmbeddingAgentRequestRouterTest {
 
         assertEquals(AgentRequestRouter.Outcome.ALL_TOOLS, decision.outcome());
         assertEquals(0, embedder.calls.get());
+    }
+
+    @Test
+    void pendingJudgmentFailurePreservesReasonAndPendingState() {
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(inputs -> {
+            throw new JudgmentException("downloading model (5 of 217 MB)", true);
+        }, 0.75);
+
+        AgentRequestRouter.Decision decision = router.route("inspect this request");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertEquals("downloading model (5 of 217 MB)", decision.reason());
+        assertTrue(decision.pending());
+    }
+
+    @Test
+    void unexpectedFailureDoesNotExposeExceptionMessage() {
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(inputs -> {
+            throw new IllegalStateException("internal detail xyz");
+        }, 0.75);
+
+        AgentRequestRouter.Decision decision = router.route("inspect this request");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertFalse(decision.pending());
+        assertFalse(decision.reason().contains("xyz"));
     }
 
     @Test

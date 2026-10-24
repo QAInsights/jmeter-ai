@@ -130,7 +130,7 @@ public final class AgentToolExpander {
                     + "needs: " + need);
             return decision == null ? AgentRequestRouter.Decision.unavailable() : decision;
         } catch (RuntimeException e) {
-            return AgentRequestRouter.Decision.unavailable();
+            return AgentRequestRouter.Decision.unavailable(e);
         }
     }
 

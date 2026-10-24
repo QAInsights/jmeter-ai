@@ -221,7 +221,7 @@ public final class LocalEmbeddingModel {
                     + repo + " into that folder");
         }
         if (downloader != null && downloader.isAlive()) {
-            throw new TypeSafeJudgmentProvider.JudgmentException(progress());
+            throw new TypeSafeJudgmentProvider.JudgmentException(progress(), true);
         }
         if (lastError != null && System.currentTimeMillis() - lastFailureMillis < RETRY_AFTER.toMillis()) {
             throw new TypeSafeJudgmentProvider.JudgmentException("downloading " + repo + " failed: " + lastError
@@ -232,7 +232,7 @@ public final class LocalEmbeddingModel {
         downloader = new Thread(this::downloadAll, "feather-wand-embedding-download");
         downloader.setDaemon(true);
         downloader.start();
-        throw new TypeSafeJudgmentProvider.JudgmentException(progress());
+        throw new TypeSafeJudgmentProvider.JudgmentException(progress(), true);
     }
 
     /** Waits for a download started by {@link #requireReady()}; for tests and benchmarks. */

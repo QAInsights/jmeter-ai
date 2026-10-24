@@ -45,7 +45,7 @@ public final class AgentRoutingConfig {
             JudgmentProvider provider = AgentJudgmentConfig.createProvider();
             return provider == null ? null : new TypeSafeAgentRequestRouter(provider, minConfidence());
         } catch (RuntimeException e) {
-            return message -> AgentRequestRouter.Decision.unavailable();
+            return message -> AgentRequestRouter.Decision.unavailable(e);
         }
     }
 

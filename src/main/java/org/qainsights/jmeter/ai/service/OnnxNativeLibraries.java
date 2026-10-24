@@ -73,6 +73,7 @@ public final class OnnxNativeLibraries {
             .build();
     private Thread downloader;
     private volatile long downloadedBytes;
+    private volatile long totalBytes;
     private volatile String lastError;
     private volatile long lastFailureMillis;
 
@@ -165,18 +166,19 @@ public final class OnnxNativeLibraries {
             }
         }
         if (downloader != null && downloader.isAlive()) {
-            throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+            throw new TypeSafeJudgmentProvider.JudgmentException(progress(target), true);
         }
         if (lastError != null && System.currentTimeMillis() - lastFailureMillis < RETRY_AFTER.toMillis()) {
             throw new TypeSafeJudgmentProvider.JudgmentException("downloading ONNX Runtime " + VERSION
                     + " failed: " + lastError + " (retrying in a minute; set " + URL_PROPERTY + " for a mirror)");
         }
         downloadedBytes = 0;
+        totalBytes = 0;
         lastError = null;
         downloader = new Thread(() -> download(target), "feather-wand-onnx-runtime-download");
         downloader.setDaemon(true);
         downloader.start();
-        throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+        throw new TypeSafeJudgmentProvider.JudgmentException(progress(target), true);
     }
 
     boolean awaitDownloadForTests(Duration timeout) throws InterruptedException {
@@ -212,8 +214,12 @@ public final class OnnxNativeLibraries {
     }
 
     private String progress(Path target) {
-        return "downloading ONNX Runtime " + VERSION + " (" + downloadedBytes / 1_000_000
-                + " MB) into " + target + "; local routing will be available when it is ready";
+        long downloadedMegabytes = downloadedBytes / 1_000_000;
+        String size = totalBytes > 0
+                ? downloadedMegabytes + " of " + totalBytes / 1_000_000 + " MB"
+                : downloadedMegabytes + " MB";
+        return "downloading ONNX Runtime " + VERSION + " (" + size
+                + ") into " + target + "; local routing will be available when it is ready";
     }
 
     private void download(Path target) {
@@ -265,6 +271,7 @@ public final class OnnxNativeLibraries {
             if (response.statusCode() != 200) {
                 throw new IOException("HTTP " + response.statusCode() + " for " + url);
             }
+            totalBytes = response.headers().firstValueAsLong("content-length").orElse(0);
             long remainingTotalNanos = totalTimeout.toNanos() - (System.nanoTime() - startedNanos);
             if (remainingTotalNanos <= 0) {
                 throw new IOException(totalTimeoutMessage());

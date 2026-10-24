@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,6 +65,27 @@ class TypeSafeAgentRequestRouterTest {
                 new TypeSafeAgentRequestRouter(unsupported, 0.75).route("hello").outcome());
         assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE,
                 new TypeSafeAgentRequestRouter(failing, 0.75).route("hello").outcome());
+    }
+
+    @Test
+    void judgmentFailurePreservesReasonAndIsNotPending() {
+        JudgmentProvider failing = new JudgmentProvider() {
+            @Override
+            public Set<Capability> capabilities() {
+                return Set.of(Capability.CHOICE);
+            }
+
+            @Override
+            public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
+                throw new JudgmentException("OpenAI API key is not configured");
+            }
+        };
+
+        AgentRequestRouter.Decision decision = new TypeSafeAgentRequestRouter(failing, 0.75).route("hello");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertEquals("OpenAI API key is not configured", decision.reason());
+        assertFalse(decision.pending());
     }
 
     @Test

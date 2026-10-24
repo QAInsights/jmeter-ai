@@ -90,7 +90,9 @@ class OnnxNativeLibrariesTest {
     @Test
     void downloadsAndExtractsOnlyTheSelectedPlatform() throws Exception {
         OnnxNativeLibraries loader = loader(sha256(archive));
-        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        TypeSafeJudgmentProvider.JudgmentException pending =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertTrue(pending.isPending());
         loader.awaitDownloadForTests(Duration.ofSeconds(10));
 
         Path target = loader.targetDirectory();
@@ -99,6 +101,29 @@ class OnnxNativeLibrariesTest {
         assertFalse(Files.exists(target.resolve("libonnxruntime4j_jni.dylib")));
         assertFalse(Files.exists(target.resolve("some/other/file.txt")));
         assertEquals(target.toString(), System.getProperty(OnnxNativeLibraries.NATIVE_PATH_PROPERTY));
+        assertEquals(1, requests.get());
+    }
+
+    @Test
+    void failedHttp429DownloadReportsReasonWithoutPendingState() throws Exception {
+        server.createContext("/429.jar", exchange -> {
+            requests.incrementAndGet();
+            exchange.sendResponseHeaders(429, -1);
+            exchange.close();
+        });
+        OnnxNativeLibraries loader = loader(sha256(archive), "/429.jar",
+                Duration.ofSeconds(60), Duration.ofMinutes(30));
+
+        TypeSafeJudgmentProvider.JudgmentException pending =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertTrue(pending.isPending());
+        assertTrue(loader.awaitDownloadForTests(Duration.ofSeconds(10)));
+
+        TypeSafeJudgmentProvider.JudgmentException failure =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertFalse(failure.isPending());
+        assertTrue(failure.getMessage().contains("HTTP 429"), failure.getMessage());
+        assertTrue(failure.getMessage().contains(OnnxNativeLibraries.URL_PROPERTY), failure.getMessage());
         assertEquals(1, requests.get());
     }
 
@@ -139,7 +164,9 @@ class OnnxNativeLibrariesTest {
                 Duration.ofSeconds(1), Duration.ofSeconds(10));
 
         try {
-            assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+            TypeSafeJudgmentProvider.JudgmentException pending =
+                    assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+            assertTrue(pending.isPending());
             assertTrue(bytesSent.await(2, TimeUnit.SECONDS), "stub should send initial response bytes");
             assertTrue(loader.awaitDownloadForTests(Duration.ofSeconds(3)),
                     "stalled download should finish within a few seconds");

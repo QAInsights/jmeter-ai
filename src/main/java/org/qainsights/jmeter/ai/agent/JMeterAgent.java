@@ -413,7 +413,7 @@ public final class JMeterAgent {
             AgentRequestRouter.Decision decision = requestRouter.route(userMessage);
             return recordRoute(decision == null ? AgentRequestRouter.Decision.unavailable() : decision);
         } catch (RuntimeException e) {
-            return recordRoute(AgentRequestRouter.Decision.unavailable());
+            return recordRoute(AgentRequestRouter.Decision.unavailable(e));
         }
     }
 

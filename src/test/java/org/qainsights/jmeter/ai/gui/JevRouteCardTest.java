@@ -47,6 +47,32 @@ class JevRouteCardTest {
         assertTrue(unavailable.getResponsibilityText().contains("DeepSeek"));
         assertTrue(unavailable.getDetailsText().contains("Jev was unavailable"));
         assertFalse(unavailable.getDetailsText().contains("Jev selected"));
+        assertFalse(unavailable.isStatusVisible());
+    }
+
+    @Test
+    void pendingReasonShowsGettingReadySummaryAndCaption() {
+        JevRouteCard card = new JevRouteCard(new AgentRequestRouter.Notice(
+                AgentRequestRouter.Decision.unavailable("downloading ONNX Runtime 1.24.3 (12 of 40 MB)", true),
+                List.of("get_tree_state"), 21), "openai:gpt-5");
+
+        assertTrue(card.getSummaryText().contains("getting ready"));
+        assertTrue(card.isStatusVisible());
+        assertTrue(card.getStatusText().startsWith("Downloading ONNX Runtime"));
+    }
+
+    @Test
+    void unavailableReasonIsVisibleWithoutReplacingFallbackSummary() {
+        String reason = "downloading ONNX Runtime 1.24.3 failed: HTTP 429 for https://x "
+                + "(retrying in a minute; set jmeter.ai.onnx.runtime.url for a mirror)";
+        JevRouteCard card = new JevRouteCard(new AgentRequestRouter.Notice(
+                AgentRequestRouter.Decision.unavailable(reason, false),
+                List.of("get_tree_state"), 21), "openai:gpt-5");
+
+        assertTrue(card.getSummaryText().contains("unavailable"));
+        assertTrue(card.isStatusVisible());
+        assertTrue(card.getStatusText().contains("HTTP 429"));
+        assertTrue(card.getStatusText().contains("jmeter.ai.onnx.runtime.url"));
     }
 
     @Test
