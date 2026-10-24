@@ -5,7 +5,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +49,35 @@ class JevRouteCardTest {
         assertTrue(unavailable.getResponsibilityText().contains("DeepSeek"));
         assertTrue(unavailable.getDetailsText().contains("Jev was unavailable"));
         assertFalse(unavailable.getDetailsText().contains("Jev selected"));
+        assertFalse(unavailable.isStatusVisible());
+    }
+
+    @Test
+    void pendingReasonShowsGettingReadySummaryAndCaption() {
+        JevRouteCard card = new JevRouteCard(new AgentRequestRouter.Notice(
+                AgentRequestRouter.Decision.unavailable("downloading ONNX Runtime 1.24.3 (12 of 40 MB)", true),
+                List.of("get_tree_state"), 21), "openai:gpt-5");
+
+        assertTrue(card.getSummaryText().contains("getting ready"));
+        assertTrue(card.isStatusVisible());
+        assertTrue(card.getStatusText().startsWith("Downloading ONNX Runtime"));
+        assertTrue(card.getDetailsText().contains("getting ready"));
+        assertEquals(ThemeColors.info(), card.getStatusColor());
+    }
+
+    @Test
+    void unavailableReasonIsVisibleWithoutReplacingFallbackSummary() {
+        String reason = "downloading ONNX Runtime 1.24.3 failed: HTTP 429 for https://x "
+                + "(retrying in a minute; set jmeter.ai.onnx.runtime.url for a mirror)";
+        JevRouteCard card = new JevRouteCard(new AgentRequestRouter.Notice(
+                AgentRequestRouter.Decision.unavailable(reason, false),
+                List.of("get_tree_state"), 21), "openai:gpt-5");
+
+        assertTrue(card.getSummaryText().contains("unavailable"));
+        assertTrue(card.isStatusVisible());
+        assertTrue(card.getStatusText().contains("HTTP 429"));
+        assertTrue(card.getStatusText().contains("jmeter.ai.onnx.runtime.url"));
+        assertEquals(ThemeColors.warning(), card.getStatusColor());
     }
 
     @Test
@@ -90,12 +121,16 @@ class JevRouteCardTest {
         JevRouteCard unavailable = new JevRouteCard(AgentRequestRouter.Notice.expansion(
                 AgentRequestRouter.Decision.unavailable(),
                 List.of("a"), 21, List.of("b")), "meta:muse");
+        JevRouteCard pending = new JevRouteCard(AgentRequestRouter.Notice.expansion(
+                AgentRequestRouter.Decision.unavailable("downloading ONNX Runtime", true),
+                List.of("a"), 21, List.of("b")), "meta:muse");
 
         assertTrue(allTools.getSummaryText().contains("All Agent Mode tools enabled"));
         assertTrue(allTools.getDetailsText().contains("enabled all Agent Mode tools"));
         assertTrue(unavailable.getSummaryText().contains("Jev unavailable"));
         assertTrue(unavailable.getSummaryText().contains("all Agent Mode tools enabled"));
         assertTrue(unavailable.getDetailsText().contains("Jev was unavailable"));
+        assertTrue(pending.getDetailsText().contains("getting ready"));
     }
 
     @Test

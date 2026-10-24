@@ -88,9 +88,20 @@ class OnnxNativeLibrariesTest {
     }
 
     @Test
+    void malformedContentLengthIsTreatedAsUnknownAndKnownTotalRoundsUp() {
+        assertEquals(0, OnnxNativeLibraries.parseContentLength("not-a-number"));
+        assertEquals(20_100_000, OnnxNativeLibraries.parseContentLength(" 20100000 "));
+        assertEquals(21, OnnxNativeLibraries.totalMegabytes(20_100_000));
+        assertEquals(20, OnnxNativeLibraries.totalMegabytes(20_000_000));
+        assertEquals(0, OnnxNativeLibraries.totalMegabytes(0));
+    }
+
+    @Test
     void downloadsAndExtractsOnlyTheSelectedPlatform() throws Exception {
         OnnxNativeLibraries loader = loader(sha256(archive));
-        assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        TypeSafeJudgmentProvider.JudgmentException pending =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertTrue(pending.isPending());
         loader.awaitDownloadForTests(Duration.ofSeconds(10));
 
         Path target = loader.targetDirectory();
@@ -99,6 +110,33 @@ class OnnxNativeLibrariesTest {
         assertFalse(Files.exists(target.resolve("libonnxruntime4j_jni.dylib")));
         assertFalse(Files.exists(target.resolve("some/other/file.txt")));
         assertEquals(target.toString(), System.getProperty(OnnxNativeLibraries.NATIVE_PATH_PROPERTY));
+        assertEquals(1, requests.get());
+    }
+
+    @Test
+    void failedHttp429DownloadReportsReasonWithoutPendingState() throws Exception {
+        server.createContext("/429.jar", exchange -> {
+            requests.incrementAndGet();
+            exchange.sendResponseHeaders(429, -1);
+            exchange.close();
+        });
+        String url = "http://user:s3cret@127.0.0.1:" + server.getAddress().getPort()
+                + "/429.jar?token=abc123";
+        OnnxNativeLibraries loader = loaderWithUrl(sha256(archive), url,
+                Duration.ofSeconds(60), Duration.ofMinutes(30));
+
+        TypeSafeJudgmentProvider.JudgmentException pending =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertTrue(pending.isPending());
+        assertTrue(loader.awaitDownloadForTests(Duration.ofSeconds(10)));
+
+        TypeSafeJudgmentProvider.JudgmentException failure =
+                assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+        assertFalse(failure.isPending());
+        assertTrue(failure.getMessage().contains("HTTP 429"), failure.getMessage());
+        assertTrue(failure.getMessage().contains(OnnxNativeLibraries.URL_PROPERTY), failure.getMessage());
+        assertFalse(failure.getMessage().contains("s3cret"), failure.getMessage());
+        assertFalse(failure.getMessage().contains("abc123"), failure.getMessage());
         assertEquals(1, requests.get());
     }
 
@@ -139,7 +177,9 @@ class OnnxNativeLibrariesTest {
                 Duration.ofSeconds(1), Duration.ofSeconds(10));
 
         try {
-            assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+            TypeSafeJudgmentProvider.JudgmentException pending =
+                    assertThrows(TypeSafeJudgmentProvider.JudgmentException.class, loader::ensureAvailableInternal);
+            assertTrue(pending.isPending());
             assertTrue(bytesSent.await(2, TimeUnit.SECONDS), "stub should send initial response bytes");
             assertTrue(loader.awaitDownloadForTests(Duration.ofSeconds(3)),
                     "stalled download should finish within a few seconds");
@@ -213,6 +253,11 @@ class OnnxNativeLibrariesTest {
 
     private OnnxNativeLibraries loader(String checksum, String path, Duration stallTimeout, Duration totalTimeout) {
         String url = "http://127.0.0.1:" + server.getAddress().getPort() + path;
+        return loaderWithUrl(checksum, url, stallTimeout, totalTimeout);
+    }
+
+    private OnnxNativeLibraries loaderWithUrl(
+            String checksum, String url, Duration stallTimeout, Duration totalTimeout) {
         Map<String, String> hashes = Map.of(
                 "libonnxruntime4j_jni.so", sha256Unchecked("jni"),
                 "libonnxruntime.so", sha256Unchecked("runtime"));

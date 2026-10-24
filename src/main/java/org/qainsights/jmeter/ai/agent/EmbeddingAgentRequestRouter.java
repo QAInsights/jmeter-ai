@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,8 +72,13 @@ public final class EmbeddingAgentRequestRouter implements AgentRequestRouter {
             }
             return decision;
         } catch (RuntimeException e) {
-            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage());
-            return Decision.unavailable();
+            if (e instanceof JudgmentException judgmentException) {
+                log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(),
+                        AgentRequestRouter.Decision.safeReason(judgmentException.getMessage()));
+            } else {
+                log.warn("{} smart routing unavailable", AgentJudgmentConfig.brand(), e);
+            }
+            return Decision.unavailable(e);
         }
     }
 

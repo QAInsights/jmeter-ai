@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -132,6 +133,92 @@ class EmbeddingAgentRequestRouterTest {
 
         assertEquals(AgentRequestRouter.Outcome.ALL_TOOLS, decision.outcome());
         assertEquals(0, embedder.calls.get());
+    }
+
+    @Test
+    void pendingJudgmentFailurePreservesReasonAndPendingState() {
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(inputs -> {
+            throw new JudgmentException("downloading model (5 of 217 MB)", true);
+        }, 0.75);
+
+        AgentRequestRouter.Decision decision = router.route("inspect this request");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertEquals("downloading model (5 of 217 MB)", decision.reason());
+        assertTrue(decision.pending());
+    }
+
+    @Test
+    void unexpectedFailureDoesNotExposeExceptionMessage() {
+        EmbeddingAgentRequestRouter router = new EmbeddingAgentRequestRouter(inputs -> {
+            throw new IllegalStateException("internal detail xyz");
+        }, 0.75);
+
+        AgentRequestRouter.Decision decision = router.route("inspect this request");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertFalse(decision.pending());
+        assertFalse(decision.reason().contains("xyz"));
+    }
+
+    @Test
+    void judgmentFailureReasonRedactsUrlCredentialsAndQueryTokens() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("HTTP 429 for https://alice:s3cret@mirror.example/onnx.jar?token=abc123 "
+                        + "(retrying in a minute)"));
+
+        assertTrue(decision.reason().contains("https://***@mirror.example/onnx.jar?***"));
+        assertTrue(decision.reason().contains("(retrying in a minute)"));
+        assertFalse(decision.reason().contains("s3cret"));
+        assertFalse(decision.reason().contains("alice"));
+        assertFalse(decision.reason().contains("abc123"));
+    }
+
+    @Test
+    void judgmentFailureReasonRedactsEverythingAfterAQueryParenthesis() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("HTTP 403 for https://mirror.example/onnx.jar?sig=part1)secret"));
+
+        assertTrue(decision.reason().contains("https://mirror.example/onnx.jar?***"));
+        assertFalse(decision.reason().contains("secret"));
+    }
+
+    @Test
+    void stringUnavailableReasonUsesTheSameSafetyFilter() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                "https://alice:secret@mirror.example/onnx.jar?token=abc123", false);
+
+        assertEquals("https://***@mirror.example/onnx.jar?***", decision.reason());
+        assertFalse(decision.reason().contains("secret"));
+        assertFalse(decision.reason().contains("abc123"));
+    }
+
+    @Test
+    void judgmentFailureReasonIsTruncatedToThreeHundredCharacters() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("x".repeat(1_000)));
+
+        assertEquals(300, decision.reason().length());
+        assertTrue(decision.reason().endsWith("..."));
+    }
+
+    @Test
+    void judgmentFailureReasonCollapsesControlCharacters() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("line one\nline\ttwo"));
+
+        assertEquals("line one line two", decision.reason());
+    }
+
+    @Test
+    void onnxProgressReasonIsUnchangedWhenShortAndSafe() {
+        String progress = "downloading ONNX Runtime 1.24.3 (12 of 40 MB) into "
+                + "/home/u/.jmeter-ai/onnxruntime/1.24.3/linux-x64; local routing will be available when it is ready";
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException(progress, true));
+
+        assertTrue(progress.length() < 300);
+        assertEquals(progress, decision.reason());
     }
 
     @Test

@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.SafeText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,6 +74,7 @@ public final class OnnxNativeLibraries {
             .build();
     private Thread downloader;
     private volatile long downloadedBytes;
+    private volatile long totalBytes;
     private volatile String lastError;
     private volatile long lastFailureMillis;
 
@@ -165,18 +167,19 @@ public final class OnnxNativeLibraries {
             }
         }
         if (downloader != null && downloader.isAlive()) {
-            throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+            throw new TypeSafeJudgmentProvider.JudgmentException(progress(target), true);
         }
         if (lastError != null && System.currentTimeMillis() - lastFailureMillis < RETRY_AFTER.toMillis()) {
             throw new TypeSafeJudgmentProvider.JudgmentException("downloading ONNX Runtime " + VERSION
                     + " failed: " + lastError + " (retrying in a minute; set " + URL_PROPERTY + " for a mirror)");
         }
         downloadedBytes = 0;
+        totalBytes = 0;
         lastError = null;
         downloader = new Thread(() -> download(target), "feather-wand-onnx-runtime-download");
         downloader.setDaemon(true);
         downloader.start();
-        throw new TypeSafeJudgmentProvider.JudgmentException(progress(target));
+        throw new TypeSafeJudgmentProvider.JudgmentException(progress(target), true);
     }
 
     boolean awaitDownloadForTests(Duration timeout) throws InterruptedException {
@@ -212,8 +215,27 @@ public final class OnnxNativeLibraries {
     }
 
     private String progress(Path target) {
-        return "downloading ONNX Runtime " + VERSION + " (" + downloadedBytes / 1_000_000
-                + " MB) into " + target + "; local routing will be available when it is ready";
+        long downloadedMegabytes = downloadedBytes / 1_000_000;
+        String size = totalBytes > 0
+                ? downloadedMegabytes + " of " + totalMegabytes(totalBytes) + " MB"
+                : downloadedMegabytes + " MB";
+        return "downloading ONNX Runtime " + VERSION + " (" + size
+                + ") into " + target + "; local routing will be available when it is ready";
+    }
+
+    static long totalMegabytes(long bytes) {
+        return bytes <= 0 ? 0 : 1 + (bytes - 1) / 1_000_000;
+    }
+
+    static long parseContentLength(String value) {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Long.parseLong(value.trim()));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private void download(Path target) {
@@ -240,7 +262,8 @@ public final class OnnxNativeLibraries {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            lastError = SafeText.redactUrls(
+                    e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             lastFailureMillis = System.currentTimeMillis();
             log.warn("Downloading ONNX Runtime {} native libraries failed: {}", VERSION, lastError);
         } finally {
@@ -265,6 +288,8 @@ public final class OnnxNativeLibraries {
             if (response.statusCode() != 200) {
                 throw new IOException("HTTP " + response.statusCode() + " for " + url);
             }
+            totalBytes = response.headers().firstValue("content-length")
+                    .map(OnnxNativeLibraries::parseContentLength).orElse(0L);
             long remainingTotalNanos = totalTimeout.toNanos() - (System.nanoTime() - startedNanos);
             if (remainingTotalNanos <= 0) {
                 throw new IOException(totalTimeoutMessage());

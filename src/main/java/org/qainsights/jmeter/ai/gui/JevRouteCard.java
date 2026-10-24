@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -22,6 +23,7 @@ class JevRouteCard extends JPanel {
     private final AgentRequestRouter.Notice notice;
     private final JLabel headerLabel = new JLabel();
     private final JLabel summaryLabel = new JLabel();
+    private final JTextArea statusText = new JTextArea();
     private final JTextArea responsibilityText = new JTextArea();
     private final JTextArea detailsArea = new JTextArea();
     private boolean expanded;
@@ -37,6 +39,9 @@ class JevRouteCard extends JPanel {
         configureDetails(modelId);
         add(content(), BorderLayout.CENTER);
         summaryLabel.setText(summary());
+        String reason = this.notice.decision().reason();
+        statusText.setText(capitalizeFirstLetter(reason));
+        statusText.setVisible(reason != null);
         responsibilityText.setText(responsibility(modelId));
         setExpanded(false);
         applyTheme();
@@ -54,6 +59,13 @@ class JevRouteCard extends JPanel {
         });
         summaryLabel.setFont(UiTokens.body(summaryLabel.getFont()));
         summaryLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statusText.setEditable(false);
+        statusText.setOpaque(false);
+        statusText.setBorder(BorderFactory.createEmptyBorder());
+        statusText.setLineWrap(true);
+        statusText.setWrapStyleWord(true);
+        statusText.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statusText.setFont(UiTokens.caption(statusText.getFont()));
         responsibilityText.setEditable(false);
         responsibilityText.setOpaque(false);
         responsibilityText.setBorder(BorderFactory.createEmptyBorder());
@@ -81,6 +93,7 @@ class JevRouteCard extends JPanel {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.add(headerLabel);
         content.add(summaryLabel);
+        content.add(statusText);
         content.add(responsibilityText);
         content.add(detailsArea);
         return content;
@@ -106,6 +119,18 @@ class JevRouteCard extends JPanel {
         return summaryLabel.getText();
     }
 
+    String getStatusText() {
+        return statusText.getText();
+    }
+
+    Color getStatusColor() {
+        return statusText.getForeground();
+    }
+
+    boolean isStatusVisible() {
+        return statusText.isVisible();
+    }
+
     String getResponsibilityText() {
         return responsibilityText.getText();
     }
@@ -122,6 +147,8 @@ class JevRouteCard extends JPanel {
                         UiTokens.SPACE_3, UiTokens.SPACE_3)));
         headerLabel.setForeground(ThemeColors.accent());
         summaryLabel.setForeground(ThemeColors.foreground());
+        statusText.setForeground(notice.decision().pending()
+                ? ThemeColors.info() : ThemeColors.warning());
         responsibilityText.setForeground(ThemeColors.secondaryText());
         detailsArea.setForeground(ThemeColors.secondaryText());
         repaint();
@@ -134,7 +161,9 @@ class JevRouteCard extends JPanel {
             return switch (decision.outcome()) {
                 case FOCUSED -> decision.route().displayName() + " added · " + confidence + "% confidence";
                 case ALL_TOOLS -> "All Agent Mode tools enabled · " + confidence + "% confidence";
-                case UNAVAILABLE -> AgentJudgmentConfig.brand() + " unavailable · all Agent Mode tools enabled";
+                case UNAVAILABLE -> decision.pending()
+                        ? AgentJudgmentConfig.brand() + " is getting ready · all Agent Mode tools enabled"
+                        : AgentJudgmentConfig.brand() + " unavailable · all Agent Mode tools enabled";
             };
         }
         return switch (decision.outcome()) {
@@ -142,8 +171,16 @@ class JevRouteCard extends JPanel {
             case ALL_TOOLS -> decision.route() == AgentRequestRouter.Route.COMPLEX_OR_UNCLEAR
                     ? "Complex request · using all Agent Mode tools · " + confidence + "% confidence"
                     : AgentJudgmentConfig.brand() + " was uncertain · using all Agent Mode tools · " + confidence + "% confidence";
-            case UNAVAILABLE -> AgentJudgmentConfig.brand() + " unavailable · using standard Agent Mode";
+            case UNAVAILABLE -> decision.pending()
+                    ? AgentJudgmentConfig.brand() + " is getting ready · using standard Agent Mode"
+                    : AgentJudgmentConfig.brand() + " unavailable · using standard Agent Mode";
         };
+    }
+
+    private static String capitalizeFirstLetter(String text) {
+        return text == null || text.isEmpty()
+                ? ""
+                : text.substring(0, 1).toUpperCase(Locale.ROOT) + text.substring(1);
     }
 
     private String responsibility(String modelId) {
@@ -185,14 +222,21 @@ class JevRouteCard extends JPanel {
                 case FOCUSED -> AgentJudgmentConfig.brand() + " added the " + notice.decision().route().displayName()
                         + " tools; " + model + " still reasons and performs the work.";
                 case ALL_TOOLS -> AgentJudgmentConfig.brand() + " enabled all Agent Mode tools for " + model + ".";
-                case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; all Agent Mode tools were enabled for "
-                        + model + ".";
+                case UNAVAILABLE -> notice.decision().pending()
+                        ? AgentJudgmentConfig.brand() + " is getting ready; all Agent Mode tools are enabled for "
+                                + model + "."
+                        : AgentJudgmentConfig.brand() + " was unavailable; all Agent Mode tools were enabled for "
+                                + model + ".";
             };
         }
         return switch (notice.decision().outcome()) {
             case FOCUSED -> AgentJudgmentConfig.brand() + " selected the tool family; " + model + " still reasons and performs the work.";
             case ALL_TOOLS -> AgentJudgmentConfig.brand() + " provided all Agent Mode tools to " + model + " for this request.";
-            case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; standard Agent Mode tools were provided to " + model + ".";
+            case UNAVAILABLE -> notice.decision().pending()
+                    ? AgentJudgmentConfig.brand() + " is getting ready; standard Agent Mode tools are being used for "
+                            + model + "."
+                    : AgentJudgmentConfig.brand() + " was unavailable; standard Agent Mode tools were provided to "
+                            + model + ".";
         };
     }
 }

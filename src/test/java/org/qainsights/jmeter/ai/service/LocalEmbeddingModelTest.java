@@ -88,6 +88,8 @@ class LocalEmbeddingModelTest {
         LocalEmbeddingModel model = new LocalEmbeddingModel(REPO, REV, pinned(), root, url(), true);
         assertFalse(model.ready());
         RuntimeException pending = assertThrows(RuntimeException.class, model::requireReady);
+        assertTrue(pending instanceof TypeSafeJudgmentProvider.JudgmentException);
+        assertTrue(((TypeSafeJudgmentProvider.JudgmentException) pending).isPending());
         assertTrue(pending.getMessage().contains("downloading the local embedding model acme/tiny-embed"),
                 pending.getMessage());
         model.awaitDownloadForTests(Duration.ofSeconds(10));

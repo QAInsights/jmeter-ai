@@ -41,7 +41,10 @@ import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -52,6 +55,8 @@ import org.qainsights.jmeter.ai.utils.AiConfig;
  * single entry point the chat UI calls to run an agentic request.
  */
 public final class JMeterAgent {
+
+    private static final Logger log = LoggerFactory.getLogger(JMeterAgent.class);
 
     public static final String ENABLED_KEY = "jmeter.ai.agent.enabled";
     public static final String MAX_TOKENS_KEY = "jmeter.ai.agent.max.tokens";
@@ -413,7 +418,13 @@ public final class JMeterAgent {
             AgentRequestRouter.Decision decision = requestRouter.route(userMessage);
             return recordRoute(decision == null ? AgentRequestRouter.Decision.unavailable() : decision);
         } catch (RuntimeException e) {
-            return recordRoute(AgentRequestRouter.Decision.unavailable());
+            if (e instanceof JudgmentException judgmentException) {
+                log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(),
+                        AgentRequestRouter.Decision.safeReason(judgmentException.getMessage()));
+            } else {
+                log.warn("{} smart routing unavailable", AgentJudgmentConfig.brand(), e);
+            }
+            return recordRoute(AgentRequestRouter.Decision.unavailable(e));
         }
     }
 

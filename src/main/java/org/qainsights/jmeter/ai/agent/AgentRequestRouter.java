@@ -4,6 +4,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
+import org.qainsights.jmeter.ai.utils.SafeText;
+
 public interface AgentRequestRouter {
 
     enum Route {
@@ -31,13 +35,21 @@ public interface AgentRequestRouter {
         UNAVAILABLE
     }
 
-    record Decision(Route route, Map<String, Double> probabilities, double confidence, Outcome outcome) {
+    record Decision(Route route, Map<String, Double> probabilities, double confidence, Outcome outcome,
+                    String reason, boolean pending) {
+        private static final int MAX_REASON_LENGTH = 300;
+
         public Decision {
             route = route == null ? Route.COMPLEX_OR_UNCLEAR : route;
             probabilities = probabilities == null
                     ? Map.of()
                     : Map.copyOf(new LinkedHashMap<>(probabilities));
             outcome = outcome == null ? Outcome.UNAVAILABLE : outcome;
+            reason = reason == null || reason.isBlank() ? null : reason;
+        }
+
+        public Decision(Route route, Map<String, Double> probabilities, double confidence, Outcome outcome) {
+            this(route, probabilities, confidence, outcome, null, false);
         }
 
         public static Decision focused(Route route, Map<String, Double> probabilities, double confidence) {
@@ -49,7 +61,36 @@ public interface AgentRequestRouter {
         }
 
         public static Decision unavailable() {
-            return new Decision(Route.COMPLEX_OR_UNCLEAR, Map.of(), 0, Outcome.UNAVAILABLE);
+            return unavailable(null, false);
+        }
+
+        public static Decision unavailable(String reason, boolean pending) {
+            return new Decision(Route.COMPLEX_OR_UNCLEAR, Map.of(), 0, Outcome.UNAVAILABLE,
+                    safeReason(reason), pending);
+        }
+
+        public static Decision unavailable(Throwable error) {
+            if (error instanceof JudgmentException judgmentException) {
+                return unavailable(safeReason(judgmentException.getMessage()), judgmentException.isPending());
+            }
+            if (error instanceof OpenAiDecisionsJudgmentProvider.DecisionsException decisionsException) {
+                return unavailable(safeReason(decisionsException.getMessage()), false);
+            }
+            return unavailable("Smart routing failed unexpectedly; details are in jmeter.log", false);
+        }
+
+        static String safeReason(String message) {
+            if (message == null || message.isBlank()) {
+                return null;
+            }
+            String safe = message.replaceAll("\\p{Cntrl}", " ").replaceAll("\\s+", " ").trim();
+            if (safe.isEmpty()) {
+                return null;
+            }
+            safe = SafeText.redactUrls(safe);
+            return safe.length() > MAX_REASON_LENGTH
+                    ? safe.substring(0, MAX_REASON_LENGTH - 3) + "..."
+                    : safe;
         }
 
         public boolean isFocused() {

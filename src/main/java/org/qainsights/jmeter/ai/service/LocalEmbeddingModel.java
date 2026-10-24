@@ -20,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.SafeText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -221,7 +222,7 @@ public final class LocalEmbeddingModel {
                     + repo + " into that folder");
         }
         if (downloader != null && downloader.isAlive()) {
-            throw new TypeSafeJudgmentProvider.JudgmentException(progress());
+            throw new TypeSafeJudgmentProvider.JudgmentException(progress(), true);
         }
         if (lastError != null && System.currentTimeMillis() - lastFailureMillis < RETRY_AFTER.toMillis()) {
             throw new TypeSafeJudgmentProvider.JudgmentException("downloading " + repo + " failed: " + lastError
@@ -232,7 +233,7 @@ public final class LocalEmbeddingModel {
         downloader = new Thread(this::downloadAll, "feather-wand-embedding-download");
         downloader.setDaemon(true);
         downloader.start();
-        throw new TypeSafeJudgmentProvider.JudgmentException(progress());
+        throw new TypeSafeJudgmentProvider.JudgmentException(progress(), true);
     }
 
     /** Waits for a download started by {@link #requireReady()}; for tests and benchmarks. */
@@ -275,7 +276,8 @@ public final class LocalEmbeddingModel {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            lastError = SafeText.redactUrls(
+                    e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             lastFailureMillis = System.currentTimeMillis();
             log.warn("Downloading local embedding model {} failed: {}", repo, lastError);
         }

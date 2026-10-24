@@ -191,12 +191,25 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
     }
 
     public static final class JudgmentException extends RuntimeException {
+        private final boolean pending;
+
         public JudgmentException(String message) {
             super(message);
+            this.pending = false;
         }
 
         public JudgmentException(String message, Throwable cause) {
             super(message, cause);
+            this.pending = false;
+        }
+
+        public JudgmentException(String message, boolean pending) {
+            super(message);
+            this.pending = pending;
+        }
+
+        public boolean isPending() {
+            return pending;
         }
     }
 }
