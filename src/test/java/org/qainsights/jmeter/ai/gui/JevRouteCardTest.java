@@ -5,7 +5,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,6 +62,7 @@ class JevRouteCardTest {
         assertTrue(card.isStatusVisible());
         assertTrue(card.getStatusText().startsWith("Downloading ONNX Runtime"));
         assertTrue(card.getDetailsText().contains("getting ready"));
+        assertEquals(ThemeColors.info(), card.getStatusColor());
     }
 
     @Test
@@ -74,6 +77,7 @@ class JevRouteCardTest {
         assertTrue(card.isStatusVisible());
         assertTrue(card.getStatusText().contains("HTTP 429"));
         assertTrue(card.getStatusText().contains("jmeter.ai.onnx.runtime.url"));
+        assertEquals(ThemeColors.warning(), card.getStatusColor());
     }
 
     @Test

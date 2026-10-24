@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
+import org.qainsights.jmeter.ai.utils.SafeText;
 
 public interface AgentRequestRouter {
 
@@ -86,8 +87,7 @@ public interface AgentRequestRouter {
             if (safe.isEmpty()) {
                 return null;
             }
-            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://)[^/\\s@]+@", "$1***@");
-            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://[^\\s?#]+)\\?[^\\s]*", "$1?***");
+            safe = SafeText.redactUrls(safe);
             return safe.length() > MAX_REASON_LENGTH
                     ? safe.substring(0, MAX_REASON_LENGTH - 3) + "..."
                     : safe;

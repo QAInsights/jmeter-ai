@@ -120,7 +120,9 @@ class OnnxNativeLibrariesTest {
             exchange.sendResponseHeaders(429, -1);
             exchange.close();
         });
-        OnnxNativeLibraries loader = loader(sha256(archive), "/429.jar",
+        String url = "http://user:s3cret@127.0.0.1:" + server.getAddress().getPort()
+                + "/429.jar?token=abc123";
+        OnnxNativeLibraries loader = loaderWithUrl(sha256(archive), url,
                 Duration.ofSeconds(60), Duration.ofMinutes(30));
 
         TypeSafeJudgmentProvider.JudgmentException pending =
@@ -133,6 +135,8 @@ class OnnxNativeLibrariesTest {
         assertFalse(failure.isPending());
         assertTrue(failure.getMessage().contains("HTTP 429"), failure.getMessage());
         assertTrue(failure.getMessage().contains(OnnxNativeLibraries.URL_PROPERTY), failure.getMessage());
+        assertFalse(failure.getMessage().contains("s3cret"), failure.getMessage());
+        assertFalse(failure.getMessage().contains("abc123"), failure.getMessage());
         assertEquals(1, requests.get());
     }
 
@@ -249,6 +253,11 @@ class OnnxNativeLibrariesTest {
 
     private OnnxNativeLibraries loader(String checksum, String path, Duration stallTimeout, Duration totalTimeout) {
         String url = "http://127.0.0.1:" + server.getAddress().getPort() + path;
+        return loaderWithUrl(checksum, url, stallTimeout, totalTimeout);
+    }
+
+    private OnnxNativeLibraries loaderWithUrl(
+            String checksum, String url, Duration stallTimeout, Duration totalTimeout) {
         Map<String, String> hashes = Map.of(
                 "libonnxruntime4j_jni.so", sha256Unchecked("jni"),
                 "libonnxruntime.so", sha256Unchecked("runtime"));

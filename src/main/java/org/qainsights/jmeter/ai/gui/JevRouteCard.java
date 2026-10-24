@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -122,6 +123,10 @@ class JevRouteCard extends JPanel {
         return statusText.getText();
     }
 
+    Color getStatusColor() {
+        return statusText.getForeground();
+    }
+
     boolean isStatusVisible() {
         return statusText.isVisible();
     }
@@ -143,7 +148,7 @@ class JevRouteCard extends JPanel {
         headerLabel.setForeground(ThemeColors.accent());
         summaryLabel.setForeground(ThemeColors.foreground());
         statusText.setForeground(notice.decision().pending()
-                ? ThemeColors.secondaryText() : ThemeColors.warning());
+                ? ThemeColors.info() : ThemeColors.warning());
         responsibilityText.setForeground(ThemeColors.secondaryText());
         detailsArea.setForeground(ThemeColors.secondaryText());
         repaint();

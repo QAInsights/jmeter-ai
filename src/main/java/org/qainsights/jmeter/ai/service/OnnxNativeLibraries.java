@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.SafeText;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -261,7 +262,8 @@ public final class OnnxNativeLibraries {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            lastError = SafeText.redactUrls(
+                    e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             lastFailureMillis = System.currentTimeMillis();
             log.warn("Downloading ONNX Runtime {} native libraries failed: {}", VERSION, lastError);
         } finally {
