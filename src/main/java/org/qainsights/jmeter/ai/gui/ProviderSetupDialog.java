@@ -57,6 +57,7 @@ final class ProviderSetupDialog extends JDialog {
     private final Runnable testCompletionCallback;
     private final JPanel contentCard = new JPanel(new BorderLayout());
     private final JPanel providerRows = new JPanel();
+    private JPanel providerNavigation;
     private final JTextArea statusText = new JTextArea(" ");
     private JPanel statusPanel;
     private final QuietButton testButton = new QuietButton("Test connection", QuietButton.Kind.OUTLINED);
@@ -129,6 +130,9 @@ final class ProviderSetupDialog extends JDialog {
                                 .map(ProviderRow.class::cast)
                                 .toList()
                         : List.of();
+        Dimension navigationSize = providerNavigation.getPreferredSize();
+        providerNavigation.setPreferredSize(new Dimension(
+                Math.max(236, navigationSize.width), navigationSize.height));
 
         copySettingsButton.setVisible(false);
         copySettingsButton.addActionListener(e -> copySettings());
@@ -136,11 +140,11 @@ final class ProviderSetupDialog extends JDialog {
         saveButton.addActionListener(e -> saveOrTest());
         closeButton.addActionListener(e -> dispose());
 
+        selectOption(ollamaDetected ? ProviderSetupOption.OLLAMA : ProviderSetupOption.ANTHROPIC);
         pack();
         setMinimumSize(new Dimension(790, 500));
         setSize(Math.max(850, getPreferredSize().width), Math.max(550, getPreferredSize().height));
         setLocationRelativeTo(owner);
-        selectOption(ollamaDetected ? ProviderSetupOption.OLLAMA : ProviderSetupOption.ANTHROPIC);
         if (ollamaDetected) {
             startTest(false);
         }
@@ -168,6 +172,7 @@ final class ProviderSetupDialog extends JDialog {
         JPanel body = new JPanel(new BorderLayout(UiTokens.SPACE_4, 0));
         body.setOpaque(false);
         JPanel navigation = new JPanel(new BorderLayout());
+        providerNavigation = navigation;
         navigation.setOpaque(false);
         JLabel providerHeading = new JLabel("PROVIDERS");
         providerHeading.setFont(UiTokens.label(providerHeading.getFont()));
@@ -176,7 +181,6 @@ final class ProviderSetupDialog extends JDialog {
         navigation.add(providerHeading, BorderLayout.NORTH);
         providerRows.setOpaque(false);
         navigation.add(providerRows, BorderLayout.CENTER);
-        navigation.setPreferredSize(new Dimension(236, 0));
 
         contentCard.setOpaque(true);
         contentCard.setBackground(ThemeColors.surface());
@@ -301,7 +305,8 @@ final class ProviderSetupDialog extends JDialog {
         keyField.setPlaceholder(configured
                 ? "A key is already saved. Paste a new one to replace it." : "Paste your API key");
         styleInput(keyField);
-        keyField.setPreferredSize(new Dimension(420, 36));
+        Dimension keySize = keyField.getPreferredSize();
+        keyField.setPreferredSize(new Dimension(420, Math.max(UiTokens.CONTROL_HEIGHT, keySize.height)));
         JToggleButton show = new JToggleButton("Show");
         show.setFocusPainted(false);
         show.setContentAreaFilled(false);
@@ -385,9 +390,11 @@ final class ProviderSetupDialog extends JDialog {
         ollamaModelCombo = new JComboBox<>();
         modelLabel.setLabelFor(ollamaModelCombo);
         ollamaModelCombo.setEditable(true);
-        ollamaModelCombo.setPreferredSize(new Dimension(420, 36));
         ollamaModelCombo.setBackground(ThemeColors.surface());
         ollamaModelCombo.setForeground(ThemeColors.foreground());
+        Dimension modelSize = ollamaModelCombo.getPreferredSize();
+        ollamaModelCombo.setPreferredSize(new Dimension(
+                420, Math.max(UiTokens.CONTROL_HEIGHT, modelSize.height)));
         String configuredModel = AiConfig.getProperty("ollama.default.model", DEFAULT_OLLAMA_MODEL);
         prefilledOllamaModel = configuredModel;
         ollamaModelCombo.addItem(configuredModel);
@@ -774,10 +781,11 @@ final class ProviderSetupDialog extends JDialog {
         field.setBorder(border);
     }
 
-    private static final class ProviderRow extends JButton {
+    static final class ProviderRow extends JButton {
         private final ProviderSetupOption option;
+        private final JPanel copy = new JPanel();
 
-        private ProviderRow(ProviderSetupOption option, boolean configured) {
+        ProviderRow(ProviderSetupOption option, boolean configured) {
             super();
             this.option = option;
             setLayout(new BorderLayout(UiTokens.SPACE_1, 0));
@@ -786,7 +794,6 @@ final class ProviderSetupDialog extends JDialog {
             setHorizontalAlignment(SwingConstants.LEFT);
             setFocusPainted(false);
             setContentAreaFilled(false);
-            JPanel copy = new JPanel();
             copy.setOpaque(false);
             copy.setLayout(new BoxLayout(copy, BoxLayout.Y_AXIS));
             JLabel name = new JLabel(option.displayName());
@@ -796,20 +803,33 @@ final class ProviderSetupDialog extends JDialog {
             hint.setForeground(ThemeColors.secondaryText());
             hint.setFont(UiTokens.caption(hint.getFont()));
             copy.add(name);
-            copy.add(Box.createVerticalStrut(2));
+            copy.add(Box.createVerticalStrut(UiTokens.SPACE_1));
             copy.add(hint);
-            add(copy, BorderLayout.CENTER);
             if (configured) {
                 JLabel badge = new JLabel("Configured");
                 badge.setForeground(ThemeColors.success());
                 badge.setFont(UiTokens.caption(badge.getFont()));
-                add(badge, BorderLayout.SOUTH);
+                copy.add(Box.createVerticalStrut(UiTokens.SPACE_1));
+                copy.add(badge);
             }
+            add(copy, BorderLayout.CENTER);
             getAccessibleContext().setAccessibleName(option.displayName());
             getAccessibleContext().setAccessibleDescription(option.description()
                     + (configured ? " Configured." : ""));
-            setPreferredSize(new Dimension(226, configured ? 64 : 54));
             setMaximumSize(new Dimension(Integer.MAX_VALUE, getPreferredSize().height));
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            if (copy == null) {
+                return preferred;
+            }
+            Dimension contentSize = copy.getPreferredSize();
+            Insets insets = getInsets();
+            return new Dimension(
+                    Math.max(226, Math.max(preferred.width, contentSize.width + insets.left + insets.right)),
+                    Math.max(preferred.height, contentSize.height + insets.top + insets.bottom));
         }
 
         @Override
