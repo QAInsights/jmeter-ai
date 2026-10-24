@@ -21,9 +21,19 @@ class AiChatPanelTest {
     java.nio.file.Path tempDir;
 
     private MockedStatic<AiConfig> aiConfigMockedStatic;
+    private String previousOpenAiKey;
+    private String previousPreferencesPath;
+    private String previousSessionsDir;
 
     @BeforeEach
     void setUp() {
+        if (org.apache.jmeter.util.JMeterUtils.getJMeterProperties() == null) {
+            org.apache.jmeter.util.JMeterUtils.loadJMeterProperties(
+                    "src/test/resources/org/apache/jmeter/jmeter.properties");
+        }
+        previousOpenAiKey = org.apache.jmeter.util.JMeterUtils.getProperty("openai.api.key");
+        previousPreferencesPath = System.getProperty(ModelSelectorPreferences.PATH_PROPERTY);
+        previousSessionsDir = System.getProperty(ConversationStore.DIR_PROPERTY);
         // keep the panel's model-selector preferences out of the real user home
         System.setProperty(ModelSelectorPreferences.PATH_PROPERTY,
                 tempDir.resolve("preferences.json").toString());
@@ -44,11 +54,28 @@ class AiChatPanelTest {
 
     @AfterEach
     void tearDown() {
+        if (org.apache.jmeter.util.JMeterUtils.getJMeterProperties() != null) {
+            if (previousOpenAiKey == null) {
+                org.apache.jmeter.util.JMeterUtils.getJMeterProperties().remove("openai.api.key");
+            } else {
+                org.apache.jmeter.util.JMeterUtils.setProperty("openai.api.key", previousOpenAiKey);
+            }
+        }
+        restoreSystemProperty(ModelSelectorPreferences.PATH_PROPERTY, previousPreferencesPath);
+        restoreSystemProperty(ConversationStore.DIR_PROPERTY, previousSessionsDir);
         if (aiConfigMockedStatic != null) {
             aiConfigMockedStatic.close();
         }
         System.clearProperty(ConversationStore.DIR_PROPERTY);
         System.clearProperty(ModelSelectorPreferences.PATH_PROPERTY);
+    }
+
+    private static void restoreSystemProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
+        }
     }
 
     private boolean restoreSessions;
@@ -66,6 +93,25 @@ class AiChatPanelTest {
         assertDoesNotThrow(() -> panel.setInputEnabled(false));
         assertDoesNotThrow(panel::clearMessageField);
         assertDoesNotThrow(() -> panel.setLastCommandType("LINT"));
+    }
+
+    @Test
+    void reloadProvidersRebuildsTheRouterWithRuntimeOpenAiKey() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        org.qainsights.jmeter.ai.service.AiService before =
+                panel.aiResponseRouter().resolveAiService("openai:gpt-4o");
+        aiConfigMockedStatic.when(() -> AiConfig.getProperty(
+                org.mockito.ArgumentMatchers.eq("openai.api.key"), anyString()))
+                .thenAnswer(invocation ->
+                        org.apache.jmeter.util.JMeterUtils.getProperty("openai.api.key"));
+        org.apache.jmeter.util.JMeterUtils.setProperty("openai.api.key", "sk-test");
+
+        javax.swing.SwingUtilities.invokeAndWait(panel::reloadProviders);
+
+        org.qainsights.jmeter.ai.service.AiService after =
+                panel.aiResponseRouter().resolveAiService("openai:gpt-4o");
+        assertInstanceOf(org.qainsights.jmeter.ai.service.OpenAiService.class, after);
+        assertNotSame(before, after);
     }
 
     @Test
@@ -267,7 +313,7 @@ class AiChatPanelTest {
 
         javax.swing.AbstractButton record = findButtonByText(panel, "Record");
         javax.swing.AbstractButton donate = findButtonByText(panel, "Donate");
-        javax.swing.JButton overflow = findButton(panel, "Conversation actions and export");
+        javax.swing.JButton overflow = findButton(panel, "More actions");
         javax.swing.JButton newConversation = findButton(panel, "Start a new conversation");
         assertNotNull(record);
         assertNotNull(donate);

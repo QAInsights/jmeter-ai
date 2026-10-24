@@ -24,6 +24,13 @@ public final class WelcomeMessages {
         return forCurrentConfig(new AgentModeNudge());
     }
 
+    /** Welcome for the live configuration with an optional local Ollama detection. */
+    public static String forCurrentConfig(boolean ollamaDetected) {
+        return forCurrentConfig(new AgentModeNudge(), () -> AppleFoundationHelper.cachedStatus()
+                .map(AppleFoundationHelper.Status::isAvailable)
+                .orElse(false), ollamaDetected);
+    }
+
     /** Adds the one-time Agent Mode tip when {@code nudge} says it is due. Has no side effects. */
     static String forCurrentConfig(AgentModeNudge nudge) {
         return forCurrentConfig(nudge, () -> AppleFoundationHelper.cachedStatus()
@@ -32,8 +39,13 @@ public final class WelcomeMessages {
     }
 
     static String forCurrentConfig(AgentModeNudge nudge, BooleanSupplier appleAvailable) {
+        return forCurrentConfig(nudge, appleAvailable, false);
+    }
+
+    static String forCurrentConfig(
+            AgentModeNudge nudge, BooleanSupplier appleAvailable, boolean ollamaDetected) {
         ProviderStatus status = ProviderStatus.fromConfig(appleAvailable);
-        String welcome = forStatus(status);
+        String welcome = forStatus(status, ollamaDetected);
         if (nudge.shouldShow(status.hasAgentCapableProvider(), JMeterAgent.isEnabled())) {
             return welcome + AgentModeNudge.TIP;
         }
@@ -56,21 +68,31 @@ public final class WelcomeMessages {
      * Not ready: short setup CTA (properties + Ollama tip).
      */
     public static String forStatus(ProviderStatus status) {
+        return forStatus(status, false);
+    }
+
+    static String forStatus(ProviderStatus status, boolean ollamaDetected) {
         if (status != null && status.isReady()) {
             return Constants.WELCOME_MESSAGE;
         }
-        return setupWelcome();
+        return setupWelcome(ollamaDetected);
     }
 
     static String setupWelcome() {
+        return setupWelcome(false);
+    }
+
+    public static String setupWelcome(boolean ollamaDetected) {
         return "# Welcome to Feather Wand\n\n"
-                + "Your AI assistant for Apache JMeter is installed, but **no API key is configured yet**.\n\n"
-                + "**To get started:**\n"
-                + "1. Paste the quick-start settings from " + QUICKSTART_URL + " into JMeter's `bin/user.properties`\n"
-                + "2. Uncomment one provider and add its key, for example `anthropic.api.key` (Ollama needs no key)\n"
-                + "3. Restart JMeter and open this panel again\n\n"
-                + "**Prefer free/local?** Install [Ollama](https://ollama.com/), pull a chat model, "
-                + "set `jmeter.ai.service.type=ollama`, and restart. No cloud key needed.\n\n"
-                + "Once a provider is ready, ask about your test plan or type `@` for commands.";
+                + "Your AI assistant for Apache JMeter is installed. No provider is connected yet.\n\n"
+                + "Click **Connect a provider** below and pick a provider. Cloud providers need an API key.\n\n"
+                + (ollamaDetected
+                        ? "Ollama is running on this machine. Click **Connect a provider** to use it, no key needed.\n\n"
+                        : "")
+                + "**Prefer editing files?** Use the [quick-start file](" + QUICKSTART_URL + ")"
+                + ", add a provider key to JMeter's `bin/user.properties`, then restart JMeter.\n\n"
+                + (ollamaDetected ? "" : "**Prefer local?** Install [Ollama](https://ollama.com/), pull a chat model, "
+                        + "then choose Ollama in Connect a provider. No cloud key needed.\n\n")
+                + "Once connected, ask about your test plan or type `@` for commands.";
     }
 }

@@ -57,8 +57,12 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     // --- Messages -----------------------------------------------------------
 
     void showWelcome(String markdown) {
+        showWelcome(markdown, null);
+    }
+
+    void showWelcome(String markdown, Runnable connect) {
         dismissWelcome();
-        welcomePanel = new WelcomePanel(markdown, baseFont);
+        welcomePanel = new WelcomePanel(markdown, baseFont, connect);
         welcomePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(welcomePanel);
     }

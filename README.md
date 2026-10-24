@@ -111,6 +111,8 @@ See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest 
 
 **First time?** Paste [`jmeter-ai-quickstart.properties`](jmeter-ai-quickstart.properties) into JMeter's `bin/user.properties`, uncomment one provider and add its key (Ollama and Apple on-device need none):
 
+You can connect a provider from the Feather Wand panel's ⋯ menu > Connect a provider and use it immediately in Chat and Agent Mode, without restarting JMeter. The manual steps below still work. The JSR223 refactor menu picks up a new provider after a JMeter restart.
+
 ```properties
 jmeter.ai.service.type=anthropic
 anthropic.api.key=YOUR_ANTHROPIC_API_KEY
