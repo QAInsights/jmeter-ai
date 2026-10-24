@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.qainsights.jmeter.ai.service.ProviderSetupOption;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.session.ConversationStore;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -106,7 +107,8 @@ class AiChatPanelTest {
                         org.apache.jmeter.util.JMeterUtils.getProperty("openai.api.key"));
         org.apache.jmeter.util.JMeterUtils.setProperty("openai.api.key", "sk-test");
 
-        javax.swing.SwingUtilities.invokeAndWait(panel::reloadProviders);
+        javax.swing.SwingUtilities.invokeAndWait(
+                () -> panel.reloadProvidersAfterSave(ProviderSetupOption.SMART_ROUTING));
 
         org.qainsights.jmeter.ai.service.AiService after =
                 panel.aiResponseRouter().resolveAiService("openai:gpt-4o");

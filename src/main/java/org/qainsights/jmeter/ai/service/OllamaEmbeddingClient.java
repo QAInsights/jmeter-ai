@@ -107,11 +107,11 @@ public final class OllamaEmbeddingClient {
         JsonNode root = readTree(text);
         String error = root == null ? "" : root.path("error").asText("");
         if (status == 404 || error.toLowerCase(Locale.ROOT).contains("not found")) {
-            throw new JudgmentException("Ollama model '" + model + "' is not available; run `ollama pull " + model + "`");
+            throw new JudgmentException(modelUnavailableMessage(model), status);
         }
         if (status < 200 || status >= 300) {
             String detail = error.isBlank() ? "" : ": " + truncate(error);
-            throw new JudgmentException("Ollama embedding request failed with HTTP " + status + detail);
+            throw new JudgmentException("Ollama embedding request failed with HTTP " + status + detail, status);
         }
         JsonNode embeddings = root == null ? null : root.get("embeddings");
         if (embeddings == null || !embeddings.isArray() || embeddings.size() != expected) {
@@ -134,6 +134,12 @@ public final class OllamaEmbeddingClient {
             vectors.add(values);
         }
         return vectors;
+    }
+
+    public static String modelUnavailableMessage(String model) {
+        String normalizedModel = model(model);
+        return "Ollama model '" + normalizedModel + "' is not available; run `ollama pull "
+                + normalizedModel + "`";
     }
 
     private static JsonNode readTree(String text) {

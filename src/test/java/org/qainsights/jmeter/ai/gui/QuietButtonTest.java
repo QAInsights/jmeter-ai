@@ -71,8 +71,13 @@ class QuietButtonTest {
         assertEquals(0, changes.get());
 
         button.setEnabled(false);
-        assertEquals(org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText(),
+        java.awt.Color disabledBackground = org.qainsights.jmeter.ai.gui.theme.ThemeColors.blend(
+                org.qainsights.jmeter.ai.gui.theme.ThemeColors.accent(),
+                org.qainsights.jmeter.ai.gui.theme.ThemeColors.canvas(), 0.42f);
+        assertEquals(org.qainsights.jmeter.ai.gui.theme.ThemeColors.secondaryText(disabledBackground),
                 button.getForeground());
+        assertTrue(org.qainsights.jmeter.ai.gui.theme.ThemeColors.contrastRatio(
+                button.getForeground(), disabledBackground) >= 3.0);
     }
 
     @Test

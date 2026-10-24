@@ -76,6 +76,12 @@
             <artifactId>openai-java</artifactId>
             <version>4.78.1</version>
         </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>svgSalamander</artifactId>
+            <version>1.1.4</version>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>com.google.genai</groupId>
