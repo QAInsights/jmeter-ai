@@ -6,10 +6,19 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.FileOwnerAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.jmeter.util.JMeterUtils;
@@ -77,7 +86,9 @@ public final class UserPropertiesWriter {
             throw new IOException("The properties file has no parent directory");
         }
         Files.createDirectories(parent);
-        String original = Files.exists(target)
+        boolean targetExists = Files.exists(target);
+        FileProtection protection = targetExists ? readProtection(target) : null;
+        String original = targetExists
                 ? Files.readString(target, StandardCharsets.UTF_8) : "";
         String separator = lineSeparator(original);
         List<Line> lines = parseLines(original);
@@ -114,9 +125,15 @@ public final class UserPropertiesWriter {
             }
         }
 
-        Path temporary = Files.createTempFile(parent, ".feather-wand-user-properties-", ".tmp");
+        Path temporary = createTemporaryFile(parent, targetExists);
         try {
+            if (protection != null) {
+                copyAccess(temporary, protection);
+            }
             Files.writeString(temporary, updated, StandardCharsets.UTF_8);
+            if (protection != null) {
+                copyOwner(temporary, protection.owner());
+            }
             try {
                 Files.move(temporary, target,
                         StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -125,6 +142,79 @@ public final class UserPropertiesWriter {
             }
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static FileProtection readProtection(Path target) throws IOException {
+        try {
+            FileOwnerAttributeView ownerView =
+                    Files.getFileAttributeView(target, FileOwnerAttributeView.class);
+            UserPrincipal owner = ownerView == null ? null : ownerView.getOwner();
+            PosixFileAttributeView posixView =
+                    Files.getFileAttributeView(target, PosixFileAttributeView.class);
+            if (posixView != null) {
+                return new FileProtection(posixView.readAttributes().permissions(), null, owner);
+            }
+            AclFileAttributeView aclView =
+                    Files.getFileAttributeView(target, AclFileAttributeView.class);
+            if (aclView != null) {
+                return new FileProtection(null, aclView.getAcl(), owner);
+            }
+            throw new IOException("The file system does not support copying file protections");
+        } catch (SecurityException | UnsupportedOperationException e) {
+            throw new IOException("Could not read the properties file protections", e);
+        }
+    }
+
+    private static Path createTemporaryFile(Path parent, boolean targetExists) throws IOException {
+        try {
+            if (!targetExists
+                    && Files.getFileAttributeView(parent, PosixFileAttributeView.class) != null) {
+                return Files.createTempFile(
+                        parent,
+                        ".feather-wand-user-properties-",
+                        ".tmp",
+                        PosixFilePermissions.asFileAttribute(EnumSet.of(
+                                PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)));
+            }
+        } catch (UnsupportedOperationException | SecurityException e) {
+            throw new IOException("Could not create a private properties file", e);
+        }
+        return Files.createTempFile(parent, ".feather-wand-user-properties-", ".tmp");
+    }
+
+    private static void copyAccess(Path temporary, FileProtection protection) throws IOException {
+        try {
+            if (protection.posixPermissions() != null) {
+                PosixFileAttributeView posixView =
+                        Files.getFileAttributeView(temporary, PosixFileAttributeView.class);
+                if (posixView == null) {
+                    throw new IOException("Could not preserve POSIX file permissions");
+                }
+                posixView.setPermissions(protection.posixPermissions());
+            } else {
+                AclFileAttributeView aclView =
+                        Files.getFileAttributeView(temporary, AclFileAttributeView.class);
+                if (aclView == null) {
+                    throw new IOException("Could not preserve file access rules");
+                }
+                aclView.setAcl(protection.acl());
+            }
+        } catch (SecurityException | UnsupportedOperationException e) {
+            throw new IOException("Could not preserve the properties file protections", e);
+        }
+    }
+
+    private static void copyOwner(Path temporary, UserPrincipal owner) {
+        if (owner != null) {
+            try {
+                FileOwnerAttributeView ownerView =
+                        Files.getFileAttributeView(temporary, FileOwnerAttributeView.class);
+                if (ownerView != null) {
+                    ownerView.setOwner(owner);
+                }
+            } catch (IOException | SecurityException | UnsupportedOperationException ignored) {
+            }
         }
     }
 
@@ -188,6 +278,12 @@ public final class UserPropertiesWriter {
 
     private static void setRuntimeProperties(LinkedHashMap<String, String> values) {
         values.forEach(JMeterUtils::setProperty);
+    }
+
+    private record FileProtection(
+            Set<PosixFilePermission> posixPermissions,
+            List<AclEntry> acl,
+            UserPrincipal owner) {
     }
 
     private record Line(String text, String ending) {

@@ -120,6 +120,28 @@ class ProviderConnectionTesterTest {
     }
 
     @Test
+    void normalizesOllamaHostsAndExtractsInlinePorts() {
+        assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://localhost", null),
+                ProviderConnectionTester.normalizeOllamaHost("localhost"));
+        assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://localhost", null),
+                ProviderConnectionTester.normalizeOllamaHost("http://localhost"));
+        assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://192.0.2.10", "11500"),
+                ProviderConnectionTester.normalizeOllamaHost("192.0.2.10:11500"));
+        assertEquals(new ProviderConnectionTester.OllamaEndpoint("http://localhost", null),
+                ProviderConnectionTester.normalizeOllamaHost("http://localhost/"));
+    }
+
+    @Test
+    void usesAnInlineOllamaPortForTheTestedUrl() {
+        AtomicReference<HttpRequest> captured = new AtomicReference<>();
+        ProviderConnectionTester tester = tester(captured, 200, "{\"models\":[]}");
+
+        tester.test(ProviderSetupOption.OLLAMA, null, "192.0.2.10:11500", 11434);
+
+        assertEquals("http://192.0.2.10:11500/api/tags", captured.get().uri().toString());
+    }
+
+    @Test
     void mapsAuthRejectedRateLimitAndHttpErrorsWithoutExposingKey() {
         String key = "private-test-key";
         assertOutcome(401, ProviderConnectionTester.Outcome.AUTH_REJECTED, key);

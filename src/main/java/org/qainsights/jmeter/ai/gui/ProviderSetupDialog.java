@@ -68,6 +68,7 @@ final class ProviderSetupDialog extends JDialog {
     private JTextField ollamaHostField;
     private JTextField ollamaPortField;
     private JComboBox<String> ollamaModelCombo;
+    private String prefilledOllamaModel;
     private boolean resultCurrent;
     private boolean testing;
     private ProviderConnectionTester.Result lastResult;
@@ -371,6 +372,7 @@ final class ProviderSetupDialog extends JDialog {
         ollamaModelCombo.setBackground(ThemeColors.surface());
         ollamaModelCombo.setForeground(ThemeColors.foreground());
         String configuredModel = AiConfig.getProperty("ollama.default.model", DEFAULT_OLLAMA_MODEL);
+        prefilledOllamaModel = configuredModel;
         ollamaModelCombo.addItem(configuredModel);
         JPanel modelBox = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
         modelBox.setOpaque(false);
@@ -408,11 +410,25 @@ final class ProviderSetupDialog extends JDialog {
             setStatus("Paste an API key before testing the connection.", ThemeColors.error());
             return;
         }
-        Integer port = null;
+        int resolvedPort = -1;
+        String host = null;
         if (selectedOption == ProviderSetupOption.OLLAMA) {
+            ProviderConnectionTester.OllamaEndpoint endpoint;
             try {
-                port = Integer.parseInt(ollamaPortField.getText().trim());
-                if (port < 1 || port > 65535) {
+                endpoint = ProviderConnectionTester.normalizeOllamaHost(ollamaHostField.getText());
+            } catch (IllegalArgumentException e) {
+                setStatus("Enter a valid Ollama host.", ThemeColors.error());
+                return;
+            }
+            host = endpoint.host();
+            String portValue = endpoint.port() == null
+                    ? ollamaPortField.getText().trim() : endpoint.port();
+            if (portValue.isBlank()) {
+                portValue = DEFAULT_OLLAMA_PORT;
+            }
+            try {
+                resolvedPort = Integer.parseInt(portValue);
+                if (resolvedPort < 1 || resolvedPort > 65535) {
                     throw new NumberFormatException();
                 }
             } catch (NumberFormatException e) {
@@ -421,8 +437,8 @@ final class ProviderSetupDialog extends JDialog {
             }
         }
         ProviderSetupOption option = selectedOption;
-        int resolvedPort = port == null ? -1 : port;
-        String host = option == ProviderSetupOption.OLLAMA ? ollamaHostField.getText().trim() : null;
+        String hostForRequest = host;
+        int portForRequest = resolvedPort;
         testing = true;
         setStatus("Testing connection...", ThemeColors.info());
         updateActionButtons();
@@ -433,7 +449,7 @@ final class ProviderSetupDialog extends JDialog {
         new SwingWorker<ProviderConnectionTester.Result, Void>() {
             @Override
             protected ProviderConnectionTester.Result doInBackground() {
-                return connectionTester.test(option, keyForRequest, host, resolvedPort);
+                return connectionTester.test(option, keyForRequest, hostForRequest, portForRequest);
             }
 
             @Override
@@ -529,14 +545,15 @@ final class ProviderSetupDialog extends JDialog {
             }
         } else {
             settings.put("jmeter.ai.service.type", "ollama");
-            String host = ollamaHostField.getText().trim();
-            String port = ollamaPortField.getText().trim();
-            if (!DEFAULT_OLLAMA_HOST.equals(host)) {
-                settings.put("ollama.host", host);
+            ProviderConnectionTester.OllamaEndpoint endpoint =
+                    ProviderConnectionTester.normalizeOllamaHost(ollamaHostField.getText());
+            String port = endpoint.port() == null
+                    ? ollamaPortField.getText().trim() : endpoint.port();
+            if (port.isBlank()) {
+                port = DEFAULT_OLLAMA_PORT;
             }
-            if (!DEFAULT_OLLAMA_PORT.equals(port)) {
-                settings.put("ollama.port", port);
-            }
+            settings.put("ollama.host", endpoint.host());
+            settings.put("ollama.port", port);
             Object model = ollamaModelCombo.getEditor().getItem();
             String selectedModel = model == null ? "" : model.toString().trim();
             if (selectedModel.isBlank()) {
@@ -561,18 +578,26 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private void updateOllamaModels(List<String> names) {
-        String current = AiConfig.getProperty("ollama.default.model", DEFAULT_OLLAMA_MODEL);
+        Object editorItem = ollamaModelCombo.getEditor().getItem();
+        String editorText = editorItem == null ? "" : editorItem.toString();
+        String selectedModel = modelAfterRefresh(editorText, prefilledOllamaModel, names);
         ollamaModelCombo.removeAllItems();
         for (String name : names) {
             ollamaModelCombo.addItem(name);
         }
-        if (names.contains(current)) {
-            ollamaModelCombo.setSelectedItem(current);
-        } else if (!names.isEmpty()) {
-            ollamaModelCombo.setSelectedItem(names.get(0));
-        } else {
-            ollamaModelCombo.setSelectedItem(current);
+        ollamaModelCombo.setSelectedItem(selectedModel);
+    }
+
+    static String modelAfterRefresh(String editorText, String prefilledModel, List<String> names) {
+        String current = editorText == null ? "" : editorText.trim();
+        String prefilled = prefilledModel == null ? "" : prefilledModel;
+        if (!current.isBlank() && !current.equals(prefilled)) {
+            return current;
         }
+        if (names.contains(prefilled)) {
+            return prefilled;
+        }
+        return names.isEmpty() ? prefilled : names.get(0);
     }
 
     private void inputChanged() {
@@ -642,15 +667,11 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private String ollamaUrl() {
-        String host = ollamaHostField.getText().trim();
-        if (!host.contains("://")) {
-            host = "http://" + host;
-        }
         String port = ollamaPortField.getText().trim();
-        if (!host.matches("(?i)^https?://[^/]+:\\d+/?$")) {
-            host = host.replaceAll("/+$", "") + ":" + port;
+        if (port.isBlank()) {
+            port = DEFAULT_OLLAMA_PORT;
         }
-        return host;
+        return ProviderConnectionTester.ollamaBaseUrl(ollamaHostField.getText().trim(), port);
     }
 
     private boolean isConfigured(ProviderSetupOption option) {

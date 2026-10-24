@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
@@ -39,6 +40,9 @@ public final class ProviderConnectionTester {
     }
 
     public record Response(int statusCode, String body) {
+    }
+
+    public record OllamaEndpoint(String host, String port) {
     }
 
     @FunctionalInterface
@@ -92,6 +96,39 @@ public final class ProviderConnectionTester {
         } catch (RuntimeException e) {
             return networkError(e, key);
         }
+    }
+
+    public static OllamaEndpoint normalizeOllamaHost(String value) {
+        String hostValue = value == null || value.isBlank() ? "http://localhost" : value.trim();
+        if (!hostValue.contains("://")) {
+            hostValue = "http://" + hostValue;
+        }
+        URI uri = URI.create(hostValue);
+        String scheme = uri.getScheme();
+        if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                || uri.getHost() == null
+                || uri.getRawQuery() != null
+                || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException("Invalid Ollama host");
+        }
+
+        String authority = uri.getRawAuthority();
+        String port = uri.getPort() < 0 ? null : Integer.toString(uri.getPort());
+        if (port != null) {
+            authority = authority.substring(0, authority.length() - port.length() - 1);
+        }
+        String path = uri.getRawPath() == null ? "" : uri.getRawPath();
+        String normalizedHost = scheme.toLowerCase(Locale.ROOT) + "://" + authority + path;
+        while (normalizedHost.endsWith("/")) {
+            normalizedHost = normalizedHost.substring(0, normalizedHost.length() - 1);
+        }
+        return new OllamaEndpoint(normalizedHost, port);
+    }
+
+    public static String ollamaBaseUrl(String host, String port) {
+        OllamaEndpoint endpoint = normalizeOllamaHost(host);
+        String resolvedPort = endpoint.port() == null ? port : endpoint.port();
+        return OllamaAiService.buildHost(endpoint.host(), resolvedPort);
     }
 
     private static HttpRequest requestFor(
@@ -180,14 +217,4 @@ public final class ProviderConnectionTester {
         return resolved + path;
     }
 
-    private static String ollamaBaseUrl(String host, String port) {
-        String resolved = host == null || host.isBlank() ? "http://localhost" : host.trim();
-        if (!resolved.contains("://")) {
-            resolved = "http://" + resolved;
-        }
-        if (port != null && !port.isBlank() && !resolved.matches("(?i)^https?://[^/]+:\\d+/?$")) {
-            resolved = appendPath(resolved, ":" + port);
-        }
-        return resolved;
-    }
 }
