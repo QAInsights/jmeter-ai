@@ -1,10 +1,12 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
+import java.awt.event.ActionEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
@@ -14,13 +16,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.accessibility.AccessibleRole;
 import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import org.apache.jmeter.util.JMeterUtils;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
 
@@ -68,7 +73,7 @@ class ProviderSetupDialogTest {
         UIManager.put("Button.font", largeButtonFont);
         try {
             ProviderSetupDialog.ProviderRow row =
-                    new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI, true);
+                    new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI);
             List<JLabel> labels = new ArrayList<>();
             collectLabels(row, labels);
             FontMetrics titleMetrics = labels.get(0).getFontMetrics(labels.get(0).getFont());
@@ -77,6 +82,7 @@ class ProviderSetupDialogTest {
             int minimumTextHeight = titleMetrics.getHeight() + hintMetrics.getHeight()
                     + insets.top + insets.bottom;
             assertTrue(row.getPreferredSize().height >= minimumTextHeight);
+            assertEquals(row.getPreferredSize().height, row.getMaximumSize().height);
 
             JPanel list = new JPanel();
             list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
@@ -94,6 +100,103 @@ class ProviderSetupDialogTest {
             UIManager.put("Label.font", originalLabelFont);
             UIManager.put("Button.font", originalButtonFont);
         }
+    }
+
+    @Test
+    void configuredKeyUsesTheSamePropertyForRowBadgeAndKeyPanePlaceholder() {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        var properties = JMeterUtils.getJMeterProperties();
+        String original = properties.getProperty("openai.api.key");
+        try {
+            JMeterUtils.setProperty("openai.api.key", "configured-test-value");
+            ProviderSetupDialog.ProviderRow row =
+                    new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI);
+
+            assertTrue(row.hasConfiguredBadge());
+            assertEquals("A key is already saved. Paste a new one to replace it.",
+                    ProviderSetupDialog.keyPlaceholder(ProviderSetupOption.OPENAI));
+        } finally {
+            if (original == null) {
+                properties.remove("openai.api.key");
+            } else {
+                JMeterUtils.setProperty("openai.api.key", original);
+            }
+        }
+    }
+
+    @Test
+    void providerHintsMeetContrastRequirementsInDarkAndLightPalettes() {
+        String[] keys = {
+                "Panel.background", "TextPane.background",
+                "Label.disabledForeground", "Label.foreground"
+        };
+        Object[] original = new Object[keys.length];
+        for (int i = 0; i < keys.length; i++) {
+            original[i] = UIManager.get(keys[i]);
+        }
+        try {
+            assertHintContrastForPalette(new Color(0x292C31), new Color(0x70747A), Color.WHITE);
+            assertHintContrastForPalette(new Color(0xF5F5F5), new Color(0xAAAAAA), Color.BLACK);
+        } finally {
+            for (int i = 0; i < keys.length; i++) {
+                if (original[i] == null) {
+                    UIManager.getDefaults().remove(keys[i]);
+                } else {
+                    UIManager.put(keys[i], original[i]);
+                }
+            }
+        }
+    }
+
+    private static void assertHintContrastForPalette(Color background, Color secondary, Color foreground) {
+        UIManager.put("Panel.background", background);
+        UIManager.put("TextPane.background", background);
+        UIManager.put("Label.disabledForeground", secondary);
+        UIManager.put("Label.foreground", foreground);
+        ProviderSetupDialog.ProviderRow row =
+                new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI);
+
+        assertRowHintContrast(row);
+        row.setRollover(true);
+        assertRowHintContrast(row);
+        row.setRollover(false);
+        row.setSelected(true);
+        assertRowHintContrast(row);
+    }
+
+    private static void assertRowHintContrast(ProviderSetupDialog.ProviderRow row) {
+        double ratio = ThemeColors.contrastRatio(row.hintColor(), row.rowBackground());
+        assertTrue(ratio >= 4.5, "Hint contrast ratio was " + ratio);
+    }
+
+    @Test
+    void providerRowSupportsKeyboardSelectionAndAccessiblePushButtonSemantics() {
+        ProviderSetupDialog.ProviderRow row =
+                new ProviderSetupDialog.ProviderRow(ProviderSetupOption.OPENAI);
+        AtomicBoolean selected = new AtomicBoolean();
+        AtomicBoolean previous = new AtomicBoolean();
+        AtomicBoolean next = new AtomicBoolean();
+        row.setActionHandlers(
+                () -> selected.set(true),
+                () -> previous.set(true),
+                () -> next.set(true));
+
+        row.getActionMap().get("activate-provider").actionPerformed(
+                new ActionEvent(row, ActionEvent.ACTION_PERFORMED, "activate"));
+        row.getActionMap().get("previous-provider").actionPerformed(
+                new ActionEvent(row, ActionEvent.ACTION_PERFORMED, "previous"));
+        row.getActionMap().get("next-provider").actionPerformed(
+                new ActionEvent(row, ActionEvent.ACTION_PERFORMED, "next"));
+
+        assertTrue(selected.get());
+        assertTrue(previous.get());
+        assertTrue(next.get());
+        assertTrue(row.isFocusable());
+        assertEquals(AccessibleRole.PUSH_BUTTON, row.getAccessibleContext().getAccessibleRole());
+        assertEquals("OpenAI, Chat and Agent Mode",
+                row.getAccessibleContext().getAccessibleName());
     }
 
     private static void collectLabels(Component component, List<JLabel> labels) {

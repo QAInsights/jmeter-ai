@@ -3,6 +3,8 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -10,29 +12,40 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
+import java.awt.Point;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.accessibility.AccessibleContext;
+import javax.accessibility.AccessibleRole;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.KeyStroke;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
@@ -50,6 +63,8 @@ final class ProviderSetupDialog extends JDialog {
     private static final String DEFAULT_OLLAMA_HOST = "http://localhost";
     private static final String DEFAULT_OLLAMA_PORT = "11434";
     private static final String DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
+    private static final String SAVED_KEY_PLACEHOLDER =
+            "A key is already saved. Paste a new one to replace it.";
 
     private final Consumer<ProviderSetupOption> onSaved;
     private final ProviderConnectionTester connectionTester;
@@ -114,12 +129,15 @@ final class ProviderSetupDialog extends JDialog {
         setContentPane(content);
 
         providerRows.setLayout(new BoxLayout(providerRows, BoxLayout.Y_AXIS));
-        ButtonGroup group = new ButtonGroup();
+        int rowIndex = 0;
         for (ProviderSetupOption option : ProviderSetupOption.values()) {
-            ProviderRow row = new ProviderRow(option, isConfigured(option));
+            int index = rowIndex++;
+            ProviderRow row = new ProviderRow(option);
             row.setAlignmentX(Component.LEFT_ALIGNMENT);
-            row.addActionListener(e -> selectOption(option));
-            group.add(row);
+            row.setActionHandlers(
+                    () -> selectOption(option),
+                    () -> focusProviderRow(index - 1),
+                    () -> focusProviderRow(index + 1));
             providerRows.add(row);
             providerRows.add(Box.createVerticalStrut(UiTokens.SPACE_2));
         }
@@ -145,6 +163,13 @@ final class ProviderSetupDialog extends JDialog {
         setMinimumSize(new Dimension(790, 500));
         setSize(Math.max(850, getPreferredSize().width), Math.max(550, getPreferredSize().height));
         setLocationRelativeTo(owner);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowOpened(WindowEvent event) {
+                pack();
+                setLocationRelativeTo(owner);
+            }
+        });
         if (ollamaDetected) {
             startTest(false);
         }
@@ -221,12 +246,20 @@ final class ProviderSetupDialog extends JDialog {
         return footer;
     }
 
+    private void focusProviderRow(int index) {
+        if (index >= 0 && index < rows.size()) {
+            ProviderRow row = rows.get(index);
+            row.requestFocusInWindow();
+            row.activate();
+        }
+    }
+
     void selectOption(ProviderSetupOption option) {
         selectedOption = option;
         resultCurrent = false;
         lastResult = null;
         for (ProviderRow row : rows) {
-            row.setSelected(option == row.option);
+            row.setSelected(option == row.option());
         }
         contentCard.removeAll();
         contentCard.add(buildProviderPane(option), BorderLayout.CENTER);
@@ -301,9 +334,7 @@ final class ProviderSetupDialog extends JDialog {
 
         keyField = new PlaceholderPasswordField();
         keyLabel.setLabelFor(keyField);
-        boolean configured = isConfigured(option);
-        keyField.setPlaceholder(configured
-                ? "A key is already saved. Paste a new one to replace it." : "Paste your API key");
+        keyField.setPlaceholder(keyPlaceholder(option));
         styleInput(keyField);
         Dimension keySize = keyField.getPreferredSize();
         keyField.setPreferredSize(new Dimension(420, Math.max(UiTokens.CONTROL_HEIGHT, keySize.height)));
@@ -736,11 +767,15 @@ final class ProviderSetupDialog extends JDialog {
         return ProviderConnectionTester.ollamaBaseUrl(ollamaHostField.getText().trim(), port);
     }
 
-    private boolean isConfigured(ProviderSetupOption option) {
+    static boolean isConfigured(ProviderSetupOption option) {
         if (option.requiresKey()) {
             return ProviderStatus.isApiKeyConfigured(option.keyProperty());
         }
         return "ollama".equalsIgnoreCase(AiConfig.getProperty("jmeter.ai.service.type", ""));
+    }
+
+    static String keyPlaceholder(ProviderSetupOption option) {
+        return isConfigured(option) ? SAVED_KEY_PLACEHOLDER : "Paste your API key";
     }
 
     private void copySettings() {
@@ -781,42 +816,158 @@ final class ProviderSetupDialog extends JDialog {
         field.setBorder(border);
     }
 
-    static final class ProviderRow extends JButton {
+    static final class ProviderRow extends JPanel {
         private final ProviderSetupOption option;
         private final JPanel copy = new JPanel();
+        private final JLabel hint;
+        private final JLabel configuredBadge;
+        private boolean selected;
+        private boolean rollover;
+        private Runnable activation = () -> { };
+        private Runnable previousProvider = () -> { };
+        private Runnable nextProvider = () -> { };
 
-        ProviderRow(ProviderSetupOption option, boolean configured) {
-            super();
+        ProviderRow(ProviderSetupOption option) {
             this.option = option;
+            boolean configured = isConfigured(option);
+            setOpaque(false);
+            setFocusable(true);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             setLayout(new BorderLayout(UiTokens.SPACE_1, 0));
             setBorder(BorderFactory.createEmptyBorder(
                     UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2));
-            setHorizontalAlignment(SwingConstants.LEFT);
-            setFocusPainted(false);
-            setContentAreaFilled(false);
             copy.setOpaque(false);
             copy.setLayout(new BoxLayout(copy, BoxLayout.Y_AXIS));
             JLabel name = new JLabel(option.displayName());
             name.setForeground(ThemeColors.foreground());
             name.setFont(UiTokens.label(name.getFont()));
-            JLabel hint = new JLabel(option.listHint());
-            hint.setForeground(ThemeColors.secondaryText());
+            hint = new JLabel(option.listHint());
             hint.setFont(UiTokens.caption(hint.getFont()));
             copy.add(name);
             copy.add(Box.createVerticalStrut(UiTokens.SPACE_1));
             copy.add(hint);
+            configuredBadge = new JLabel("Configured");
+            configuredBadge.setForeground(ThemeColors.success());
+            configuredBadge.setFont(UiTokens.caption(configuredBadge.getFont()));
+            configuredBadge.setVisible(configured);
             if (configured) {
-                JLabel badge = new JLabel("Configured");
-                badge.setForeground(ThemeColors.success());
-                badge.setFont(UiTokens.caption(badge.getFont()));
                 copy.add(Box.createVerticalStrut(UiTokens.SPACE_1));
-                copy.add(badge);
             }
+            copy.add(configuredBadge);
             add(copy, BorderLayout.CENTER);
-            getAccessibleContext().setAccessibleName(option.displayName());
+            updateHintColor();
+            getAccessibleContext().setAccessibleName(option.displayName() + ", " + option.listHint());
             getAccessibleContext().setAccessibleDescription(option.description()
                     + (configured ? " Configured." : ""));
-            setMaximumSize(new Dimension(Integer.MAX_VALUE, getPreferredSize().height));
+            installMouseHandlers(this);
+            bindKey(java.awt.event.KeyEvent.VK_SPACE, "activate-provider", this::activate);
+            bindKey(java.awt.event.KeyEvent.VK_ENTER, "activate-provider", this::activate);
+            bindKey(java.awt.event.KeyEvent.VK_UP, "previous-provider", () -> previousProvider.run());
+            bindKey(java.awt.event.KeyEvent.VK_DOWN, "next-provider", () -> nextProvider.run());
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusGained(java.awt.event.FocusEvent event) {
+                    repaint();
+                }
+
+                @Override
+                public void focusLost(java.awt.event.FocusEvent event) {
+                    repaint();
+                }
+            });
+        }
+
+        void setActionHandlers(Runnable activation, Runnable previousProvider, Runnable nextProvider) {
+            this.activation = activation == null ? () -> { } : activation;
+            this.previousProvider = previousProvider == null ? () -> { } : previousProvider;
+            this.nextProvider = nextProvider == null ? () -> { } : nextProvider;
+        }
+
+        private void bindKey(int keyCode, String actionName, Runnable action) {
+            getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(keyCode, 0), actionName);
+            getActionMap().put(actionName, new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    if (isEnabled()) {
+                        action.run();
+                    }
+                }
+            });
+        }
+
+        private void installMouseHandlers(Component component) {
+            MouseAdapter mouseHandler = new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent event) {
+                    setRollover(true);
+                }
+
+                @Override
+                public void mouseExited(MouseEvent event) {
+                    Point point = SwingUtilities.convertPoint(
+                            event.getComponent(), event.getPoint(), ProviderRow.this);
+                    setRollover(contains(point));
+                }
+
+                @Override
+                public void mouseClicked(MouseEvent event) {
+                    if (isEnabled() && event.getButton() == MouseEvent.BUTTON1) {
+                        requestFocusInWindow();
+                        activate();
+                    }
+                }
+            };
+            component.addMouseListener(mouseHandler);
+            if (component instanceof Container container) {
+                for (Component child : container.getComponents()) {
+                    installMouseHandlers(child);
+                }
+            }
+        }
+
+        private void activate() {
+            if (isEnabled()) {
+                activation.run();
+            }
+        }
+
+        void setRollover(boolean rollover) {
+            if (this.rollover != rollover) {
+                this.rollover = rollover;
+                updateHintColor();
+                repaint();
+            }
+        }
+
+        void setSelected(boolean selected) {
+            if (this.selected != selected) {
+                this.selected = selected;
+                updateHintColor();
+                repaint();
+            }
+        }
+
+        ProviderSetupOption option() {
+            return option;
+        }
+
+        boolean hasConfiguredBadge() {
+            return configuredBadge.isVisible();
+        }
+
+        Color rowBackground() {
+            return selected ? ThemeColors.accentSoft()
+                    : rollover ? ThemeColors.hoverBackground() : ThemeColors.surface();
+        }
+
+        Color hintColor() {
+            return hint.getForeground();
+        }
+
+        private void updateHintColor() {
+            if (hint != null) {
+                hint.setForeground(ThemeColors.secondaryText(rowBackground()));
+            }
         }
 
         @Override
@@ -833,21 +984,46 @@ final class ProviderSetupDialog extends JDialog {
         }
 
         @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+
+        @Override
         protected void paintComponent(Graphics graphics) {
             Graphics2D g2 = (Graphics2D) graphics.create();
             try {
-                g2.setColor(getModel().isSelected()
-                        ? ThemeColors.accentSoft()
-                        : getModel().isRollover() ? ThemeColors.hoverBackground() : ThemeColors.surface());
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(rowBackground());
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), UiTokens.RADIUS_MEDIUM, UiTokens.RADIUS_MEDIUM);
-                if (getModel().isSelected()) {
+                if (selected) {
                     g2.setColor(ThemeColors.accent());
-                    g2.fillRoundRect(0, 0, 3, getHeight(), 3, 3);
+                    g2.fillRoundRect(0, 0, UiTokens.SPACE_1, getHeight(),
+                            UiTokens.SPACE_1, UiTokens.SPACE_1);
+                }
+                if (isFocusOwner()) {
+                    g2.setColor(ThemeColors.focusRing());
+                    g2.drawRoundRect(1, 1, Math.max(0, getWidth() - 3), Math.max(0, getHeight() - 3),
+                            UiTokens.RADIUS_MEDIUM, UiTokens.RADIUS_MEDIUM);
                 }
             } finally {
                 g2.dispose();
             }
             super.paintComponent(graphics);
+        }
+
+        @Override
+        public AccessibleContext getAccessibleContext() {
+            if (accessibleContext == null) {
+                accessibleContext = new AccessibleProviderRow();
+            }
+            return accessibleContext;
+        }
+
+        protected class AccessibleProviderRow extends AccessibleJPanel {
+            @Override
+            public AccessibleRole getAccessibleRole() {
+                return AccessibleRole.PUSH_BUTTON;
+            }
         }
     }
 

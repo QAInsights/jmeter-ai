@@ -115,6 +115,26 @@ public final class ThemeColors {
         return c;
     }
 
+    /** Secondary text adjusted to meet WCAG AA contrast against the given background. */
+    public static Color secondaryText(Color background) {
+        if (background == null) {
+            return secondaryText();
+        }
+        Color preferred = secondaryText();
+        if (contrastRatio(preferred, background) >= 4.5) {
+            return preferred;
+        }
+        Color target = contrastRatio(Color.WHITE, background) >= contrastRatio(Color.BLACK, background)
+                ? Color.WHITE : Color.BLACK;
+        for (int step = 1; step <= 100; step++) {
+            Color candidate = blend(preferred, target, 1f - step / 100f);
+            if (contrastRatio(candidate, background) >= 4.5) {
+                return candidate;
+            }
+        }
+        return target;
+    }
+
     /** Standard component border color for the active theme. */
     public static Color border() {
         Color c = UIManager.getColor("Component.borderColor");
@@ -182,7 +202,7 @@ public final class ThemeColors {
                 clamp(Math.round(a.getBlue() * ratio + b.getBlue() * inv)));
     }
 
-    static double contrastRatio(Color a, Color b) {
+    public static double contrastRatio(Color a, Color b) {
         double lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
         double darker = Math.min(relativeLuminance(a), relativeLuminance(b));
         return (lighter + 0.05) / (darker + 0.05);
