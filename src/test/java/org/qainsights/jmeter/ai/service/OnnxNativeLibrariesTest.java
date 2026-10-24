@@ -88,6 +88,15 @@ class OnnxNativeLibrariesTest {
     }
 
     @Test
+    void malformedContentLengthIsTreatedAsUnknownAndKnownTotalRoundsUp() {
+        assertEquals(0, OnnxNativeLibraries.parseContentLength("not-a-number"));
+        assertEquals(20_100_000, OnnxNativeLibraries.parseContentLength(" 20100000 "));
+        assertEquals(21, OnnxNativeLibraries.totalMegabytes(20_100_000));
+        assertEquals(20, OnnxNativeLibraries.totalMegabytes(20_000_000));
+        assertEquals(0, OnnxNativeLibraries.totalMegabytes(0));
+    }
+
+    @Test
     void downloadsAndExtractsOnlyTheSelectedPlatform() throws Exception {
         OnnxNativeLibraries loader = loader(sha256(archive));
         TypeSafeJudgmentProvider.JudgmentException pending =

@@ -49,7 +49,7 @@ public final class TypeSafeAgentRequestRouter implements AgentRequestRouter {
             }
             return Decision.focused(route, answer.probabilities(), answer.confidence());
         } catch (RuntimeException e) {
-            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage());
+            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage(), e);
             return Decision.unavailable(e);
         }
     }

@@ -71,7 +71,7 @@ public final class EmbeddingAgentRequestRouter implements AgentRequestRouter {
             }
             return decision;
         } catch (RuntimeException e) {
-            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage());
+            log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(), e.getMessage(), e);
             return Decision.unavailable(e);
         }
     }

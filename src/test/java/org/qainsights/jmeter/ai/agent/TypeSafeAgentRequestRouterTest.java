@@ -89,6 +89,27 @@ class TypeSafeAgentRequestRouterTest {
     }
 
     @Test
+    void unexpectedFailureUsesGenericReasonWithoutExposingMessage() {
+        JudgmentProvider failing = new JudgmentProvider() {
+            @Override
+            public Set<Capability> capabilities() {
+                return Set.of(Capability.CHOICE);
+            }
+
+            @Override
+            public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
+                throw new IllegalStateException("offline");
+            }
+        };
+
+        AgentRequestRouter.Decision decision = new TypeSafeAgentRequestRouter(failing, 0.75).route("hello");
+
+        assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, decision.outcome());
+        assertEquals("Smart routing failed unexpectedly; details are in jmeter.log", decision.reason());
+        assertFalse(decision.reason().contains("offline"));
+    }
+
+    @Test
     void routeSendsOnlySanitizedCurrentMessageAndAgentMode() {
         AtomicReference<Object> capturedState = new AtomicReference<>();
         JudgmentProvider provider = new JudgmentProvider() {

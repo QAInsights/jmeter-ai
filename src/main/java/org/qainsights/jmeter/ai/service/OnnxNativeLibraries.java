@@ -216,10 +216,25 @@ public final class OnnxNativeLibraries {
     private String progress(Path target) {
         long downloadedMegabytes = downloadedBytes / 1_000_000;
         String size = totalBytes > 0
-                ? downloadedMegabytes + " of " + totalBytes / 1_000_000 + " MB"
+                ? downloadedMegabytes + " of " + totalMegabytes(totalBytes) + " MB"
                 : downloadedMegabytes + " MB";
         return "downloading ONNX Runtime " + VERSION + " (" + size
                 + ") into " + target + "; local routing will be available when it is ready";
+    }
+
+    static long totalMegabytes(long bytes) {
+        return bytes <= 0 ? 0 : 1 + (bytes - 1) / 1_000_000;
+    }
+
+    static long parseContentLength(String value) {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Long.parseLong(value.trim()));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private void download(Path target) {
@@ -271,7 +286,8 @@ public final class OnnxNativeLibraries {
             if (response.statusCode() != 200) {
                 throw new IOException("HTTP " + response.statusCode() + " for " + url);
             }
-            totalBytes = response.headers().firstValueAsLong("content-length").orElse(0);
+            totalBytes = response.headers().firstValue("content-length")
+                    .map(OnnxNativeLibraries::parseContentLength).orElse(0L);
             long remainingTotalNanos = totalTimeout.toNanos() - (System.nanoTime() - startedNanos);
             if (remainingTotalNanos <= 0) {
                 throw new IOException(totalTimeoutMessage());

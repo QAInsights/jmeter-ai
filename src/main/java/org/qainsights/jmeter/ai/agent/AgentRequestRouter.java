@@ -63,7 +63,8 @@ public interface AgentRequestRouter {
         }
 
         public static Decision unavailable(String reason, boolean pending) {
-            return new Decision(Route.COMPLEX_OR_UNCLEAR, Map.of(), 0, Outcome.UNAVAILABLE, reason, pending);
+            return new Decision(Route.COMPLEX_OR_UNCLEAR, Map.of(), 0, Outcome.UNAVAILABLE,
+                    safeReason(reason), pending);
         }
 
         public static Decision unavailable(Throwable error) {
@@ -82,7 +83,7 @@ public interface AgentRequestRouter {
                 return null;
             }
             safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://)[^/\\s@]+@", "$1***@");
-            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://[^\\s?#]+)\\?[^\\s)]*", "$1?***");
+            safe = safe.replaceAll("(?i)\\b([a-z][a-z0-9+.-]*://[^\\s?#]+)\\?[^\\s]*", "$1?***");
             return safe.length() > MAX_REASON_LENGTH
                     ? safe.substring(0, MAX_REASON_LENGTH - 3) + "..."
                     : safe;

@@ -175,6 +175,25 @@ class EmbeddingAgentRequestRouterTest {
     }
 
     @Test
+    void judgmentFailureReasonRedactsEverythingAfterAQueryParenthesis() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                new JudgmentException("HTTP 403 for https://mirror.example/onnx.jar?sig=part1)secret"));
+
+        assertTrue(decision.reason().contains("https://mirror.example/onnx.jar?***"));
+        assertFalse(decision.reason().contains("secret"));
+    }
+
+    @Test
+    void stringUnavailableReasonUsesTheSameSafetyFilter() {
+        AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
+                "https://alice:secret@mirror.example/onnx.jar?token=abc123", false);
+
+        assertEquals("https://***@mirror.example/onnx.jar?***", decision.reason());
+        assertFalse(decision.reason().contains("secret"));
+        assertFalse(decision.reason().contains("abc123"));
+    }
+
+    @Test
     void judgmentFailureReasonIsTruncatedToThreeHundredCharacters() {
         AgentRequestRouter.Decision decision = AgentRequestRouter.Decision.unavailable(
                 new JudgmentException("x".repeat(1_000)));

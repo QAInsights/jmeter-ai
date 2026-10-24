@@ -59,6 +59,7 @@ class JevRouteCardTest {
         assertTrue(card.getSummaryText().contains("getting ready"));
         assertTrue(card.isStatusVisible());
         assertTrue(card.getStatusText().startsWith("Downloading ONNX Runtime"));
+        assertTrue(card.getDetailsText().contains("getting ready"));
     }
 
     @Test
@@ -116,12 +117,16 @@ class JevRouteCardTest {
         JevRouteCard unavailable = new JevRouteCard(AgentRequestRouter.Notice.expansion(
                 AgentRequestRouter.Decision.unavailable(),
                 List.of("a"), 21, List.of("b")), "meta:muse");
+        JevRouteCard pending = new JevRouteCard(AgentRequestRouter.Notice.expansion(
+                AgentRequestRouter.Decision.unavailable("downloading ONNX Runtime", true),
+                List.of("a"), 21, List.of("b")), "meta:muse");
 
         assertTrue(allTools.getSummaryText().contains("All Agent Mode tools enabled"));
         assertTrue(allTools.getDetailsText().contains("enabled all Agent Mode tools"));
         assertTrue(unavailable.getSummaryText().contains("Jev unavailable"));
         assertTrue(unavailable.getSummaryText().contains("all Agent Mode tools enabled"));
         assertTrue(unavailable.getDetailsText().contains("Jev was unavailable"));
+        assertTrue(pending.getDetailsText().contains("getting ready"));
     }
 
     @Test

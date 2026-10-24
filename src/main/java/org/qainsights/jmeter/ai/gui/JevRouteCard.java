@@ -217,14 +217,21 @@ class JevRouteCard extends JPanel {
                 case FOCUSED -> AgentJudgmentConfig.brand() + " added the " + notice.decision().route().displayName()
                         + " tools; " + model + " still reasons and performs the work.";
                 case ALL_TOOLS -> AgentJudgmentConfig.brand() + " enabled all Agent Mode tools for " + model + ".";
-                case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; all Agent Mode tools were enabled for "
-                        + model + ".";
+                case UNAVAILABLE -> notice.decision().pending()
+                        ? AgentJudgmentConfig.brand() + " is getting ready; all Agent Mode tools are enabled for "
+                                + model + "."
+                        : AgentJudgmentConfig.brand() + " was unavailable; all Agent Mode tools were enabled for "
+                                + model + ".";
             };
         }
         return switch (notice.decision().outcome()) {
             case FOCUSED -> AgentJudgmentConfig.brand() + " selected the tool family; " + model + " still reasons and performs the work.";
             case ALL_TOOLS -> AgentJudgmentConfig.brand() + " provided all Agent Mode tools to " + model + " for this request.";
-            case UNAVAILABLE -> AgentJudgmentConfig.brand() + " was unavailable; standard Agent Mode tools were provided to " + model + ".";
+            case UNAVAILABLE -> notice.decision().pending()
+                    ? AgentJudgmentConfig.brand() + " is getting ready; standard Agent Mode tools are being used for "
+                            + model + "."
+                    : AgentJudgmentConfig.brand() + " was unavailable; standard Agent Mode tools were provided to "
+                            + model + ".";
         };
     }
 }
