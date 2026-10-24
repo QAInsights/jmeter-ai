@@ -40,6 +40,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -50,6 +51,7 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
 import javax.swing.KeyStroke;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -421,13 +423,18 @@ final class ProviderSetupDialog extends JDialog {
         choices.setOpaque(false);
         choices.setLayout(new BoxLayout(choices, BoxLayout.Y_AXIS));
         ButtonGroup group = new ButtonGroup();
-        addBackendChoice(group, choices, "off", "Off");
-        addBackendChoice(group, choices, AgentJudgmentConfig.TYPESAFE, "Jev by TypeSafe");
-        addBackendChoice(group, choices, AgentJudgmentConfig.OPENAI, "OpenAI Decisions");
+        addBackendChoice(group, choices, "off", "Off", "Off");
+        addBackendChoice(group, choices, AgentJudgmentConfig.TYPESAFE,
+                "Jev by TypeSafe", "Jev by TypeSafe");
+        addBackendChoice(group, choices, AgentJudgmentConfig.OPENAI,
+                "OpenAI Decisions", "OpenAI Decisions");
         addBackendChoice(group, choices, AgentJudgmentConfig.OPENROUTER,
-                "<html>OpenRouter Decisions<br>(Microsoft-Decision-1)</html>");
-        addBackendChoice(group, choices, AgentJudgmentConfig.LOCAL, "EmbeddingGemma on this machine");
-        addBackendChoice(group, choices, AgentJudgmentConfig.OLLAMA, "Ollama embeddings");
+                "<html>OpenRouter Decisions<br>(Microsoft-Decision-1)</html>",
+                "OpenRouter Decisions (Microsoft-Decision-1)");
+        addBackendChoice(group, choices, AgentJudgmentConfig.LOCAL,
+                "EmbeddingGemma on this machine", "EmbeddingGemma on this machine");
+        addBackendChoice(group, choices, AgentJudgmentConfig.OLLAMA,
+                "Ollama embeddings", "Ollama embeddings");
         choices.setAlignmentX(Component.LEFT_ALIGNMENT);
         choices.setMaximumSize(new Dimension(Integer.MAX_VALUE, choices.getPreferredSize().height));
         addLeftAligned(content, choices);
@@ -501,15 +508,43 @@ final class ProviderSetupDialog extends JDialog {
         parent.add(component);
     }
 
-    private void addBackendChoice(ButtonGroup group, JPanel choices, String backend, String label) {
-        JRadioButton choice = new JRadioButton(label, backend.equals(smartBackend));
+    private void addBackendChoice(
+            ButtonGroup group,
+            JPanel choices,
+            String backend,
+            String labelText,
+            String accessibleName) {
+        JRadioButton choice = new JRadioButton("", backend.equals(smartBackend));
         choice.setOpaque(false);
         choice.setAlignmentX(Component.LEFT_ALIGNMENT);
         choice.setForeground(ThemeColors.foreground());
         choice.setFont(UiTokens.body(choice.getFont()));
-        choice.setMaximumSize(new Dimension(Integer.MAX_VALUE, choice.getPreferredSize().height));
+        choice.getAccessibleContext().setAccessibleName(accessibleName);
         group.add(choice);
-        choices.add(choice);
+        JLabel label = new JLabel(labelText, BrandLogo.icon(BrandLogo.logoForBackend(backend), 16),
+                SwingConstants.LEFT);
+        if (label.getIcon() == null) {
+            label.setIcon(spacerIcon(16));
+        }
+        label.setIconTextGap(UiTokens.SPACE_2);
+        label.setForeground(ThemeColors.foreground());
+        label.setFont(UiTokens.body(label.getFont()));
+        label.setLabelFor(choice);
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getButton() == MouseEvent.BUTTON1) {
+                    choice.doClick();
+                }
+            }
+        });
+        JPanel row = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.add(choice, BorderLayout.WEST);
+        row.add(label, BorderLayout.CENTER);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        choices.add(row);
         choice.addActionListener(e -> {
             if (!backend.equals(smartBackend)) {
                 String previousBackend = smartBackend;
@@ -522,6 +557,24 @@ final class ProviderSetupDialog extends JDialog {
                 updateSmartBackendControls();
             }
         });
+    }
+
+    private static Icon spacerIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component component, Graphics graphics, int x, int y) {
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
     }
 
     private JPanel smartKeyPanel(String backend, String property, String label) {
@@ -591,17 +644,23 @@ final class ProviderSetupDialog extends JDialog {
         JPanel content = new JPanel();
         content.setOpaque(false);
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        JPanel heading = new JPanel();
+        JPanel heading = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
         heading.setOpaque(false);
-        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("Apple on-device");
         title.setFont(UiTokens.heading(title.getFont()));
         title.setForeground(ThemeColors.foreground());
         JLabel description = new JLabel("No key, runs on this Mac");
         description.setForeground(ThemeColors.secondaryText());
         description.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
-        addLeftAligned(heading, title);
-        addLeftAligned(heading, description);
+        JPanel titleCopy = new JPanel();
+        titleCopy.setOpaque(false);
+        titleCopy.setLayout(new BoxLayout(titleCopy, BoxLayout.Y_AXIS));
+        addLeftAligned(titleCopy, title);
+        addLeftAligned(titleCopy, description);
+        heading.add(new JLabel(BrandLogo.tile(BrandLogo.logoFor(
+                ProviderSetupOption.APPLE_ON_DEVICE), 36, 24)), BorderLayout.WEST);
+        heading.add(titleCopy, BorderLayout.CENTER);
+        heading.setAlignmentX(Component.LEFT_ALIGNMENT);
         heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
         addLeftAligned(content, heading);
         if (!Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"))) {
@@ -731,7 +790,7 @@ final class ProviderSetupDialog extends JDialog {
         };
     }
 
-    private String configuredSmartBackend() {
+    static String configuredSmartBackend() {
         boolean active = Boolean.parseBoolean(AiConfig.getProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "false"))
                 && (Boolean.parseBoolean(AiConfig.getProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false"))
                         || Boolean.parseBoolean(AiConfig.getProperty(
@@ -790,17 +849,22 @@ final class ProviderSetupDialog extends JDialog {
         JPanel pane = new JPanel();
         pane.setOpaque(false);
         pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
-        JPanel heading = new JPanel();
+        JPanel heading = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
         heading.setOpaque(false);
-        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
         JLabel name = new JLabel(option.displayName());
         name.setFont(UiTokens.heading(name.getFont()));
         name.setForeground(ThemeColors.foreground());
         JLabel hint = new JLabel(option.description());
         hint.setForeground(ThemeColors.secondaryText());
         hint.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
-        heading.add(name);
-        heading.add(hint);
+        JPanel titleCopy = new JPanel();
+        titleCopy.setOpaque(false);
+        titleCopy.setLayout(new BoxLayout(titleCopy, BoxLayout.Y_AXIS));
+        addLeftAligned(titleCopy, name);
+        addLeftAligned(titleCopy, hint);
+        heading.add(new JLabel(BrandLogo.tile(BrandLogo.logoFor(option), 36, 24)),
+                BorderLayout.WEST);
+        heading.add(titleCopy, BorderLayout.CENTER);
         heading.setAlignmentX(Component.LEFT_ALIGNMENT);
         heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
         pane.add(heading);
@@ -1599,6 +1663,7 @@ final class ProviderSetupDialog extends JDialog {
     static final class ProviderRow extends JPanel {
         private final ProviderSetupOption option;
         private final JPanel copy = new JPanel();
+        private final JLabel logo;
         private final JLabel hint;
         private final JLabel configuredBadge;
         private Component configuredGap;
@@ -1614,9 +1679,14 @@ final class ProviderSetupDialog extends JDialog {
             setOpaque(false);
             setFocusable(true);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setLayout(new BorderLayout(UiTokens.SPACE_1, 0));
+            setLayout(new BorderLayout(UiTokens.SPACE_2, 0));
             setBorder(BorderFactory.createEmptyBorder(
                     UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2));
+            logo = new JLabel(BrandLogo.tile(BrandLogo.logoFor(option), 28, 18));
+            JPanel logoSlot = new JPanel(new BorderLayout());
+            logoSlot.setOpaque(false);
+            logoSlot.add(logo, BorderLayout.NORTH);
+            add(logoSlot, BorderLayout.WEST);
             copy.setOpaque(false);
             copy.setLayout(new BoxLayout(copy, BoxLayout.Y_AXIS));
             JLabel name = new JLabel(option.displayName());
@@ -1731,6 +1801,9 @@ final class ProviderSetupDialog extends JDialog {
 
         void setHintText(String value) {
             hint.setText(value);
+            if (option == ProviderSetupOption.SMART_ROUTING) {
+                logo.setIcon(BrandLogo.tile(BrandLogo.logoFor(option), 28, 18));
+            }
             getAccessibleContext().setAccessibleName(option.displayName() + ", " + value);
             revalidate();
             repaint();
