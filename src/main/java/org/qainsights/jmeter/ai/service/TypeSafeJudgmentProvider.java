@@ -96,7 +96,8 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new JudgmentException(label + " request failed with HTTP " + response.statusCode());
+                throw new JudgmentException(
+                        label + " request failed with HTTP " + response.statusCode(), response.statusCode());
             }
             return response.body();
         } catch (InterruptedException e) {
@@ -192,24 +193,38 @@ public final class TypeSafeJudgmentProvider implements JudgmentProvider {
 
     public static final class JudgmentException extends RuntimeException {
         private final boolean pending;
+        private final int httpCode;
 
         public JudgmentException(String message) {
             super(message);
             this.pending = false;
+            this.httpCode = 0;
         }
 
         public JudgmentException(String message, Throwable cause) {
             super(message, cause);
             this.pending = false;
+            this.httpCode = 0;
+        }
+
+        public JudgmentException(String message, int httpCode) {
+            super(message);
+            this.pending = false;
+            this.httpCode = httpCode;
         }
 
         public JudgmentException(String message, boolean pending) {
             super(message);
             this.pending = pending;
+            this.httpCode = 0;
         }
 
         public boolean isPending() {
             return pending;
+        }
+
+        public int httpCode() {
+            return httpCode;
         }
     }
 }

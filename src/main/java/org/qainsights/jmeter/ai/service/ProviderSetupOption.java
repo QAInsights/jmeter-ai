@@ -49,6 +49,20 @@ public enum ProviderSetupOption {
             "Run models locally with no API key.",
             null,
             "ollama",
+            null),
+    SMART_ROUTING(
+            "Smart routing",
+            "Off",
+            "Choose how Agent Mode selects a focused tool set.",
+            null,
+            null,
+            null),
+    APPLE_ON_DEVICE(
+            "Apple on-device",
+            "No key, runs on this Mac",
+            "Use Apple Intelligence locally on this Mac.",
+            null,
+            null,
             null);
 
     private final String displayName;
@@ -99,5 +113,9 @@ public enum ProviderSetupOption {
 
     public boolean requiresKey() {
         return keyProperty != null;
+    }
+
+    public boolean isChatProvider() {
+        return this != SMART_ROUTING && this != APPLE_ON_DEVICE;
     }
 }
