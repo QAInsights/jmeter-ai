@@ -127,6 +127,124 @@ class ProviderSetupDialogTest {
     }
 
     @Test
+    void statusTextUsesTheBodyFontInsteadOfMonospaced() {
+        assertFalse(Font.MONOSPACED.equals(ProviderSetupDialog.createStatusText().getFont().getFamily()));
+    }
+
+    @Test
+    void testsWithSavedKeyWhenChatKeyFieldIsEmptyAndTypingInvalidatesTheResult() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        String propertyKey = "openai.api.key";
+        String savedKey = "saved-openai-test-secret";
+        String original = setJMeterProperty(propertyKey, savedKey);
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
+        ProviderConnectionTester tester = new ProviderConnectionTester(request -> {
+            authorization.set(request.headers().firstValue("Authorization").orElse(""));
+            throw new java.io.IOException("Connection failed using " + savedKey);
+        });
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                ProviderSetupDialog dialog = new ProviderSetupDialog(
+                        null, option -> { }, false, tester,
+                        tempDir.resolve("saved-key-test.properties"), testCompleted::countDown);
+                dialogRef.set(dialog);
+                dialog.selectOption(ProviderSetupOption.OPENAI);
+                try {
+                    Method startTest = ProviderSetupDialog.class.getDeclaredMethod("startTest", boolean.class);
+                    startTest.setAccessible(true);
+                    startTest.invoke(dialog, false);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            assertTrue(testCompleted.await(5, TimeUnit.SECONDS));
+            assertEquals("Bearer " + savedKey, authorization.get());
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    Field keyField = ProviderSetupDialog.class.getDeclaredField("keyField");
+                    keyField.setAccessible(true);
+                    javax.swing.JTextField input = (javax.swing.JTextField) keyField.get(dialogRef.get());
+                    assertEquals("", input.getText());
+
+                    Field statusText = ProviderSetupDialog.class.getDeclaredField("statusText");
+                    statusText.setAccessible(true);
+                    String status = ((javax.swing.JTextArea) statusText.get(dialogRef.get())).getText();
+                    assertTrue(status.contains("Could not reach the provider"));
+                    assertFalse(status.contains(savedKey));
+
+                    Field resultCurrent = ProviderSetupDialog.class.getDeclaredField("resultCurrent");
+                    resultCurrent.setAccessible(true);
+                    assertTrue(resultCurrent.getBoolean(dialogRef.get()));
+                    input.setText("replacement-openai-key");
+                    assertFalse(resultCurrent.getBoolean(dialogRef.get()));
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+                if (dialogRef.get() != null) {
+                    dialogRef.get().dispose();
+                }
+            });
+            restoreJMeterProperty(propertyKey, original);
+        }
+    }
+
+    @Test
+    void saveWithSavedKeyTestsAndWritesOnlyNonKeySettings() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        String propertyKey = "openai.api.key";
+        String savedKey = "saved-openai-test-secret";
+        String original = setJMeterProperty(propertyKey, savedKey);
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<ProviderSetupOption> savedOption = new AtomicReference<>();
+        AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
+        Path propertiesPath = tempDir.resolve("saved-key-settings.properties");
+        ProviderConnectionTester tester = new ProviderConnectionTester(request -> {
+            authorization.set(request.headers().firstValue("Authorization").orElse(""));
+            return new ProviderConnectionTester.Response(200, "{\"data\":[]}");
+        });
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                ProviderSetupDialog dialog = new ProviderSetupDialog(
+                        null, savedOption::set, false, tester, propertiesPath, testCompleted::countDown);
+                dialogRef.set(dialog);
+                dialog.selectOption(ProviderSetupOption.OPENAI);
+                try {
+                    Method saveOrTest = ProviderSetupDialog.class.getDeclaredMethod("saveOrTest");
+                    saveOrTest.setAccessible(true);
+                    saveOrTest.invoke(dialog);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            assertTrue(testCompleted.await(5, TimeUnit.SECONDS));
+            assertEquals("Bearer " + savedKey, authorization.get());
+            assertEquals(ProviderSetupOption.OPENAI, savedOption.get());
+            String persisted = java.nio.file.Files.readString(propertiesPath);
+            assertTrue(persisted.contains(
+                    "jmeter.ai.service.type=" + ProviderSetupOption.OPENAI.serviceType()));
+            assertFalse(persisted.contains("openai.api.key="));
+            assertFalse(persisted.contains(savedKey));
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+                if (dialogRef.get() != null) {
+                    dialogRef.get().dispose();
+                }
+            });
+            restoreJMeterProperty(propertyKey, original);
+        }
+    }
+
+    @Test
     void providerHintsMeetContrastRequirementsInDarkAndLightPalettes() {
         String[] keys = {
                 "Panel.background", "TextPane.background",
@@ -257,5 +375,22 @@ class ProviderSetupDialogTest {
         org.junit.jupiter.api.Assertions.assertTrue(testCompleted.await(5, TimeUnit.SECONDS));
         assertFalse(saved.get());
         SwingUtilities.invokeAndWait(() -> dialogRef.get().dispose());
+    }
+
+    private static String setJMeterProperty(String key, String value) {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        String original = JMeterUtils.getJMeterProperties().getProperty(key);
+        JMeterUtils.setProperty(key, value);
+        return original;
+    }
+
+    private static void restoreJMeterProperty(String key, String original) {
+        if (original == null) {
+            JMeterUtils.getJMeterProperties().remove(key);
+        } else {
+            JMeterUtils.setProperty(key, original);
+        }
     }
 }
