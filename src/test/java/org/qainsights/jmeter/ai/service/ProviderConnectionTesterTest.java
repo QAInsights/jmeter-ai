@@ -6,6 +6,7 @@ import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.sun.net.httpserver.HttpServer;
@@ -254,6 +255,61 @@ class ProviderConnectionTesterTest {
                 new ProviderConnectionTester().testSmartRouting("typesafe", "dummy-test-key");
         assertEquals(ProviderConnectionTester.Outcome.NETWORK_ERROR, result.outcome());
         assertNoKey(result, "dummy-test-key");
+    }
+
+    @Test
+    void smartRoutingPassesTriageFlagToTester() {
+        AtomicReference<Boolean> triageSeen = new AtomicReference<>();
+        ProviderConnectionTester tester = new ProviderConnectionTester(request -> null,
+                (backend, key, triage) -> {
+                    triageSeen.set(triage);
+                    return new ProviderConnectionTester.Result(
+                            ProviderConnectionTester.Outcome.OK, 0, java.util.List.of(), 200, null);
+                });
+
+        tester.testSmartRouting("typesafe", "unused-test-key", true);
+
+        assertEquals(Boolean.TRUE, triageSeen.get());
+    }
+
+    @Test
+    void decisionProviderScoresOnlyWhenTriageIsEnabledAndSupported() {
+        for (boolean triage : new boolean[] {false, true}) {
+            for (boolean scoreSupported : new boolean[] {false, true}) {
+                AtomicInteger chooseCalls = new AtomicInteger();
+                AtomicInteger scoreCalls = new AtomicInteger();
+                java.util.List<String> calls = new java.util.ArrayList<>();
+                JudgmentProvider provider = new JudgmentProvider() {
+                    @Override
+                    public Set<Capability> capabilities() {
+                        return scoreSupported
+                                ? Set.of(Capability.CHOICE, Capability.SCORE)
+                                : Set.of(Capability.CHOICE);
+                    }
+
+                    @Override
+                    public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
+                        chooseCalls.incrementAndGet();
+                        calls.add("choose");
+                        return new ChoiceAnswer("FIRST", Map.of(), 1);
+                    }
+
+                    @Override
+                    public ScoreAnswer score(Object state, String instructions, Map<String, String> levels) {
+                        scoreCalls.incrementAndGet();
+                        calls.add("score");
+                        return new ScoreAnswer(0, 1);
+                    }
+                };
+
+                ProviderConnectionTester.testSmartRoutingProvider(provider, triage);
+
+                assertEquals(1, chooseCalls.get());
+                assertEquals(triage && scoreSupported ? 1 : 0, scoreCalls.get());
+                assertEquals(triage && scoreSupported
+                        ? java.util.List.of("choose", "score") : java.util.List.of("choose"), calls);
+            }
+        }
     }
 
     @Test

@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,7 +57,7 @@ public final class ProviderConnectionTester {
 
     @FunctionalInterface
     public interface SmartRoutingTester {
-        Result test(String backend, String key);
+        Result test(String backend, String key, boolean triage);
     }
 
     private final HttpSender sender;
@@ -122,10 +123,14 @@ public final class ProviderConnectionTester {
     }
 
     public Result testSmartRouting(String backend, String key) {
-        return smartRoutingTester.test(backend, key);
+        return testSmartRouting(backend, key, false);
     }
 
-    private Result testSmartRoutingReal(String backend, String key) {
+    public Result testSmartRouting(String backend, String key, boolean triage) {
+        return smartRoutingTester.test(backend, key, triage);
+    }
+
+    private Result testSmartRoutingReal(String backend, String key, boolean triage) {
         try {
             JudgmentProvider provider = switch (backend) {
                 case "typesafe" -> new TypeSafeJudgmentProvider(
@@ -149,13 +154,26 @@ public final class ProviderConnectionTester {
                         AgentRoutingConfig.timeout());
                 default -> throw new IllegalArgumentException("Unsupported smart routing backend");
             };
-            provider.choose(
-                    Map.of("message", "Choose the first option for this connection check."),
-                    "Select the preferred option for this connection check.",
-                    Map.of("FIRST", "Select the first option.", "SECOND", "Select the second option."));
+            testSmartRoutingProvider(provider, triage);
             return new Result(Outcome.OK, 0, List.of(), 200, null);
         } catch (RuntimeException e) {
             return judgmentError(e, key);
+        }
+    }
+
+    static void testSmartRoutingProvider(JudgmentProvider provider, boolean triage) {
+        provider.choose(
+                Map.of("message", "Choose the first option for this connection check."),
+                "Select the preferred option for this connection check.",
+                Map.of("FIRST", "Select the first option.", "SECOND", "Select the second option."));
+        if (triage && provider.capabilities().contains(JudgmentProvider.Capability.SCORE)) {
+            Map<String, String> levels = new LinkedHashMap<>();
+            levels.put("LOW", "Low severity.");
+            levels.put("HIGH", "High severity.");
+            provider.score(
+                    Map.of("message", "This is a simple connection-check scenario."),
+                    "Rate the severity of the scenario on the supplied scale.",
+                    levels);
         }
     }
 

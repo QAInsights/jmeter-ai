@@ -31,6 +31,7 @@ import org.qainsights.jmeter.ai.service.ProviderSetupOption;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
@@ -92,6 +93,13 @@ class ProviderSetupDialogTest {
                         "openrouter.api.key", "entered-openrouter-key"),
                 ProviderSetupDialog.smartRoutingSettings(
                         "openrouter", true, true, "entered-openrouter-key"));
+        var disabledJev = ProviderSetupDialog.smartRoutingSettings("typesafe", false, false, "");
+        assertEquals("false", disabledJev.get("jmeter.ai.typesafe.agent.routing.enabled"));
+        assertEquals("false", disabledJev.get("jmeter.ai.typesafe.agent.triage.enabled"));
+        assertFalse(disabledJev.containsKey("typesafe.api.key"));
+        assertTrue(ProviderSetupDialog.smartRoutingFeaturesDisabled(false, false));
+        assertFalse(ProviderSetupDialog.smartRoutingFeaturesDisabled(true, false));
+        assertFalse(ProviderSetupDialog.smartRoutingFeaturesDisabled(false, true));
         for (String backend : List.of("local", "ollama")) {
             assertEquals(java.util.Map.of(
                             "jmeter.ai.typesafe.enabled", "true",
@@ -107,6 +115,20 @@ class ProviderSetupDialogTest {
         assertEquals("true", ProviderSetupDialog.appleSettings().get("apple.enabled"));
         assertEquals("Run ollama pull embeddinggemma.",
                 ProviderSetupDialog.ollamaMissingModelCopy("embeddinggemma"));
+    }
+
+    @Test
+    void smartRoutingSignalsChatReloadOnlyWhenOpenAiKeyIsWritten() {
+        assertEquals(ProviderSetupOption.SMART_ROUTING,
+                ProviderSetupDialog.callbackOptionAfterSave(
+                        ProviderSetupOption.SMART_ROUTING, java.util.Map.of("openai.api.key", "entered")));
+        assertNull(ProviderSetupDialog.callbackOptionAfterSave(
+                ProviderSetupOption.SMART_ROUTING, java.util.Map.of("typesafe.api.key", "entered")));
+        assertNull(ProviderSetupDialog.callbackOptionAfterSave(
+                ProviderSetupOption.SMART_ROUTING, java.util.Map.of()));
+        assertEquals(ProviderSetupOption.OPENAI,
+                ProviderSetupDialog.callbackOptionAfterSave(
+                        ProviderSetupOption.OPENAI, java.util.Map.of("openai.api.key", "entered")));
     }
 
     @Test
@@ -353,7 +375,7 @@ class ProviderSetupDialogTest {
         CountDownLatch testCompleted = new CountDownLatch(1);
         AtomicBoolean saved = new AtomicBoolean();
         AtomicReference<ProviderSetupDialog> dialogRef = new AtomicReference<>();
-        ProviderConnectionTester tester = new ProviderConnectionTester(request -> null, (backend, key) -> {
+        ProviderConnectionTester tester = new ProviderConnectionTester(request -> null, (backend, key, triage) -> {
                 requestStarted.countDown();
                 try {
                     releaseRequest.await();

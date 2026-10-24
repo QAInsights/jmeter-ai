@@ -991,6 +991,7 @@ final class ProviderSetupDialog extends JDialog {
         int portForRequest = resolvedPort;
         String keyForRequest = key;
         String backendForRequest = backend;
+        boolean triageForRequest = smart && triageEnabled.isSelected();
         resultCurrent = false;
         lastResult = null;
         testing = true;
@@ -1005,7 +1006,8 @@ final class ProviderSetupDialog extends JDialog {
                 if (option == ProviderSetupOption.SMART_ROUTING) {
                     return AgentJudgmentConfig.OLLAMA.equals(backendForRequest)
                             ? connectionTester.testOllamaEmbeddings()
-                            : connectionTester.testSmartRouting(backendForRequest, keyForRequest);
+                            : connectionTester.testSmartRouting(
+                                    backendForRequest, keyForRequest, triageForRequest);
                 }
                 return connectionTester.test(option, keyForRequest, hostForRequest, portForRequest);
             }
@@ -1017,7 +1019,8 @@ final class ProviderSetupDialog extends JDialog {
                 }
                 try {
                     if (!requestInputsMatch(
-                            option, keyForRequest, hostForRequest, portForRequest, backendForRequest)) {
+                            option, keyForRequest, hostForRequest, portForRequest,
+                            backendForRequest, triageForRequest)) {
                         resultCurrent = false;
                         setStatus("Inputs changed during the test. Test again before saving.",
                                 ThemeColors.info());
@@ -1045,12 +1048,15 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private boolean requestInputsMatch(
-            ProviderSetupOption option, String key, String host, int port, String backend) {
+            ProviderSetupOption option, String key, String host, int port, String backend, boolean triage) {
         if (selectedOption != option) {
             return false;
         }
         if (option == ProviderSetupOption.SMART_ROUTING) {
             if (!java.util.Objects.equals(backend, smartBackend)) {
+                return false;
+            }
+            if (triage != triageEnabled.isSelected()) {
                 return false;
             }
             if (isKeyedSmartBackend(backend)
@@ -1136,6 +1142,11 @@ final class ProviderSetupDialog extends JDialog {
             return;
         }
         if (selectedOption == ProviderSetupOption.SMART_ROUTING
+                && smartRoutingFeaturesDisabled(routingEnabled.isSelected(), triageEnabled.isSelected())) {
+            saveSettings();
+            return;
+        }
+        if (selectedOption == ProviderSetupOption.SMART_ROUTING
                 && ("off".equals(smartBackend)
                         || AgentJudgmentConfig.LOCAL.equals(smartBackend))) {
             saveSettings();
@@ -1200,12 +1211,13 @@ final class ProviderSetupDialog extends JDialog {
             settings.put("ollama.default.model", selectedModel);
         }
         lastSettings = settings;
+        ProviderSetupOption callbackOption = callbackOptionAfterSave(selectedOption, settings);
         try {
             UserPropertiesWriter.apply(propertiesPath, settings);
-            onSaved.accept(selectedOption == ProviderSetupOption.SMART_ROUTING ? null : selectedOption);
+            onSaved.accept(callbackOption);
             dispose();
         } catch (IOException e) {
-            onSaved.accept(selectedOption == ProviderSetupOption.SMART_ROUTING ? null : selectedOption);
+            onSaved.accept(callbackOption);
             String reason = e.getMessage() == null || e.getMessage().isBlank()
                     ? e.getClass().getSimpleName() : e.getMessage();
             setStatus("Couldn't save to " + propertiesPath + ": " + reason
@@ -1236,10 +1248,23 @@ final class ProviderSetupDialog extends JDialog {
             case AgentJudgmentConfig.OPENROUTER -> AgentJudgmentConfig.OPENROUTER_API_KEY;
             default -> null;
         };
-        if (keyProperty != null && enteredKey != null && !enteredKey.isBlank()) {
+        if ((routing || triage) && keyProperty != null && enteredKey != null && !enteredKey.isBlank()) {
             settings.put(keyProperty, enteredKey);
         }
         return settings;
+    }
+
+    static boolean smartRoutingFeaturesDisabled(boolean routing, boolean triage) {
+        return !routing && !triage;
+    }
+
+    static ProviderSetupOption callbackOptionAfterSave(
+            ProviderSetupOption option, Map<String, String> settings) {
+        if (option != ProviderSetupOption.SMART_ROUTING) {
+            return option;
+        }
+        return settings.containsKey(AgentJudgmentConfig.OPENAI_API_KEY)
+                ? ProviderSetupOption.SMART_ROUTING : null;
     }
 
     static LinkedHashMap<String, String> appleSettings() {
@@ -1334,6 +1359,8 @@ final class ProviderSetupDialog extends JDialog {
     private void updateActionButtons() {
         boolean smart = selectedOption == ProviderSetupOption.SMART_ROUTING;
         boolean apple = selectedOption == ProviderSetupOption.APPLE_ON_DEVICE;
+        boolean smartFeaturesDisabled = smart
+                && smartRoutingFeaturesDisabled(routingEnabled.isSelected(), triageEnabled.isSelected());
         boolean smartTestable = smart && !"off".equals(smartBackend)
                 && !AgentJudgmentConfig.LOCAL.equals(smartBackend);
         testButton.setVisible(!apple && (!smart || smartTestable));
@@ -1343,7 +1370,8 @@ final class ProviderSetupDialog extends JDialog {
         if (apple) {
             saveButton.setText("Use Apple on-device");
             saveButton.setEnabled(!testing && appleStatusReady && appleAvailable);
-        } else if (smart && ("off".equals(smartBackend)
+        } else if (smart && (smartFeaturesDisabled
+                || "off".equals(smartBackend)
                 || AgentJudgmentConfig.LOCAL.equals(smartBackend))) {
             saveButton.setText("Save");
         } else {
