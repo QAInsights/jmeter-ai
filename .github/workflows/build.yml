@@ -35,6 +35,33 @@ jobs:
       - name: Build and test
         run: xvfb-run -a mvn -B -ntp verify -Dgpg.skip
 
+      - name: Cache JMeter 5.6.3
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/apache-jmeter-5.6.3.tgz
+          key: apache-jmeter-5.6.3-archive-v1
+
+      - name: Install JMeter 5.6.3
+        run: |
+          archive="$RUNNER_TEMP/apache-jmeter-5.6.3.tgz"
+          if [ ! -f "$archive" ]; then
+            curl -fsSL -o "$archive" https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
+          fi
+          printf '%s  %s\n' \
+            '5978a1a35edb5a7d428e270564ff49d2b1b257a65e17a759d259a9283fc17093e522fe46f474a043864aea6910683486340706d745fcdf3db1505fd71e689083' \
+            "$archive" | sha512sum --check -
+          if [ ! -x "$JMETER_HOME/bin/jmeter" ]; then
+            mkdir -p "$JMETER_HOME"
+            tar -xz --strip-components=1 -f "$archive" -C "$JMETER_HOME"
+          fi
+        env:
+          JMETER_HOME: ${{ runner.temp }}/apache-jmeter-5.6.3
+
+      - name: Smoke test shaded JAR
+        run: scripts/smoke-shaded-jar.sh
+        env:
+          JMETER_HOME: ${{ runner.temp }}/apache-jmeter-5.6.3
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4

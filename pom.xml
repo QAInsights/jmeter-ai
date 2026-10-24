@@ -315,11 +315,59 @@
                                         <exclude>META-INF/*.RSA</exclude>
                                     </excludes>
                                 </filter>
+                                <!-- Unused generated SDK endpoints are excluded; the shaded-jar smoke test guards this. -->
+                                <filter>
+                                    <artifact>com.openai:*</artifact>
+                                    <excludes>
+                                        <exclude>com/openai/models/beta/**</exclude>
+                                        <exclude>com/openai/models/admin/**</exclude>
+                                        <exclude>com/openai/models/realtime/**</exclude>
+                                        <exclude>com/openai/models/evals/**</exclude>
+                                        <exclude>com/openai/models/finetuning/**</exclude>
+                                        <exclude>com/openai/models/webhooks/**</exclude>
+                                        <exclude>com/openai/models/vectorstores/**</exclude>
+                                        <exclude>com/openai/models/audio/**</exclude>
+                                        <exclude>com/openai/models/images/**</exclude>
+                                        <exclude>com/openai/models/containers/**</exclude>
+                                        <exclude>com/openai/models/conversations/**</exclude>
+                                        <exclude>com/openai/models/videos/**</exclude>
+                                        <exclude>com/openai/models/graders/**</exclude>
+                                        <exclude>com/openai/models/moderations/**</exclude>
+                                        <exclude>com/openai/models/skills/**</exclude>
+                                        <exclude>com/openai/services/blocking/beta/**</exclude>
+                                        <exclude>com/openai/services/blocking/admin/**</exclude>
+                                        <exclude>com/openai/services/blocking/realtime/**</exclude>
+                                        <exclude>com/openai/services/blocking/evals/**</exclude>
+                                        <exclude>com/openai/services/blocking/finetuning/**</exclude>
+                                        <exclude>com/openai/services/blocking/webhooks/**</exclude>
+                                        <exclude>com/openai/services/blocking/vectorstores/**</exclude>
+                                        <exclude>com/openai/services/blocking/audio/**</exclude>
+                                        <exclude>com/openai/services/blocking/images/**</exclude>
+                                        <exclude>com/openai/services/blocking/containers/**</exclude>
+                                        <exclude>com/openai/services/blocking/conversations/**</exclude>
+                                        <exclude>com/openai/services/blocking/videos/**</exclude>
+                                        <exclude>com/openai/services/blocking/graders/**</exclude>
+                                        <exclude>com/openai/services/blocking/moderations/**</exclude>
+                                        <exclude>com/openai/services/blocking/skills/**</exclude>
+                                        <exclude>com/openai/services/async/**</exclude>
+                                        <exclude>com/openai/services/beta/**</exclude>
+                                        <exclude>com/openai/helpers/beta/**</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>com.anthropic:*</artifact>
+                                    <excludes>
+                                        <exclude>com/anthropic/services/async/**</exclude>
+                                        <exclude>com/anthropic/services/blocking/beta/**</exclude>
+                                        <exclude>com/anthropic/models/beta/*/**</exclude>
+                                    </excludes>
+                                </filter>
                                 <filter>
                                     <artifact>com.microsoft.onnxruntime:onnxruntime</artifact>
                                     <excludes>
                                         <exclude>**/*.dSYM/**</exclude>
                                         <exclude>**/*.pdb</exclude>
+                                        <exclude>ai/onnxruntime/native/**</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
