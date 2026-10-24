@@ -38,6 +38,7 @@ import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
@@ -279,6 +280,11 @@ public final class JMeterAgent {
         return JMeterAgentProviderResolver.forGrok(grok);
     }
 
+    /** Wires an agent against an existing OpenRouter service using its OpenAI-compatible API. */
+    public static JMeterAgent forOpenRouter(OpenRouterAiService openRouter) {
+        return JMeterAgentProviderResolver.forOpenRouter(openRouter);
+    }
+
     /**
      * Wires an agent against an existing Meta Muse service using its OpenAI-compatible API.
      */
@@ -296,7 +302,7 @@ public final class JMeterAgent {
     }
 
     /**
-     * Wires an agent for Claude, OpenAI, Google Gemini, DeepSeek, Grok, Meta Muse,
+     * Wires an agent for Claude, OpenAI, Google Gemini, DeepSeek, Grok, OpenRouter, Meta Muse,
      * or a subscription CLI, or returns {@code null} for unsupported providers
      * (the caller then falls back to the plain, non-agentic chat path).
      */
@@ -315,7 +321,7 @@ public final class JMeterAgent {
 
     /**
      * The provider chat-model factory backing Claude, OpenAI, Google Gemini, DeepSeek,
-     * Grok, Meta Muse, or a subscription CLI, or {@code null} for unsupported providers.
+     * Grok, OpenRouter, Meta Muse, or a subscription CLI, or {@code null} for unsupported providers.
      * <p>
      * Exposed for callers that drive their own tool registry rather than the default
      * JMeter one - Record Mode advertises browser tools instead - so provider detection

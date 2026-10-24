@@ -41,6 +41,10 @@ final class AgentCommandRunner {
     private final TreeActivityGlowController glowController;
     private final Function<AiService, JMeterAgent> agentFactory;
 
+    private static boolean isOpenRouterModel(String selectedModel) {
+        return selectedModel != null && selectedModel.startsWith("openrouter:");
+    }
+
     AgentCommandRunner(CommandCallback cb, TreeActivityGlowController glowController) {
         this(cb, glowController, JMeterAgent::forService);
     }
@@ -113,7 +117,7 @@ final class AgentCommandRunner {
                     AiService service = cb.resolveAiService(selectedModel);
                     JMeterAgent agent = agentFactory.apply(service);
                     if (agent == null) {
-                        return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, DeepSeek, Grok, "
+                        return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, DeepSeek, Grok, OpenRouter, "
                                 + "Meta Muse, Codex and Claude Code models only. "
                                 + "Select one of those and retry.");
                     }
@@ -156,12 +160,13 @@ final class AgentCommandRunner {
                         log.warn("Agent run aborted by rate limit: {}", agentError.getMessage());
                         return finish("Error: " + RateLimitErrors.describe(agentError));
                     }
-                    if (ProviderErrors.isConfigurationError(agentError)) {
+                    String provider = isOpenRouterModel(selectedModel) ? "openrouter" : null;
+                    if (ProviderErrors.isConfigurationError(agentError, provider)) {
                         Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                         // A rejected key or unknown model fails plain chat the same way.
                         log.warn("Agent run aborted by provider configuration error: {}",
                                 agentError.getMessage());
-                        return finish(ProviderErrors.describe(agentError, "running the agent", true));
+                        return finish(ProviderErrors.describe(agentError, "running the agent", true, provider));
                     }
                     Telemetry.record(TelemetryFeature.OUTCOME_FALLBACK);
                     Telemetry.recordError(agentError);
@@ -219,7 +224,8 @@ final class AgentCommandRunner {
                 } catch (InterruptedException | ExecutionException e) {
                     Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                     cb.onWorkerError("Error running the agent", e,
-                            ProviderErrors.describe(e, "running the agent", true));
+                            ProviderErrors.describe(e, "running the agent", true,
+                                    isOpenRouterModel(selectedModel) ? "openrouter" : null));
                 }
             }
         };

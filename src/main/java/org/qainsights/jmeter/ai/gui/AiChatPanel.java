@@ -36,6 +36,7 @@ import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
@@ -106,6 +107,7 @@ public class AiChatPanel
     private DeepseekAiService deepseekService;
     private GoogleAiService googleService;
     private GrokAiService grokService;
+    private OpenRouterAiService openRouterService;
     private MetaMuseAiService metaMuseService;
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
@@ -230,6 +232,7 @@ public class AiChatPanel
         ollamaService = new OllamaAiService();
         deepseekService = new DeepseekAiService();
         grokService = new GrokAiService();
+        openRouterService = new OpenRouterAiService();
         metaMuseService = new MetaMuseAiService();
         bedrockService = new BedrockAiService();
         codexService = new CodexAiService();
@@ -314,6 +317,7 @@ public class AiChatPanel
         ollamaService.setUsageStats(usageStats);
         deepseekService.setUsageStats(usageStats);
         grokService.setUsageStats(usageStats);
+        openRouterService.setUsageStats(usageStats);
         metaMuseService.setUsageStats(usageStats);
         bedrockService.setUsageStats(usageStats);
         if (googleService != null) {
@@ -822,6 +826,7 @@ public class AiChatPanel
         holder.setDeepseekService(deepseekService);
         holder.setGoogleService(googleService);
         holder.setGrokService(grokService);
+        holder.setOpenRouterService(openRouterService);
         holder.setMetaMuseService(metaMuseService);
         holder.setBedrockService(bedrockService);
         holder.setCodexService(codexService);
@@ -855,6 +860,8 @@ public class AiChatPanel
                     // Get the default model ID
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
+                    modelSelectorPanel.setFeaturedModels(openRouterService == null
+                            ? List.of() : openRouterService.featuredModelIds());
                     modelSelectorPanel.setModels(models, defaultModelId);
                     // A restored session carries its model; reselect it now that
                     // the list is available (no-op when the model is gone).
@@ -945,6 +952,7 @@ public class AiChatPanel
             case GEMINI -> model.startsWith("google:");
             case DEEPSEEK -> model.startsWith("deepseek:");
             case GROK -> model.startsWith("grok:");
+            case OPENROUTER -> model.startsWith(OpenRouterAiService.MODEL_PREFIX);
             case META_MUSE -> model.startsWith("meta:");
             case OLLAMA -> model.startsWith("ollama:");
             case APPLE_ON_DEVICE -> model.startsWith(AppleFoundationAiService.MODEL_PREFIX);

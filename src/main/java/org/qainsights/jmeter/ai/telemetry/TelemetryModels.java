@@ -12,14 +12,15 @@ import java.util.regex.Pattern;
  */
 final class TelemetryModels {
     private static final String[] PREFIXES = {
-        "openai", "ollama", "deepseek", "google", "grok", "meta", "bedrock", "apple", "codex", "claude-code",
+        "openai", "ollama", "deepseek", "google", "grok", "openrouter", "meta", "bedrock", "apple", "codex", "claude-code",
     };
     private static final String ID = "[a-z0-9.-]";
     private static final Pattern WELL_KNOWN = Pattern.compile(
             "^(?:(?:us|eu|apac|global)\\.)?(?:anthropic\\.|meta\\.|amazon\\.|mistral\\.|cohere\\.|deepseek\\.)?"
+            + "(?:(?:anthropic|openai|google|deepseek|qwen|moonshotai|x-ai|meta|mistral|mistralai|cohere|amazon|microsoft)/)?"
             + "(?:gpt-" + ID + "+|chatgpt-" + ID + "+|o[1-9](?:-(?:mini|pro|preview|deep-research))*(?:-\\d{4}-\\d{2}-\\d{2})?"
             + "|codex(?:-" + ID + "+)?|claude(?:-" + ID + "+)?|gemini-" + ID + "+|deepseek-" + ID + "+"
-            + "|grok-" + ID + "+|muse-" + ID + "+|nova-" + ID + "+|titan-" + ID + "+|command-" + ID + "+|on-device"
+            + "|grok-" + ID + "+|kimi-" + ID + "+|muse-" + ID + "+|nova-" + ID + "+|titan-" + ID + "+|command-" + ID + "+|on-device"
             + "|(?:llama|codellama|qwen|mistral|mixtral|gemma|phi|devstral|codestral)" + ID + "*)"
             + "(?::" + ID + "+)?$");
     private static final int MAX_LENGTH = 64;

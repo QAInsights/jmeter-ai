@@ -60,6 +60,7 @@ class BrandLogoTest {
         assertEquals("deepseek", BrandLogo.logoFor(ProviderSetupOption.DEEPSEEK));
         assertEquals("grok", BrandLogo.logoFor(ProviderSetupOption.GROK));
         assertEquals("meta", BrandLogo.logoFor(ProviderSetupOption.META_MUSE));
+        assertEquals("openrouter", BrandLogo.logoFor(ProviderSetupOption.OPENROUTER));
         assertEquals("ollama", BrandLogo.logoFor(ProviderSetupOption.OLLAMA));
         assertEquals("apple", BrandLogo.logoFor(ProviderSetupOption.APPLE_ON_DEVICE));
         assertNull(BrandLogo.logoFor(null));

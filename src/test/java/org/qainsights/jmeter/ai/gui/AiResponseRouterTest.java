@@ -12,6 +12,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 
@@ -43,6 +44,9 @@ class AiResponseRouterTest {
     private GrokAiService grokService;
 
     @Mock
+    private OpenRouterAiService openRouterService;
+
+    @Mock
     private MetaMuseAiService metaMuseService;
 
     @Mock
@@ -60,6 +64,7 @@ class AiResponseRouterTest {
         holder.setDeepseekService(deepseekService);
         holder.setGoogleService(googleService);
         holder.setGrokService(grokService);
+        holder.setOpenRouterService(openRouterService);
         holder.setMetaMuseService(metaMuseService);
         holder.setBedrockService(bedrockService);
         router = new AiResponseRouter(holder);
@@ -181,6 +186,17 @@ class AiResponseRouterTest {
         assertEquals("grok response", response);
         verify(grokService).setModel("grok-2");
         verify(grokService).generateResponse(history);
+    }
+
+    @Test
+    void testGetAiResponse_OpenRouter() {
+        when(openRouterService.generateResponse(history)).thenReturn("openrouter response");
+
+        String response = router.getAiResponse("openrouter:anthropic/claude-sonnet-5.5", history);
+
+        assertEquals("openrouter response", response);
+        verify(openRouterService).setModel("anthropic/claude-sonnet-5.5");
+        verify(openRouterService).generateResponse(history);
     }
 
     @Test

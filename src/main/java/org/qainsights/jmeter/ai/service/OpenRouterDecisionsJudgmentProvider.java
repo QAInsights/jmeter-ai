@@ -13,7 +13,7 @@ import java.util.Set;
  */
 public final class OpenRouterDecisionsJudgmentProvider implements JudgmentProvider {
 
-    public static final String DEFAULT_BASE_URL = "https://openrouter.ai/api";
+    public static final String DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
     public static final String DEFAULT_MODEL = "microsoft/microsoft-decision-1";
 
     private static final String DECISIONS_PATH = "/alpha/decisions";

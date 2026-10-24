@@ -16,6 +16,7 @@ import com.google.genai.errors.ClientException;
 import com.google.genai.errors.ServerException;
 import com.openai.core.http.Headers;
 import com.openai.errors.NotFoundException;
+import com.openai.errors.BadRequestException;
 import com.openai.errors.OpenAIIoException;
 import com.openai.errors.UnauthorizedException;
 import com.openai.models.ErrorObject;
@@ -60,6 +61,30 @@ class ProviderErrorsTest {
         assertTrue(text.startsWith("Error: Not found (HTTP 404)"), text);
         assertTrue(text.contains("base.url"), text);
         assertTrue(text.contains("Provider said: The model `muse-x` does not exist."), text);
+    }
+
+    @Test
+    void openRouterToolUnsupportedErrorsExplainTheAgentModeLimitation() {
+        String expected = "This OpenRouter model can't use tools, so Agent Mode can't drive it. "
+                + "Pick a model from the list, which only shows tool-capable models, or switch "
+                + "Agent Mode off for plain chat.";
+        NotFoundException notFound = NotFoundException.builder()
+                .headers(Headers.builder().build())
+                .error(error("No endpoints found that support tool use"))
+                .build();
+        BadRequestException badRequest = BadRequestException.builder()
+                .headers(Headers.builder().build())
+                .error(error("This model does not support tool calls"))
+                .build();
+
+        assertTrue(ProviderErrors.describe(notFound, "running the agent", true, "openrouter")
+                .contains(expected));
+        assertTrue(ProviderErrors.isConfigurationError(notFound, "openrouter"));
+        assertTrue(ProviderErrors.describe(badRequest, "running the agent", true, "openrouter")
+                .contains(expected));
+        assertTrue(ProviderErrors.isConfigurationError(badRequest, "openrouter"));
+        assertFalse(ProviderErrors.describe(notFound, "running the agent", true, "grok")
+                .contains(expected));
     }
 
     @Test

@@ -1225,7 +1225,9 @@ final class ProviderSetupDialog extends JDialog {
             }
         } else {
             switch (result.outcome()) {
-                case OK -> setStatus("Connected. " + result.modelCount() + " models available.",
+                case OK -> setStatus(option == ProviderSetupOption.OPENROUTER
+                        ? "Connected. Key accepted."
+                        : "Connected. " + result.modelCount() + " models available.",
                         ThemeColors.success());
                 case AUTH_REJECTED -> setStatus(
                         "Authentication was rejected. Check the key and try again.", ThemeColors.error());

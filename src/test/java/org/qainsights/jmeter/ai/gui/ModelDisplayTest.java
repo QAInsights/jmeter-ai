@@ -23,6 +23,8 @@ class ModelDisplayTest {
             ModelDisplay.parse("google:gemini-2.5-flash"));
         assertArrayEquals(new String[] { "grok-2", "Grok" },
             ModelDisplay.parse("grok:grok-2"));
+        assertArrayEquals(new String[] { "qwen/qwen3.8-flash:free", "OpenRouter" },
+            ModelDisplay.parse("openrouter:qwen/qwen3.8-flash:free"));
         assertArrayEquals(new String[] { "llama-3", "Meta" },
             ModelDisplay.parse("meta:llama-3"));
         assertArrayEquals(new String[] { "claude-3-7", "AWS Bedrock" },

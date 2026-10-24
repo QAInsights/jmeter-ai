@@ -22,7 +22,8 @@ import org.slf4j.LoggerFactory;
  * The toolbar's model selector: a button showing the current model plus a pin
  * toggle. Clicking the button opens the {@link ModelPickerPopup} docked
  * underneath - a searchable dropdown listing pinned models first, then
- * recently used, then everything else (see {@link ModelSelectorPreferences}).
+ * recently used, featured, and everything else (see
+ * {@link ModelSelectorPreferences}).
  * The star button pins/unpins the current model.
  * <p>
  * Selections are exposed through {@link #setSelectionListener} and
@@ -38,6 +39,7 @@ class ModelSelectorPanel extends JPanel {
     private final ModelSelectorPreferences prefs;
     private final ModelCapabilityCatalog catalog;
     private List<String> allModels = new ArrayList<>();
+    private List<String> featuredModels = List.of();
     private List<SubscriptionCliProvider> cliProviders = List.of();
     private Consumer<String> selectionListener = model -> { };
     private String currentModel;
@@ -126,6 +128,10 @@ class ModelSelectorPanel extends JPanel {
         }
     }
 
+    void setFeaturedModels(List<String> featured) {
+        featuredModels = featured == null ? List.of() : List.copyOf(featured);
+    }
+
     /**
      * Applies a model as the current selection: updates the button, syncs the
      * star, and fires the routing listener. No history side effects.
@@ -200,7 +206,7 @@ class ModelSelectorPanel extends JPanel {
         }
         java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
         ModelPickerPopup popup = new ModelPickerPopup(owner, allModels, currentModel, prefs, catalog,
-                cliProviders, this::addModels);
+                cliProviders, this::addModels, featuredModels);
         popup.showFor(selectorButton, this::select);
     }
 

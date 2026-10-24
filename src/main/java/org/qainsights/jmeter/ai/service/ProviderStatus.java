@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.service;
 
 import java.util.function.BooleanSupplier;
+import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
@@ -40,6 +41,7 @@ public final class ProviderStatus {
                 || isApiKeyConfigured("google.api.key")
                 || isApiKeyConfigured("deepseek.api.key")
                 || isApiKeyConfigured("grok.api.key")
+                || isApiKeyConfigured(AgentJudgmentConfig.OPENROUTER_API_KEY)
                 || isApiKeyConfigured("meta.api.key")
                 || GatewayConfig.hasOpenAiGatewayCredentials()
                 || GatewayConfig.hasAnthropicGatewayCredentials();

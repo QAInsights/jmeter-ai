@@ -11,6 +11,7 @@ import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -50,6 +51,11 @@ final class JMeterAgentProviderResolver {
                 JMeterAgent.maxIterations(), destructiveGate());
     }
 
+    static JMeterAgent forOpenRouter(OpenRouterAiService openRouter) {
+        return new JMeterAgent(factoryFor(openRouter, maxTokens()),
+                JMeterAgent.maxIterations(), destructiveGate());
+    }
+
     static JMeterAgent forMetaMuse(MetaMuseAiService metaMuse) {
         return new JMeterAgent(factoryFor(metaMuse, maxTokens()),
                 JMeterAgent.maxIterations(), destructiveGate());
@@ -79,6 +85,9 @@ final class JMeterAgentProviderResolver {
         }
         if (service instanceof GrokAiService) {
             return forGrok((GrokAiService) service);
+        }
+        if (service instanceof OpenRouterAiService) {
+            return forOpenRouter((OpenRouterAiService) service);
         }
         if (service instanceof MetaMuseAiService) {
             return forMetaMuse((MetaMuseAiService) service);
@@ -130,6 +139,9 @@ final class JMeterAgentProviderResolver {
         if (service instanceof GrokAiService) {
             return factoryFor((GrokAiService) service, maxTokens);
         }
+        if (service instanceof OpenRouterAiService) {
+            return factoryFor((OpenRouterAiService) service, maxTokens);
+        }
         if (service instanceof MetaMuseAiService) {
             return factoryFor((MetaMuseAiService) service, maxTokens);
         }
@@ -150,6 +162,11 @@ final class JMeterAgentProviderResolver {
 
     private static AgentChatModelFactory factoryFor(GrokAiService grok, long maxTokens) {
         return JMeterAgent.openAiCompatibleFactory(grok.getClient(), grok.getCurrentModel(), maxTokens);
+    }
+
+    private static AgentChatModelFactory factoryFor(OpenRouterAiService openRouter, long maxTokens) {
+        return JMeterAgent.openAiCompatibleFactory(
+                openRouter.getClient(), openRouter.getCurrentModel(), maxTokens);
     }
 
     private static AgentChatModelFactory factoryFor(MetaMuseAiService metaMuse, long maxTokens) {

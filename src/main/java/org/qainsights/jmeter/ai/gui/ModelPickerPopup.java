@@ -42,13 +42,13 @@ import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
  * bottom of the chat panel): a search field on top and a metadata-rich list
  * below (two-line rows via
  * {@link ModelPickerRenderer}). With an empty filter the list is ordered
- * pinned → recently used → everything else; typing filters on display name,
- * provider, or raw id. Clicking a row's star zone toggles its pin (persisted
- * immediately); Enter or double-click confirms, Esc or clicking elsewhere
- * cancels. Implemented as an undecorated, non-modal {@link JDialog} owned by
- * the main window: a {@link JWindow} cannot take keyboard focus on the JDK
- * (probe-verified: {@code isFocusableWindow()} is false even owned and
- * showing), which would leave the search field untypable.
+ * pinned → recently used → featured → everything else; typing filters on
+ * display name, provider, or raw id. Clicking a row's star zone toggles its
+ * pin (persisted immediately); Enter or double-click confirms, Esc or
+ * clicking elsewhere cancels. Implemented as an undecorated, non-modal
+ * {@link JDialog} owned by the main window: a {@link JWindow} cannot take
+ * keyboard focus on the JDK (probe-verified: {@code isFocusableWindow()} is
+ * false even owned and showing), which would leave the search field untypable.
  */
 class ModelPickerPopup extends JDialog {
 
@@ -61,6 +61,7 @@ class ModelPickerPopup extends JDialog {
     static final int HEIGHT = 360;
 
     private final List<String> allModels;
+    private final List<String> featuredModels;
     private String pendingCustomModel;
     private final ModelSelectorPreferences prefs;
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
@@ -74,7 +75,7 @@ class ModelPickerPopup extends JDialog {
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
-        this(owner, models, currentModel, prefs, catalog, List.of());
+        this(owner, models, currentModel, prefs, catalog, List.of(), discovered -> { }, List.of());
     }
 
     /**
@@ -85,17 +86,26 @@ class ModelPickerPopup extends JDialog {
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
                      List<SubscriptionCliProvider> cliProviders) {
-        this(owner, models, currentModel, prefs, catalog, cliProviders, discovered -> { });
+        this(owner, models, currentModel, prefs, catalog, cliProviders, discovered -> { }, List.of());
     }
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
                      ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
                      List<SubscriptionCliProvider> cliProviders,
                      Consumer<List<String>> onModelsDiscovered) {
+        this(owner, models, currentModel, prefs, catalog, cliProviders, onModelsDiscovered, List.of());
+    }
+
+    ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
+                     ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog,
+                     List<SubscriptionCliProvider> cliProviders,
+                     Consumer<List<String>> onModelsDiscovered,
+                     List<String> featuredModels) {
         super(owner); // owned, so it stays out of the taskbar and shares the owner's focus cycle
         setUndecorated(true);
         setFocusableWindowState(true);
         this.allModels = new ArrayList<>(models);
+        this.featuredModels = featuredModels == null ? List.of() : List.copyOf(featuredModels);
         this.prefs = prefs;
         this.onModelsDiscovered = onModelsDiscovered;
 
@@ -271,12 +281,18 @@ class ModelPickerPopup extends JDialog {
 
     /**
      * Filters and orders the candidate models: pinned first (pin order), then
-     * recently used (most-recent first), then the rest alphabetically by
-     * display name. The filter matches the raw id, the display name, or the
-     * provider (case-insensitive substring); an empty filter keeps everything.
+     * recently used (most-recent first), then featured in configured order,
+     * then the rest alphabetically by display name. The filter matches the raw
+     * id, the display name, or the provider (case-insensitive substring); an
+     * empty filter keeps everything.
      */
     static List<String> filterAndSort(List<String> models, String filter,
                                       ModelSelectorPreferences prefs) {
+        return filterAndSort(models, filter, prefs, List.of());
+    }
+
+    static List<String> filterAndSort(List<String> models, String filter,
+                                      ModelSelectorPreferences prefs, List<String> featured) {
         String needle = filter == null ? "" : filter.trim().toLowerCase(java.util.Locale.ROOT);
         List<String> matches = new ArrayList<>();
         for (String model : models) {
@@ -286,24 +302,47 @@ class ModelPickerPopup extends JDialog {
         }
         List<String> pinned = prefs.pinned();
         List<String> recents = prefs.recents();
-        matches.sort(curationOrder(pinned, recents));
+        List<String> featuredModels = featured == null ? List.of() : featured;
+        matches.sort(curationOrder(pinned, recents, featuredModels));
         return matches;
     }
 
     /**
      * The product rule for row order: pinned first (pin order), then recently
-     * used (most-recent first), then everything else by display name.
+     * used (most-recent first), then featured (configured order), then
+     * everything else by display name.
      */
-    private static Comparator<String> curationOrder(List<String> pinned, List<String> recents) {
+    private static Comparator<String> curationOrder(
+            List<String> pinned, List<String> recents, List<String> featured) {
         return Comparator
-                .comparingInt((String m) -> pinned.contains(m) ? 0 : recents.contains(m) ? 1 : 2)
-                .thenComparingInt(m -> positionIn(m, pinned, recents))
+                .comparingInt((String m) -> curationTier(m, pinned, recents, featured))
+                .thenComparingInt(m -> positionIn(m, pinned, recents, featured))
                 .thenComparing(m -> ModelDisplay.parse(m)[0], String.CASE_INSENSITIVE_ORDER);
     }
 
-    private static int positionIn(String model, List<String> pinned, List<String> recents) {
+    private static int curationTier(
+            String model, List<String> pinned, List<String> recents, List<String> featured) {
+        if (pinned.contains(model)) {
+            return 0;
+        }
+        if (recents.contains(model)) {
+            return 1;
+        }
+        return featured.contains(model) ? 2 : 3;
+    }
+
+    private static int positionIn(
+            String model, List<String> pinned, List<String> recents, List<String> featured) {
         int pin = pinned.indexOf(model);
-        return pin >= 0 ? pin : Math.max(recents.indexOf(model), 0);
+        if (pin >= 0) {
+            return pin;
+        }
+        int recent = recents.indexOf(model);
+        if (recent >= 0) {
+            return recent;
+        }
+        int featuredPosition = featured.indexOf(model);
+        return featuredPosition >= 0 ? featuredPosition : 0;
     }
 
     private static boolean matches(String model, String needle) {
@@ -430,7 +469,7 @@ class ModelPickerPopup extends JDialog {
     private void refresh() {
         String keep = modelList.getSelectedValue();
         listModel.clear();
-        for (String model : filterAndSort(allModels, filterField.getText(), prefs)) {
+        for (String model : filterAndSort(allModels, filterField.getText(), prefs, featuredModels)) {
             listModel.addElement(model);
         }
         if (!selectVisible(keep) && listModel.getSize() > 0) {

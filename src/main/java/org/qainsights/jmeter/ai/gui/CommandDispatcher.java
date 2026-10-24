@@ -125,7 +125,7 @@ public class CommandDispatcher {
                 break;
         }
 
-        // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok and Meta Muse).
+        // Tier 2: agentic tool-calling loop (feature-flagged; Claude, OpenAI, Google Gemini, DeepSeek, Grok, OpenRouter and Meta Muse).
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
             Telemetry.noteModel(cb.getSelectedModel());
             Telemetry.record(TelemetryFeature.AGENT_RUN);
@@ -416,7 +416,7 @@ public class CommandDispatcher {
     /**
      * True when the selected model routes to a provider the agent can drive: the
      * tool-calling adapters (Anthropic Claude, OpenAI, Google Gemini, DeepSeek,
-     * Grok, Meta Muse) plus the
+     * Grok, OpenRouter, Meta Muse) plus the
      * subscription CLIs (Codex, Claude Code), which get their tools through the
      * prompt-level protocol. Every other provider falls back to plain chat.
      */
@@ -426,6 +426,7 @@ public class CommandDispatcher {
                 || (selectedModel != null && selectedModel.startsWith("google:"))
                 || (selectedModel != null && selectedModel.startsWith("deepseek:"))
                 || (selectedModel != null && selectedModel.startsWith("grok:"))
+                || (selectedModel != null && selectedModel.startsWith("openrouter:"))
                 || (selectedModel != null && selectedModel.startsWith("meta:"))
                 || (selectedModel != null && selectedModel.startsWith("codex:"))
                 || (selectedModel != null && selectedModel.startsWith("claude-code:"));
@@ -445,6 +446,7 @@ public class CommandDispatcher {
                 && !selectedModel.startsWith("deepseek:")
                 && !selectedModel.startsWith("google:")
                 && !selectedModel.startsWith("grok:")
+                && !selectedModel.startsWith("openrouter:")
                 && !selectedModel.startsWith("meta:")
                 && !selectedModel.startsWith("bedrock:")
                 && !selectedModel.startsWith("apple:")

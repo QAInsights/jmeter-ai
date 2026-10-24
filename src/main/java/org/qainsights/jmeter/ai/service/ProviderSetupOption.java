@@ -43,6 +43,13 @@ public enum ProviderSetupOption {
             "meta.api.key",
             null,
             null),
+    OPENROUTER(
+            "OpenRouter",
+            "Chat and Agent Mode, 300+ models",
+            "One key for hundreds of tool-capable models from every major lab.",
+            "openrouter.api.key",
+            null,
+            "https://openrouter.ai/settings/keys"),
     OLLAMA(
             "Ollama",
             "Local models, no API key",

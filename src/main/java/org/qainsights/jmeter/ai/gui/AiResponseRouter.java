@@ -14,6 +14,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
 import org.qainsights.jmeter.ai.service.GoogleAiService;
 import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
@@ -37,6 +38,7 @@ public class AiResponseRouter {
     private final DeepseekAiService deepseekService;
     private final GoogleAiService googleService;
     private final GrokAiService grokService;
+    private final OpenRouterAiService openRouterService;
     private final MetaMuseAiService metaMuseService;
     private final BedrockAiService bedrockService;
     private final CodexAiService codexService;
@@ -51,6 +53,7 @@ public class AiResponseRouter {
         this.deepseekService = serviceHolder.getDeepseekService();
         this.googleService = serviceHolder.getGoogleService();
         this.grokService = serviceHolder.getGrokService();
+        this.openRouterService = serviceHolder.getOpenRouterService();
         this.metaMuseService = serviceHolder.getMetaMuseService();
         this.bedrockService = serviceHolder.getBedrockService();
         this.codexService = serviceHolder.getCodexService();
@@ -121,6 +124,14 @@ public class AiResponseRouter {
                 return grokService.generateResponse(conversationHistory);
             }
             return notConfiguredMessage("Grok", "grok.api.key");
+        } else if (selectedModel.startsWith(OpenRouterAiService.MODEL_PREFIX)) {
+            String modelId = selectedModel.substring(OpenRouterAiService.MODEL_PREFIX.length());
+            log.info("Using OpenRouter model: {}", modelId);
+            if (openRouterService != null) {
+                openRouterService.setModel(modelId);
+                return openRouterService.generateResponse(conversationHistory);
+            }
+            return notConfiguredMessage("OpenRouter", "openrouter.api.key");
         } else if (selectedModel.startsWith("meta:")) {
             String metaModelId = selectedModel.substring(5);
             log.info("Using Meta Muse model: {}", metaModelId);
@@ -217,6 +228,13 @@ public class AiResponseRouter {
             String grokModelId = selectedModel.substring(5);
             if (grokService != null) {
                 return grokService.generateStreamResponse(conversationHistory, grokModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
+            }
+            return () -> {};
+        } else if (selectedModel.startsWith(OpenRouterAiService.MODEL_PREFIX)) {
+            String modelId = selectedModel.substring(OpenRouterAiService.MODEL_PREFIX.length());
+            if (openRouterService != null) {
+                return openRouterService.generateStreamResponse(
+                        conversationHistory, modelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
         } else if (selectedModel.startsWith("meta:")) {
@@ -321,6 +339,12 @@ public class AiResponseRouter {
                 grokService.setModel(grokModelId);
             }
             return grokService;
+        } else if (selectedModel.startsWith(OpenRouterAiService.MODEL_PREFIX)) {
+            String modelId = selectedModel.substring(OpenRouterAiService.MODEL_PREFIX.length());
+            if (openRouterService != null) {
+                openRouterService.setModel(modelId);
+            }
+            return openRouterService;
         } else if (selectedModel.startsWith("meta:")) {
             String metaModelId = selectedModel.substring(5);
             if (metaMuseService != null) {

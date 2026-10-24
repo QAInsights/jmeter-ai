@@ -16,6 +16,8 @@ class TelemetryModelsTest {
         assertEquals("anthropic.claude-3-5-sonnet-20240620-v1:0",
                 TelemetryModels.publicName("bedrock:anthropic.claude-3-5-sonnet-20240620-v1:0"));
         assertEquals("deepseek-chat", TelemetryModels.publicName("deepseek:deepseek-chat"));
+        assertEquals("qwen/qwen3.8-flash:free",
+                TelemetryModels.publicName("openrouter:qwen/qwen3.8-flash:free"));
         assertEquals("on-device", TelemetryModels.publicName("apple:on-device"));
     }
 
@@ -40,6 +42,7 @@ class TelemetryModelsTest {
         assertEquals("claude-code", TelemetryModels.provider("claude-code:sonnet"));
         assertEquals("anthropic", TelemetryModels.provider("claude-sonnet-4-5"));
         assertEquals("apple", TelemetryModels.provider("apple:on-device"));
+        assertEquals("openrouter", TelemetryModels.provider("openrouter:anthropic/claude-sonnet-5.5"));
     }
 
     @Test
