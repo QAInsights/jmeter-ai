@@ -44,6 +44,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
@@ -370,16 +371,21 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private JPanel buildSmartRoutingPane() {
-        JPanel pane = new JPanel();
+        JPanel pane = new JPanel(new BorderLayout());
         pane.setOpaque(false);
-        pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        JPanel heading = new JPanel();
+        heading.setOpaque(false);
+        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("Smart routing");
         title.setFont(UiTokens.heading(title.getFont()));
         title.setForeground(ThemeColors.foreground());
-        pane.add(title);
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_2));
-        JTextArea intro = new JTextArea("Smart routing picks a focused tool set for each Agent Mode request, "
-                + "so the model sees fewer tools and answers faster. Failure triage groups failed samples by likely cause.");
+        JTextArea intro = new JTextArea(
+                "Smart routing picks a focused tool set for each Agent Mode request, "
+                        + "so the model sees fewer tools and answers faster. Failure triage groups failed samples by likely cause.",
+                3, 58);
         intro.setEditable(false);
         intro.setFocusable(false);
         intro.setOpaque(false);
@@ -387,8 +393,13 @@ final class ProviderSetupDialog extends JDialog {
         intro.setWrapStyleWord(true);
         intro.setForeground(ThemeColors.secondaryText());
         intro.setFont(UiTokens.body(intro.getFont()));
-        pane.add(intro);
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
+        intro.setMaximumSize(new Dimension(Integer.MAX_VALUE, intro.getPreferredSize().height));
+        addLeftAligned(heading, title);
+        addLeftAligned(heading, Box.createVerticalStrut(UiTokens.SPACE_1));
+        addLeftAligned(heading, intro);
+        heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
+        addLeftAligned(content, heading);
+        addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_4));
 
         JPanel choices = new JPanel();
         choices.setOpaque(false);
@@ -403,8 +414,8 @@ final class ProviderSetupDialog extends JDialog {
         addBackendChoice(group, choices, AgentJudgmentConfig.OLLAMA, "Ollama embeddings");
         choices.setAlignmentX(Component.LEFT_ALIGNMENT);
         choices.setMaximumSize(new Dimension(Integer.MAX_VALUE, choices.getPreferredSize().height));
-        pane.add(choices);
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_2));
+        addLeftAligned(content, choices);
+        addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_2));
 
         JPanel details = new JPanel();
         details.setOpaque(false);
@@ -430,38 +441,43 @@ final class ProviderSetupDialog extends JDialog {
         details.add(detailPanel(AgentJudgmentConfig.OLLAMA, ollamaHint));
         details.setAlignmentX(Component.LEFT_ALIGNMENT);
         details.setMaximumSize(new Dimension(Integer.MAX_VALUE, details.getPreferredSize().height));
-        pane.add(details);
+        addLeftAligned(content, details);
 
-        routingEnabled = new JCheckBox("Smart routing", configuredFlag(
+        routingEnabled = new JCheckBox("Route Agent Mode requests", configuredFlag(
                 AgentRoutingConfig.ROUTING_ENABLED_KEY, true));
-        triageEnabled = new JCheckBox("Failure triage", configuredFlag(
-                "jmeter.ai.typesafe.agent.triage.enabled", true));
+        triageEnabled = new JCheckBox("Failure triage", triageSelectedForBackend(smartBackend, configuredFlag(
+                "jmeter.ai.typesafe.agent.triage.enabled", true)));
         routingEnabled.setOpaque(false);
         triageEnabled.setOpaque(false);
-        routingEnabled.setAlignmentX(Component.LEFT_ALIGNMENT);
-        triageEnabled.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel toggles = new JPanel();
         toggles.setOpaque(false);
         toggles.setLayout(new BoxLayout(toggles, BoxLayout.Y_AXIS));
-        toggles.add(routingEnabled);
-        toggles.add(triageEnabled);
+        addLeftAligned(toggles, routingEnabled);
+        addLeftAligned(toggles, triageEnabled);
         triageHint = new JLabel("Not available with local embeddings");
         triageHint.setForeground(ThemeColors.secondaryText());
         triageHint.setBorder(BorderFactory.createEmptyBorder(0, UiTokens.SPACE_4, 0, 0));
-        triageHint.setAlignmentX(Component.LEFT_ALIGNMENT);
-        toggles.add(triageHint);
+        addLeftAligned(toggles, triageHint);
         toggles.setAlignmentX(Component.LEFT_ALIGNMENT);
         toggles.setMaximumSize(new Dimension(Integer.MAX_VALUE, toggles.getPreferredSize().height));
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_2));
-        pane.add(toggles);
+        addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_2));
+        addLeftAligned(content, toggles);
         routingEnabled.addActionListener(e -> inputChanged());
         triageEnabled.addActionListener(e -> inputChanged());
 
         JPanel bottom = buildStatusActions(true);
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
-        pane.add(bottom);
-        updateSmartBackendControls();
+        addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_3));
+        addLeftAligned(content, bottom);
+        addLeftAligned(content, Box.createVerticalGlue());
+        pane.add(content, BorderLayout.NORTH);
         return pane;
+    }
+
+    private static void addLeftAligned(JPanel parent, Component component) {
+        if (component instanceof JComponent swingComponent) {
+            swingComponent.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }
+        parent.add(component);
     }
 
     private void addBackendChoice(ButtonGroup group, JPanel choices, String backend, String label) {
@@ -477,9 +493,7 @@ final class ProviderSetupDialog extends JDialog {
             if (!backend.equals(smartBackend)) {
                 smartBackend = backend;
                 routingEnabled.setSelected(!"off".equals(backend));
-                triageEnabled.setSelected(!"off".equals(backend)
-                        && !AgentJudgmentConfig.LOCAL.equals(backend)
-                        && !AgentJudgmentConfig.OLLAMA.equals(backend));
+                triageEnabled.setSelected(triageSelectedForBackend(backend, true));
                 inputChanged();
                 updateSmartBackendControls();
                 updateSmartRoutingRow();
@@ -549,25 +563,39 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private JPanel buildApplePane() {
-        JPanel pane = new JPanel();
+        JPanel pane = new JPanel(new BorderLayout());
         pane.setOpaque(false);
-        pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
+        JPanel content = new JPanel();
+        content.setOpaque(false);
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        JPanel heading = new JPanel();
+        heading.setOpaque(false);
+        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("Apple on-device");
         title.setFont(UiTokens.heading(title.getFont()));
         title.setForeground(ThemeColors.foreground());
-        pane.add(title);
         JLabel description = new JLabel("No key, runs on this Mac");
         description.setForeground(ThemeColors.secondaryText());
         description.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
-        pane.add(description);
+        addLeftAligned(heading, title);
+        addLeftAligned(heading, description);
+        heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
+        addLeftAligned(content, heading);
         if (!Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"))) {
             JLabel disabled = new JLabel("Apple on-device is turned off. This button will turn it back on.");
             disabled.setForeground(ThemeColors.info());
             disabled.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_3, 0, 0, 0));
-            pane.add(disabled);
+            addLeftAligned(content, disabled);
         }
-        pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
-        pane.add(buildStatusActions(false));
+        addLeftAligned(content, Box.createVerticalStrut(UiTokens.SPACE_3));
+        addLeftAligned(content, buildStatusActions(false));
+        JLabel requirements = new JLabel(
+                "Requires Apple silicon, macOS 26 or later, and Apple Intelligence turned on.");
+        requirements.setForeground(ThemeColors.secondaryText());
+        requirements.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addLeftAligned(content, requirements);
+        addLeftAligned(content, Box.createVerticalGlue());
+        pane.add(content, BorderLayout.NORTH);
         return pane;
     }
 
@@ -589,6 +617,7 @@ final class ProviderSetupDialog extends JDialog {
         }
         bottom.add(actions, BorderLayout.NORTH);
         bottom.add(statusText, BorderLayout.CENTER);
+        bottom.setAlignmentX(Component.LEFT_ALIGNMENT);
         statusPanel = bottom;
         return bottom;
     }
@@ -598,12 +627,20 @@ final class ProviderSetupDialog extends JDialog {
                 || AgentJudgmentConfig.OLLAMA.equals(smartBackend);
         boolean off = "off".equals(smartBackend);
         routingEnabled.setEnabled(!off);
-        triageEnabled.setEnabled(!local && !off);
+        triageEnabled.setEnabled(triageSelectedForBackend(smartBackend, true));
+        triageEnabled.setSelected(triageSelectedForBackend(smartBackend, triageEnabled.isSelected()));
         triageHint.setVisible(local);
         if (contentCard.getComponentCount() > 0) {
             setBackendPanelVisibility((Container) contentCard.getComponent(0), smartBackend);
         }
         updateActionButtons();
+    }
+
+    static boolean triageSelectedForBackend(String backend, boolean selected) {
+        boolean supportsTriage = !"off".equals(backend)
+                && !AgentJudgmentConfig.LOCAL.equals(backend)
+                && !AgentJudgmentConfig.OLLAMA.equals(backend);
+        return selected && supportsTriage;
     }
 
     private static void setBackendPanelVisibility(Container parent, String backend) {
@@ -650,7 +687,7 @@ final class ProviderSetupDialog extends JDialog {
             case AgentJudgmentConfig.OPENAI -> "OpenAI Decisions";
             case AgentJudgmentConfig.OPENROUTER -> "Microsoft Decision via OpenRouter";
             case AgentJudgmentConfig.LOCAL -> "EmbeddingGemma, on this machine";
-            case AgentJudgmentConfig.OLLAMA -> "EmbeddingGemma via Ollama";
+            case AgentJudgmentConfig.OLLAMA -> AgentJudgmentConfig.brand() + ", via Ollama";
             default -> "Jev";
         };
     }
@@ -700,10 +737,10 @@ final class ProviderSetupDialog extends JDialog {
                     appleStatusReady = true;
                     appleAvailable = status != null && status.isAvailable();
                     setStatus(appleStatusCopy(status),
-                            appleAvailable ? ThemeColors.success() : ThemeColors.info());
+                            appleAvailable ? ThemeColors.success() : ThemeColors.warning());
                 } catch (Exception e) {
                     appleStatusReady = true;
-                    setStatus("Not available right now", ThemeColors.info());
+                    setStatus("Not available right now", ThemeColors.warning());
                 }
                 updateActionButtons();
             }
@@ -982,6 +1019,8 @@ final class ProviderSetupDialog extends JDialog {
                     if (!requestInputsMatch(
                             option, keyForRequest, hostForRequest, portForRequest, backendForRequest)) {
                         resultCurrent = false;
+                        setStatus("Inputs changed during the test. Test again before saving.",
+                                ThemeColors.info());
                         return;
                     }
                     presentResult(option, get());

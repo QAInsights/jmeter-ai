@@ -100,6 +100,10 @@ class ProviderSetupDialogTest {
                             "jmeter.ai.judgment.provider", backend),
                     ProviderSetupDialog.smartRoutingSettings(backend, true, true, null));
         }
+        for (String backend : List.of("off", "local", "ollama")) {
+            assertFalse(ProviderSetupDialog.triageSelectedForBackend(backend, true));
+        }
+        assertTrue(ProviderSetupDialog.triageSelectedForBackend("typesafe", true));
         assertEquals("true", ProviderSetupDialog.appleSettings().get("apple.enabled"));
         assertEquals("Run ollama pull embeddinggemma.",
                 ProviderSetupDialog.ollamaMissingModelCopy("embeddinggemma"));
@@ -190,7 +194,7 @@ class ProviderSetupDialogTest {
     }
 
     @Test
-    void providerHintsMeetContrastRequirementsInDarkAndLightPalettes() {
+    void providerHintsAndDisabledPrimaryButtonsMeetContrastRequirementsInDarkAndLightPalettes() {
         String[] keys = {
                 "Panel.background", "TextPane.background",
                 "Label.disabledForeground", "Label.foreground"
@@ -227,6 +231,12 @@ class ProviderSetupDialogTest {
         row.setRollover(false);
         row.setSelected(true);
         assertRowHintContrast(row);
+
+        QuietButton disabledPrimary = new QuietButton("Use Apple on-device", QuietButton.Kind.PRIMARY);
+        disabledPrimary.setEnabled(false);
+        Color disabledBackground = ThemeColors.blend(ThemeColors.accent(), ThemeColors.canvas(), 0.42f);
+        double buttonContrast = ThemeColors.contrastRatio(disabledPrimary.getForeground(), disabledBackground);
+        assertTrue(buttonContrast >= 3.0, "Disabled primary text contrast ratio was " + buttonContrast);
     }
 
     private static void assertRowHintContrast(ProviderSetupDialog.ProviderRow row) {
@@ -319,6 +329,19 @@ class ProviderSetupDialogTest {
 
         org.junit.jupiter.api.Assertions.assertTrue(testCompleted.await(5, TimeUnit.SECONDS));
         assertFalse(saved.get());
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                Field statusText = ProviderSetupDialog.class.getDeclaredField("statusText");
+                statusText.setAccessible(true);
+                assertEquals("Inputs changed during the test. Test again before saving.",
+                        ((javax.swing.JTextArea) statusText.get(dialogRef.get())).getText());
+                Field resultCurrent = ProviderSetupDialog.class.getDeclaredField("resultCurrent");
+                resultCurrent.setAccessible(true);
+                assertFalse(resultCurrent.getBoolean(dialogRef.get()));
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException(e);
+            }
+        });
         SwingUtilities.invokeAndWait(() -> dialogRef.get().dispose());
     }
 
