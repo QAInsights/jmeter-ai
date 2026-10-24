@@ -215,7 +215,7 @@ public final class UserPropertiesWriter {
     private static void deleteTemporaryAfterFailure(Path temporary, IOException failure) {
         try {
             Files.deleteIfExists(temporary);
-        } catch (IOException cleanupFailure) {
+        } catch (IOException | SecurityException | UnsupportedOperationException cleanupFailure) {
             failure.addSuppressed(cleanupFailure);
         }
     }
