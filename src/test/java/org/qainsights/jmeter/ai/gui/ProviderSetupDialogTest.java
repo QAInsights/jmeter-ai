@@ -311,8 +311,12 @@ class ProviderSetupDialogTest {
         String missingModelMessage = OllamaEmbeddingClient.modelUnavailableMessage(model);
         assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(400, missingModelMessage, model));
         assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(404, "unrelated 404 response", model));
+        assertTrue(ProviderSetupDialog.isOllamaModelUnavailable(
+                400, OllamaEmbeddingClient.modelUnavailableMessage(OllamaEmbeddingClient.DEFAULT_MODEL), ""));
         assertFalse(ProviderSetupDialog.isOllamaModelUnavailable(
                 500, OllamaEmbeddingClient.modelUnavailableMessage("other-model"), model));
+        assertEquals("Run ollama pull embeddinggemma.", ProviderSetupDialog.ollamaMissingModelCopy(""));
+        assertEquals("Run ollama pull embeddinggemma.", ProviderSetupDialog.ollamaMissingModelCopy("  "));
 
         ProviderConnectionTester.Result malformedResponse = new ProviderConnectionTester.Result(
                 ProviderConnectionTester.Outcome.HTTP_ERROR, 0, List.of(), 0, "invalid decision payload");

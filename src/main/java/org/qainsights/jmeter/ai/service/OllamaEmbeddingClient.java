@@ -137,7 +137,9 @@ public final class OllamaEmbeddingClient {
     }
 
     public static String modelUnavailableMessage(String model) {
-        return "Ollama model '" + model + "' is not available; run `ollama pull " + model + "`";
+        String normalizedModel = model(model);
+        return "Ollama model '" + normalizedModel + "' is not available; run `ollama pull "
+                + normalizedModel + "`";
     }
 
     private static JsonNode readTree(String text) {

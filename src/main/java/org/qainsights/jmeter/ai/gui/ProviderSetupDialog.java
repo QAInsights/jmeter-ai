@@ -1356,7 +1356,7 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     static String ollamaMissingModelCopy(String model) {
-        return "Run ollama pull " + model + ".";
+        return "Run ollama pull " + OllamaEmbeddingClient.model(model) + ".";
     }
 
     static boolean isOllamaModelUnavailable(int httpCode, String reason, String model) {

@@ -82,6 +82,15 @@ class OllamaEmbeddingClientTest {
     }
 
     @Test
+    void modelUnavailableMessageUsesTheNormalizedModel() {
+        String expected = OllamaEmbeddingClient.modelUnavailableMessage(OllamaEmbeddingClient.DEFAULT_MODEL);
+
+        assertEquals(expected, OllamaEmbeddingClient.modelUnavailableMessage(null));
+        assertEquals(expected, OllamaEmbeddingClient.modelUnavailableMessage(""));
+        assertEquals(expected, OllamaEmbeddingClient.modelUnavailableMessage("  embeddinggemma  "));
+    }
+
+    @Test
     void serverErrorsAndMalformedResponsesThrow() {
         respond(500, "{\"error\":\"this model does not support embeddings\"}");
         JudgmentException http = assertThrows(JudgmentException.class, () -> client("llama3.1").embed(List.of("x")));
