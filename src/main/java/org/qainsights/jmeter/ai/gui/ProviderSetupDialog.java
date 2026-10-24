@@ -757,21 +757,10 @@ final class ProviderSetupDialog extends JDialog {
         for (ProviderRow row : rows) {
             if (row.option() == ProviderSetupOption.SMART_ROUTING) {
                 row.setHintText(smartRoutingHint());
-                row.setConfigured(isSmartBackendConfigured());
+                row.setConfigured(isConfigured(ProviderSetupOption.SMART_ROUTING));
                 break;
             }
         }
-    }
-
-    private boolean isSmartBackendConfigured() {
-        String property = switch (AgentJudgmentConfig.provider()) {
-            case AgentJudgmentConfig.OPENAI -> AgentJudgmentConfig.OPENAI_API_KEY;
-            case AgentJudgmentConfig.OPENROUTER -> AgentJudgmentConfig.OPENROUTER_API_KEY;
-            default -> AgentRoutingConfig.API_KEY;
-        };
-        return AgentJudgmentConfig.LOCAL.equals(AgentJudgmentConfig.provider())
-                || AgentJudgmentConfig.OLLAMA.equals(AgentJudgmentConfig.provider())
-                || ProviderStatus.isApiKeyConfigured(property);
     }
 
     private String smartRoutingHint() {
@@ -1400,6 +1389,7 @@ final class ProviderSetupDialog extends JDialog {
     static LinkedHashMap<String, String> appleSettings() {
         LinkedHashMap<String, String> settings = new LinkedHashMap<>();
         settings.put("apple.enabled", "true");
+        settings.put("jmeter.ai.service.type", "apple");
         return settings;
     }
 

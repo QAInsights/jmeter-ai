@@ -121,8 +121,38 @@ class ProviderSetupDialogTest {
         }
         assertTrue(ProviderSetupDialog.triageSelectedForBackend("typesafe", true));
         assertEquals("true", ProviderSetupDialog.appleSettings().get("apple.enabled"));
+        assertEquals("apple", ProviderSetupDialog.appleSettings().get("jmeter.ai.service.type"));
         assertEquals("Run ollama pull embeddinggemma.",
                 ProviderSetupDialog.ollamaMissingModelCopy("embeddinggemma"));
+    }
+
+    @Test
+    void smartRoutingConfiguredRequiresRoutingOrTriageAndAConfiguredBackend() {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        String[] keys = {
+                AgentRoutingConfig.TYPESAFE_ENABLED_KEY,
+                AgentRoutingConfig.ROUTING_ENABLED_KEY,
+                AgentTriageConfig.TRIAGE_ENABLED_KEY,
+                AgentJudgmentConfig.PROVIDER_KEY,
+                AgentRoutingConfig.API_KEY
+        };
+        Map<String, String> original = snapshotProperties(keys);
+        try {
+            JMeterUtils.setProperty(AgentRoutingConfig.TYPESAFE_ENABLED_KEY, "true");
+            JMeterUtils.setProperty(AgentJudgmentConfig.PROVIDER_KEY, AgentJudgmentConfig.TYPESAFE);
+            JMeterUtils.setProperty(AgentRoutingConfig.API_KEY, "typesafe-test-key-not-placeholder");
+            JMeterUtils.setProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "false");
+            JMeterUtils.setProperty(AgentTriageConfig.TRIAGE_ENABLED_KEY, "false");
+
+            assertFalse(ProviderSetupDialog.isConfigured(ProviderSetupOption.SMART_ROUTING));
+
+            JMeterUtils.setProperty(AgentRoutingConfig.ROUTING_ENABLED_KEY, "true");
+            assertTrue(ProviderSetupDialog.isConfigured(ProviderSetupOption.SMART_ROUTING));
+        } finally {
+            restoreProperties(original);
+        }
     }
 
     @Test
