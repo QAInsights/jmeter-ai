@@ -7,6 +7,7 @@ import java.awt.FontMetrics;
 import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
@@ -366,18 +367,44 @@ class ProviderSetupDialogTest {
     private static void clickBackend(ProviderSetupDialog dialog, String label) {
         JRadioButton button = findRadioButton(dialog.getContentPane(), label);
         assertTrue(button != null, "Missing backend choice: " + label);
-        button.doClick();
+        assertEquals("", button.getText());
+        assertTrue(button.getAccessibleContext().getAccessibleName().contains(label));
+        JLabel choiceLabel = findChoiceLabel(dialog.getContentPane(), button);
+        assertTrue(choiceLabel != null, "Missing backend label: " + label);
+        assertTrue(choiceLabel.getText().contains(label));
+        choiceLabel.dispatchEvent(new MouseEvent(
+                choiceLabel, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(),
+                0, 8, 8, 1, false, MouseEvent.BUTTON1));
+        assertTrue(button.isSelected(), "Clicking the backend label should select " + label);
     }
 
     private static JRadioButton findRadioButton(Component component, String label) {
-        if (component instanceof JRadioButton button && button.getText().contains(label)) {
-            return button;
+        if (component instanceof JRadioButton button) {
+            String accessibleName = button.getAccessibleContext().getAccessibleName();
+            if (accessibleName != null && accessibleName.contains(label)) {
+                return button;
+            }
         }
         if (component instanceof java.awt.Container container) {
             for (Component child : container.getComponents()) {
                 JRadioButton button = findRadioButton(child, label);
                 if (button != null) {
                     return button;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static JLabel findChoiceLabel(Component component, JRadioButton button) {
+        if (component instanceof JLabel label && label.getLabelFor() == button) {
+            return label;
+        }
+        if (component instanceof java.awt.Container container) {
+            for (Component child : container.getComponents()) {
+                JLabel label = findChoiceLabel(child, button);
+                if (label != null) {
+                    return label;
                 }
             }
         }
