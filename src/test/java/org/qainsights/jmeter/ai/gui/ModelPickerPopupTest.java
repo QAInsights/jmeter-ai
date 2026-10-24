@@ -13,9 +13,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link ModelPickerPopup}: the filter/sort pipeline (pinned
- * first in pin order, then recents most-recent-first, then alphabetical;
- * matching on id, display name, or provider) and popup construction with
- * initial selection.
+ * first in pin order, then recents most-recent-first, then featured, then
+ * alphabetical; matching on id, display name, or provider) and popup
+ * construction with initial selection.
  */
 class ModelPickerPopupTest {
 
@@ -40,6 +40,54 @@ class ModelPickerPopupTest {
                 "google:gemini-2.5-pro",
                 "openai:gpt-4o",
                 "openai:gpt-5.1"), sorted);
+    }
+
+    @Test
+    void featuredModelsFollowPinnedAndRecentModelsAndPrecedeAlphabeticalRemainder() {
+        List<String> models = List.of(
+                "openrouter:zulu/needle-z",
+                "openrouter:alpha/needle-a",
+                "openrouter:beta/needle-b",
+                "openrouter:charlie/other");
+        List<String> featured = List.of(
+                "openrouter:zulu/needle-z",
+                "openrouter:alpha/needle-a",
+                "openrouter:missing/not-listed");
+
+        assertEquals(List.of(
+                        "openrouter:zulu/needle-z",
+                        "openrouter:alpha/needle-a",
+                        "openrouter:beta/needle-b",
+                        "openrouter:charlie/other"),
+                ModelPickerPopup.filterAndSort(models, "", prefs(), featured));
+
+        ModelSelectorPreferences curatedPrefs = prefs();
+        curatedPrefs.togglePinned("openrouter:charlie/other");
+        curatedPrefs.recordUse("openrouter:beta/needle-b");
+        assertEquals(List.of(
+                        "openrouter:charlie/other",
+                        "openrouter:beta/needle-b",
+                        "openrouter:zulu/needle-z",
+                        "openrouter:alpha/needle-a"),
+                ModelPickerPopup.filterAndSort(models, "", curatedPrefs, featured));
+    }
+
+    @Test
+    void filteringKeepsFeaturedOrderAndIgnoresMissingFeaturedIds() {
+        List<String> models = List.of(
+                "openrouter:zulu/needle-z",
+                "openrouter:alpha/needle-a",
+                "openrouter:beta/needle-b",
+                "openrouter:charlie/other");
+
+        assertEquals(List.of(
+                        "openrouter:zulu/needle-z",
+                        "openrouter:alpha/needle-a",
+                        "openrouter:beta/needle-b"),
+                ModelPickerPopup.filterAndSort(models, "needle", prefs(), List.of(
+                        "openrouter:zulu/needle-z",
+                        "openrouter:missing/needle-m",
+                        "openrouter:alpha/needle-a")));
     }
 
     @Test

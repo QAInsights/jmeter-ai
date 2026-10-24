@@ -860,6 +860,8 @@ public class AiChatPanel
                     // Get the default model ID
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
+                    modelSelectorPanel.setFeaturedModels(openRouterService == null
+                            ? List.of() : openRouterService.featuredModelIds());
                     modelSelectorPanel.setModels(models, defaultModelId);
                     // A restored session carries its model; reselect it now that
                     // the list is available (no-op when the model is gone).

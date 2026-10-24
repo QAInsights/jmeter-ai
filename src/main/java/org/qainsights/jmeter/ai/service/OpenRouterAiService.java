@@ -60,6 +60,7 @@ public class OpenRouterAiService implements AiService {
     private final float temperature;
     private final long maxTokens;
     private final List<String> featuredModels;
+    private final String defaultModel;
     private String model;
     private volatile List<String> cachedModels;
     private UsageStats usageStats;
@@ -109,7 +110,8 @@ public class OpenRouterAiService implements AiService {
         this.openAiClient = openAiClient;
         this.apiKey = usableApiKey(apiKey) ? apiKey.trim() : null;
         this.baseUrl = chatBaseUrl(baseUrl);
-        this.model = model == null || model.isBlank() ? DEFAULT_MODEL : model.trim();
+        this.defaultModel = model == null || model.isBlank() ? DEFAULT_MODEL : model.trim();
+        this.model = defaultModel;
         this.temperature = temperature;
         this.maxHistorySize = maxHistorySize;
         this.maxTokens = maxTokens;
@@ -184,6 +186,24 @@ public class OpenRouterAiService implements AiService {
 
     public String getCurrentModel() {
         return model;
+    }
+
+    public List<String> featuredModelIds() {
+        if (openAiClient == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        for (String featured : featuredModels) {
+            if (featured != null && !featured.isBlank()) {
+                ids.add(prefixedModelId(featured));
+            }
+        }
+        ids.add(prefixedModelId(defaultModel));
+        return List.copyOf(ids);
+    }
+
+    private static String prefixedModelId(String modelId) {
+        return modelId.startsWith(MODEL_PREFIX) ? modelId : MODEL_PREFIX + modelId;
     }
 
     @Override

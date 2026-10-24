@@ -2,6 +2,9 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -90,6 +93,29 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    static String ellipsize(String text, FontMetrics fm, int maxWidth) {
+        if (text == null) {
+            return "";
+        }
+        if (text.isEmpty() || fm.stringWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "…";
+        if (fm.stringWidth(ellipsis) > maxWidth) {
+            return "";
+        }
+        int prefixEnd = 0;
+        for (int offset = 0; offset < text.length();) {
+            int next = offset + Character.charCount(text.codePointAt(offset));
+            if (fm.stringWidth(text.substring(0, next) + ellipsis) > maxWidth) {
+                break;
+            }
+            prefixEnd = next;
+            offset = next;
+        }
+        return text.substring(0, prefixEnd) + ellipsis;
+    }
+
     @Override
     public Component getListCellRendererComponent(
             JList<?> list, Object value, int index,
@@ -102,6 +128,25 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
         Component c = super.getListCellRendererComponent(
                 list, modelId, index, isSelected, cellHasFocus);
         javax.swing.JLabel label = (javax.swing.JLabel) c;
+        label.setBorder(BorderFactory.createEmptyBorder(
+                UiTokens.SPACE_2, UiTokens.SPACE_3,
+                UiTokens.SPACE_2, UiTokens.SPACE_3));
+        label.setToolTipText(null);
+        String title = parts[0];
+        if (list.getWidth() > 0) {
+            Insets insets = label.getInsets();
+            Font labelFont = label.getFont();
+            FontMetrics regularMetrics = label.getFontMetrics(labelFont);
+            FontMetrics boldMetrics = label.getFontMetrics(labelFont.deriveFont(Font.BOLD));
+            int providerWidth = parts[1].isEmpty()
+                    ? 0 : regularMetrics.stringWidth(" · " + parts[1]);
+            int availableWidth = list.getWidth() - insets.left - insets.right
+                    - regularMetrics.stringWidth("★ ") - providerWidth - 8;
+            title = ellipsize(title, boldMetrics, availableWidth);
+            if (!title.equals(parts[0])) {
+                label.setToolTipText(modelId);
+            }
+        }
 
         // every row paints a star so the pin affordance is visible (the left
         // zone is clickable in every row, not just pinned ones)
@@ -114,26 +159,25 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
         html.append("<span style='color:rgb(").append(starColor.getRed()).append(',')
                 .append(starColor.getGreen()).append(',').append(starColor.getBlue())
                 .append(");'>★</span> ");
-        html.append("<span style='color:rgb(").append(primary.getRed()).append(',')
+        html.append("<nobr><span style='color:rgb(").append(primary.getRed()).append(',')
                 .append(primary.getGreen()).append(',').append(primary.getBlue())
-                .append(");'><b>").append(escapeHtml(parts[0])).append("</b>");
+                .append(");'><b>").append(escapeHtml(title)).append("</b>");
         if (!parts[1].isEmpty()) {
             html.append(" · ").append(escapeHtml(parts[1]));
         }
-        html.append("</span>");
+        html.append("</span></nobr>");
         if (!metadata.isEmpty()) {
-            html.append("<br><span style='color:rgb(").append(secondary.getRed()).append(',')
+            html.append("<br><nobr><span style='color:rgb(")
+                    .append(secondary.getRed()).append(',')
                     .append(secondary.getGreen()).append(',').append(secondary.getBlue())
-                    .append(");font-size:9px;'>").append(escapeHtml(metadata)).append("</span>");
+                    .append(");font-size:9px;'>").append(escapeHtml(metadata))
+                    .append("</span></nobr>");
         }
         html.append("</html>");
         label.setText(html.toString());
         label.setOpaque(true);
         label.setBackground(isSelected
                 ? ThemeColors.selectedBackground() : ThemeColors.elevatedSurface());
-        label.setBorder(BorderFactory.createEmptyBorder(
-                UiTokens.SPACE_2, UiTokens.SPACE_3,
-                UiTokens.SPACE_2, UiTokens.SPACE_3));
         return label;
     }
 }

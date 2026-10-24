@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.awt.Component;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -26,6 +30,57 @@ class ModelPickerRendererTest {
 
     private ModelSelectorPreferences prefs() {
         return ModelSelectorPreferences.load(tempDir.resolve("preferences.json"));
+    }
+
+    private static FontMetrics fontMetrics() {
+        BufferedImage image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            return graphics.getFontMetrics(new Font(Font.DIALOG, Font.BOLD, 12));
+        } finally {
+            graphics.dispose();
+        }
+    }
+
+    @Test
+    void ellipsizeLeavesShortTextUnchanged() {
+        String text = "short model";
+        FontMetrics metrics = fontMetrics();
+
+        assertEquals(text, ModelPickerRenderer.ellipsize(text, metrics, metrics.stringWidth(text)));
+    }
+
+    @Test
+    void ellipsizeFitsLongTextAndReturnsNonNullForTinyWidths() {
+        String text = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+        FontMetrics metrics = fontMetrics();
+        int maxWidth = metrics.stringWidth(text) / 2;
+
+        String shortened = ModelPickerRenderer.ellipsize(text, metrics, maxWidth);
+        assertTrue(shortened.endsWith("…"));
+        assertTrue(metrics.stringWidth(shortened) <= maxWidth);
+        assertNotNull(ModelPickerRenderer.ellipsize(text, metrics, 1));
+    }
+
+    @Test
+    void rendererSetsFullIdTooltipOnlyWhenTitleIsTruncated() {
+        ModelPickerRenderer renderer =
+                new ModelPickerRenderer(prefs(), ModelCapabilityCatalog.getInstance());
+        JList<String> list = new JList<>();
+        list.setFont(new Font(Font.DIALOG, Font.PLAIN, 12));
+        list.setSize(220, 60);
+        String longModel = "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+
+        JLabel truncated = (JLabel) renderer.getListCellRendererComponent(
+                list, longModel, 0, false, false);
+        assertEquals(longModel, truncated.getToolTipText());
+        assertTrue(truncated.getText().contains("…"));
+        assertTrue(truncated.getText().contains("<nobr>"));
+
+        list.setSize(500, 60);
+        JLabel shortModel = (JLabel) renderer.getListCellRendererComponent(
+                list, "openai:gpt-5.1", 1, false, false);
+        assertNull(shortModel.getToolTipText());
     }
 
     @Test

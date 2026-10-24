@@ -108,7 +108,30 @@ class OpenRouterAiServiceTest {
         OpenRouterAiService service = serviceWithoutClient();
 
         assertEquals(List.of(), service.listModels());
+        assertEquals(List.of(), service.featuredModelIds());
         assertEquals(0, modelRequests.get());
+    }
+
+    @Test
+    void exposesFeaturedModelIdsWithPrefixAndDeduplicatesDefaultInOrder() {
+        OpenRouterAiService defaultLast = service("default-model",
+                List.of("featured-a", "featured-b", "featured-a"));
+        assertEquals(List.of(
+                "openrouter:featured-a",
+                "openrouter:featured-b",
+                "openrouter:default-model"), defaultLast.featuredModelIds());
+        defaultLast.setModel("selected-model");
+        assertEquals(List.of(
+                "openrouter:featured-a",
+                "openrouter:featured-b",
+                "openrouter:default-model"), defaultLast.featuredModelIds());
+
+        OpenRouterAiService defaultFeatured = service("default-model",
+                List.of("featured-a", "default-model", "featured-b"));
+        assertEquals(List.of(
+                "openrouter:featured-a",
+                "openrouter:default-model",
+                "openrouter:featured-b"), defaultFeatured.featuredModelIds());
     }
 
     @Test
