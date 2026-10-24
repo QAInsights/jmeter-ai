@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 
 public interface AgentRequestRouter {
@@ -70,6 +71,9 @@ public interface AgentRequestRouter {
         public static Decision unavailable(Throwable error) {
             if (error instanceof JudgmentException judgmentException) {
                 return unavailable(safeReason(judgmentException.getMessage()), judgmentException.isPending());
+            }
+            if (error instanceof OpenAiDecisionsJudgmentProvider.DecisionsException decisionsException) {
+                return unavailable(safeReason(decisionsException.getMessage()), false);
             }
             return unavailable("Smart routing failed unexpectedly; details are in jmeter.log", false);
         }
