@@ -13,6 +13,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolParameter;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,7 +135,12 @@ public final class AgentToolExpander {
                     + "needs: " + need);
             return decision == null ? AgentRequestRouter.Decision.unavailable() : decision;
         } catch (RuntimeException e) {
-            log.warn("{} smart routing unavailable while expanding tools", AgentJudgmentConfig.brand(), e);
+            if (e instanceof JudgmentException judgmentException) {
+                log.warn("{} smart routing unavailable while expanding tools: {}", AgentJudgmentConfig.brand(),
+                        AgentRequestRouter.Decision.safeReason(judgmentException.getMessage()));
+            } else {
+                log.warn("{} smart routing unavailable while expanding tools", AgentJudgmentConfig.brand(), e);
+            }
             return AgentRequestRouter.Decision.unavailable(e);
         }
     }

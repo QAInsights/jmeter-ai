@@ -41,6 +41,7 @@ import org.qainsights.jmeter.ai.service.GrokAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -417,7 +418,12 @@ public final class JMeterAgent {
             AgentRequestRouter.Decision decision = requestRouter.route(userMessage);
             return recordRoute(decision == null ? AgentRequestRouter.Decision.unavailable() : decision);
         } catch (RuntimeException e) {
-            log.warn("{} smart routing unavailable", AgentJudgmentConfig.brand(), e);
+            if (e instanceof JudgmentException judgmentException) {
+                log.warn("{} smart routing unavailable: {}", AgentJudgmentConfig.brand(),
+                        AgentRequestRouter.Decision.safeReason(judgmentException.getMessage()));
+            } else {
+                log.warn("{} smart routing unavailable", AgentJudgmentConfig.brand(), e);
+            }
             return recordRoute(AgentRequestRouter.Decision.unavailable(e));
         }
     }
