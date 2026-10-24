@@ -161,9 +161,7 @@ class CliProviderStatusPanel extends JPanel {
             signInButton.setEnabled(installed && !state.canRunPrompts());
             signOutButton.setEnabled(installed && state.canRunPrompts());
             refreshButton.setEnabled(true);
-            String signInHint = provider.signInHint();
-            statusLabel.setToolTipText(signInHint != null
-                    ? signInHint : installed ? null : provider.installHint());
+            statusLabel.setToolTipText(installed ? provider.signInHint() : provider.installHint());
         }
 
         private void setActionsEnabled(boolean enabled) {
