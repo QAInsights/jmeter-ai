@@ -14,6 +14,12 @@ class SafeTextTest {
     }
 
     @Test
+    void redactsUrlUserInfoContainingAtSign() {
+        assertEquals("https://***@mirror.example/path",
+                SafeText.redactUrls("https://alice:p@ss@mirror.example/path"));
+    }
+
+    @Test
     void redactsUrlQuery() {
         assertEquals("https://mirror.example/path?***",
                 SafeText.redactUrls("https://mirror.example/path?token=abc123"));

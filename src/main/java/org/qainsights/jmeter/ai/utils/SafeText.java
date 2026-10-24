@@ -4,7 +4,7 @@ import java.util.regex.Pattern;
 
 public final class SafeText {
     private static final Pattern URL_USERINFO =
-            Pattern.compile("(?i)\\b([a-z][a-z0-9+.-]*://)[^/\\s@]+@");
+            Pattern.compile("(?i)\\b([a-z][a-z0-9+.-]*://)[^/\\s]+@");
     private static final Pattern URL_QUERY =
             Pattern.compile("(?i)\\b([a-z][a-z0-9+.-]*://[^\\s?#]+)\\?[^\\s]*");
 
