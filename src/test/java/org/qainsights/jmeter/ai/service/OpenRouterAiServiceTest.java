@@ -16,10 +16,15 @@ import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -84,13 +89,46 @@ class OpenRouterAiServiceTest {
     }
 
     @Test
-    void fallsBackToFeaturedAndDefaultModelsOnServerError() {
+    void retriesCatalogDiscoveryAfterServerError() {
         modelStatus.set(500);
         OpenRouterAiService service = service("default-model",
                 List.of("featured-a", "featured-b"));
 
         assertEquals(List.of("featured-a", "featured-b", "default-model"), service.listModels());
         assertEquals(1, modelRequests.get());
+
+        modelStatus.set(200);
+        modelResponse.set("{\"data\":[{\"id\":\"live-model\"}]}");
+        assertEquals(List.of("live-model"), service.listModels());
+        assertEquals(2, modelRequests.get());
+    }
+
+    @Test
+    void returnsNoModelsWithoutAClientOrMakingARequest() {
+        OpenRouterAiService service = serviceWithoutClient();
+
+        assertEquals(List.of(), service.listModels());
+        assertEquals(0, modelRequests.get());
+    }
+
+    @Test
+    void reportsMissingClientFromStreamOnTheEventDispatchThread() throws InterruptedException {
+        OpenRouterAiService service = serviceWithoutClient();
+        CountDownLatch errorReceived = new CountDownLatch(1);
+        AtomicReference<Exception> streamError = new AtomicReference<>();
+        AtomicBoolean calledOnEdt = new AtomicBoolean();
+
+        String syncError = service.generateResponse(List.of("Hello"), "model");
+        service.generateStreamResponse(List.of("Hello"), "model", ignored -> { }, () -> { }, error -> {
+            streamError.set(error);
+            calledOnEdt.set(javax.swing.SwingUtilities.isEventDispatchThread());
+            errorReceived.countDown();
+        });
+
+        assertTrue(errorReceived.await(5, TimeUnit.SECONDS));
+        assertTrue(streamError.get() instanceof IllegalStateException);
+        assertEquals(syncError.substring("Error: ".length()), streamError.get().getMessage());
+        assertTrue(calledOnEdt.get());
     }
 
     @Test
@@ -107,6 +145,19 @@ class OpenRouterAiServiceTest {
         assertEquals(OpenRouterAiService.REFERER_VALUE, completionReferer.get());
         assertEquals(OpenRouterAiService.TITLE_VALUE, completionTitle.get());
         verify(usage).record("openrouter:anthropic/claude-sonnet-5.5", 12, 5);
+    }
+
+    @Test
+    void omitsTemperatureOnlyForOpenAiReasoningModelsInSyncAndStreamingRequests() throws Exception {
+        OpenRouterAiService service = service("default-model", List.of());
+
+        service.generateResponse(List.of("Hello"), "openai/o3");
+        assertFalse(completionRequest.get().has("temperature"));
+        service.generateResponse(List.of("Hello"), "anthropic/claude-sonnet-5.5");
+        assertTrue(completionRequest.get().has("temperature"));
+
+        assertStreamTemperature(service, "openai/o3", false);
+        assertStreamTemperature(service, "anthropic/claude-sonnet-5.5", true);
     }
 
     @Test
@@ -137,6 +188,28 @@ class OpenRouterAiServiceTest {
                 0.7f, 10, 4096L, SYSTEM_PROMPT, featuredModels, HttpClient.newHttpClient());
     }
 
+    private OpenRouterAiService serviceWithoutClient() {
+        return new OpenRouterAiService(null, null, origin() + "/api/v1", "default-model",
+                0.7f, 10, 4096L, SYSTEM_PROMPT, List.of("featured-model"),
+                HttpClient.newHttpClient());
+    }
+
+    private void assertStreamTemperature(OpenRouterAiService service, String model, boolean expected)
+            throws InterruptedException {
+        CountDownLatch streamFinished = new CountDownLatch(1);
+        AtomicReference<Exception> streamError = new AtomicReference<>();
+
+        service.generateStreamResponse(List.of("Hello"), model, ignored -> { },
+                streamFinished::countDown, error -> {
+                    streamError.set(error);
+                    streamFinished.countDown();
+                });
+
+        assertTrue(streamFinished.await(5, TimeUnit.SECONDS));
+        assertNull(streamError.get());
+        assertEquals(expected, completionRequest.get().has("temperature"));
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
         if (path.endsWith("/models")) {
@@ -149,14 +222,16 @@ class OpenRouterAiServiceTest {
             send(exchange, modelStatus.get(), modelResponse.get());
             return;
         }
+        JsonNode request = JSON.readTree(exchange.getRequestBody());
         completionReferer.set(exchange.getRequestHeaders().getFirst(OpenRouterAiService.REFERER_HEADER));
         completionTitle.set(exchange.getRequestHeaders().getFirst(OpenRouterAiService.TITLE_HEADER));
-        JsonNode request = JSON.readTree(exchange.getRequestBody());
-        request = JSON.createObjectNode().set("model", request.path("model"))
-                .deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) request).put("authorization",
                 exchange.getRequestHeaders().getFirst("Authorization"));
         completionRequest.set(request);
+        if (request.path("stream").asBoolean()) {
+            sendStream(exchange);
+            return;
+        }
         send(exchange, 200, """
                 {"id":"chatcmpl-test","object":"chat.completion","created":1,
                  "model":"anthropic/claude-sonnet-5.5",
@@ -164,6 +239,18 @@ class OpenRouterAiServiceTest {
                    "finish_reason":"stop"}],
                  "usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17}}
                 """);
+    }
+
+    private static void sendStream(HttpExchange exchange) throws IOException {
+        byte[] bytes = ("data: {\"id\":\"chatcmpl-test\",\"object\":\"chat.completion.chunk\","
+                + "\"created\":1,\"model\":\"test\",\"choices\":[{\"index\":0,"
+                + "\"delta\":{\"content\":\"OpenRouter response\"},\"finish_reason\":\"stop\"}]}\n\n"
+                + "data: [DONE]\n\n").getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, 0);
+        try (var output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
     }
 
     private static void send(HttpExchange exchange, int status, String body) throws IOException {

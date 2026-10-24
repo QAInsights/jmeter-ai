@@ -47,6 +47,9 @@ public class OpenRouterAiService implements AiService {
     private static final Logger log = LoggerFactory.getLogger(OpenRouterAiService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Duration MODEL_LIST_TIMEOUT = Duration.ofSeconds(10);
+    private static final String CLIENT_NOT_INITIALIZED_MESSAGE =
+            "OpenRouter client not initialized. Set openrouter.api.key in "
+                    + "user.properties (or jmeter.properties) and restart JMeter.";
 
     private final OpenAIClient openAiClient;
     private final HttpClient modelListClient;
@@ -60,6 +63,9 @@ public class OpenRouterAiService implements AiService {
     private String model;
     private volatile List<String> cachedModels;
     private UsageStats usageStats;
+
+    private record ModelCatalog(List<String> models, boolean successful) {
+    }
 
     public OpenRouterAiService() {
         this(AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_API_KEY, ""),
@@ -198,16 +204,17 @@ public class OpenRouterAiService implements AiService {
     @Override
     public String generateResponse(List<String> conversation, String model) {
         if (openAiClient == null) {
-            return "Error: OpenRouter client not initialized. Set openrouter.api.key in "
-                    + "user.properties (or jmeter.properties) and restart JMeter.";
+            return "Error: " + CLIENT_NOT_INITIALIZED_MESSAGE;
         }
         String modelToUse = model == null || model.isBlank() ? this.model : model;
         try {
             ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                     .maxCompletionTokens(maxTokens)
-                    .model(modelToUse)
-                    .temperature((double) temperature)
-                    .addSystemMessage(systemPrompt);
+                    .model(modelToUse);
+            if (supportsCustomTemperature(modelToUse)) {
+                paramsBuilder.temperature((double) temperature);
+            }
+            paramsBuilder.addSystemMessage(systemPrompt);
             appendConversation(paramsBuilder, filterErrorMessages(buildLimitedHistory(conversation)));
             ChatCompletion completion = openAiClient.chat().completions().create(paramsBuilder.build());
             if (usageStats != null) {
@@ -242,15 +249,19 @@ public class OpenRouterAiService implements AiService {
             Runnable onComplete,
             Consumer<Exception> onError) {
         if (openAiClient == null) {
+            javax.swing.SwingUtilities.invokeLater(
+                    () -> onError.accept(new IllegalStateException(CLIENT_NOT_INITIALIZED_MESSAGE)));
             return () -> { };
         }
         String modelToUse = model == null || model.isBlank() ? this.model : model;
         ChatCompletionCreateParams.Builder paramsBuilder = ChatCompletionCreateParams.builder()
                 .maxCompletionTokens(maxTokens)
                 .model(modelToUse)
-                .temperature((double) temperature)
                 .streamOptions(ChatCompletionStreamOptions.builder().includeUsage(true).build())
                 .addSystemMessage(systemPrompt);
+        if (supportsCustomTemperature(modelToUse)) {
+            paramsBuilder.temperature((double) temperature);
+        }
         appendConversation(paramsBuilder, filterErrorMessages(buildLimitedHistory(conversation)));
 
         Thread streamThread = new Thread(() -> {
@@ -287,19 +298,27 @@ public class OpenRouterAiService implements AiService {
 
     /** Lists cached OpenRouter models that advertise tool support. */
     public List<String> listModels() {
+        if (openAiClient == null) {
+            return List.of();
+        }
         List<String> models = cachedModels;
         if (models != null) {
             return models;
         }
         synchronized (this) {
             if (cachedModels == null) {
-                cachedModels = List.copyOf(fetchModels());
+                ModelCatalog catalog = fetchModels();
+                if (catalog.successful()) {
+                    cachedModels = List.copyOf(catalog.models());
+                } else {
+                    return catalog.models();
+                }
             }
             return cachedModels;
         }
     }
 
-    private List<String> fetchModels() {
+    private ModelCatalog fetchModels() {
         List<String> fallback = fallbackModels();
         try {
             HttpRequest.Builder request = HttpRequest.newBuilder(
@@ -316,7 +335,7 @@ public class OpenRouterAiService implements AiService {
             if (response.statusCode() != 200) {
                 log.info("OpenRouter model listing returned HTTP {}; using configured fallback models",
                         response.statusCode());
-                return fallback;
+                return new ModelCatalog(fallback, false);
             }
             JsonNode data = JSON.readTree(response.body()).path("data");
             if (!data.isArray()) {
@@ -329,16 +348,23 @@ public class OpenRouterAiService implements AiService {
                     available.add(id);
                 }
             }
-            return orderModels(available);
+            return new ModelCatalog(orderModels(available), true);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.debug("OpenRouter model listing was interrupted; using configured fallback models");
-            return fallback;
+            return new ModelCatalog(fallback, false);
         } catch (Exception e) {
             log.debug("OpenRouter model listing failed ({}); using configured fallback models",
                     e.getClass().getSimpleName());
-            return fallback;
+            return new ModelCatalog(fallback, false);
         }
+    }
+
+    private static boolean supportsCustomTemperature(String modelId) {
+        String openAiPrefix = "openai/";
+        String temperatureModelId = modelId != null && modelId.startsWith(openAiPrefix)
+                ? modelId.substring(openAiPrefix.length()) : modelId;
+        return OpenAiService.supportsCustomTemperature(temperatureModelId);
     }
 
     private List<String> orderModels(List<String> available) {
