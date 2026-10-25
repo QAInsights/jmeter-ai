@@ -22,6 +22,10 @@ import org.qainsights.jmeter.ai.utils.SafeText;
 public final class PlanDiff {
     private static final Set<String> SENSITIVE_FIELD_PARTS = Set.of(
             "password", "passwd", "pwd", "secret", "token", "session", "cookie", "auth", "api_key", "apikey");
+    private static final Set<String> RESULT_LISTENER_GUI_CLASSES = Set.of(
+            "org.apache.jmeter.visualizers.ViewResultsFullVisualizer",
+            "org.apache.jmeter.visualizers.StatVisualizer",
+            "org.apache.jmeter.visualizers.SummaryReport");
 
     private final Map<String, ElementSnapshot> before;
     private final Map<String, ElementSnapshot> after;
@@ -199,6 +203,12 @@ public final class PlanDiff {
 
         public String path() { return path; }
         public String className() { return className; }
+        public String guiClass() { return afterProperties.getOrDefault(TestElement.GUI_CLASS, ""); }
+        public boolean isResponseAssertion() {
+            return className.equals("org.apache.jmeter.assertions.ResponseAssertion")
+                    && guiClass().equals("org.apache.jmeter.assertions.gui.AssertionGui");
+        }
+        public boolean isResultListener() { return RESULT_LISTENER_GUI_CLASSES.contains(guiClass()); }
         public Map<String, String> beforeProperties() { return beforeProperties; }
         public Map<String, String> afterProperties() { return afterProperties; }
     }

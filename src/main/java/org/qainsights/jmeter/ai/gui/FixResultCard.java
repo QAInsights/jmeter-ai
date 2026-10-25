@@ -65,9 +65,10 @@ final class FixResultCard extends JPanel {
                 }
             });
             long assertions = diff.added().stream()
-                    .filter(change -> change.className().equals("org.apache.jmeter.assertions.ResponseAssertion"))
+                    .filter(org.qainsights.jmeter.ai.fix.PlanDiff.ElementChange::isResponseAssertion)
                     .count();
-            long listeners = diff.added().stream().filter(change -> change.className().contains("Visualizer"))
+            long listeners = diff.added().stream()
+                    .filter(org.qainsights.jmeter.ai.fix.PlanDiff.ElementChange::isResultListener)
                     .count();
             content.add(label("Assertions added: " + assertions));
             content.add(label("Listeners added: " + listeners));

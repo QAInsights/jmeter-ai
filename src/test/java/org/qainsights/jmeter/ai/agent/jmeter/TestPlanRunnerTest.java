@@ -2,8 +2,10 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
+import org.apache.jmeter.reporters.ResultCollector;
 import org.apache.jmeter.sampler.DebugSampler;
 import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jmeter.util.JMeterUtils;
@@ -176,12 +178,53 @@ class TestPlanRunnerTest {
         assertTrue(error.getMessage().contains("Make it pass only supports standard Thread Groups"));
     }
 
+    @Test
+    void prepareExecutionTreeStripsUserListenersWithoutChangingLiveTree() {
+        HashTree liveTree = planWithLoops(1);
+        HashTree planChildren = liveTree.getTree(liveTree.list().iterator().next());
+        ResultCollector resultCollector = new ResultCollector();
+        resultCollector.setName("User JTL");
+        resultCollector.setProperty(TestElement.GUI_CLASS,
+                "org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
+        planChildren.add(resultCollector);
+        TestPlanRunner.SampleCollector visualizerBacked = new TestPlanRunner.SampleCollector();
+        visualizerBacked.setName("Visualizer-backed element");
+        visualizerBacked.setProperty(TestElement.GUI_CLASS,
+                "org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
+        planChildren.add(visualizerBacked);
+
+        HashTree execTree = TestPlanRunner.prepareExecutionTree(liveTree, 0, 0);
+
+        assertFalse(containsElement(execTree, element -> element instanceof ResultCollector));
+        assertFalse(containsElement(execTree, element ->
+                "org.apache.jmeter.visualizers.ViewResultsFullVisualizer"
+                        .equals(element.getPropertyAsString(TestElement.GUI_CLASS))));
+        assertTrue(containsElement(liveTree, element -> element == resultCollector));
+        assertTrue(containsElement(liveTree, element -> element == visualizerBacked));
+    }
+
     private static LoopController originalController(HashTree plan) {
         Object testPlan = plan.list().iterator().next();
         HashTree planChildren = plan.getTree(testPlan);
         Object group = planChildren.list().iterator().next();
         ThreadGroup threadGroup = (ThreadGroup) group;
         return (LoopController) threadGroup.getSamplerController();
+    }
+
+    private static boolean containsElement(HashTree tree,
+            java.util.function.Predicate<TestElement> predicate) {
+        if (tree == null) {
+            return false;
+        }
+        for (Object key : tree.list()) {
+            if (key instanceof TestElement element && predicate.test(element)) {
+                return true;
+            }
+            if (containsElement(tree.getTree(key), predicate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test

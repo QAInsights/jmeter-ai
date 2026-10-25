@@ -11,13 +11,16 @@ import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.engine.JMeterEngineException;
 import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.reporters.AbstractListenerElement;
 import org.apache.jmeter.samplers.SampleEvent;
 import org.apache.jmeter.samplers.SampleListener;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestStateListener;
 import org.apache.jmeter.threads.AbstractThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.visualizers.Visualizer;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
@@ -105,16 +108,7 @@ public final class TestPlanRunner {
     }
 
     synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, int threads, int loops) {
-        ListedHashTree clonedTree;
-        try {
-            clonedTree = (ListedHashTree) testPlanTree.clone();
-        } catch (RuntimeException e) {
-            throw new TestExecutionException("Could not clone the test plan: " + e.getMessage());
-        }
-        HashTree execTree = JMeter.convertSubTree(clonedTree, true);
-        if (threads > 0 && loops > 0) {
-            forceIterations(execTree, threads, loops);
-        }
+        HashTree execTree = prepareExecutionTree(testPlanTree, threads, loops);
 
         // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements
         // via their no-arg constructor (see AbstractTestElement.clone()) - any instance field set
@@ -178,6 +172,50 @@ public final class TestPlanRunner {
                 results.subList(0, Math.min(results.size(), 1000))));
         return TestRunSummary.of(results, collected.totalSamples(), collected.successCount(),
                 collected.failureCount(), timedOut, elapsed);
+    }
+
+    static HashTree prepareExecutionTree(HashTree testPlanTree, int threads, int loops) {
+        ListedHashTree clonedTree;
+        try {
+            clonedTree = (ListedHashTree) testPlanTree.clone();
+        } catch (RuntimeException e) {
+            throw new TestExecutionException("Could not clone the test plan: " + e.getMessage());
+        }
+        HashTree execTree = JMeter.convertSubTree(clonedTree, true);
+        if (threads > 0 && loops > 0) {
+            forceIterations(execTree, threads, loops);
+        }
+        stripPlanListeners(execTree);
+        return execTree;
+    }
+
+    private static void stripPlanListeners(HashTree tree) {
+        if (tree == null) {
+            return;
+        }
+        for (Object key : new ArrayList<>(tree.list())) {
+            TestElement element = key instanceof TestElement ? (TestElement) key : null;
+            if (element != null && (element instanceof AbstractListenerElement || isVisualizerBacked(element))) {
+                tree.remove(key);
+            } else {
+                stripPlanListeners(tree.getTree(key));
+            }
+        }
+    }
+
+    private static boolean isVisualizerBacked(TestElement element) {
+        String guiClass = element.getPropertyAsString(TestElement.GUI_CLASS);
+        if (guiClass == null || guiClass.isBlank()) {
+            return false;
+        }
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        try {
+            Class<?> type = Class.forName(guiClass, false,
+                    loader == null ? TestPlanRunner.class.getClassLoader() : loader);
+            return Visualizer.class.isAssignableFrom(type);
+        } catch (ClassNotFoundException | LinkageError | SecurityException e) {
+            return false;
+        }
     }
 
     /** Applies the one-user, one-loop override to an execution tree, never the live plan. */

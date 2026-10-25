@@ -4,15 +4,21 @@ import java.util.List;
 
 import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.reporters.ResultCollector;
+import org.apache.jmeter.samplers.Clearable;
+import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.visualizers.Visualizer;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class FixListenersTest {
     @Test
@@ -42,6 +48,34 @@ class FixListenersTest {
         assertTrue(FixListeners.isVisualizerElement(visualizer));
         assertFalse(FixListeners.isVisualizerElement(nonVisualizer));
         assertFalse(FixListeners.isVisualizerElement(empty));
+    }
+
+    @Test
+    void deliveryClearsOnlyMakeItPassListeners() {
+        HashTree tree = plan();
+        HashTree planChildren = tree.getTree(tree.list().iterator().next());
+        ResultCollector ownedListener = listener("org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
+        ownedListener.setName("Make it pass - View Results Tree");
+        ResultCollector userListener = listener("org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
+        userListener.setName("My View Results");
+        planChildren.add(ownedListener);
+        planChildren.add(userListener);
+
+        JMeterGUIComponent ownedGui = mock(JMeterGUIComponent.class,
+                withSettings().extraInterfaces(Visualizer.class, Clearable.class));
+        JMeterGUIComponent userGui = mock(JMeterGUIComponent.class,
+                withSettings().extraInterfaces(Visualizer.class, Clearable.class));
+        GuiPackage gui = mock(GuiPackage.class);
+        when(gui.getGui(ownedListener)).thenReturn(ownedGui);
+        when(gui.getGui(userListener)).thenReturn(userGui);
+        SampleResult sample = new SampleResult();
+
+        FixListeners.deliver(tree, gui, List.of(sample));
+
+        verify((Clearable) ownedGui).clearData();
+        verify((Clearable) userGui, never()).clearData();
+        verify((Visualizer) ownedGui).add(sample);
+        verify((Visualizer) userGui).add(sample);
     }
 
     @Test

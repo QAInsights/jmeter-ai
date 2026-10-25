@@ -4,7 +4,10 @@ import java.util.Map;
 import java.util.List;
 import java.util.LinkedHashMap;
 
+import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
+import org.apache.jmeter.reporters.ResultCollector;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
@@ -69,6 +72,33 @@ class PlanDiffTest {
         assertFalse(element.properties().containsValue("do-not-show"));
     }
 
+    @Test
+    void identifiesResultCollectorsAndAssertionsByGuiClass() {
+        HashTree tree = plan();
+        HashTree children = tree.getTree(tree.list().iterator().next());
+        children.add(listener("Make it pass - View Results Tree",
+                "org.apache.jmeter.visualizers.ViewResultsFullVisualizer"));
+        children.add(listener("Make it pass - Summary Report",
+                "org.apache.jmeter.visualizers.SummaryReport"));
+        ResponseAssertion assertion = new ResponseAssertion();
+        assertion.setName("Make it pass: page check");
+        assertion.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.assertions.gui.AssertionGui");
+        children.add(assertion);
+
+        PlanDiff diff = PlanDiff.between(Map.of(), PlanDiff.snapshot(tree));
+
+        List<PlanDiff.ElementChange> listeners = diff.added().stream()
+                .filter(PlanDiff.ElementChange::isResultListener).toList();
+        List<PlanDiff.ElementChange> assertions = diff.added().stream()
+                .filter(PlanDiff.ElementChange::isResponseAssertion).toList();
+        assertEquals(2, listeners.size());
+        assertEquals(ResultCollector.class.getName(), listeners.get(0).className());
+        assertEquals("org.apache.jmeter.visualizers.ViewResultsFullVisualizer", listeners.get(0).guiClass());
+        assertEquals("org.apache.jmeter.visualizers.SummaryReport", listeners.get(1).guiClass());
+        assertEquals(1, assertions.size());
+        assertEquals("org.apache.jmeter.assertions.gui.AssertionGui", assertions.get(0).guiClass());
+    }
+
     private static HashTree plan() {
         HashTree tree = new ListedHashTree();
         tree.add(new TestPlan("Test Plan"));
@@ -80,5 +110,12 @@ class PlanDiffTest {
         sampler.setName(name);
         sampler.setPath(path);
         return sampler;
+    }
+
+    private static ResultCollector listener(String name, String guiClass) {
+        ResultCollector listener = new ResultCollector();
+        listener.setName(name);
+        listener.setProperty(TestElement.GUI_CLASS, guiClass);
+        return listener;
     }
 }

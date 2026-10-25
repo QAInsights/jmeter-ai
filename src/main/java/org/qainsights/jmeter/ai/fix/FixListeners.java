@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.samplers.Clearable;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
@@ -18,6 +19,7 @@ import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 
 /** Installs Make it pass result listeners and forwards the final run to them. */
 public final class FixListeners {
+    private static final String OWNED_LISTENER_PREFIX = "Make it pass - ";
     private static final String VIEW_RESULTS_GUI =
             "org.apache.jmeter.visualizers.ViewResultsFullVisualizer";
     private static final String SUMMARY_REPORT_GUI = "org.apache.jmeter.visualizers.StatVisualizer";
@@ -80,13 +82,17 @@ public final class FixListeners {
         });
     }
 
-    private static void deliver(HashTree tree, GuiPackage gui, List<SampleResult> results) {
+    static void deliver(HashTree tree, GuiPackage gui, List<SampleResult> results) {
         if (tree == null) {
             return;
         }
         for (Object key : tree.list()) {
             TestElement element = element(key);
             if (isVisualizerElement(element) && gui.getGui(element) instanceof Visualizer visualizer) {
+                if (element.getName() != null && element.getName().startsWith(OWNED_LISTENER_PREFIX)
+                        && visualizer instanceof Clearable clearable) {
+                    clearable.clearData();
+                }
                 results.forEach(visualizer::add);
             }
             deliver(tree.getTree(key), gui, results);

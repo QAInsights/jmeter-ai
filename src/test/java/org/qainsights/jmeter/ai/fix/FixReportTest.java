@@ -3,6 +3,12 @@ package org.qainsights.jmeter.ai.fix;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.jmeter.assertions.ResponseAssertion;
+import org.apache.jmeter.reporters.ResultCollector;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.TestPlan;
+import org.apache.jorphan.collections.HashTree;
+import org.apache.jorphan.collections.ListedHashTree;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,5 +38,35 @@ class FixReportTest {
         assertTrue(markdown.contains("Move literal password"));
         assertTrue(markdown.contains("Plan/Request"));
         assertTrue(markdown.contains("Soft failure: page title indicates an error"));
+    }
+
+    @Test
+    void markdownListsAddedResultCollectorsAndAssertionsByGuiClass() {
+        HashTree tree = new ListedHashTree();
+        HashTree children = tree.add(new TestPlan("Test Plan"));
+        children.add(listener("Make it pass - View Results Tree",
+                "org.apache.jmeter.visualizers.ViewResultsFullVisualizer"));
+        children.add(listener("Make it pass - Summary Report",
+                "org.apache.jmeter.visualizers.SummaryReport"));
+        ResponseAssertion assertion = new ResponseAssertion();
+        assertion.setName("Make it pass: page check");
+        assertion.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.assertions.gui.AssertionGui");
+        children.add(assertion);
+        PlanDiff diff = PlanDiff.between(Map.of(), PlanDiff.snapshot(tree));
+        FixResult result = new FixResult(FixResult.Status.FIXED, 1, 1, 0, 1, 1, 0,
+                null, List.of(), List.of(), "", diff, List.of());
+
+        String markdown = FixReport.markdown(result);
+
+        assertTrue(markdown.contains("- Test Plan/Make it pass: page check"));
+        assertTrue(markdown.contains("- Test Plan/Make it pass - View Results Tree"));
+        assertTrue(markdown.contains("- Test Plan/Make it pass - Summary Report"));
+    }
+
+    private static ResultCollector listener(String name, String guiClass) {
+        ResultCollector listener = new ResultCollector();
+        listener.setName(name);
+        listener.setProperty(TestElement.GUI_CLASS, guiClass);
+        return listener;
     }
 }

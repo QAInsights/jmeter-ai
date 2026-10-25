@@ -71,12 +71,11 @@ public final class FixReport {
             text.append("No repair rounds ran.\n");
         }
         text.append("\n## Assertions added\n\n");
-        appendByClass(text, diff, "org.apache.jmeter.assertions.ResponseAssertion");
+        appendAssertions(text, diff);
         result.skippedPageChecks().forEach(label -> text.append("- ").append(label).append('\n'));
         text.append("\n## Listeners added\n\n");
         if (diff != null) {
-            diff.added().stream().filter(change -> change.className().contains("ViewResultsFullVisualizer")
-                    || change.className().contains("StatVisualizer"))
+            diff.added().stream().filter(PlanDiff.ElementChange::isResultListener)
                     .forEach(change -> text.append("- ").append(change.path()).append('\n'));
         }
         text.append("\n## Needs you\n\n");
@@ -129,9 +128,9 @@ public final class FixReport {
         text.append('\n');
     }
 
-    private static void appendByClass(StringBuilder text, PlanDiff diff, String className) {
+    private static void appendAssertions(StringBuilder text, PlanDiff diff) {
         if (diff != null) {
-            diff.added().stream().filter(change -> change.className().equals(className))
+            diff.added().stream().filter(PlanDiff.ElementChange::isResponseAssertion)
                     .forEach(change -> text.append("- ").append(change.path()).append('\n'));
         }
     }
