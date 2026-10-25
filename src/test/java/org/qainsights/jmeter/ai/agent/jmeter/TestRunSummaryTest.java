@@ -75,6 +75,19 @@ class TestRunSummaryTest {
     }
 
     @Test
+    void of_usesFullRunCountsWithDetailsFromRetainedResults() {
+        List<SampleResult> retained = List.of(failure("Latest failure", "500", "err"));
+
+        TestRunSummary summary = TestRunSummary.of(retained, 5000, 4997, 3, false, 0);
+
+        assertEquals(5000, summary.getTotalSamples());
+        assertEquals(4997, summary.getSuccessCount());
+        assertEquals(3, summary.getFailureCount());
+        assertEquals(1, summary.getFailures().size());
+        assertTrue(summary.hasMoreFailuresThanShown());
+    }
+
+    @Test
     void of_timedOutFlag_isPreserved() {
         TestRunSummary summary = TestRunSummary.of(new ArrayList<>(), true, 5000L);
         assertTrue(summary.isTimedOut());

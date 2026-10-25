@@ -20,6 +20,7 @@ import org.apache.jmeter.threads.AbstractThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
+import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
 
 /**
  * Runs the current test plan through a private {@link StandardJMeterEngine} - the same
@@ -171,10 +172,12 @@ public final class TestPlanRunner {
             stopRequest = null;
         }
         long elapsed = System.currentTimeMillis() - start;
-        List<SampleResult> results = SampleCollector.collected();
+        CollectedSamples collected = SampleCollector.collected();
+        List<SampleResult> results = collected.results();
         lastSampleResults = Collections.unmodifiableList(new ArrayList<>(
                 results.subList(0, Math.min(results.size(), 1000))));
-        return TestRunSummary.of(results, timedOut, elapsed);
+        return TestRunSummary.of(results, collected.totalSamples(), collected.successCount(),
+                collected.failureCount(), timedOut, elapsed);
     }
 
     /** Applies the one-user, one-loop override to an execution tree, never the live plan. */
@@ -218,34 +221,30 @@ public final class TestPlanRunner {
      */
     public static final class SampleCollector extends AbstractTestElement implements SampleListener {
         private static final int MAX_RESULTS_KEPT = 1000;
-        private static volatile List<SampleResult> shared;
+        private static volatile SampleCollection shared;
 
         /** Resets the shared results list; call once before each run. */
         static void prepare() {
-            shared = Collections.synchronizedList(new ArrayList<>());
+            shared = new SampleCollection();
         }
 
-        /** A snapshot of every top-level sample result collected since the last {@link #prepare()}. */
-        static List<SampleResult> collected() {
-            List<SampleResult> current = shared;
-            if (current == null) {
-                return Collections.emptyList();
-            }
-            synchronized (current) {
-                return new ArrayList<>(current);
+        static CollectedSamples collected() {
+            SampleCollection current = shared;
+            return current == null ? new CollectedSamples(List.of(), 0, 0, 0) : current.snapshot();
+        }
+
+        static void recordSample(SampleResult result) {
+            SampleCollection current = shared;
+            if (current != null && result != null) {
+                current.record(result);
             }
         }
 
         @Override
         public void sampleOccurred(SampleEvent event) {
-            List<SampleResult> current = shared;
             SampleResult result = event.getResult();
-            if (current != null && result != null && result.getParent() == null) {
-                synchronized (current) {
-                    if (current.size() < MAX_RESULTS_KEPT) {
-                        current.add(result);
-                    }
-                }
+            if (result != null && result.getParent() == null) {
+                recordSample(result);
             }
         }
 
@@ -257,6 +256,47 @@ public final class TestPlanRunner {
         @Override
         public void sampleStopped(SampleEvent event) {
             // no-op: only completed samples are summarized
+        }
+    }
+
+    static record CollectedSamples(List<SampleResult> results, int totalSamples, int successCount,
+                                   int failureCount) {
+    }
+
+    private static final class SampleCollection {
+        private final List<SampleResult> results = new ArrayList<>();
+        private final List<Boolean> failures = new ArrayList<>();
+        private int totalSamples;
+        private int successCount;
+        private int failureCount;
+
+        synchronized void record(SampleResult result) {
+            String softFailure = SoftFailureDetector.reason(result);
+            boolean failed = !result.isSuccessful() || softFailure != null;
+            totalSamples++;
+            if (failed) {
+                failureCount++;
+            } else {
+                successCount++;
+            }
+            if (results.size() < SampleCollector.MAX_RESULTS_KEPT) {
+                results.add(result);
+                failures.add(failed);
+            } else if (failed) {
+                for (int index = 0; index < failures.size(); index++) {
+                    if (!failures.get(index)) {
+                        results.remove(index);
+                        failures.remove(index);
+                        results.add(result);
+                        failures.add(true);
+                        break;
+                    }
+                }
+            }
+        }
+
+        synchronized CollectedSamples snapshot() {
+            return new CollectedSamples(List.copyOf(results), totalSamples, successCount, failureCount);
         }
     }
 

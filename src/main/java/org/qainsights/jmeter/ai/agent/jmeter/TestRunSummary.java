@@ -45,9 +45,22 @@ public final class TestRunSummary {
     public static TestRunSummary of(List<SampleResult> results, boolean timedOut, long elapsedMillis) {
         int success = 0;
         int failure = 0;
+        for (SampleResult result : results) {
+            if (result.isSuccessful() && SoftFailureDetector.reason(result) == null) {
+                success++;
+            } else {
+                failure++;
+            }
+        }
+        return of(results, results.size(), success, failure, timedOut, elapsedMillis);
+    }
+
+    /** Builds a summary with aggregate counts from every sample and details from retained samples. */
+    public static TestRunSummary of(List<SampleResult> retainedResults, int totalSamples, int successCount,
+                                    int failureCount, boolean timedOut, long elapsedMillis) {
         List<Failure> failures = new ArrayList<>();
         List<Observation> observations = new ArrayList<>();
-        for (SampleResult result : results) {
+        for (SampleResult result : retainedResults) {
             String softFailure = SoftFailureDetector.reason(result);
             if (observations.size() < MAX_OBSERVATIONS_KEPT) {
                 String url = result instanceof HTTPSampleResult && result.getURL() != null
@@ -56,10 +69,7 @@ public final class TestRunSummary {
                         SoftFailureDetector.titleText(result), result.getContentType(), softFailure,
                         !result.isSuccessful() || softFailure != null));
             }
-            if (result.isSuccessful() && softFailure == null) {
-                success++;
-            } else {
-                failure++;
+            if (!result.isSuccessful() || softFailure != null) {
                 if (failures.size() < MAX_FAILURES_KEPT) {
                     String method = "";
                     String url = "";
@@ -86,7 +96,8 @@ public final class TestRunSummary {
                 }
             }
         }
-        return new TestRunSummary(results.size(), success, failure, timedOut, elapsedMillis, failures, observations);
+        return new TestRunSummary(totalSamples, successCount, failureCount, timedOut, elapsedMillis,
+                failures, observations);
     }
 
     public int getTotalSamples() {

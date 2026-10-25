@@ -1,7 +1,9 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.sampler.DebugSampler;
+import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jmeter.util.JMeterUtils;
@@ -96,6 +98,44 @@ class TestPlanRunnerTest {
 
         assertEquals(2, TestPlanRunner.takeLastSampleResults().size());
         assertTrue(TestPlanRunner.takeLastSampleResults().isEmpty());
+    }
+
+    @Test
+    void sampleCollectorCountsAllSamplesAndRetainsLateFailures() throws Exception {
+        TestPlanRunner.SampleCollector.prepare();
+        for (int index = 0; index < 5000; index++) {
+            SampleResult sample;
+            if (index == 4999) {
+                HTTPSampleResult softFailure = new HTTPSampleResult();
+                softFailure.setContentType("text/html");
+                softFailure.setResponseData("<title>Not Found</title>", "UTF-8");
+                sample = softFailure;
+            } else {
+                sample = new SampleResult();
+            }
+            sample.setSampleLabel("Sample " + index);
+            boolean hardFailure = index < 2;
+            sample.setSuccessful(!hardFailure);
+            sample.setResponseCode(index < 2 ? "500" : "200");
+            TestPlanRunner.SampleCollector.recordSample(sample);
+        }
+
+        TestPlanRunner.CollectedSamples collected = TestPlanRunner.SampleCollector.collected();
+        TestRunSummary summary = TestRunSummary.of(collected.results(), collected.totalSamples(),
+                collected.successCount(), collected.failureCount(), false, 0);
+
+        assertEquals(1000, collected.results().size());
+        assertEquals(5000, collected.totalSamples());
+        assertEquals(4997, collected.successCount());
+        assertEquals(3, collected.failureCount());
+        assertEquals(5000, summary.getTotalSamples());
+        assertEquals(4997, summary.getSuccessCount());
+        assertEquals(3, summary.getFailureCount());
+        assertEquals(3, summary.getFailures().size());
+        assertTrue(summary.getFailures().stream().anyMatch(failure -> failure.getLabel().equals("Sample 0")));
+        assertTrue(summary.getFailures().stream().anyMatch(failure -> failure.getLabel().equals("Sample 1")));
+        assertTrue(summary.getFailures().stream().anyMatch(failure -> failure.getLabel().equals("Sample 4999")));
+        assertFalse(summary.hasMoreFailuresThanShown());
     }
 
     @Test
