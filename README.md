@@ -233,12 +233,12 @@ OpenCode's free models work without signing in. Other providers use credentials 
 
 | Property | Description | Default |
 |----------|-------------|---------|
-| `jmeter.ai.opencode.enabled` | Show OpenCode status and models in the picker after restart | `false` |
+| `jmeter.ai.opencode.enabled` | Enable the OpenCode Chat and Agent Mode provider | `false` |
 | `jmeter.ai.opencode.executable` | Full path to the `opencode` binary | *(PATH auto-detect)* |
 | `jmeter.ai.opencode.timeout.seconds` | Hard timeout for one `opencode run` request | `180` |
 | `jmeter.ai.opencode.models` | Comma-separated raw provider/model ids added beside `opencode:default` | *(empty = discovered models plus CLI default)* |
 
-Feather Wand runs OpenCode in an empty temporary directory. File writes, shell, and web tools are denied, as are reads outside that directory. Feather Wand's own JMeter tools do the plan editing. Enable with `jmeter.ai.opencode.enabled=true` and restart JMeter.
+Feather Wand runs OpenCode in an empty temporary directory. File writes, shell, and web tools are denied, as are reads outside that directory. Feather Wand's own JMeter tools do the plan editing. To enable OpenCode without editing properties, open **Connect a provider**, choose **OpenCode**, click **Test connection**, then **Save and connect**. It takes effect immediately without restarting JMeter. As a manual alternative, set `jmeter.ai.opencode.enabled=true` and optionally `jmeter.ai.opencode.executable=/path/to/opencode` in `user.properties`.
 
 > This Chat and Agent Mode provider is separate from `jmeter.ai.terminal.opencode.*`, which controls the interactive terminal tab.
 
@@ -564,12 +564,11 @@ The footer offers the same **Sign in**, **Sign out**, **Refresh**, and **Custom 
 
 OpenCode's free models work without signing in. Other models use providers added to the local OpenCode CLI. Feather Wand does not read or store provider credentials, and adding a provider is done by you in the AI CLI terminal tab.
 
-1. Install the CLI: `npm install -g opencode-ai`.
-2. Add `jmeter.ai.opencode.enabled=true` to `user.properties` and restart JMeter.
+1. Open **Connect a provider**, choose **OpenCode**, click **Test connection**, then **Save and connect**. The setting takes effect immediately with no JMeter restart.
+2. To use a provider that requires sign-in, run `opencode auth login` yourself in the AI CLI terminal tab. Feather Wand never runs the interactive login command.
 3. Open the model picker and select **OpenCode**. The picker offers `default`, discovered `provider/model` ids, configured ids from `jmeter.ai.opencode.models`, and **Custom model…**.
-4. To use a provider that requires sign-in, run `opencode auth login` yourself in the AI CLI terminal tab. Feather Wand never runs the interactive login command.
 
-The provider status row offers **Refresh** and **Custom model…**, but no Sign in or Sign out buttons. Free models can be used without adding a provider.
+As a manual alternative, set `jmeter.ai.opencode.enabled=true` and optionally `jmeter.ai.opencode.executable=/path/to/opencode` in `user.properties`. The provider status row offers **Refresh** and **Custom model…**, but no Sign in or Sign out buttons. Free models can be used without adding a provider.
 
 ### OpenCode permissions
 

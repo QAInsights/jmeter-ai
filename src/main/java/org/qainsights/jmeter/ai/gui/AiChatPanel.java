@@ -931,6 +931,21 @@ public class AiChatPanel
             return;
         }
         pendingProviderSelection = option;
+        if (option == ProviderSetupOption.OPENCODE) {
+            new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() {
+                    openCodeService.getOpenCodeProvider().refresh();
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    reloadProviders();
+                }
+            }.execute();
+            return;
+        }
         reloadProviders();
     }
 
@@ -974,6 +989,7 @@ public class AiChatPanel
             case META_MUSE -> model.startsWith("meta:");
             case OLLAMA -> model.startsWith("ollama:");
             case APPLE_ON_DEVICE -> model.startsWith(AppleFoundationAiService.MODEL_PREFIX);
+            case OPENCODE -> model.startsWith(OpenCodeCliProvider.MODEL_PREFIX);
             case SMART_ROUTING -> false;
         };
     }

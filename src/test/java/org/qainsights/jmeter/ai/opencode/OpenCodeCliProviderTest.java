@@ -64,6 +64,23 @@ class OpenCodeCliProviderTest {
     }
 
     @Test
+    void fixedExecutableOverrideTakesPrecedenceOverTheProperty() {
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, ""))
+                .thenReturn("/configured/opencode");
+
+        assertEquals("/fixed/opencode",
+                OpenCodeCliProvider.forExecutable(" /fixed/opencode ").executable());
+    }
+
+    @Test
+    void blankExecutableOverrideUsesTheConfiguredExecutable() {
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, ""))
+                .thenReturn("/configured/opencode");
+
+        assertEquals("/configured/opencode", OpenCodeCliProvider.forExecutable("  ").executable());
+    }
+
+    @Test
     void featuredModelIdsUseDefaultThenConfiguredOrderWhenEnabled() {
         config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"))
                 .thenReturn("true");

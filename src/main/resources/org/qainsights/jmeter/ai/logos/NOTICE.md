@@ -2,7 +2,7 @@
 
 ## Lobe Icons
 
-The Anthropic, Apple, DeepSeek, Gemma, Gemini, Grok, Meta, Ollama, OpenAI, and OpenRouter SVGs are derived from `@lobehub/icons-static-svg` version 1.98.0.
+The Anthropic, Apple, DeepSeek, Gemma, Gemini, Grok, Meta, Ollama, OpenAI, OpenCode, and OpenRouter SVGs are derived from `@lobehub/icons-static-svg` version 1.98.0.
 
 MIT License
 

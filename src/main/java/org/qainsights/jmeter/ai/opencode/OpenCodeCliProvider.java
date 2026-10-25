@@ -55,18 +55,29 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
 
     private final OpenCodeCliAdapter adapter;
     private final CliProcessRunner runner;
+    private final String executableOverride;
     private String executable;
     private boolean detectionAttempted;
     private volatile List<String> discoveredModels;
     private volatile String model = "";
 
     public OpenCodeCliProvider() {
-        this(new OpenCodeCliAdapter(), new DefaultCliProcessRunner());
+        this(new OpenCodeCliAdapter(), new DefaultCliProcessRunner(), null);
     }
 
     OpenCodeCliProvider(OpenCodeCliAdapter adapter, CliProcessRunner runner) {
+        this(adapter, runner, null);
+    }
+
+    private OpenCodeCliProvider(OpenCodeCliAdapter adapter, CliProcessRunner runner, String executableOverride) {
         this.adapter = adapter;
         this.runner = runner;
+        this.executableOverride = executableOverride;
+    }
+
+    public static OpenCodeCliProvider forExecutable(String path) {
+        String override = path == null || path.isBlank() ? null : path.trim();
+        return new OpenCodeCliProvider(new OpenCodeCliAdapter(), new DefaultCliProcessRunner(), override);
     }
 
     @Override
@@ -128,7 +139,10 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         return executable() != null;
     }
 
-    synchronized String executable() {
+    public synchronized String executable() {
+        if (executableOverride != null) {
+            return executableOverride;
+        }
         String override = AiConfig.getProperty(EXECUTABLE_KEY, "");
         if (override != null && !override.trim().isEmpty()) {
             return override.trim();
