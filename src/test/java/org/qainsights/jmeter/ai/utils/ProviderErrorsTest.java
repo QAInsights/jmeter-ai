@@ -3,6 +3,8 @@ package org.qainsights.jmeter.ai.utils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
@@ -145,5 +147,16 @@ class ProviderErrorsTest {
         assertEquals("unreachable", ProviderErrors.category(new java.net.UnknownHostException("api.example.com")));
         assertEquals("other", ProviderErrors.category(new IllegalStateException("boom")));
         assertEquals("other", ProviderErrors.category(null));
+    }
+
+    @Test
+    void bedrockSdkFailuresMapToHttpAndNetworkCategories() {
+        software.amazon.awssdk.awscore.exception.AwsServiceException serviceError =
+                mock(software.amazon.awssdk.awscore.exception.AwsServiceException.class);
+        when(serviceError.statusCode()).thenReturn(503);
+        assertEquals(503, ProviderErrors.statusCode(serviceError));
+        assertEquals("server", ProviderErrors.category(serviceError));
+        assertEquals("unreachable", ProviderErrors.category(
+                software.amazon.awssdk.core.exception.SdkClientException.create("connection failed")));
     }
 }

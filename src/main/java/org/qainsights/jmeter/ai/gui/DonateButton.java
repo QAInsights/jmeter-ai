@@ -8,6 +8,8 @@ import javax.swing.JButton;
 import javax.swing.Timer;
 import org.qainsights.jmeter.ai.gui.theme.HeaderButtonSizing;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /**
  * The native-chrome Donate action with the shared animated gradient outline.
@@ -23,6 +25,7 @@ class DonateButton extends JButton {
 
     DonateButton() {
         super("Donate");
+        addActionListener(event -> Telemetry.record(TelemetryFeature.DONATE_CLICK));
         setMargin(new Insets(2, 6, 2, 6));
         HeaderButtonSizing.apply(this);
         setAlignmentY(CENTER_ALIGNMENT);

@@ -155,17 +155,17 @@ class TelemetryClientTest {
     }
 
     @Test
-    void sendsAtMostFiftyKeysAndKeepsTheRestPending() throws Exception {
-        for (int i = 0; i < 60; i++) {
+    void sendsAtMostOneHundredKeysAndKeepsTheRestPending() throws Exception {
+        for (int i = 0; i < 120; i++) {
             for (int n = 0; n <= i; n++) {
                 counters.increment("tool_t" + i);
             }
         }
         client(clockAt("2026-01-05")).tick();
         JsonNode f = MAPPER.readTree(sent.get(0)).get("features");
-        assertEquals(50, f.size());
-        assertEquals(60, f.get("tool_t59").asInt());
-        assertEquals(10, counters.snapshot().size());
+        assertEquals(100, f.size());
+        assertEquals(120, f.get("tool_t119").asInt());
+        assertEquals(20, counters.snapshot().size());
         assertEquals(1, counters.snapshot().get("tool_t0"));
     }
 

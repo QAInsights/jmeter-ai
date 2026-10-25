@@ -6,6 +6,8 @@ import java.io.File;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.TransferHandler;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /**
  * {@link TransferHandler} for the message field that turns file drops and
@@ -33,7 +35,11 @@ class AttachmentTransferHandler extends TransferHandler {
     public boolean importData(TransferSupport support) {
         Transferable transferable = support.getTransferable();
         if (support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-            return importFiles(transferable);
+            boolean imported = importFiles(transferable);
+            if (imported && support.isDrop()) {
+                Telemetry.record(TelemetryFeature.ATTACH_DROP);
+            }
+            return imported;
         }
         return delegate != null && delegate.importData(support);
     }

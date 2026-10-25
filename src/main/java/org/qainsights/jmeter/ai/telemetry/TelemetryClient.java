@@ -22,7 +22,7 @@ import java.util.Properties;
  */
 public class TelemetryClient {
     private static final Logger log = LoggerFactory.getLogger(TelemetryClient.class);
-    static final int MAX_FEATURES = 50;
+    static final int MAX_FEATURES = 100;
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String VERSION_RESOURCE =
             "org/qainsights/jmeter/ai/telemetry/version.properties";

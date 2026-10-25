@@ -37,6 +37,8 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /**
  * Dropdown-style model picker docked to the selector button (opening upward
@@ -73,6 +75,7 @@ class ModelPickerPopup extends JDialog {
     private final Consumer<List<String>> onModelsDiscovered;
     private final AWTEventListener outsideClickListener = this::handleAwtEvent;
     private Consumer<String> onSelect = model -> { };
+    private boolean searchRecorded;
     private boolean outsideClickListenerInstalled;
 
     ModelPickerPopup(java.awt.Window owner, List<String> models, String currentModel,
@@ -188,6 +191,7 @@ class ModelPickerPopup extends JDialog {
                     return;
                 }
                 if (e.getX() <= STAR_ZONE_WIDTH) {
+                    Telemetry.record(TelemetryFeature.PICKER_PIN);
                     prefs.togglePinned(listModel.get(index));
                     refresh();
                 } else if (e.getClickCount() == 2) {
@@ -395,6 +399,8 @@ class ModelPickerPopup extends JDialog {
     /** Shows the popup docked to the anchor; {@code onSelect} fires on confirm. */
     void showFor(Component anchor, Consumer<String> onSelect) {
         this.onSelect = onSelect != null ? onSelect : model -> { };
+        searchRecorded = false;
+        Telemetry.record(TelemetryFeature.PICKER_OPEN);
         Point location = anchor.getLocationOnScreen();
         java.awt.GraphicsConfiguration gc = anchor.getGraphicsConfiguration();
         java.awt.Rectangle screen = gc != null
@@ -489,6 +495,10 @@ class ModelPickerPopup extends JDialog {
     }
 
     private void refresh() {
+        if (isVisible() && !searchRecorded && !filterField.getText().isBlank()) {
+            searchRecorded = true;
+            Telemetry.record(TelemetryFeature.PICKER_SEARCH);
+        }
         String keep = modelList.getSelectedValue();
         List<String> visibleModels =
                 filterAndSort(allModels, filterField.getText(), prefs, featuredModels);

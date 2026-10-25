@@ -10,6 +10,8 @@ import org.apache.jmeter.save.SaveService;
 import org.apache.jorphan.collections.HashTree;
 import org.qainsights.jmeter.ai.terminal.DisabledTtyConnector;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -299,6 +301,7 @@ public class ClaudeCodePanel extends JPanel {
                         }
 
                         ptyProcess = processBuilder.start();
+                        Telemetry.record(cliFeature(selectedCli));
 
                         // Create TTY connector
                         TtyConnector connector = new PtyProcessTtyConnector(
@@ -359,6 +362,28 @@ public class ClaudeCodePanel extends JPanel {
                 return null;
             }
         }.execute();
+    }
+
+    private static TelemetryFeature cliFeature(AiCliAdapter adapter) {
+        if (adapter instanceof ClaudeCodeCliAdapter) {
+            return TelemetryFeature.CLI_CLAUDECODE;
+        }
+        if (adapter instanceof OpenAiCodexCliAdapter) {
+            return TelemetryFeature.CLI_CODEX;
+        }
+        if (adapter instanceof OpenCodeCliAdapter) {
+            return TelemetryFeature.CLI_OPENCODE;
+        }
+        if (adapter instanceof CopilotCliAdapter) {
+            return TelemetryFeature.CLI_COPILOT;
+        }
+        if (adapter instanceof AntigravityCliAdapter) {
+            return TelemetryFeature.CLI_ANTIGRAVITY;
+        }
+        if (adapter instanceof GrokCliAdapter) {
+            return TelemetryFeature.CLI_GROK;
+        }
+        return TelemetryFeature.CLI_OTHER;
     }
 
     /**

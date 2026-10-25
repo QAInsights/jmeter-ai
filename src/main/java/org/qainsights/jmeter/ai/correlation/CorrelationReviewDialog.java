@@ -14,6 +14,8 @@ import java.awt.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 public class CorrelationReviewDialog extends JDialog {
 
@@ -132,6 +134,7 @@ public class CorrelationReviewDialog extends JDialog {
     }
 
     private void runCorrelation() {
+        Telemetry.record(TelemetryFeature.CORRELATION_RUN);
         startTimer();
         new SwingWorker<List<CorrelationCandidate>, Void>() {
             @Override
@@ -327,6 +330,9 @@ public class CorrelationReviewDialog extends JDialog {
     private void applyCorrelation() {
         CorrelationInjector injector = new CorrelationInjector();
         int count = injector.apply(candidates);
+        if (count > 0) {
+            Telemetry.record(TelemetryFeature.CORRELATION_APPLY);
+        }
         JOptionPane.showMessageDialog(this, "Applied " + count + " correlation extractors to the test plan.", "Correlation Applied", JOptionPane.INFORMATION_MESSAGE);
     }
 

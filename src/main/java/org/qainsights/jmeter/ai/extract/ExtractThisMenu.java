@@ -181,6 +181,7 @@ public final class ExtractThisMenu {
         for (JMeterTreeNode n : uses) {
             useNames.add(n.getName());
         }
+        Telemetry.record(TelemetryFeature.EXTRACT_OPENED);
         ExtractThisDialog.Choice choice = ExtractThisDialog.show(text, value, sampler.getName(), suggestions, useNames);
         if (choice == null) {
             return;

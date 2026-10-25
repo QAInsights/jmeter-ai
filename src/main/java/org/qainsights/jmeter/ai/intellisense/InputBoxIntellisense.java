@@ -14,6 +14,8 @@ import java.util.List;
 import javax.swing.JTextArea;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /**
  * Manages intellisense functionality for the input text area in the AI Chat Panel.
@@ -411,6 +413,7 @@ public class InputBoxIntellisense {
     private void insertSelectedCommand() {
         String selected = insertionFor(intellisensePopup.getSelectedValue());
         if (selected != null) {
+            Telemetry.record(TelemetryFeature.INTELLISENSE_PICK);
             try {
                 int pos = textArea.getCaretPosition();
                 String text = textArea.getText();

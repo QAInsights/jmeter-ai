@@ -7,6 +7,7 @@ import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
+import org.qainsights.jmeter.ai.telemetry.TelemetryJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,7 +28,7 @@ class AgentJudgmentConfigTest {
             assertNull(AgentJudgmentConfig.createProvider());
 
             config.when(() -> AiConfig.getProperty(AgentRoutingConfig.API_KEY, "")).thenReturn("ts-key");
-            assertInstanceOf(TypeSafeJudgmentProvider.class, AgentJudgmentConfig.createProvider());
+            assertInstanceOf(TelemetryJudgmentProvider.class, AgentJudgmentConfig.createProvider());
         }
     }
 
@@ -55,7 +56,7 @@ class AgentJudgmentConfigTest {
             assertNull(AgentJudgmentConfig.createProvider(), "a TypeSafe key must not enable the OpenAI backend");
 
             config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENAI_API_KEY, "")).thenReturn("sk-test");
-            assertInstanceOf(OpenAiDecisionsJudgmentProvider.class, AgentJudgmentConfig.createProvider());
+            assertInstanceOf(TelemetryJudgmentProvider.class, AgentJudgmentConfig.createProvider());
         }
     }
 
@@ -100,7 +101,7 @@ class AgentJudgmentConfigTest {
 
             config.when(() -> AiConfig.getProperty(AgentJudgmentConfig.OPENROUTER_API_KEY, ""))
                     .thenReturn("sk-or-test");
-            assertInstanceOf(OpenRouterDecisionsJudgmentProvider.class, AgentJudgmentConfig.createProvider());
+            assertInstanceOf(TelemetryJudgmentProvider.class, AgentJudgmentConfig.createProvider());
         }
     }
 

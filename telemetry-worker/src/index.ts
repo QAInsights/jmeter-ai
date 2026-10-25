@@ -6,7 +6,7 @@ export interface Env {
 
 const MAX_BODY_BYTES = 4096;
 const MAX_STRING_FIELD = 64;
-const MAX_FEATURES = 50;
+const MAX_FEATURES = 100;
 const FEATURE_KEY_RE = /^[a-z0-9_]{1,40}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const STRING_FIELDS = [
@@ -348,6 +348,25 @@ function parseErrorKey(feature: string): [string, string] | null {
 	return null;
 }
 
+function parseDecisionKey(feature: string): [string, string, string] | null {
+	if (!feature.startsWith("decide_")) return null;
+	const rest = feature.slice("decide_".length);
+	if (rest.startsWith("fail_")) {
+		const failure = rest.slice("fail_".length);
+		for (const category of ERROR_CATEGORIES) {
+			const suffix = `_${category}`;
+			if (failure.endsWith(suffix) && failure.length > suffix.length) {
+				return [failure.slice(0, -suffix.length), "fail", category];
+			}
+		}
+		return [failure, "fail", "other"];
+	}
+	const separator = rest.indexOf("_");
+	if (separator < 0) return [rest, "other", ""];
+	const result = rest.slice(0, separator);
+	return [rest.slice(separator + 1), result, ""];
+}
+
 /** Pivot of installs per day (rows) and plugin version (columns, the 6 most common). */
 function adoptionTable(rows: StatsRow[]): string {
 	const totals = new Map<string, number>();
@@ -377,8 +396,42 @@ function statsPage(s: Record<string, unknown>): string {
 	const tools = features.filter(r => name(r).startsWith("tool_"));
 	const toolFailures = features.filter(r => name(r).startsWith("toolfail_"));
 	const judgment = features.filter(r => name(r).startsWith("route_") || name(r).startsWith("triage_"));
+	const chatProviders = features.filter(r => name(r).startsWith("msg_"));
+	const agentProviders = features.filter(r => name(r).startsWith("agentrun_"));
+	const agentSizes = features.filter(r => name(r).startsWith("agent_steps_"));
+	const setup = features.filter(r => name(r).startsWith("setup_") || name(r) === "welcome_no_provider");
+	const decisions = features.filter(r => name(r).startsWith("decide_"));
+	const picker = features.filter(r => name(r).startsWith("picker_"));
+	const setupOutcomes = ["auth_rejected", "rate_limited", "network_error", "http_error", "ok"];
+	const setupRows = setup.map(r => {
+		const feature = name(r);
+		if (feature === "welcome_no_provider") {
+			return ["welcome_no_provider", "", "", r.total, r.installs];
+		}
+		if (feature === "setup_open") {
+			return ["open", "", "", r.total, r.installs];
+		}
+		if (feature.startsWith("setup_save_")) {
+			return ["save", feature.slice("setup_save_".length), "", r.total, r.installs];
+		}
+		const rest = feature.slice("setup_test_".length);
+		const outcome = setupOutcomes.find(value => rest.endsWith(`_${value}`));
+		return outcome
+			? ["test", rest.slice(0, -(outcome.length + 1)), outcome, r.total, r.installs]
+			: [feature, "", "", r.total, r.installs];
+	});
+	const decisionRows = decisions.map(r => {
+		const parsed = parseDecisionKey(name(r));
+		return parsed ? [...parsed, r.total, r.installs] : [name(r), "other", "", r.total, r.installs];
+	});
+	const isSpecialized = (feature: string) =>
+		feature.startsWith("msg_") || feature.startsWith("agentrun_")
+		|| feature.startsWith("agent_steps_") || feature.startsWith("setup_")
+		|| feature === "welcome_no_provider" || feature.startsWith("decide_")
+		|| feature.startsWith("picker_");
 	const usage = features.filter(r => !errors.includes(r) && !outcomes.includes(r)
-		&& !tools.includes(r) && !toolFailures.includes(r) && !judgment.includes(r));
+		&& !tools.includes(r) && !toolFailures.includes(r) && !judgment.includes(r)
+		&& !isSpecialized(name(r)));
 	// toolfail_ keys keep 31 name characters and tool_ keys keep 35, so join on the shorter prefix.
 	const failNameLength = 40 - "toolfail_".length;
 	const callsByTool = new Map<string, number>();
@@ -434,7 +487,8 @@ ${table("New installs (30d)", ["day", "installs"], (s.newInstalls as StatsRow[])
 ${table("Plugin versions (30d)", ["version", "installs"], rows(bd.pluginVersion))}
 ${table("JMeter versions (30d)", ["version", "installs"], rows(bd.jmeterVersion))}
 ${table("OS (30d)", ["os", "installs"], rows(bd.os))}
-${table("Providers (30d)", ["provider", "installs"], rows(bd.provider))}
+${table("JSR223 Refactor provider setting (30d)", ["provider setting", "installs"], rows(bd.provider))}
+<p class="note">This is the provider setting for JSR223 Refactor, not the chat provider.</p>
 ${table("Countries (30d)", ["country", "installs"], rows(bd.country))}
 ${table("Retention (all time)", ["came back after", "eligible installs", "returned", "rate"],
 		retention.map(r => [`${r.days} day${r.days === 1 ? "" : "s"}`, r.cohort, r.retained, pct(r.retained, r.cohort)]))}
@@ -445,6 +499,12 @@ ${table("Agent Mode (30d)", ["agent mode", "installs"], onOff(bd.agentEnabled))}
 ${table("Models (30d)", ["model", "installs"], rows(bd.model))}
 ${table("Decisions backend (30d)", ["backend", "installs"], rows(bd.judgmentProvider))}
 ${table("Feature usage (30d)", ["feature", "total", "installs", "per install"], usageRows(usage))}
+${table("Chat messages by provider (30d)", ["provider", "total", "installs", "per install"], usageRows(chatProviders, "msg_"))}
+${table("Agent runs by provider (30d)", ["provider", "total", "installs", "per install"], usageRows(agentProviders, "agentrun_"))}
+${table("Agent run size (30d)", ["size", "total", "installs", "per install"], usageRows(agentSizes, "agent_steps_"))}
+${table("Provider setup funnel (30d)", ["event", "option", "outcome", "total", "installs"], setupRows)}
+${table("Decisions calls (30d)", ["backend", "result", "error category", "total", "installs"], decisionRows)}
+${table("Model picker (30d)", ["action", "total", "installs", "per install"], usageRows(picker, "picker_"))}
 ${table("Agent outcomes (30d)", ["outcome", "total", "installs", "per install"], usageRows(outcomes, "outcome_"))}
 ${table("Agent tool calls (30d)", ["tool", "total", "installs", "per install"], usageRows(tools, "tool_"))}
 ${table("Agent tool failures (30d)", ["tool", "failures", "installs", "of calls"], failureRows)}

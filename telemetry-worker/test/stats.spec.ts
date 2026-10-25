@@ -175,6 +175,52 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>route_focused</td><td>2</td>");
 		expect(html).toContain("<td>chat_message</td><td>9</td>");
 	});
+
+	it("groups provider, setup, Decisions and picker counters outside generic feature usage", async () => {
+		await insertPing("a", day(0));
+		await insertPing("b", day(0));
+		await env.DB.prepare(
+			`INSERT INTO feature_counts (install_id, day, feature, count) VALUES
+			 ('a', ?1, 'msg_claudecode', 3), ('a', ?1, 'agentrun_openrouter', 2),
+			 ('a', ?1, 'agent_steps_1_5', 2), ('a', ?1, 'setup_open', 1),
+			 ('a', ?1, 'setup_test_openai_auth_rejected', 1), ('b', ?1, 'setup_save_openai', 1),
+			 ('b', ?1, 'welcome_no_provider', 2), ('a', ?1, 'decide_ok_openai', 3),
+			 ('b', ?1, 'decide_fail_openrouter_timeout', 1), ('a', ?1, 'decide_slow_typesafe', 1),
+			 ('a', ?1, 'picker_open', 4), ('b', ?1, 'picker_search', 2),
+			 ('a', ?1, 'chat_message', 1)`
+		).bind(day(0)).run();
+
+		const html = await (await stats(`/stats?token=${TOKEN}`)).text();
+
+		for (const heading of [
+			"Chat messages by provider (30d)", "Agent runs by provider (30d)", "Agent run size (30d)",
+			"Provider setup funnel (30d)", "Decisions calls (30d)", "Model picker (30d)",
+			"JSR223 Refactor provider setting (30d)",
+		]) {
+			expect(html).toContain(heading);
+		}
+		expect(html).toContain("not the chat provider");
+		expect(html).toContain("<td>claudecode</td><td>3</td><td>1</td><td>3.0</td>");
+		expect(html).toContain("<td>openrouter</td><td>2</td><td>1</td><td>2.0</td>");
+		expect(html).toContain("<td>test</td><td>openai</td><td>auth_rejected</td><td>1</td><td>1</td>");
+		expect(html).toContain("<td>openrouter</td><td>fail</td><td>timeout</td><td>1</td><td>1</td>");
+		expect(html).toContain("<td>openai</td><td>ok</td><td></td><td>3</td><td>1</td>");
+		expect(html).toContain("<td>open</td><td></td><td></td><td>1</td><td>1</td>");
+		expect(html).toContain("<td>open</td><td>4</td><td>1</td><td>4.0</td>");
+
+		const usageStart = html.indexOf("<h2>Feature usage (30d)</h2>");
+		const usageEnd = html.indexOf("<h2>Chat messages by provider (30d)</h2>");
+		const genericUsage = html.slice(usageStart, usageEnd);
+		expect(genericUsage).toContain("<td>chat_message</td>");
+		for (const key of [
+			"msg_claudecode", "agentrun_openrouter", "agent_steps_1_5", "setup_open",
+			"setup_test_openai_auth_rejected", "setup_save_openai", "welcome_no_provider",
+			"decide_ok_openai", "decide_fail_openrouter_timeout", "decide_slow_typesafe",
+			"picker_open", "picker_search",
+		]) {
+			expect(genericUsage).not.toContain(`<td>${key}</td>`);
+		}
+	});
 });
 
 describe("test-run filtering, growth and engagement", () => {

@@ -129,12 +129,14 @@ public class CommandDispatcher {
         if (shouldUseAgent(JMeterAgent.isEnabled(), cb.isAgentModeSelected(), cb.getSelectedModel())) {
             Telemetry.noteModel(cb.getSelectedModel());
             Telemetry.record(TelemetryFeature.AGENT_RUN);
+            Telemetry.recordAgentProvider(cb.getSelectedModel());
             new AgentCommandRunner(cb, glowController, agentFactory).run(message);
             return;
         }
 
         Telemetry.noteModel(cb.getSelectedModel());
         Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
+        Telemetry.recordChatProvider(cb.getSelectedModel());
 
         log.info("Checking if message is an element request: '{}'", message);
         cb.setInputEnabled(false);

@@ -62,6 +62,8 @@ import org.qainsights.jmeter.ai.service.usage.ContextEstimator;
 import org.qainsights.jmeter.ai.service.usage.UsageStats;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.qainsights.jmeter.ai.utils.Models;
 import org.qainsights.jmeter.ai.utils.VersionUtils;
@@ -939,6 +941,7 @@ public class AiChatPanel
             SwingUtilities.invokeLater(this::openProviderSetup);
             return;
         }
+        Telemetry.record(TelemetryFeature.SETUP_OPEN);
         ProviderSetupDialog dialog = new ProviderSetupDialog(
                 SwingUtilities.getWindowAncestor(this),
                 this::reloadProvidersAfterSave,
@@ -1013,6 +1016,9 @@ public class AiChatPanel
         boolean showConnect = !providerStatus().isReady();
         String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (!welcome.equals(lastShownWelcome) || showConnect != lastWelcomeHasConnectButton) {
+            if (showConnect) {
+                Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
+            }
             transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
             WelcomeMessages.onShown(welcome);
             lastShownWelcome = welcome;
@@ -1023,6 +1029,9 @@ public class AiChatPanel
     private void showWelcomeForCurrentConfig() {
         boolean showConnect = !providerStatus().isReady();
         String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
+        if (showConnect) {
+            Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
+        }
         transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
         WelcomeMessages.onShown(welcome);
         lastShownWelcome = welcome;
@@ -1229,6 +1238,7 @@ public class AiChatPanel
         if (currentCancelHandle == null) {
             return;
         }
+        Telemetry.record(TelemetryFeature.OUTCOME_CANCELLED);
         streamGeneration.incrementAndGet();
         currentCancelHandle.run();
         String partial = transcript.abandonStream();
@@ -1478,14 +1488,17 @@ public class AiChatPanel
     }
 
     private void undoLastRename() {
+        Telemetry.record(TelemetryFeature.UNDO);
         undoRedoDispatcher.undoLastRename();
     }
 
     private void redoLastUndo() {
+        Telemetry.record(TelemetryFeature.REDO);
         undoRedoDispatcher.redoLastUndo();
     }
 
     private void undoLastWrap() {
+        Telemetry.record(TelemetryFeature.UNDO);
         undoRedoDispatcher.undoLastWrap();
     }
 
