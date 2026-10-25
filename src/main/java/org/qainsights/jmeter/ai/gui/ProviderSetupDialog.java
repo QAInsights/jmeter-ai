@@ -20,6 +20,8 @@ import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -30,6 +32,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -55,6 +58,7 @@ import javax.swing.SwingConstants;
 import javax.swing.KeyStroke;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.Timer;
 import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -69,15 +73,23 @@ import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
 import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
+import org.qainsights.jmeter.ai.opencode.OpenCodeAuthStatus;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
 import org.qainsights.jmeter.ai.service.ProviderStatus;
+import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.SafeText;
 import org.qainsights.jmeter.ai.utils.UserPropertiesWriter;
 
 final class ProviderSetupDialog extends JDialog {
+    interface OpenCodeSetupProbe {
+        String detect(String executableOverride);
+        String test(String executableOverride);
+    }
+
     private static final String DEFAULT_OLLAMA_HOST = "http://localhost";
     private static final String DEFAULT_OLLAMA_PORT = "11434";
     private static final String DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
@@ -102,9 +114,20 @@ final class ProviderSetupDialog extends JDialog {
     private final List<ProviderRow> rows;
     private final BooleanSupplier appleSupportedPlatform;
     private final Supplier<AppleFoundationHelper.Status> appleStatusSupplier;
+    private final OpenCodeSetupProbe openCodeSetupProbe;
 
     private ProviderSetupOption selectedOption;
     private PlaceholderPasswordField keyField;
+    private JTextField openCodeExecutableField;
+    private JTextArea openCodeDetectionStatus;
+    private JLabel openCodeAlreadyEnabledHint;
+    private Timer openCodeDetectionTimer;
+    private String openCodeDetectedPath;
+    private String openCodeLastDetectedOverride;
+    private long openCodeRequestGeneration;
+    private boolean openCodeDetecting;
+    private boolean openCodeDetected;
+    private boolean openCodeTestResultCurrent;
     private JTextField ollamaHostField;
     private JTextField ollamaPortField;
     private JComboBox<String> ollamaModelCombo;
@@ -165,6 +188,20 @@ final class ProviderSetupDialog extends JDialog {
             Runnable testCompletionCallback,
             BooleanSupplier appleSupportedPlatform,
             Supplier<AppleFoundationHelper.Status> appleStatusSupplier) {
+        this(owner, onSaved, ollamaDetected, connectionTester, propertiesPath, testCompletionCallback,
+                appleSupportedPlatform, appleStatusSupplier, null);
+    }
+
+    ProviderSetupDialog(
+            Window owner,
+            Consumer<ProviderSetupOption> onSaved,
+            boolean ollamaDetected,
+            ProviderConnectionTester connectionTester,
+            Path propertiesPath,
+            Runnable testCompletionCallback,
+            BooleanSupplier appleSupportedPlatform,
+            Supplier<AppleFoundationHelper.Status> appleStatusSupplier,
+            OpenCodeSetupProbe openCodeSetupProbe) {
         super(owner, "Connect a provider", ModalityType.APPLICATION_MODAL);
         this.onSaved = onSaved == null ? option -> { } : onSaved;
         this.connectionTester = connectionTester;
@@ -172,6 +209,8 @@ final class ProviderSetupDialog extends JDialog {
         this.testCompletionCallback = testCompletionCallback == null ? () -> { } : testCompletionCallback;
         this.appleSupportedPlatform = appleSupportedPlatform == null ? () -> false : appleSupportedPlatform;
         this.appleStatusSupplier = appleStatusSupplier == null ? AppleFoundationHelper::status : appleStatusSupplier;
+        this.openCodeSetupProbe = openCodeSetupProbe == null
+                ? defaultOpenCodeSetupProbe() : openCodeSetupProbe;
         smartBackend = configuredSmartBackend();
         routingSelection = initialRoutingSelection(
                 smartBackend, configuredFlag(AgentRoutingConfig.ROUTING_ENABLED_KEY, false));
@@ -364,6 +403,15 @@ final class ProviderSetupDialog extends JDialog {
 
     void selectOption(ProviderSetupOption option) {
         selectedOption = option;
+        if (openCodeDetectionTimer != null) {
+            openCodeDetectionTimer.stop();
+        }
+        openCodeRequestGeneration++;
+        openCodeDetecting = false;
+        openCodeDetected = false;
+        openCodeDetectedPath = null;
+        openCodeLastDetectedOverride = null;
+        openCodeTestResultCurrent = false;
         resultCurrent = false;
         lastResult = null;
         for (ProviderRow row : rows) {
@@ -375,6 +423,8 @@ final class ProviderSetupDialog extends JDialog {
             updateSmartBackendControls();
         } else if (option == ProviderSetupOption.APPLE_ON_DEVICE) {
             contentCard.add(buildApplePane(), BorderLayout.CENTER);
+        } else if (option == ProviderSetupOption.OPENCODE) {
+            contentCard.add(buildOpenCodePane(), BorderLayout.CENTER);
         } else {
             contentCard.add(buildProviderPane(option), BorderLayout.CENTER);
         }
@@ -383,6 +433,8 @@ final class ProviderSetupDialog extends JDialog {
         updateActionButtons();
         if (option == ProviderSetupOption.APPLE_ON_DEVICE) {
             probeAppleStatus();
+        } else if (option == ProviderSetupOption.OPENCODE) {
+            probeOpenCodeStatus();
         }
         contentCard.revalidate();
         contentCard.repaint();
@@ -686,7 +738,8 @@ final class ProviderSetupDialog extends JDialog {
         bottom.setOpaque(false);
         statusText.setEditable(false);
         statusText.setFocusable(false);
-        statusText.setOpaque(false);
+        statusText.setOpaque(true);
+        statusText.setBackground(ThemeColors.surface());
         statusText.setLineWrap(true);
         statusText.setWrapStyleWord(true);
         statusText.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
@@ -835,6 +888,9 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private JPanel buildProviderPane(ProviderSetupOption option) {
+        if (option == ProviderSetupOption.OPENCODE) {
+            return buildOpenCodePane();
+        }
         JPanel pane = new JPanel();
         pane.setOpaque(false);
         pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
@@ -891,6 +947,232 @@ final class ProviderSetupDialog extends JDialog {
         bottom.setMaximumSize(new Dimension(Integer.MAX_VALUE, bottom.getPreferredSize().height));
         pane.add(bottom);
         return pane;
+    }
+
+    private JPanel buildOpenCodePane() {
+        JPanel pane = new JPanel();
+        pane.setOpaque(false);
+        pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
+
+        JPanel heading = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
+        heading.setOpaque(false);
+        JLabel name = new JLabel(ProviderSetupOption.OPENCODE.displayName());
+        name.setFont(UiTokens.heading(name.getFont()));
+        name.setForeground(ThemeColors.foreground());
+        JLabel hint = new JLabel(ProviderSetupOption.OPENCODE.listHint());
+        hint.setForeground(ThemeColors.secondaryText());
+        hint.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
+        JPanel titleCopy = new JPanel();
+        titleCopy.setOpaque(false);
+        titleCopy.setLayout(new BoxLayout(titleCopy, BoxLayout.Y_AXIS));
+        addLeftAligned(titleCopy, name);
+        addLeftAligned(titleCopy, hint);
+        heading.add(new JLabel(BrandLogo.tile(BrandLogo.logoFor(ProviderSetupOption.OPENCODE), 36, 24)),
+                BorderLayout.WEST);
+        heading.add(titleCopy, BorderLayout.CENTER);
+        heading.setAlignmentX(Component.LEFT_ALIGNMENT);
+        heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
+        pane.add(heading);
+        pane.add(Box.createVerticalStrut(UiTokens.SPACE_4));
+
+        openCodeDetectionStatus = new JTextArea("Checking for OpenCode…");
+        openCodeDetectionStatus.setEditable(false);
+        openCodeDetectionStatus.setFocusable(false);
+        openCodeDetectionStatus.setOpaque(true);
+        openCodeDetectionStatus.setBackground(ThemeColors.surface());
+        openCodeDetectionStatus.setLineWrap(true);
+        openCodeDetectionStatus.setWrapStyleWord(true);
+        openCodeDetectionStatus.setRows(2);
+        openCodeDetectionStatus.setFont(UiTokens.body(openCodeDetectionStatus.getFont()));
+        openCodeDetectionStatus.setForeground(ThemeColors.info());
+        openCodeDetectionStatus.setMargin(new Insets(0, 0, 0, 0));
+        openCodeDetectionStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
+        openCodeDetectionStatus.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, openCodeDetectionStatus.getPreferredSize().height));
+        pane.add(openCodeDetectionStatus);
+        if (Boolean.parseBoolean(AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"))) {
+            openCodeAlreadyEnabledHint = new JLabel(
+                    "OpenCode is already on. Saving keeps it on and refreshes its models.");
+            openCodeAlreadyEnabledHint.setForeground(ThemeColors.info());
+            openCodeAlreadyEnabledHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+            openCodeAlreadyEnabledHint.setBorder(
+                    BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
+            openCodeAlreadyEnabledHint.setMaximumSize(new Dimension(
+                    Integer.MAX_VALUE, openCodeAlreadyEnabledHint.getPreferredSize().height));
+            pane.add(openCodeAlreadyEnabledHint);
+        } else {
+            openCodeAlreadyEnabledHint = null;
+        }
+        pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
+
+        JPanel executableFields = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+        executableFields.setOpaque(false);
+        executableFields.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel executableLabel = new JLabel("OpenCode executable (optional)");
+        executableLabel.setFont(UiTokens.label(executableLabel.getFont()));
+        executableLabel.setForeground(ThemeColors.foreground());
+        openCodeExecutableField = new PlaceholderTextField(
+                AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, ""));
+        ((PlaceholderTextField) openCodeExecutableField)
+                .setPlaceholder("Found on PATH or enter /path/to/opencode");
+        openCodeExecutableField.setToolTipText("Found on PATH, or enter /path/to/opencode");
+        styleInput(openCodeExecutableField);
+        executableLabel.setLabelFor(openCodeExecutableField);
+        executableFields.add(executableLabel, BorderLayout.NORTH);
+        executableFields.add(openCodeExecutableField, BorderLayout.CENTER);
+        executableFields.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, executableFields.getPreferredSize().height));
+        pane.add(executableFields);
+        openCodeExecutableField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                openCodeInputChanged();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                openCodeInputChanged();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                openCodeInputChanged();
+            }
+        });
+        openCodeExecutableField.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusLost(FocusEvent event) {
+                String override = openCodeExecutableField.getText().trim();
+                if (!Objects.equals(override, openCodeLastDetectedOverride)) {
+                    scheduleOpenCodeDetection();
+                }
+            }
+        });
+
+        JTextArea note = new JTextArea(
+                "Its free models need no sign-in. To add other providers, run "
+                        + "'opencode auth login' in the AI CLI terminal tab.");
+        note.setEditable(false);
+        note.setFocusable(false);
+        note.setOpaque(true);
+        note.setBackground(ThemeColors.surface());
+        note.setLineWrap(true);
+        note.setWrapStyleWord(true);
+        note.setFont(UiTokens.body(note.getFont()));
+        note.setForeground(ThemeColors.secondaryText());
+        note.setMargin(new Insets(0, 0, 0, 0));
+        note.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_3, 0, 0, 0));
+        note.setAlignmentX(Component.LEFT_ALIGNMENT);
+        note.setMaximumSize(new Dimension(Integer.MAX_VALUE, note.getPreferredSize().height));
+        pane.add(note);
+        pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
+
+        JPanel statusActions = buildStatusActions(true);
+        statusActions.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, statusActions.getPreferredSize().height));
+        pane.add(statusActions);
+        pane.add(Box.createVerticalGlue());
+        return pane;
+    }
+
+    static OpenCodeSetupProbe defaultOpenCodeSetupProbe() {
+        return new OpenCodeSetupProbe() {
+            @Override
+            public String detect(String executableOverride) {
+                OpenCodeCliProvider provider = OpenCodeCliProvider.forExecutable(executableOverride);
+                return provider.getAuthStatus() == OpenCodeAuthStatus.READY
+                        ? provider.executable() : null;
+            }
+
+            @Override
+            public String test(String executableOverride) {
+                return OpenCodeCliProvider.forExecutable(executableOverride)
+                        .execute("Reply with the single word OK.", "");
+            }
+        };
+    }
+
+    private void openCodeInputChanged() {
+        openCodeTestResultCurrent = false;
+        openCodeDetected = false;
+        openCodeDetectedPath = null;
+        openCodeLastDetectedOverride = null;
+        copySettingsButton.setVisible(false);
+        setStatus(" ", ThemeColors.secondaryText());
+        scheduleOpenCodeDetection();
+    }
+
+    private void scheduleOpenCodeDetection() {
+        if (selectedOption != ProviderSetupOption.OPENCODE || openCodeExecutableField == null) {
+            return;
+        }
+        long generation = ++openCodeRequestGeneration;
+        openCodeDetecting = true;
+        openCodeDetected = false;
+        openCodeDetectionStatus.setText("Checking for OpenCode…");
+        openCodeDetectionStatus.setForeground(ThemeColors.info());
+        updateActionButtons();
+        if (openCodeDetectionTimer != null) {
+            openCodeDetectionTimer.stop();
+        }
+        openCodeDetectionTimer = new Timer(300, event -> {
+            if (isDisplayable()) {
+                startOpenCodeDetection(generation);
+            }
+        });
+        openCodeDetectionTimer.setRepeats(false);
+        openCodeDetectionTimer.start();
+    }
+
+    private void probeOpenCodeStatus() {
+        long generation = ++openCodeRequestGeneration;
+        openCodeDetecting = true;
+        openCodeDetected = false;
+        openCodeDetectionStatus.setText("Checking for OpenCode…");
+        openCodeDetectionStatus.setForeground(ThemeColors.info());
+        updateActionButtons();
+        startOpenCodeDetection(generation);
+    }
+
+    private void startOpenCodeDetection(long generation) {
+        if (selectedOption != ProviderSetupOption.OPENCODE || openCodeExecutableField == null) {
+            return;
+        }
+        String override = openCodeExecutableField.getText().trim();
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                return openCodeSetupProbe.detect(override);
+            }
+
+            @Override
+            protected void done() {
+                if (!isDisplayable() || selectedOption != ProviderSetupOption.OPENCODE
+                        || generation != openCodeRequestGeneration
+                        || !override.equals(openCodeExecutableField.getText().trim())) {
+                    return;
+                }
+                String path = null;
+                try {
+                    path = get();
+                } catch (Exception ignored) {
+                }
+                openCodeLastDetectedOverride = override;
+                openCodeDetectedPath = path == null || path.isBlank() ? null : path;
+                openCodeDetected = openCodeDetectedPath != null;
+                openCodeDetecting = false;
+                if (openCodeDetected) {
+                    openCodeDetectionStatus.setText("OpenCode CLI found: " + openCodeDetectedPath);
+                    openCodeDetectionStatus.setForeground(ThemeColors.success());
+                } else {
+                    openCodeDetectionStatus.setText(
+                            "OpenCode CLI not found. Install it with 'npm install -g opencode-ai', "
+                                    + "or enter its path below.");
+                    openCodeDetectionStatus.setForeground(ThemeColors.warning());
+                }
+                updateActionButtons();
+            }
+        }.execute();
     }
 
     boolean hasAppleRow() {
@@ -1030,6 +1312,10 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private void startTest(boolean saveAfterTest) {
+        if (selectedOption == ProviderSetupOption.OPENCODE) {
+            startOpenCodeTest(saveAfterTest);
+            return;
+        }
         if (testing) {
             return;
         }
@@ -1145,6 +1431,89 @@ final class ProviderSetupDialog extends JDialog {
         }.execute();
     }
 
+    private void startOpenCodeTest(boolean saveAfterTest) {
+        if (testing || openCodeDetecting || !openCodeDetected || openCodeExecutableField == null) {
+            return;
+        }
+        String override = openCodeExecutableField.getText().trim();
+        long generation = ++openCodeRequestGeneration;
+        openCodeTestResultCurrent = false;
+        testing = true;
+        setStatus("Testing OpenCode… this can take up to a minute.", ThemeColors.info());
+        updateActionButtons();
+        for (ProviderRow row : rows) {
+            row.setEnabled(false);
+        }
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                return openCodeSetupProbe.test(override);
+            }
+
+            @Override
+            protected void done() {
+                if (!isDisplayable()) {
+                    return;
+                }
+                try {
+                    String reply = get();
+                    if (selectedOption != ProviderSetupOption.OPENCODE
+                            || generation != openCodeRequestGeneration
+                            || !override.equals(openCodeExecutableField.getText().trim())) {
+                        if (selectedOption == ProviderSetupOption.OPENCODE) {
+                            setStatus("Inputs changed during the test. Test again before saving.",
+                                    ThemeColors.info());
+                        }
+                        return;
+                    }
+                    if (reply == null || reply.isBlank()) {
+                        throw new CliProviderException("OpenCode returned an empty response.");
+                    }
+                    openCodeTestResultCurrent = true;
+                    setStatus("Connected. OpenCode replied.", ThemeColors.success());
+                    if (saveAfterTest) {
+                        saveSettings();
+                    }
+                } catch (Exception e) {
+                    if (selectedOption == ProviderSetupOption.OPENCODE
+                            && generation == openCodeRequestGeneration
+                            && override.equals(openCodeExecutableField.getText().trim())) {
+                        openCodeTestResultCurrent = true;
+                        setStatus("OpenCode failed: " + openCodeFailureMessage(e)
+                                + " You can save anyway.", ThemeColors.error());
+                    }
+                } finally {
+                    testing = false;
+                    for (ProviderRow row : rows) {
+                        row.setEnabled(true);
+                    }
+                    updateActionButtons();
+                    testCompletionCallback.run();
+                }
+            }
+        }.execute();
+    }
+
+    private static String openCodeFailureMessage(Throwable throwable) {
+        CliProviderException cliFailure = null;
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof CliProviderException cliProviderException) {
+                cliFailure = cliProviderException;
+            }
+            current = current.getCause();
+        }
+        String message = cliFailure == null ? throwable.getMessage() : cliFailure.getMessage();
+        if (message == null || message.isBlank()) {
+            message = throwable.getClass().getSimpleName();
+        }
+        return java.util.Arrays.stream(message.split("\\R"))
+                .limit(3)
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .collect(java.util.stream.Collectors.joining(" "));
+    }
+
     private boolean requestInputsMatch(
             ProviderSetupOption option,
             String key,
@@ -1155,6 +1524,10 @@ final class ProviderSetupDialog extends JDialog {
             boolean savedKeyUsed) {
         if (selectedOption != option) {
             return false;
+        }
+        if (option == ProviderSetupOption.OPENCODE) {
+            return openCodeDetected && openCodeExecutableField != null
+                    && Objects.equals(openCodeLastDetectedOverride, openCodeExecutableField.getText().trim());
         }
         if (option == ProviderSetupOption.SMART_ROUTING) {
             if (!java.util.Objects.equals(backend, smartBackend)) {
@@ -1247,6 +1620,17 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private void saveOrTest() {
+        if (selectedOption == ProviderSetupOption.OPENCODE) {
+            if (openCodeDetecting || testing || !openCodeDetected) {
+                return;
+            }
+            if (!openCodeTestResultCurrent) {
+                startOpenCodeTest(true);
+            } else {
+                saveSettings();
+            }
+            return;
+        }
         if (selectedOption == ProviderSetupOption.APPLE_ON_DEVICE) {
             if (appleAvailable) {
                 saveSettings();
@@ -1294,6 +1678,13 @@ final class ProviderSetupDialog extends JDialog {
                 return;
             }
             settings.putAll(appleSettings());
+        } else if (selectedOption == ProviderSetupOption.OPENCODE) {
+            settings.put(OpenCodeCliProvider.ENABLED_KEY, "true");
+            String executable = openCodeExecutableField.getText().trim();
+            String current = AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, "");
+            if (!Objects.equals(executable, current)) {
+                settings.put(OpenCodeCliProvider.EXECUTABLE_KEY, executable);
+            }
         } else if (selectedOption.requiresKey()) {
             String key = readKey();
             if (key.isBlank()
@@ -1497,12 +1888,13 @@ final class ProviderSetupDialog extends JDialog {
     private void updateActionButtons() {
         boolean smart = selectedOption == ProviderSetupOption.SMART_ROUTING;
         boolean apple = selectedOption == ProviderSetupOption.APPLE_ON_DEVICE;
+        boolean openCode = selectedOption == ProviderSetupOption.OPENCODE;
         boolean smartFeaturesDisabled = smart
                 && smartRoutingFeaturesDisabled(routingEnabled.isSelected(), triageEnabled.isSelected());
         boolean smartTestable = smart && !"off".equals(smartBackend)
                 && !AgentJudgmentConfig.LOCAL.equals(smartBackend);
         testButton.setVisible(!apple && (!smart || smartTestable));
-        testButton.setEnabled(!testing);
+        testButton.setEnabled(!testing && (!openCode || (!openCodeDetecting && openCodeDetected)));
         closeButton.setEnabled(true);
         saveButton.setEnabled(!testing);
         if (apple) {
@@ -1515,7 +1907,10 @@ final class ProviderSetupDialog extends JDialog {
         } else {
             saveButton.setText("Save and connect");
         }
-        if (resultCurrent && lastResult != null) {
+        if (openCode) {
+            saveButton.setEnabled(!testing && !openCodeDetecting && openCodeDetected);
+        }
+        if (!openCode && resultCurrent && lastResult != null) {
             switch (lastResult.outcome()) {
                 case AUTH_REJECTED -> saveButton.setEnabled(false);
                 case HTTP_ERROR, NETWORK_ERROR -> saveButton.setText("Save anyway");
@@ -1574,6 +1969,9 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     static boolean isConfigured(ProviderSetupOption option) {
+        if (option == ProviderSetupOption.OPENCODE) {
+            return Boolean.parseBoolean(AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"));
+        }
         if (option.requiresKey()) {
             return ProviderStatus.isApiKeyConfigured(option.keyProperty());
         }
@@ -1650,6 +2048,32 @@ final class ProviderSetupDialog extends JDialog {
                 BorderFactory.createEmptyBorder(UiTokens.SPACE_1, UiTokens.SPACE_2,
                         UiTokens.SPACE_1, UiTokens.SPACE_2));
         field.setBorder(border);
+    }
+
+    private static final class PlaceholderTextField extends JTextField {
+        private String placeholder;
+
+        private PlaceholderTextField(String text) {
+            super(text);
+        }
+
+        private void setPlaceholder(String placeholder) {
+            this.placeholder = placeholder;
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            if (getText().isEmpty() && placeholder != null && !placeholder.isEmpty()) {
+                Graphics2D copy = (Graphics2D) graphics.create();
+                Insets insets = getInsets();
+                FontMetrics metrics = copy.getFontMetrics(getFont());
+                int baseline = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+                copy.setColor(ThemeColors.secondaryText());
+                copy.drawString(placeholder, insets.left + 2, baseline);
+                copy.dispose();
+            }
+        }
     }
 
     static final class ProviderRow extends JPanel {

@@ -10,6 +10,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.models.Model;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
 import org.qainsights.jmeter.ai.codex.CodexCliProvider;
+import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
@@ -208,6 +209,19 @@ public class Models {
             }
         } catch (Exception e) {
             log.error("Error adding Claude Code CLI models: {}", e.getMessage(), e);
+        }
+
+        try {
+            if (serviceHolder.getOpenCodeService() != null
+                    && serviceHolder.getOpenCodeService().getOpenCodeProvider().isEnabled()
+                    && serviceHolder.getOpenCodeService().getOpenCodeProvider().isInstalled()) {
+                for (String modelId : serviceHolder.getOpenCodeService().getOpenCodeProvider().listModels()) {
+                    allModels.add(OpenCodeCliProvider.MODEL_PREFIX + modelId);
+                }
+                log.info("Added OpenCode CLI models to selector");
+            }
+        } catch (Exception e) {
+            log.error("Error adding OpenCode CLI models: {}", e.getMessage(), e);
         }
 
         if (Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"))) {

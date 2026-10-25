@@ -79,6 +79,9 @@ class CliProviderStatusPanel extends JPanel {
             this.signInButton = new QuietButton(provider.signInActionLabel(),
                     QuietButton.Kind.OUTLINED).compact();
             setOpaque(false);
+            signInButton.setVisible(provider.managesSignIn());
+            signOutButton.setVisible(provider.managesSignIn());
+            statusLabel.setToolTipText(provider.signInHint());
 
             JLabel name = new JLabel(provider.displayName());
             statusLabel.setForeground(ThemeColors.secondaryText());
@@ -158,7 +161,7 @@ class CliProviderStatusPanel extends JPanel {
             signInButton.setEnabled(installed && !state.canRunPrompts());
             signOutButton.setEnabled(installed && state.canRunPrompts());
             refreshButton.setEnabled(true);
-            statusLabel.setToolTipText(installed ? null : provider.installHint());
+            statusLabel.setToolTipText(installed ? provider.signInHint() : provider.installHint());
         }
 
         private void setActionsEnabled(boolean enabled) {

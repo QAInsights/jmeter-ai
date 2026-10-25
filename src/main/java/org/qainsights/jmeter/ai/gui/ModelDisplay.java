@@ -23,6 +23,7 @@ final class ModelDisplay {
         { "apple:", "Apple" },
         { "codex:", "ChatGPT / Codex" },
         { "claude-code:", "Claude Code" },
+        { "opencode:", "OpenCode" },
     };
 
     /** Unprefixed model ids route to Claude (see CommandDispatcher). */

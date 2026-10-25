@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -32,17 +33,29 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
 
     @Override
     public CliProcessResult run(List<String> command, String stdin, Duration timeout) {
-        return run(command, stdin, timeout, null);
+        return runProcess(command, stdin, timeout, Map.of(), null);
+    }
+
+    @Override
+    public CliProcessResult run(List<String> command, String stdin, Duration timeout,
+                               Map<String, String> environment) {
+        return runProcess(command, stdin, timeout, environment, null);
     }
 
     @Override
     public CliProcessResult run(List<String> command, String stdin, Duration timeout,
                                 Consumer<String> stdoutLineConsumer) {
+        return runProcess(command, stdin, timeout, Map.of(), stdoutLineConsumer);
+    }
+
+    private CliProcessResult runProcess(List<String> command, String stdin, Duration timeout,
+                                        Map<String, String> environment,
+                                        Consumer<String> stdoutLineConsumer) {
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("command must not be empty");
         }
         long startNanos = System.nanoTime();
-        Process process = start(command);
+        Process process = start(command, environment);
 
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
@@ -78,9 +91,12 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
         return new CliProcessResult(exitCode, snapshot(stdout), snapshot(stderr), false, elapsed);
     }
 
-    private static Process start(List<String> command) {
+    private static Process start(List<String> command, Map<String, String> environment) {
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
         builder.redirectErrorStream(false);
+        if (environment != null) {
+            builder.environment().putAll(environment);
+        }
         try {
             log.info("CLI execution started: {}", command.get(0));
             return builder.start();

@@ -50,6 +50,13 @@ public enum ProviderSetupOption {
             "openrouter.api.key",
             null,
             "https://openrouter.ai/settings/keys"),
+    OPENCODE(
+            "OpenCode",
+            "Chat and Agent Mode, free models, no key",
+            "Use OpenCode's free models, or any provider you've signed into in OpenCode.",
+            null,
+            null,
+            "https://opencode.ai"),
     OLLAMA(
             "Ollama",
             "Local models, no API key",

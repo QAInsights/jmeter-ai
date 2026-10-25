@@ -118,7 +118,7 @@ final class AgentCommandRunner {
                     JMeterAgent agent = agentFactory.apply(service);
                     if (agent == null) {
                         return finish("Agent mode currently supports Claude, OpenAI, Google Gemini, DeepSeek, Grok, OpenRouter, "
-                                + "Meta Muse, Codex and Claude Code models only. "
+                                + "Meta Muse, Codex, Claude Code and OpenCode models only. "
                                 + "Select one of those and retry.");
                     }
                     AgentLoop.AgentResult result;

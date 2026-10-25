@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.cli;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -18,6 +19,16 @@ public interface CliProcessRunner {
      *                              calling thread is interrupted
      */
     CliProcessResult run(List<String> command, String stdin, Duration timeout);
+
+    /**
+     * Runs {@code command} with additional environment variables for the child
+     * process. Runners that do not support environment overrides retain the
+     * default process behavior.
+     */
+    default CliProcessResult run(List<String> command, String stdin, Duration timeout,
+                                 Map<String, String> environment) {
+        return run(command, stdin, timeout);
+    }
 
     /**
      * Same as {@link #run(List, String, Duration)} but forwarding each stdout

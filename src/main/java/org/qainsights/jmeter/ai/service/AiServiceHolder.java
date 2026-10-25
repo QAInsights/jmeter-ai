@@ -16,6 +16,7 @@ public class AiServiceHolder {
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
     private ClaudeCodeAiService claudeCodeService;
+    private OpenCodeAiService openCodeService;
     private AppleFoundationAiService appleFoundationAiService;
 
     public ClaudeService getClaudeService() {
@@ -104,6 +105,14 @@ public class AiServiceHolder {
 
     public void setClaudeCodeService(ClaudeCodeAiService claudeCodeService) {
         this.claudeCodeService = claudeCodeService;
+    }
+
+    public OpenCodeAiService getOpenCodeService() {
+        return openCodeService;
+    }
+
+    public void setOpenCodeService(OpenCodeAiService openCodeService) {
+        this.openCodeService = openCodeService;
     }
 
     public AppleFoundationAiService getAppleFoundationAiService() {

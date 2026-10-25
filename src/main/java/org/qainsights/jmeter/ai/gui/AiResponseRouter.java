@@ -3,12 +3,14 @@ package org.qainsights.jmeter.ai.gui;
 import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.codex.CodexCliProvider;
+import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.service.OllamaAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
@@ -43,6 +45,7 @@ public class AiResponseRouter {
     private final BedrockAiService bedrockService;
     private final CodexAiService codexService;
     private final ClaudeCodeAiService claudeCodeService;
+    private final OpenCodeAiService openCodeService;
     private final AppleFoundationAiService appleFoundationAiService;
     private org.qainsights.jmeter.ai.service.attach.AttachmentRegistry attachmentRegistry;
 
@@ -58,6 +61,7 @@ public class AiResponseRouter {
         this.bedrockService = serviceHolder.getBedrockService();
         this.codexService = serviceHolder.getCodexService();
         this.claudeCodeService = serviceHolder.getClaudeCodeService();
+        this.openCodeService = serviceHolder.getOpenCodeService();
         this.appleFoundationAiService = serviceHolder.getAppleFoundationAiService();
     }
 
@@ -168,6 +172,10 @@ public class AiResponseRouter {
             String claudeCodeModelId = selectedModel.substring(ClaudeCodeCliProvider.MODEL_PREFIX.length());
             log.info("Using Claude Code CLI model: {}", claudeCodeModelId);
             return generateWithCli(claudeCodeService, claudeCodeModelId, conversationHistory, "Claude Code");
+        } else if (selectedModel.startsWith(OpenCodeCliProvider.MODEL_PREFIX)) {
+            String openCodeModelId = selectedModel.substring(OpenCodeCliProvider.MODEL_PREFIX.length());
+            log.info("Using OpenCode CLI model: {}", openCodeModelId);
+            return generateWithCli(openCodeService, openCodeModelId, conversationHistory, "OpenCode");
         } else {
             log.info("Using Anthropic model: {}", selectedModel);
             claudeService.setModel(selectedModel);
@@ -270,6 +278,12 @@ public class AiResponseRouter {
                 return claudeCodeService.generateStreamResponse(conversationHistory, claudeCodeModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
             }
             return () -> {};
+        } else if (selectedModel.startsWith(OpenCodeCliProvider.MODEL_PREFIX)) {
+            String openCodeModelId = selectedModel.substring(OpenCodeCliProvider.MODEL_PREFIX.length());
+            if (openCodeService != null) {
+                return openCodeService.generateStreamResponse(conversationHistory, openCodeModelId, tokenConsumer, reasoningConsumer, onComplete, onError);
+            }
+            return () -> {};
         } else {
             // Anthropic
             return claudeService.generateStreamResponse(conversationHistory, selectedModel, tokenConsumer, reasoningConsumer, onComplete, onError);
@@ -369,6 +383,11 @@ public class AiResponseRouter {
                 claudeCodeService.setModel(selectedModel.substring(ClaudeCodeCliProvider.MODEL_PREFIX.length()));
             }
             return claudeCodeService;
+        } else if (selectedModel.startsWith(OpenCodeCliProvider.MODEL_PREFIX)) {
+            if (openCodeService != null) {
+                openCodeService.setModel(selectedModel.substring(OpenCodeCliProvider.MODEL_PREFIX.length()));
+            }
+            return openCodeService;
         } else {
             claudeService.setModel(selectedModel);
             return claudeService;

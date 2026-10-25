@@ -66,6 +66,13 @@ class WelcomeMessagesTest {
     }
 
     @Test
+    void forCurrentConfig_cliProviderReadyWithoutKeys_returnsFullWelcome() {
+        String msg = WelcomeMessages.forCurrentConfig(false, true);
+
+        assertEquals(Constants.WELCOME_MESSAGE, msg);
+    }
+
+    @Test
     void forStatus_nullStatus_treatedAsNotReady() {
         assertTrue(WelcomeMessages.forStatus(null).contains("Connect a provider"));
     }

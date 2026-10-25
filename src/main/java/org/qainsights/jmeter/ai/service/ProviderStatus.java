@@ -9,8 +9,9 @@ import org.qainsights.jmeter.ai.utils.GatewayConfig;
 /**
  * Read-only snapshot of which AI providers look configured from JMeter
  * properties. No network calls: Ollama is treated as "available to try"
- * without probing, and Apple availability comes only from the helper's cached
- * status. This class never starts the helper process.
+ * without probing, CLI providers are represented by their loaded models, and
+ * Apple availability comes only from the helper's cached status. This class
+ * never starts the helper process.
  */
 public final class ProviderStatus {
 
@@ -18,13 +19,16 @@ public final class ProviderStatus {
     private final boolean ollamaPreferred;
     private final boolean agentCapableReady;
     private final boolean appleAvailable;
+    private final boolean cliProviderReady;
 
     private ProviderStatus(boolean anyCloudReady, boolean ollamaPreferred,
-                           boolean agentCapableReady, boolean appleAvailable) {
+                           boolean agentCapableReady, boolean appleAvailable,
+                           boolean cliProviderReady) {
         this.anyCloudReady = anyCloudReady;
         this.ollamaPreferred = ollamaPreferred;
         this.agentCapableReady = agentCapableReady;
         this.appleAvailable = appleAvailable;
+        this.cliProviderReady = cliProviderReady;
     }
 
     /** Loads status from the current {@link AiConfig} / JMeter properties. */
@@ -36,6 +40,11 @@ public final class ProviderStatus {
 
     /** Loads status using the supplied Apple on-device availability value. */
     public static ProviderStatus fromConfig(BooleanSupplier appleOnDeviceAvailable) {
+        return fromConfig(appleOnDeviceAvailable, false);
+    }
+
+    /** Loads status using the supplied Apple and CLI provider availability values. */
+    public static ProviderStatus fromConfig(BooleanSupplier appleOnDeviceAvailable, boolean cliProviderReady) {
         boolean agentCapable = isApiKeyConfigured("anthropic.api.key")
                 || isApiKeyConfigured("openai.api.key")
                 || isApiKeyConfigured("google.api.key")
@@ -50,17 +59,17 @@ public final class ProviderStatus {
         boolean ollamaPreferred = "ollama".equalsIgnoreCase(serviceType == null ? "" : serviceType.trim());
         boolean apple = Boolean.parseBoolean(AiConfig.getProperty("apple.enabled", "true"))
                 && appleOnDeviceAvailable.getAsBoolean();
-        return new ProviderStatus(cloud, ollamaPreferred, agentCapable, apple);
+        return new ProviderStatus(cloud, ollamaPreferred, agentCapable, apple, cliProviderReady);
     }
 
     /**
      * True when the user has at least one cloud/API key (or Bedrock creds),
      * has explicitly chosen Ollama as the default service type, or Apple
-     * on-device is available. Apple availability uses a cached local helper
-     * process probe, not a network call.
+     * on-device is available, or a CLI provider has loaded models. Apple
+     * availability uses a cached local helper process probe, not a network call.
      */
     public boolean isReady() {
-        return anyCloudReady || ollamaPreferred || appleAvailable;
+        return anyCloudReady || ollamaPreferred || appleAvailable || cliProviderReady;
     }
 
     /** True when at least one non-placeholder cloud/API key is set. */
@@ -68,9 +77,9 @@ public final class ProviderStatus {
         return anyCloudReady;
     }
 
-    /** True when a provider that supports Agent Mode has a key (Bedrock and Ollama do not count). */
+    /** True when an Agent Mode provider has a key or a CLI provider has loaded models. */
     public boolean hasAgentCapableProvider() {
-        return agentCapableReady;
+        return agentCapableReady || cliProviderReady;
     }
 
     /** True when {@code jmeter.ai.service.type=ollama}. */

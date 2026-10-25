@@ -417,7 +417,7 @@ public class CommandDispatcher {
      * True when the selected model routes to a provider the agent can drive: the
      * tool-calling adapters (Anthropic Claude, OpenAI, Google Gemini, DeepSeek,
      * Grok, OpenRouter, Meta Muse) plus the
-     * subscription CLIs (Codex, Claude Code), which get their tools through the
+     * subscription CLIs (Codex, Claude Code, OpenCode), which get their tools through the
      * prompt-level protocol. Every other provider falls back to plain chat.
      */
     static boolean isAgentCapableModel(String selectedModel) {
@@ -429,7 +429,8 @@ public class CommandDispatcher {
                 || (selectedModel != null && selectedModel.startsWith("openrouter:"))
                 || (selectedModel != null && selectedModel.startsWith("meta:"))
                 || (selectedModel != null && selectedModel.startsWith("codex:"))
-                || (selectedModel != null && selectedModel.startsWith("claude-code:"));
+                || (selectedModel != null && selectedModel.startsWith("claude-code:"))
+                || (selectedModel != null && selectedModel.startsWith("opencode:"));
     }
 
     static boolean shouldUseAgent(boolean featureEnabled, boolean agentSelected, String selectedModel) {
@@ -451,7 +452,8 @@ public class CommandDispatcher {
                 && !selectedModel.startsWith("bedrock:")
                 && !selectedModel.startsWith("apple:")
                 && !selectedModel.startsWith("codex:")
-                && !selectedModel.startsWith("claude-code:");
+                && !selectedModel.startsWith("claude-code:")
+                && !selectedModel.startsWith("opencode:");
     }
 
     /**

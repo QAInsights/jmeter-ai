@@ -91,6 +91,25 @@ class ModelPickerPopupTest {
     }
 
     @Test
+    void opencodeConfiguredModelsKeepFeaturedOrderAheadOfOtherModels() {
+        List<String> models = List.of(
+                "opencode:opencode/beam-free",
+                "opencode:opencode/big-pickle",
+                "opencode:opencode/nemotron-3.5-lightning-free",
+                "opencode:default");
+
+        assertEquals(List.of(
+                        "opencode:default",
+                        "opencode:opencode/nemotron-3.5-lightning-free",
+                        "opencode:opencode/big-pickle",
+                        "opencode:opencode/beam-free"),
+                ModelPickerPopup.filterAndSort(models, "", prefs(), List.of(
+                        "opencode:default",
+                        "opencode:opencode/nemotron-3.5-lightning-free",
+                        "opencode:opencode/big-pickle")));
+    }
+
+    @Test
     void pinnedComeFirstInPinOrder() {
         ModelSelectorPreferences prefs = prefs();
         prefs.togglePinned("openai:gpt-4o");

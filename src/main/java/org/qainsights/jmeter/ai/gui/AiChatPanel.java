@@ -23,6 +23,9 @@ import org.apache.jorphan.gui.JMeterUIDefaults;
 import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.TriageNotice;
+import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
+import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
+import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -41,10 +44,13 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.CliSubscriptionAiService;
 import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.OpenCodeAiService;
+import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
@@ -112,6 +118,7 @@ public class AiChatPanel
     private BedrockAiService bedrockService;
     private CodexAiService codexService;
     private ClaudeCodeAiService claudeCodeService;
+    private OpenCodeAiService openCodeService;
     private AppleFoundationAiService appleFoundationAiService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
@@ -138,6 +145,7 @@ public class AiChatPanel
     private String lastShownWelcome;
     private boolean lastWelcomeHasConnectButton;
     private boolean ollamaDetected;
+    private volatile boolean cliProviderReady;
     private boolean ollamaProbeStarted;
     private ProviderSetupOption pendingProviderSelection;
     private final AtomicInteger modelLoadGeneration = new AtomicInteger();
@@ -237,6 +245,7 @@ public class AiChatPanel
         bedrockService = new BedrockAiService();
         codexService = new CodexAiService();
         claudeCodeService = new ClaudeCodeAiService();
+        openCodeService = new OpenCodeAiService();
         appleFoundationAiService = new AppleFoundationAiService();
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
@@ -831,6 +840,7 @@ public class AiChatPanel
         holder.setBedrockService(bedrockService);
         holder.setCodexService(codexService);
         holder.setClaudeCodeService(claudeCodeService);
+        holder.setOpenCodeService(openCodeService);
         holder.setAppleFoundationAiService(appleFoundationAiService);
         return holder;
     }
@@ -857,11 +867,19 @@ public class AiChatPanel
                 }
                 try {
                     List<String> models = get();
+                    cliProviderReady = models.stream().anyMatch(model ->
+                            model.startsWith(CodexCliProvider.MODEL_PREFIX)
+                                    || model.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)
+                                    || model.startsWith(OpenCodeCliProvider.MODEL_PREFIX));
                     // Get the default model ID
                     String defaultModelId = claudeService.getCurrentModel();
                     log.info("Default model ID: {}", defaultModelId);
-                    modelSelectorPanel.setFeaturedModels(openRouterService == null
+                    List<String> featuredModels = new ArrayList<>(openRouterService == null
                             ? List.of() : openRouterService.featuredModelIds());
+                    if (openCodeService != null) {
+                        featuredModels.addAll(openCodeService.getOpenCodeProvider().featuredModelIds());
+                    }
+                    modelSelectorPanel.setFeaturedModels(featuredModels);
                     modelSelectorPanel.setModels(models, defaultModelId);
                     // A restored session carries its model; reselect it now that
                     // the list is available (no-op when the model is gone).
@@ -956,13 +974,14 @@ public class AiChatPanel
             case META_MUSE -> model.startsWith("meta:");
             case OLLAMA -> model.startsWith("ollama:");
             case APPLE_ON_DEVICE -> model.startsWith(AppleFoundationAiService.MODEL_PREFIX);
+            case OPENCODE -> model.startsWith(OpenCodeCliProvider.MODEL_PREFIX);
             case SMART_ROUTING -> false;
         };
     }
 
     private List<SubscriptionCliProvider> enabledCliProviders() {
         List<SubscriptionCliProvider> providers = new ArrayList<>();
-        for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService)) {
+        for (CliSubscriptionAiService service : List.of(codexService, claudeCodeService, openCodeService)) {
             if (service.getProvider().isEnabled()) {
                 providers.add(service.getProvider());
             }
@@ -976,17 +995,23 @@ public class AiChatPanel
     private void displayWelcomeMessage() {
         log.info("Displaying welcome message");
         showWelcomeForCurrentConfig();
-        if (!ProviderStatus.fromConfig().isReady()) {
+        if (!providerStatus().isReady()) {
             probeOllamaAvailability();
         }
+    }
+
+    private ProviderStatus providerStatus() {
+        return ProviderStatus.fromConfig(() -> AppleFoundationHelper.cachedStatus()
+                .map(AppleFoundationHelper.Status::isAvailable)
+                .orElse(false), cliProviderReady);
     }
 
     private void refreshWelcomeIfReady() {
         if (!transcript.isWelcomeShowing()) {
             return;
         }
-        boolean showConnect = !ProviderStatus.fromConfig().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected);
+        boolean showConnect = !providerStatus().isReady();
+        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (!welcome.equals(lastShownWelcome) || showConnect != lastWelcomeHasConnectButton) {
             transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
             WelcomeMessages.onShown(welcome);
@@ -996,8 +1021,8 @@ public class AiChatPanel
     }
 
     private void showWelcomeForCurrentConfig() {
-        boolean showConnect = !ProviderStatus.fromConfig().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected);
+        boolean showConnect = !providerStatus().isReady();
+        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
         WelcomeMessages.onShown(welcome);
         lastShownWelcome = welcome;
@@ -1019,7 +1044,7 @@ public class AiChatPanel
             @Override
             protected void done() {
                 try {
-                    if (get() && !ProviderStatus.fromConfig().isReady()) {
+                    if (get() && !providerStatus().isReady()) {
                         ollamaDetected = true;
                         refreshWelcomeIfReady();
                     }
@@ -1617,7 +1642,12 @@ public class AiChatPanel
         Exception e,
         String userMessage
     ) {
-        log.error(logMessage, e);
+        CliProviderException cliProviderException = findCliProviderException(e);
+        if (cliProviderException == null) {
+            log.error(logMessage, e);
+        } else {
+            log.warn("{}: {}", logMessage, cliProviderException.getMessage());
+        }
         runOnEdt(() -> {
             if (conversationTracker.history().size() % 2 == 1) {
                 addToConversationHistory(org.qainsights.jmeter.ai.service.HistoryWindow.FAILED_REPLY);
@@ -1626,6 +1656,17 @@ public class AiChatPanel
             transcript.addSystemMessage(userMessage, ThemeColors.error());
             setInputEnabled(true);
         });
+    }
+
+    private static CliProviderException findCliProviderException(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof CliProviderException cliProviderException) {
+                return cliProviderException;
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 
     /**

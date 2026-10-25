@@ -8,12 +8,16 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,6 +28,8 @@ import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.apache.jmeter.util.JMeterUtils;
@@ -32,7 +38,9 @@ import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
 import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
+import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
+import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -79,6 +87,219 @@ class ProviderSetupDialogTest {
             assertTrue(persisted.contains("openrouter.api.key=openrouter-test-key"));
         } finally {
             dialog.dispose();
+        }
+    }
+
+    @Test
+    void openCodeIsVisibleWithoutAppleSupportAndIsConfiguredFromItsEnabledProperty() {
+        List<ProviderSetupOption> withoutApple = ProviderSetupDialog.navigationProviderOptions(() -> false);
+        List<ProviderSetupOption> withApple = ProviderSetupDialog.navigationProviderOptions(() -> true);
+        assertTrue(withoutApple.contains(ProviderSetupOption.OPENCODE));
+        assertTrue(withApple.contains(ProviderSetupOption.OPENCODE));
+        assertFalse(withoutApple.contains(ProviderSetupOption.APPLE_ON_DEVICE));
+        assertTrue(withApple.contains(ProviderSetupOption.APPLE_ON_DEVICE));
+        assertFalse(ProviderSetupOption.OPENCODE.requiresKey());
+        assertNull(ProviderSetupOption.OPENCODE.keyProperty());
+        assertNull(ProviderSetupOption.OPENCODE.serviceType());
+        assertEquals("https://opencode.ai", ProviderSetupOption.OPENCODE.consoleUrl());
+
+        String original = setJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, "false");
+        try {
+            assertFalse(ProviderSetupDialog.isConfigured(ProviderSetupOption.OPENCODE));
+            JMeterUtils.setProperty(OpenCodeCliProvider.ENABLED_KEY, "true");
+            assertTrue(ProviderSetupDialog.isConfigured(ProviderSetupOption.OPENCODE));
+        } finally {
+            restoreJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, original);
+        }
+    }
+
+    @Test
+    void defaultOpenCodeProbeRejectsANonexistentExecutableOverride() {
+        ProviderSetupDialog.OpenCodeSetupProbe probe = ProviderSetupDialog.defaultOpenCodeSetupProbe();
+
+        assertNull(probe.detect("/nonexistent/opencode"));
+    }
+
+    @Test
+    void missingOpenCodeCliDisablesSaveAndShowsInstallInstructions() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        AtomicReference<String> detectedOverride = new AtomicReference<>();
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                new ProviderSetupDialog.OpenCodeSetupProbe() {
+                    @Override
+                    public String detect(String executableOverride) {
+                        detectedOverride.set(executableOverride);
+                        return null;
+                    }
+
+                    @Override
+                    public String test(String executableOverride) {
+                        return "OK";
+                    }
+                },
+                option -> { },
+                () -> { },
+                tempDir.resolve("missing-opencode.properties"));
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                dialog.selectOption(ProviderSetupOption.OPENCODE);
+                component(dialog, "openCodeExecutableField", JTextField.class)
+                        .setText("/bogus/opencode");
+            });
+            awaitOpenCodeDetection(dialog, false);
+            SwingUtilities.invokeAndWait(() -> {
+                assertFalse(component(dialog, "saveButton", QuietButton.class).isEnabled());
+                assertEquals(
+                        "OpenCode CLI not found. Install it with 'npm install -g opencode-ai', "
+                                + "or enter its path below.",
+                        component(dialog, "openCodeDetectionStatus", JTextArea.class).getText());
+            });
+            assertEquals("/bogus/opencode", detectedOverride.get());
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+        }
+    }
+
+    @Test
+    void editingOpenCodeExecutableHidesStaleCopySettingsButton() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                openCodeProbe("/path/from/path", "OK"),
+                option -> { },
+                () -> { },
+                tempDir.resolve("copy-settings.properties"));
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                dialog.selectOption(ProviderSetupOption.OPENCODE);
+                QuietButton copySettings = component(dialog, "copySettingsButton", QuietButton.class);
+                copySettings.setVisible(true);
+                component(dialog, "openCodeExecutableField", JTextField.class)
+                        .setText("/new/opencode");
+                assertFalse(copySettings.isVisible());
+            });
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+        }
+    }
+
+    @Test
+    void successfulOpenCodeTestSavesOnlyEnablementAndEnteredExecutable() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        String originalEnabled = setJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, "false");
+        String originalExecutable = setJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, "");
+        Path propertiesPath = tempDir.resolve("opencode-settings.properties");
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        AtomicReference<ProviderSetupOption> savedOption = new AtomicReference<>();
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                openCodeProbe("/path/from/path", "OK"),
+                savedOption::set,
+                testCompleted::countDown,
+                propertiesPath);
+        try {
+            SwingUtilities.invokeAndWait(() -> dialog.selectOption(ProviderSetupOption.OPENCODE));
+            awaitOpenCodeDetection(dialog, true);
+            SwingUtilities.invokeAndWait(() ->
+                    component(dialog, "openCodeExecutableField", JTextField.class)
+                            .setText("/custom/opencode"));
+            awaitOpenCodeDetection(dialog, true);
+            SwingUtilities.invokeAndWait(() ->
+                    component(dialog, "saveButton", QuietButton.class).doClick());
+
+            assertTrue(testCompleted.await(10, TimeUnit.SECONDS));
+            Properties saved = readProperties(propertiesPath);
+            assertEquals(Set.of(
+                    OpenCodeCliProvider.ENABLED_KEY,
+                    OpenCodeCliProvider.EXECUTABLE_KEY), saved.stringPropertyNames());
+            assertEquals("true", saved.getProperty(OpenCodeCliProvider.ENABLED_KEY));
+            assertEquals("/custom/opencode", saved.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY));
+            assertFalse(saved.containsKey("jmeter.ai.service.type"));
+            assertEquals(ProviderSetupOption.OPENCODE, savedOption.get());
+            assertEquals("true", JMeterUtils.getPropDefault(OpenCodeCliProvider.ENABLED_KEY, "false"));
+            assertEquals("/custom/opencode",
+                    JMeterUtils.getPropDefault(OpenCodeCliProvider.EXECUTABLE_KEY, ""));
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+            restoreJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, originalEnabled);
+            restoreJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, originalExecutable);
+        }
+    }
+
+    @Test
+    void failedOpenCodeTestShowsSaveAnywayAndSecondSavePersistsEnablement() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        String originalEnabled = setJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, "false");
+        String originalExecutable = setJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, "");
+        Path propertiesPath = tempDir.resolve("opencode-save-anyway.properties");
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        AtomicReference<ProviderSetupOption> savedOption = new AtomicReference<>();
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                new ProviderSetupDialog.OpenCodeSetupProbe() {
+                    @Override
+                    public String detect(String executableOverride) {
+                        return "/path/from/path";
+                    }
+
+                    @Override
+                    public String test(String executableOverride) {
+                        throw new CliProviderException("Probe failed\nAdditional detail");
+                    }
+                },
+                savedOption::set,
+                testCompleted::countDown,
+                propertiesPath);
+        try {
+            SwingUtilities.invokeAndWait(() -> dialog.selectOption(ProviderSetupOption.OPENCODE));
+            awaitOpenCodeDetection(dialog, true);
+            SwingUtilities.invokeAndWait(() -> component(dialog, "testButton", QuietButton.class).doClick());
+            assertTrue(testCompleted.await(10, TimeUnit.SECONDS));
+            SwingUtilities.invokeAndWait(() -> {
+                String status = component(dialog, "statusText", JTextArea.class).getText();
+                assertTrue(status.contains("OpenCode failed: Probe failed Additional detail"));
+                assertTrue(status.contains("You can save anyway."));
+                component(dialog, "saveButton", QuietButton.class).doClick();
+            });
+
+            assertEquals(ProviderSetupOption.OPENCODE, savedOption.get());
+            Properties saved = readProperties(propertiesPath);
+            assertEquals(Set.of(OpenCodeCliProvider.ENABLED_KEY), saved.stringPropertyNames());
+            assertEquals("true", saved.getProperty(OpenCodeCliProvider.ENABLED_KEY));
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+            restoreJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, originalEnabled);
+            restoreJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, originalExecutable);
+        }
+    }
+
+    @Test
+    void clearingOpenCodeExecutablePersistsEmptyValueAndUpdatesRuntimeProperty() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        String originalEnabled = setJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, "false");
+        String originalExecutable = setJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, "/old/opencode");
+        Path propertiesPath = tempDir.resolve("opencode-cleared-path.properties");
+        CountDownLatch testCompleted = new CountDownLatch(1);
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                openCodeProbe("/path/from/path", "OK"),
+                option -> { },
+                testCompleted::countDown,
+                propertiesPath);
+        try {
+            SwingUtilities.invokeAndWait(() -> dialog.selectOption(ProviderSetupOption.OPENCODE));
+            awaitOpenCodeDetection(dialog, true);
+            SwingUtilities.invokeAndWait(() ->
+                    component(dialog, "openCodeExecutableField", JTextField.class).setText(""));
+            awaitOpenCodeDetection(dialog, true);
+            SwingUtilities.invokeAndWait(() ->
+                    component(dialog, "saveButton", QuietButton.class).doClick());
+            assertTrue(testCompleted.await(10, TimeUnit.SECONDS));
+
+            Properties saved = readProperties(propertiesPath);
+            assertEquals("", saved.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY));
+            assertEquals("", JMeterUtils.getPropDefault(OpenCodeCliProvider.EXECUTABLE_KEY, "unset"));
+            assertEquals("true", JMeterUtils.getPropDefault(OpenCodeCliProvider.ENABLED_KEY, "false"));
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+            restoreJMeterProperty(OpenCodeCliProvider.ENABLED_KEY, originalEnabled);
+            restoreJMeterProperty(OpenCodeCliProvider.EXECUTABLE_KEY, originalExecutable);
         }
     }
 
@@ -961,5 +1182,83 @@ class ProviderSetupDialogTest {
         } else {
             JMeterUtils.setProperty(key, original);
         }
+    }
+
+    private ProviderSetupDialog createOpenCodeDialog(
+            ProviderSetupDialog.OpenCodeSetupProbe probe,
+            java.util.function.Consumer<ProviderSetupOption> onSaved,
+            Runnable testCompletion,
+            Path propertiesPath) throws Exception {
+        AtomicReference<ProviderSetupDialog> dialog = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> dialog.set(new ProviderSetupDialog(
+                null,
+                onSaved,
+                false,
+                new ProviderConnectionTester(request ->
+                        new ProviderConnectionTester.Response(200, "{}")),
+                propertiesPath,
+                testCompletion,
+                () -> false,
+                org.qainsights.jmeter.ai.apple.AppleFoundationHelper.Status::available,
+                probe)));
+        return dialog.get();
+    }
+
+    private static ProviderSetupDialog.OpenCodeSetupProbe openCodeProbe(String path, String reply) {
+        return new ProviderSetupDialog.OpenCodeSetupProbe() {
+            @Override
+            public String detect(String executableOverride) {
+                return executableOverride.isBlank() ? path : executableOverride;
+            }
+
+            @Override
+            public String test(String executableOverride) {
+                return reply;
+            }
+        };
+    }
+
+    private static void awaitOpenCodeDetection(ProviderSetupDialog dialog, boolean found) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            AtomicBoolean complete = new AtomicBoolean();
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    Field detectingField = ProviderSetupDialog.class.getDeclaredField("openCodeDetecting");
+                    detectingField.setAccessible(true);
+                    boolean detecting = detectingField.getBoolean(dialog);
+                    String status = component(dialog, "openCodeDetectionStatus", JTextArea.class)
+                            .getText();
+                    complete.set(!detecting && (found
+                            ? status.startsWith("OpenCode CLI found:")
+                            : status.startsWith("OpenCode CLI not found.")));
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            if (complete.get()) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("OpenCode detection did not reach the expected state");
+    }
+
+    private static <T> T component(ProviderSetupDialog dialog, String fieldName, Class<T> type) {
+        try {
+            Field field = ProviderSetupDialog.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return type.cast(field.get(dialog));
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Properties readProperties(Path path) throws IOException {
+        Properties properties = new Properties();
+        try (var input = Files.newInputStream(path)) {
+            properties.load(input);
+        }
+        return properties;
     }
 }

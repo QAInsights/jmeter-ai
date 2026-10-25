@@ -24,7 +24,7 @@ class BrandLogoTest {
 
     private static final List<String> LOGOS = List.of(
             "anthropic", "openai", "gemini", "deepseek", "grok", "meta",
-            "ollama", "openrouter", "apple", "gemma", "typesafe");
+            "ollama", "openrouter", "opencode", "apple", "gemma", "typesafe");
 
     @Test
     void everyLogoRendersAtCommonSizesWithLightAndDarkForegrounds() {
@@ -61,6 +61,7 @@ class BrandLogoTest {
         assertEquals("grok", BrandLogo.logoFor(ProviderSetupOption.GROK));
         assertEquals("meta", BrandLogo.logoFor(ProviderSetupOption.META_MUSE));
         assertEquals("openrouter", BrandLogo.logoFor(ProviderSetupOption.OPENROUTER));
+        assertEquals("opencode", BrandLogo.logoFor(ProviderSetupOption.OPENCODE));
         assertEquals("ollama", BrandLogo.logoFor(ProviderSetupOption.OLLAMA));
         assertEquals("apple", BrandLogo.logoFor(ProviderSetupOption.APPLE_ON_DEVICE));
         assertNull(BrandLogo.logoFor(null));

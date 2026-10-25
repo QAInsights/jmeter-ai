@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
  */
 final class TelemetryModels {
     private static final String[] PREFIXES = {
-        "openai", "ollama", "deepseek", "google", "grok", "openrouter", "meta", "bedrock", "apple", "codex", "claude-code",
+        "openai", "ollama", "deepseek", "google", "grok", "openrouter", "meta", "bedrock", "apple", "codex",
+        "claude-code", "opencode",
     };
     private static final String ID = "[a-z0-9.-]";
     private static final Pattern WELL_KNOWN = Pattern.compile(

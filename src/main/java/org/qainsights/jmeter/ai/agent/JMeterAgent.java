@@ -232,7 +232,7 @@ public final class JMeterAgent {
 
     /**
      * Builds a factory that wires a CLI-backed {@link CliAgentChatModel} (Codex,
-     * Claude Code) for each run. Those CLIs have no tool-calling API, so tools
+     * Claude Code, OpenCode) for each run. Those CLIs have no tool-calling API, so tools
      * travel in the prompt via {@link org.qainsights.jmeter.ai.agent.cli.CliToolProtocol};
      * reasoning settings do not apply - the CLI owns its own thinking budget.
      */
@@ -311,7 +311,7 @@ public final class JMeterAgent {
     }
 
     /**
-     * Wires an agent against a CLI-backed provider (Codex, Claude Code), reusing the
+     * Wires an agent against a CLI-backed provider (Codex, Claude Code, OpenCode), reusing the
      * same tool registry, system prompt, limits and destructive-tool confirmation as
      * {@link #forClaude(ClaudeService)}.
      */
