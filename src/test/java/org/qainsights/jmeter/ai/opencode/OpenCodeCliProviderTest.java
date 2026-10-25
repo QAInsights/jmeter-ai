@@ -232,7 +232,7 @@ class OpenCodeCliProviderTest {
     }
 
     @Test
-    void mapsUnknownErrorToUnknownModelWhenAbsentFromDiscoveredModels() {
+    void preservesUnknownErrorMessageAndHintsWhenModelIsAbsentFromDiscoveredModels() {
         runner.queue(CliProcessResult.of(0, "known/model\n"));
         runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
         OpenCodeCliProvider provider = provider("opencode");
@@ -241,8 +241,9 @@ class OpenCodeCliProviderTest {
         CliProviderException failure = assertThrows(CliProviderException.class,
                 () -> provider.execute("prompt", "nope/missing-model"));
 
-        assertEquals("OpenCode doesn't know the model 'nope/missing-model'. "
-                + "Pick one from the list or check 'opencode models'.", failure.getMessage());
+        assertEquals("OpenCode failed: Unexpected server error. Check server logs for details. "
+                + "'nope/missing-model' isn't in the 'opencode models' list, so check the model ID.",
+                failure.getMessage());
     }
 
     @Test

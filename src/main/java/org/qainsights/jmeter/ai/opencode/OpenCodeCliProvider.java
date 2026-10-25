@@ -270,8 +270,12 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
                 && discovered != null && !discovered.isEmpty()
                 && !discovered.contains(model)
                 && !configuredModels().contains(model)) {
-            return "OpenCode doesn't know the model '" + model
-                    + "'. Pick one from the list or check 'opencode models'.";
+            String modelHint = "'" + model
+                    + "' isn't in the 'opencode models' list, so check the model ID.";
+            if (!message.isBlank()) {
+                return "OpenCode failed: " + firstLines(message) + " " + modelHint;
+            }
+            return describeFailure(result) + " " + modelHint;
         }
         if (!message.isBlank()) {
             return "OpenCode failed: " + firstLines(message);
