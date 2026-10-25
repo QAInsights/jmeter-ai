@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.telemetry;
 
 import java.util.regex.Pattern;
 import java.util.Locale;
+import java.util.Set;
 import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,16 @@ public final class Telemetry {
     private static volatile TelemetryState state;
     private static volatile String lastSelectedModel;
     private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
+    private static final Set<String> SETUP_OPTIONS = Set.of(
+            "anthropic", "openai", "gemini", "deepseek", "grok", "metamuse",
+            "openrouter", "opencode", "ollama", "smartrouting", "appleondevice");
+    private static final Set<String> SETUP_OUTCOMES = Set.of(
+            "ok", "auth_rejected", "rate_limited", "http_error", "network_error");
+    private static final Set<String> DECISION_BACKENDS = Set.of("typesafe", "openai", "openrouter");
+    private static final Set<String> DECISION_RESULTS = Set.of("ok", "fail", "slow");
+    private static final Set<String> ERROR_CATEGORIES = Set.of(
+            "auth", "forbidden", "not_found", "bad_request", "rate_limit",
+            "server", "timeout", "unreachable", "other");
     /** Failure key for calls to a tool name that is not registered; the model's name is never sent. */
     static final String UNKNOWN_TOOL_FAIL_KEY = "toolfail__unknown";
 
@@ -64,7 +75,9 @@ public final class Telemetry {
 
             if (loaded.isNewInstall()) {
                 log.info("Feather Wand sends an anonymous daily usage ping "
-                        + "(plugin/JMeter/Java version, OS, provider and well-known model name, feature and error counts). "
+                        + "(plugin/JMeter/Java version, OS, provider and well-known model name, provider counts per message, "
+                        + "setup test and save outcomes, Decisions call results, UI feature counts, Agent run-size buckets, "
+                        + "cancellation and error counts; no prompts, keys or test plan content). "
                         + "Disable with jmeter.ai.telemetry.enabled=false or DO_NOT_TRACK=1.");
             }
 
@@ -98,6 +111,58 @@ public final class Telemetry {
     /** Remembers the chat-panel model of the latest Chat or Agent message for the daily ping. */
     public static void noteModel(String selectedModel) {
         lastSelectedModel = selectedModel;
+    }
+
+    public static void recordChatProvider(String model) {
+        recordKey("msg_" + TelemetryModels.providerKey(model));
+    }
+
+    public static void recordAgentProvider(String model) {
+        recordKey("agentrun_" + TelemetryModels.providerKey(model));
+    }
+
+    public static void recordSetupTest(String option, String outcome) {
+        String optionKey = setupOptionKey(option);
+        String outcomeKey = setupOutcomeKey(outcome);
+        if (optionKey != null && outcomeKey != null) {
+            recordKey("setup_test_" + optionKey + "_" + outcomeKey);
+        }
+    }
+
+    public static void recordSetupSave(String option) {
+        String optionKey = setupOptionKey(option);
+        if (optionKey != null) {
+            recordKey("setup_save_" + optionKey);
+        }
+    }
+
+    public static void recordDecisionResult(String backend, String result, String category) {
+        String backendKey = backend == null ? "" : backend.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]", "");
+        String resultKey = result == null ? "" : result.toLowerCase(Locale.ROOT);
+        if (!DECISION_BACKENDS.contains(backendKey) || !DECISION_RESULTS.contains(resultKey)) {
+            return;
+        }
+        if ("fail".equals(resultKey)) {
+            String categoryKey = category == null ? "" : category.toLowerCase(Locale.ROOT)
+                    .replaceAll("[^a-z0-9_]", "");
+            if (!ERROR_CATEGORIES.contains(categoryKey)) {
+                categoryKey = "other";
+            }
+            recordKey("decide_fail_" + backendKey + "_" + categoryKey);
+        } else {
+            recordKey("decide_" + resultKey + "_" + backendKey);
+        }
+    }
+
+    public static void recordAgentSteps(int iterations) {
+        if (iterations <= 5) {
+            record(TelemetryFeature.AGENT_STEPS_1_5);
+        } else if (iterations <= 15) {
+            record(TelemetryFeature.AGENT_STEPS_6_15);
+        } else {
+            record(TelemetryFeature.AGENT_STEPS_16P);
+        }
     }
 
     static String lastSelectedModel() {
@@ -158,8 +223,23 @@ public final class Telemetry {
     }
 
     static String errorKey(String provider, String category) {
-        String p = provider == null ? "" : provider.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-        return "err_" + (p.isEmpty() ? "unknown" : p.length() > 12 ? p.substring(0, 12) : p) + "_" + category;
+        String categoryKey = category == null ? "" : category.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_]", "");
+        if (!ERROR_CATEGORIES.contains(categoryKey)) {
+            categoryKey = "other";
+        }
+        return "err_" + TelemetryModels.normalizeProviderKey(provider) + "_" + categoryKey;
+    }
+
+    private static String setupOptionKey(String option) {
+        String key = option == null ? "" : option.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return SETUP_OPTIONS.contains(key) ? key : null;
+    }
+
+    private static String setupOutcomeKey(String outcome) {
+        String key = outcome == null ? "" : outcome.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_]", "_").replaceAll("_+", "_");
+        return SETUP_OUTCOMES.contains(key) ? key : null;
     }
 
     private static void recordKey(String key) {

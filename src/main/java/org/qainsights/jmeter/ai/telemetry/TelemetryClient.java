@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Map;
@@ -22,7 +23,8 @@ import java.util.Properties;
  */
 public class TelemetryClient {
     private static final Logger log = LoggerFactory.getLogger(TelemetryClient.class);
-    static final int MAX_FEATURES = 50;
+    static final int MAX_FEATURES = 100;
+    static final int MAX_PAYLOAD_BYTES = 8000;
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String VERSION_RESOURCE =
             "org/qainsights/jmeter/ai/telemetry/version.properties";
@@ -57,8 +59,12 @@ public class TelemetryClient {
             if (today.equals(state.getLastPingDay())) {
                 return;
             }
-            Map<String, Integer> snapshot = limit(counters.snapshot());
+            Map<String, Integer> snapshot = limitPayload(counters.snapshot());
             String json = buildPayload(snapshot);
+            if (json.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
+                log.debug("Telemetry payload exceeds the byte budget");
+                return;
+            }
             if (sender.send(json)) {
                 counters.subtract(snapshot);
                 state.setLastPingDay(today);
@@ -106,6 +112,27 @@ public class TelemetryClient {
                 .limit(MAX_FEATURES)
                 .forEach(e -> kept.put(e.getKey(), e.getValue()));
         return kept;
+    }
+
+    Map<String, Integer> limitPayload(Map<String, Integer> snapshot) {
+        Map<String, Integer> kept = new LinkedHashMap<>(limit(snapshot));
+        while (!kept.isEmpty() && payloadBytes(kept) > MAX_PAYLOAD_BYTES) {
+            Map.Entry<String, Integer> leastUsed = null;
+            for (Map.Entry<String, Integer> entry : kept.entrySet()) {
+                if (leastUsed == null || entry.getValue() < leastUsed.getValue()) {
+                    leastUsed = entry;
+                }
+            }
+            if (leastUsed == null) {
+                break;
+            }
+            kept.remove(leastUsed.getKey());
+        }
+        return kept;
+    }
+
+    private int payloadBytes(Map<String, Integer> features) {
+        return buildPayload(features).getBytes(StandardCharsets.UTF_8).length;
     }
 
     public static String pluginVersion() {

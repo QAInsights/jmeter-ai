@@ -97,6 +97,8 @@ public final class ProviderErrors {
             return "not_found";
         } else if (status == 400 || status == 422) {
             return "bad_request";
+        } else if (status == 429) {
+            return "rate_limit";
         } else if (status == 408 || status >= 500) {
             return "server";
         } else if (status > 0) {
@@ -143,6 +145,16 @@ public final class ProviderErrors {
             if (t instanceof com.google.genai.errors.ApiException) {
                 return ((com.google.genai.errors.ApiException) t).code();
             }
+            if (t instanceof software.amazon.awssdk.awscore.exception.AwsServiceException) {
+                return ((software.amazon.awssdk.awscore.exception.AwsServiceException) t).statusCode();
+            }
+            if (t instanceof org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException) {
+                int status = ((org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException) t)
+                        .httpCode();
+                if (status > 0) {
+                    return status;
+                }
+            }
         }
         return -1;
     }
@@ -164,7 +176,8 @@ public final class ProviderErrors {
                     || t instanceof NoRouteToHostException
                     || t instanceof com.openai.errors.OpenAIIoException
                     || t instanceof com.anthropic.errors.AnthropicIoException
-                    || t instanceof com.google.genai.errors.GenAiIOException) {
+                    || t instanceof com.google.genai.errors.GenAiIOException
+                    || t instanceof software.amazon.awssdk.core.exception.SdkClientException) {
                 return true;
             }
         }

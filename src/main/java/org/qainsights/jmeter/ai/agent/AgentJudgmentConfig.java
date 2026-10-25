@@ -8,6 +8,7 @@ import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.OpenRouterDecisionsJudgmentProvider;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
+import org.qainsights.jmeter.ai.telemetry.TelemetryJudgmentProvider;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 
 /**
@@ -132,27 +133,31 @@ public final class AgentJudgmentConfig {
             if (!AgentRoutingConfig.usableSecret(apiKey)) {
                 return null;
             }
-            return new OpenAiDecisionsJudgmentProvider(apiKey.trim(),
+            return monitored(new OpenAiDecisionsJudgmentProvider(apiKey.trim(),
                     AiConfig.getProperty(OPENAI_MODEL_KEY, OpenAiDecisionsJudgmentProvider.DEFAULT_MODEL),
-                    AgentRoutingConfig.timeout());
+                    AgentRoutingConfig.timeout()));
         }
         if (OPENROUTER.equals(provider())) {
             String apiKey = AiConfig.getProperty(OPENROUTER_API_KEY, "");
             if (!AgentRoutingConfig.usableSecret(apiKey)) {
                 return null;
             }
-            return new OpenRouterDecisionsJudgmentProvider(apiKey.trim(),
+            return monitored(new OpenRouterDecisionsJudgmentProvider(apiKey.trim(),
                     AiConfig.getProperty(OPENROUTER_BASE_URL_KEY, OpenRouterDecisionsJudgmentProvider.DEFAULT_BASE_URL),
                     AiConfig.getProperty(OPENROUTER_MODEL_KEY, OpenRouterDecisionsJudgmentProvider.DEFAULT_MODEL),
-                    AgentRoutingConfig.timeout());
+                    AgentRoutingConfig.timeout()));
         }
         String apiKey = AiConfig.getProperty(AgentRoutingConfig.API_KEY, "");
         if (!AgentRoutingConfig.usableSecret(apiKey)) {
             return null;
         }
-        return new TypeSafeJudgmentProvider(apiKey,
+        return monitored(new TypeSafeJudgmentProvider(apiKey,
                 AiConfig.getProperty(AgentRoutingConfig.BASE_URL_KEY, TypeSafeJudgmentProvider.DEFAULT_BASE_URL),
                 AiConfig.getProperty(AgentRoutingConfig.MODEL_KEY, TypeSafeJudgmentProvider.DEFAULT_MODEL),
-                AgentRoutingConfig.timeout());
+                AgentRoutingConfig.timeout()));
+    }
+
+    private static JudgmentProvider monitored(JudgmentProvider delegate) {
+        return delegate == null ? null : new TelemetryJudgmentProvider(delegate, provider());
     }
 }

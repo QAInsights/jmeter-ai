@@ -5,6 +5,8 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.mcpserver.FeatherWandMcpServer;
 import org.qainsights.jmeter.ai.mcpserver.McpClientSetup;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -211,6 +213,7 @@ public class McpServerMenuItem extends JMenuItem {
             copy.setEnabled(full != null);
             copy.addActionListener(e -> {
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(full), null);
+                Telemetry.record(TelemetryFeature.MCP_SETUP_COPY);
                 copy.setText("Copied");
             });
             JPanel row = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));

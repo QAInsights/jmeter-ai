@@ -15,6 +15,8 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -138,6 +140,7 @@ class ModelSelectorPanel extends JPanel {
      */
     private void applyModel(String model) {
         currentModel = model;
+        Telemetry.noteModel(model);
         selectorButton.setText(ModelDisplay.parse(model)[0]);
         selectorButton.setToolTipText("Selected model: " + ModelDisplay.formatLabel(model)
                 + " - click to change");
@@ -163,7 +166,9 @@ class ModelSelectorPanel extends JPanel {
      */
     void select(String model) {
         log.info("Selected model: {}", model);
+        Telemetry.record(TelemetryFeature.PICKER_SELECT);
         if (!allModels.contains(model)) {
+            Telemetry.record(TelemetryFeature.PICKER_CUSTOM_ID);
             allModels.add(model); // a model id just typed into the picker footer
         }
         applyModel(model);
@@ -214,6 +219,7 @@ class ModelSelectorPanel extends JPanel {
         if (currentModel == null) {
             return;
         }
+        Telemetry.record(TelemetryFeature.PICKER_PIN);
         prefs.togglePinned(currentModel); // change listener syncs the star
     }
 }

@@ -121,9 +121,15 @@ describe("POST /v1/ping", () => {
 		expect((await postPing(pingBody({ features: { "Bad-Key": 1 } }))).status).toBe(400);
 	});
 
-	it("rejects more than 50 feature keys", async () => {
+	it("accepts exactly 100 feature keys", async () => {
 		const features: Record<string, number> = {};
-		for (let i = 0; i < 51; i++) features[`f_${i}`] = 1;
+		for (let i = 0; i < 100; i++) features[`f_${i}`] = 1;
+		expect((await postPing(pingBody({ features }))).status).toBe(204);
+	});
+
+	it("rejects more than 100 feature keys", async () => {
+		const features: Record<string, number> = {};
+		for (let i = 0; i < 101; i++) features[`f_${i}`] = 1;
 		expect((await postPing(pingBody({ features }))).status).toBe(400);
 	});
 
@@ -137,18 +143,28 @@ describe("POST /v1/ping", () => {
 		expect((await postPing("not json")).status).toBe(400);
 	});
 
-	it("rejects bodies over 4 KB", async () => {
-		const big = pingBody({ padding: "x".repeat(5000) });
+	it("rejects bodies over 8 KB", async () => {
+		const big = pingBody({ padding: "x".repeat(8192) });
 		expect((await postPing(big)).status).toBe(400);
 	});
 
 	it("rejects oversized bodies by Content-Length header", async () => {
 		const res = await SELF.fetch("https://example.com/v1/ping", {
 			method: "POST",
-			headers: { "Content-Type": "application/json", "Content-Length": "9999" },
+			headers: { "Content-Type": "application/json", "Content-Length": "8193" },
 			body: JSON.stringify(pingBody()),
 		});
 		expect(res.status).toBe(400);
+	});
+
+	it("accepts 100 maximum-length feature keys with realistic metadata", async () => {
+		const features: Record<string, number> = {};
+		for (let i = 0; i < 100; i++) {
+			features[`f${String(i).padStart(2, "0")}_${"x".repeat(36)}`] = 1_000_000;
+		}
+		const body = pingBody({ features });
+		expect(new TextEncoder().encode(JSON.stringify(body)).length).toBeLessThanOrEqual(8192);
+		expect((await postPing(body)).status).toBe(204);
 	});
 
 	it("rate limits repeated requests from the same IP", async () => {

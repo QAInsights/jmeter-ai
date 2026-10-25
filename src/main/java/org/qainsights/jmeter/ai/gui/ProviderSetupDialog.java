@@ -73,6 +73,8 @@ import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
 import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.opencode.OpenCodeAuthStatus;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
@@ -1470,6 +1472,7 @@ final class ProviderSetupDialog extends JDialog {
                         throw new CliProviderException("OpenCode returned an empty response.");
                     }
                     openCodeTestResultCurrent = true;
+                    Telemetry.recordSetupTest(ProviderSetupOption.OPENCODE.name(), "ok");
                     setStatus("Connected. OpenCode replied.", ThemeColors.success());
                     if (saveAfterTest) {
                         saveSettings();
@@ -1479,6 +1482,8 @@ final class ProviderSetupDialog extends JDialog {
                             && generation == openCodeRequestGeneration
                             && override.equals(openCodeExecutableField.getText().trim())) {
                         openCodeTestResultCurrent = true;
+                        Telemetry.recordSetupTest(ProviderSetupOption.OPENCODE.name(),
+                                openCodeOutcome(e));
                         setStatus("OpenCode failed: " + openCodeFailureMessage(e)
                                 + " You can save anyway.", ThemeColors.error());
                     }
@@ -1512,6 +1517,21 @@ final class ProviderSetupDialog extends JDialog {
                 .map(String::trim)
                 .filter(line -> !line.isBlank())
                 .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private static String openCodeOutcome(Throwable throwable) {
+        String category = ProviderErrors.category(throwable);
+        if ("auth".equals(category) || "forbidden".equals(category)) {
+            return "auth_rejected";
+        }
+        if ("rate_limit".equals(category)) {
+            return "rate_limited";
+        }
+        if ("server".equals(category) || "bad_request".equals(category)
+                || "not_found".equals(category)) {
+            return "http_error";
+        }
+        return "network_error";
     }
 
     private boolean requestInputsMatch(
@@ -1579,6 +1599,7 @@ final class ProviderSetupDialog extends JDialog {
         if (option != selectedOption) {
             return;
         }
+        Telemetry.recordSetupTest(option.name(), result.outcome().name());
         lastResult = result;
         resultCurrent = true;
         copySettingsButton.setVisible(false);
@@ -1723,12 +1744,14 @@ final class ProviderSetupDialog extends JDialog {
             if (selectedOption == ProviderSetupOption.SMART_ROUTING) {
                 updateSmartRoutingRow();
             }
+            Telemetry.recordSetupSave(selectedOption.name());
             onSaved.accept(callbackOption);
             dispose();
         } catch (IOException e) {
             if (selectedOption == ProviderSetupOption.SMART_ROUTING) {
                 updateSmartRoutingRow();
             }
+            Telemetry.recordSetupSave(selectedOption.name());
             onSaved.accept(callbackOption);
             String reason = e.getMessage() == null || e.getMessage().isBlank()
                     ? e.getClass().getSimpleName() : e.getMessage();

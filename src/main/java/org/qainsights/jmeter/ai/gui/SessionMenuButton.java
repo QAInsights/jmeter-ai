@@ -14,6 +14,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.session.ConversationExporter;
 import org.qainsights.jmeter.ai.service.session.ConversationSession;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,6 +107,8 @@ class SessionMenuButton extends QuietButton {
         }
         try {
             ConversationExporter.write(session, target, format);
+            Telemetry.record(format == ConversationExporter.Format.HTML
+                    ? TelemetryFeature.EXPORT_HTML : TelemetryFeature.EXPORT_MD);
         } catch (IOException e) {
             log.warn("Could not export conversation to {}", target, e);
             JOptionPane.showMessageDialog(dialogParent,

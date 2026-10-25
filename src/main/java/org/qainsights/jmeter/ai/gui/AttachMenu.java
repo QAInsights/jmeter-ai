@@ -11,6 +11,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.apache.jmeter.util.JMeterUtils;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,15 +39,24 @@ class AttachMenu extends JPopupMenu {
                         UiTokens.SPACE_1, UiTokens.SPACE_1)));
 
         JMenuItem browse = new JMenuItem("Attach file…");
-        browse.addActionListener(e -> browseForFile(null));
+        browse.addActionListener(e -> {
+            Telemetry.record(TelemetryFeature.ATTACH_FILE);
+            browseForFile(null);
+        });
         add(browse);
 
         JMenuItem jmeterLog = new JMenuItem("Attach jmeter.log");
-        jmeterLog.addActionListener(e -> attachJMeterLog());
+        jmeterLog.addActionListener(e -> {
+            Telemetry.record(TelemetryFeature.ATTACH_LOG);
+            attachJMeterLog();
+        });
         add(jmeterLog);
 
         JMenuItem results = new JMenuItem("Attach recent results…");
-        results.addActionListener(e -> browseForFile(binDirectory()));
+        results.addActionListener(e -> {
+            Telemetry.record(TelemetryFeature.ATTACH_RESULTS);
+            browseForFile(binDirectory());
+        });
         add(results);
     }
 

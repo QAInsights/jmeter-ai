@@ -14,6 +14,8 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningCapabilities;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /**
  * The thinking/effort controls that sit in the toolbar next to the model
@@ -48,6 +50,7 @@ class ReasoningControls extends JPanel {
         thinkingToggle.setSelected(settings.isThinkingEnabled());
         thinkingToggle.addActionListener(e -> {
             if (!updating) {
+                Telemetry.record(TelemetryFeature.REASONING_SET);
                 settings.userSetThinkingEnabled(thinkingToggle.isSelected());
             }
         });
@@ -70,6 +73,7 @@ class ReasoningControls extends JPanel {
             if (!updating) {
                 Object selected = effortCombo.getSelectedItem();
                 if (selected != null) {
+                    Telemetry.record(TelemetryFeature.REASONING_SET);
                     settings.userSetEffort((String) selected);
                 }
             }

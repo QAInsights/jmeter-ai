@@ -155,6 +155,7 @@ public class JSR223ContextMenu {
         // Add AI try, catch, finally menu item
         JMenuItem aiTryCatchFinallyItem = new JMenuItem("Try, Catch, Finally");
         aiTryCatchFinallyItem.addActionListener(e -> {
+            Telemetry.record(TelemetryFeature.JSR223_TRYCATCH);
             if (refactorer != null) {
                 refactorer.refactorTryCatchFinally(textArea);
             }
@@ -164,6 +165,7 @@ public class JSR223ContextMenu {
         // Add format code menu item
         JMenuItem formatCodeItem = new JMenuItem("Format Code");
         formatCodeItem.addActionListener(e -> {
+            Telemetry.record(TelemetryFeature.JSR223_FORMAT);
             String code = textArea.getText();
             if (code != null && !code.trim().isEmpty()) {
                 try {

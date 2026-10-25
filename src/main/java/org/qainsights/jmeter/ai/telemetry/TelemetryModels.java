@@ -58,6 +58,19 @@ final class TelemetryModels {
         return "anthropic";
     }
 
+    /** A provider label suitable for a parameterized telemetry counter key. */
+    static String providerKey(String selectedModel) {
+        return normalizeProviderKey(provider(selectedModel));
+    }
+
+    static String normalizeProviderKey(String provider) {
+        String key = provider == null ? "" : provider.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        if (key.isEmpty()) {
+            return "unknown";
+        }
+        return key.length() > 12 ? key.substring(0, 12) : key;
+    }
+
     /** The configured default model for the configured service, used before any message is sent. */
     static String configuredModel() {
         String type = AiConfig.getProperty("jmeter.ai.service.type", "openai").trim().toLowerCase(Locale.ROOT);

@@ -47,6 +47,15 @@ class TelemetryModelsTest {
     }
 
     @Test
+    void providerKeysAreNormalizedAndBounded() {
+        assertEquals("claudecode", TelemetryModels.providerKey("claude-code:sonnet"));
+        assertEquals("openrouter", TelemetryModels.providerKey("openrouter:anthropic/claude-sonnet-5.5"));
+        assertEquals("anthropic", TelemetryModels.providerKey("claude-sonnet-4-5"));
+        assertEquals("unknown", TelemetryModels.normalizeProviderKey("!!!"));
+        assertEquals("abcdefghijkl", TelemetryModels.normalizeProviderKey("ABC-DEF-GHIJKL-MNO"));
+    }
+
+    @Test
     void keysAreServerSafe() {
         assertEquals("tool_add_element", Telemetry.toolKey("add_element"));
         assertEquals("tool_bad_name_", Telemetry.toolKey("Bad Name!"));

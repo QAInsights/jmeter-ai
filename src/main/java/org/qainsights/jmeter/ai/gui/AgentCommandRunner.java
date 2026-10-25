@@ -136,6 +136,7 @@ final class AgentCommandRunner {
                     }
                     Telemetry.record(result.isCompleted()
                             ? TelemetryFeature.OUTCOME_COMPLETED : TelemetryFeature.OUTCOME_STEP_LIMIT);
+                    Telemetry.recordAgentSteps(result.getIterations());
                     String summary = result.getFinalText();
                     if (!result.isCompleted()) {
                         summary = (summary.isEmpty() ? "" : summary + "\n\n")

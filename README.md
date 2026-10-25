@@ -1313,7 +1313,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
-Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Only the count is sent, never what you typed or what the feature produced.
+Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Additional counts cover provider families used for Chat and Agent messages, provider setup opens/tests/saves, model-picker actions, reasoning changes, attachments, exports, undo and redo, `@` suggestion picks, JSR223 formatting and try/catch, Extract This, correlation runs and applies, CLI launches, MCP setup copies, and Donate clicks. Only the count is sent, never what you typed or what the feature produced.
 
 These counters are also sent, again as counts only:
 
@@ -1322,13 +1322,22 @@ These counters are also sent, again as counts only:
 | `outcome_completed`, `outcome_step_limit`, `outcome_error`, `outcome_fallback` | How each Agent run ended: finished, stopped at the step limit, failed with a provider or configuration error, or fell back to a plain AI response. |
 | `outcome_tool_failed` | Agent tool calls that returned an error, including calls with a missing required parameter or an unknown tool name. |
 | `outcome_tool_declined` | Agent tool calls you declined at a confirmation prompt. The tool never ran. |
+| `outcome_cancelled` | A response stopped by the user while a cancel handle was active. |
+| `msg_<provider>` and `agentrun_<provider>` | Chat messages and Agent runs grouped by provider family, using fixed provider labels such as `anthropic`, `openai`, `opencode`, or `claudecode`. These are counts, not model names. |
+| `agent_steps_1_5`, `agent_steps_6_15`, `agent_steps_16p` | Agent run size grouped into iteration buckets. |
+| `setup_open`, `setup_test_<option>_<outcome>`, `setup_save_<option>`, `welcome_no_provider` | Provider setup funnel counts. Options and outcomes come from fixed code enums. |
+| `decide_ok_<backend>`, `decide_fail_<backend>_<type>`, `decide_slow_<backend>` | Smart routing and triage Decisions call results, error category, and calls taking over two seconds. |
+| `picker_*` | Model picker opens, searches, pins, selections, and custom-id selections. |
+| `reasoning_set`, `attach_*`, `export_md`, `export_html`, `undo`, `redo`, `intellisense_pick`, `jsr223_trycatch`, `jsr223_format`, `extract_opened`, `correlation_run`, `correlation_apply` | UI action counts. |
+| `cli_claudecode`, `cli_codex`, `cli_opencode`, `cli_copilot`, `cli_antigravity`, `cli_grok`, `cli_other` | Successful AI CLI process starts grouped by adapter type. |
+| `mcp_setup_copy`, `donate_click` | MCP client setup snippet copies and Donate clicks. |
 | `tool_<name>` | Agent tool calls per built-in tool, for example `tool_add_element`. Tool arguments and results are never sent. |
 | `toolfail_<name>` | Agent tool calls per built-in tool that returned an error (including a missing required parameter), for example `toolfail_update_element_property`. Calls to a tool name that does not exist count as `toolfail__unknown`, and the requested name is not sent. The error message is never sent. |
 | `route_focused`, `route_all_tools`, `route_unavailable`, `route_expanded` | Smart routing cards: a focused tool pack, all tools (low confidence), backend unavailable, and mid-run tool expansion. |
 | `triage_run`, `triage_unclassified` | Failure triage advisories, and those where no failure could be classified. |
 | `err_<provider>_<type>` | Provider errors, for example `err_openai_auth`. Types: `auth`, `forbidden`, `not_found`, `bad_request`, `rate_limit`, `server`, `timeout`, `unreachable`, `other`. The error message is never sent. |
 
-At most 50 counters go in one ping; any extra ones wait for the next day's ping.
+At most 100 counters go in one ping; any extra ones wait for the next day's ping.
 
 A complete ping looks like this:
 
@@ -1352,7 +1361,7 @@ A complete ping looks like this:
 
 ### What is never sent
 
-Prompts, AI responses, chat history, error messages, tool arguments or results, custom or fine-tuned model names, API keys or tokens, base URLs or gateway settings, file names or paths, test plan content, hostnames, user names, or IP addresses.
+Prompts, AI responses, chat history, error messages, tool arguments or results, custom or fine-tuned model names, API keys or tokens, base URLs or gateway settings, file names or paths, test plan content, hostnames, user names, or IP addresses. No prompts, keys, or test plan content are sent.
 
 ### How it works
 
