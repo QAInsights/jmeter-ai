@@ -3,8 +3,16 @@ package org.qainsights.jmeter.ai.gui;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JFrame;
+import javax.swing.ListCellRenderer;
+import javax.swing.SwingUtilities;
 
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
@@ -239,16 +247,94 @@ class ModelPickerPopupTest {
         ModelPickerPopup popup = new ModelPickerPopup(owner, MODELS,
                 "google:gemini-2.5-pro", prefs(), ModelCapabilityCatalog.getInstance());
         try {
+            assertTrue(popup.modelList().getFixedCellWidth() > 0);
             assertEquals(4, popup.visibleModelCount());
             assertEquals("google:gemini-2.5-pro", popup.selectedVisibleModel());
             assertEquals("", popup.filterText());
             assertEquals(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER,
                     popup.horizontalScrollBarPolicy());
             assertTrue(popup.modelListTracksViewportWidth());
-            assertEquals(-1, popup.modelListFixedCellHeight());
+            assertTrue(popup.modelListFixedCellHeight() > 0);
         } finally {
             popup.dispose();
             owner.dispose();
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.condition.DisabledIfSystemProperty(
+            named = "java.awt.headless", matches = "true")
+    void filteringLargeModelListRendersOnlyVisibleRows() throws Exception {
+        List<String> models = new ArrayList<>();
+        for (int i = 1; i <= 400; i++) {
+            String suffix = String.format("%04d", i);
+            models.add("opencode:prov/model-" + suffix);
+            models.add("openrouter:prov/router-" + suffix);
+        }
+
+        AtomicReference<JFrame> ownerReference = new AtomicReference<>();
+        AtomicReference<ModelPickerPopup> popupReference = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            JFrame owner = new JFrame();
+            owner.setSize(420, 360);
+            owner.setVisible(true);
+            ModelPickerPopup popup = new ModelPickerPopup(owner, models, models.get(0),
+                    prefs(), ModelCapabilityCatalog.getInstance());
+            popup.setBounds(100, 100, 420, 360);
+            popup.setVisible(true);
+            ownerReference.set(owner);
+            popupReference.set(popup);
+        });
+
+        JFrame owner = ownerReference.get();
+        ModelPickerPopup popup = popupReference.get();
+        AtomicInteger rendererCalls = new AtomicInteger();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                ListCellRenderer<? super String> delegate = popup.modelList().getCellRenderer();
+                popup.modelList().setCellRenderer((list, value, index, selected, cellHasFocus) -> {
+                    rendererCalls.incrementAndGet();
+                    return delegate.getListCellRendererComponent(
+                            list, value, index, selected, cellHasFocus);
+                });
+                popup.validate();
+                paintPopup(popup);
+                rendererCalls.set(0);
+            });
+
+            String[] filters = { "m", "mo", "mod", "" };
+            int[] expectedCounts = { 400, 400, 400, 800 };
+            for (int i = 0; i < filters.length; i++) {
+                String filter = filters[i];
+                int expectedCount = expectedCounts[i];
+                SwingUtilities.invokeAndWait(() -> {
+                    popup.setFilterTextForTest(filter);
+                    popup.validate();
+                    paintPopup(popup);
+                    assertEquals(expectedCount, popup.visibleModelCount());
+                    assertNotNull(popup.selectedVisibleModel());
+                });
+            }
+
+            assertTrue(rendererCalls.get() > 0);
+            assertTrue(rendererCalls.get() < 200,
+                    "expected only visible rows to be rendered, got " + rendererCalls.get());
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+                popup.dispose();
+                owner.dispose();
+            });
+        }
+    }
+
+    private static void paintPopup(ModelPickerPopup popup) {
+        BufferedImage image = new BufferedImage(
+                popup.getWidth(), popup.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            popup.getRootPane().printAll(graphics);
+        } finally {
+            graphics.dispose();
         }
     }
 

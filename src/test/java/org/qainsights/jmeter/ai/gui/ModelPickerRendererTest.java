@@ -108,6 +108,31 @@ class ModelPickerRendererTest {
     }
 
     @Test
+    void secondLineForUsesProviderFallbacksWithoutCatalogMetadata() {
+        ModelCapabilityCatalog catalog = ModelCapabilityCatalog.getInstance();
+
+        assertEquals("Uses your ChatGPT plan through the Codex CLI",
+                ModelPickerRenderer.secondLineFor("codex:unlisted-model", catalog));
+        assertEquals("Uses your Claude plan through Claude Code",
+                ModelPickerRenderer.secondLineFor("claude-code:unlisted-model", catalog));
+        assertEquals("Runs through the OpenCode CLI",
+                ModelPickerRenderer.secondLineFor("opencode:unlisted/model", catalog));
+        assertEquals("Routed through OpenRouter",
+                ModelPickerRenderer.secondLineFor("openrouter:unlisted/model", catalog));
+        assertEquals("Anthropic model",
+                ModelPickerRenderer.secondLineFor("unlisted-claude-model", catalog));
+        assertEquals("local model",
+                ModelPickerRenderer.secondLineFor("ollama:qwen3:8b", catalog));
+    }
+
+    @Test
+    void secondLineForUsesCatalogMetadataWhenAvailable() {
+        assertEquals("400k ctx · $1.25/$10 per Mtok · vision · thinking",
+                ModelPickerRenderer.secondLineFor(
+                        "openai:gpt-5.1", ModelCapabilityCatalog.getInstance()));
+    }
+
+    @Test
     void formatContextCompacts() {
         assertEquals("1M", ModelPickerRenderer.formatContext(1_048_576));
         assertEquals("400k", ModelPickerRenderer.formatContext(400_000));
@@ -183,13 +208,14 @@ class ModelPickerRendererTest {
     }
 
     @Test
-    void cellWithoutMetadataRendersSingleLine() {
+    void cellWithoutMetadataStillRendersSecondLine() {
         ModelPickerRenderer renderer =
                 new ModelPickerRenderer(prefs(), ModelCapabilityCatalog.getInstance());
         Component c = renderer.getListCellRendererComponent(
                 new JList<>(), "openai:gpt-9-turbo", 0, false, false);
         String html = ((JLabel) c).getText();
         assertTrue(html.contains("<b>gpt-9-turbo</b> · OpenAI"));
-        assertFalse(html.contains("<br>"));
+        assertTrue(html.contains("<br>"));
+        assertTrue(html.contains("OpenAI model"));
     }
 }
