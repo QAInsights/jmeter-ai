@@ -56,28 +56,39 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
     private final OpenCodeCliAdapter adapter;
     private final CliProcessRunner runner;
     private final String executableOverride;
+    private final boolean skipConfiguredExecutable;
     private String executable;
     private boolean detectionAttempted;
     private volatile List<String> discoveredModels;
     private volatile String model = "";
 
     public OpenCodeCliProvider() {
-        this(new OpenCodeCliAdapter(), new DefaultCliProcessRunner(), null);
+        this(new OpenCodeCliAdapter(), new DefaultCliProcessRunner(), null, false);
     }
 
     OpenCodeCliProvider(OpenCodeCliAdapter adapter, CliProcessRunner runner) {
-        this(adapter, runner, null);
+        this(adapter, runner, null, false);
     }
 
-    private OpenCodeCliProvider(OpenCodeCliAdapter adapter, CliProcessRunner runner, String executableOverride) {
+    private OpenCodeCliProvider(
+            OpenCodeCliAdapter adapter,
+            CliProcessRunner runner,
+            String executableOverride,
+            boolean skipConfiguredExecutable) {
         this.adapter = adapter;
         this.runner = runner;
         this.executableOverride = executableOverride;
+        this.skipConfiguredExecutable = skipConfiguredExecutable;
     }
 
     public static OpenCodeCliProvider forExecutable(String path) {
+        return forExecutable(path, new OpenCodeCliAdapter(), new DefaultCliProcessRunner());
+    }
+
+    static OpenCodeCliProvider forExecutable(
+            String path, OpenCodeCliAdapter adapter, CliProcessRunner runner) {
         String override = path == null || path.isBlank() ? null : path.trim();
-        return new OpenCodeCliProvider(new OpenCodeCliAdapter(), new DefaultCliProcessRunner(), override);
+        return new OpenCodeCliProvider(adapter, runner, override, override == null);
     }
 
     @Override
@@ -143,9 +154,11 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         if (executableOverride != null) {
             return executableOverride;
         }
-        String override = AiConfig.getProperty(EXECUTABLE_KEY, "");
-        if (override != null && !override.trim().isEmpty()) {
-            return override.trim();
+        if (!skipConfiguredExecutable) {
+            String override = AiConfig.getProperty(EXECUTABLE_KEY, "");
+            if (override != null && !override.trim().isEmpty()) {
+                return override.trim();
+            }
         }
         if (!detectionAttempted) {
             detectionAttempted = true;

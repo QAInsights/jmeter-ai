@@ -74,6 +74,7 @@ import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.agent.AgentRoutingConfig;
 import org.qainsights.jmeter.ai.agent.AgentTriageConfig;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
+import org.qainsights.jmeter.ai.opencode.OpenCodeAuthStatus;
 import org.qainsights.jmeter.ai.service.OllamaEmbeddingClient;
 import org.qainsights.jmeter.ai.service.ProviderConnectionTester;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -737,7 +738,8 @@ final class ProviderSetupDialog extends JDialog {
         bottom.setOpaque(false);
         statusText.setEditable(false);
         statusText.setFocusable(false);
-        statusText.setOpaque(false);
+        statusText.setOpaque(true);
+        statusText.setBackground(ThemeColors.surface());
         statusText.setLineWrap(true);
         statusText.setWrapStyleWord(true);
         statusText.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
@@ -976,6 +978,8 @@ final class ProviderSetupDialog extends JDialog {
         openCodeDetectionStatus = new JLabel("Checking for OpenCode…");
         openCodeDetectionStatus.setForeground(ThemeColors.info());
         openCodeDetectionStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
+        openCodeDetectionStatus.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, openCodeDetectionStatus.getPreferredSize().height));
         pane.add(openCodeDetectionStatus);
         if (Boolean.parseBoolean(AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"))) {
             openCodeAlreadyEnabledHint = new JLabel(
@@ -984,6 +988,8 @@ final class ProviderSetupDialog extends JDialog {
             openCodeAlreadyEnabledHint.setAlignmentX(Component.LEFT_ALIGNMENT);
             openCodeAlreadyEnabledHint.setBorder(
                     BorderFactory.createEmptyBorder(UiTokens.SPACE_1, 0, 0, 0));
+            openCodeAlreadyEnabledHint.setMaximumSize(new Dimension(
+                    Integer.MAX_VALUE, openCodeAlreadyEnabledHint.getPreferredSize().height));
             pane.add(openCodeAlreadyEnabledHint);
         } else {
             openCodeAlreadyEnabledHint = null;
@@ -1005,6 +1011,8 @@ final class ProviderSetupDialog extends JDialog {
         executableLabel.setLabelFor(openCodeExecutableField);
         executableFields.add(executableLabel, BorderLayout.NORTH);
         executableFields.add(openCodeExecutableField, BorderLayout.CENTER);
+        executableFields.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, executableFields.getPreferredSize().height));
         pane.add(executableFields);
         openCodeExecutableField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -1037,28 +1045,34 @@ final class ProviderSetupDialog extends JDialog {
                         + "'opencode auth login' in the AI CLI terminal tab.");
         note.setEditable(false);
         note.setFocusable(false);
-        note.setOpaque(false);
+        note.setOpaque(true);
+        note.setBackground(ThemeColors.surface());
         note.setLineWrap(true);
         note.setWrapStyleWord(true);
         note.setFont(UiTokens.body(note.getFont()));
         note.setForeground(ThemeColors.secondaryText());
+        note.setMargin(new Insets(0, 0, 0, 0));
         note.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_3, 0, 0, 0));
         note.setAlignmentX(Component.LEFT_ALIGNMENT);
         note.setMaximumSize(new Dimension(Integer.MAX_VALUE, note.getPreferredSize().height));
         pane.add(note);
         pane.add(Box.createVerticalStrut(UiTokens.SPACE_3));
 
-        pane.add(buildStatusActions(true));
+        JPanel statusActions = buildStatusActions(true);
+        statusActions.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, statusActions.getPreferredSize().height));
+        pane.add(statusActions);
         pane.add(Box.createVerticalGlue());
         return pane;
     }
 
-    private static OpenCodeSetupProbe defaultOpenCodeSetupProbe() {
+    static OpenCodeSetupProbe defaultOpenCodeSetupProbe() {
         return new OpenCodeSetupProbe() {
             @Override
             public String detect(String executableOverride) {
                 OpenCodeCliProvider provider = OpenCodeCliProvider.forExecutable(executableOverride);
-                return provider.isInstalled() ? provider.executable() : null;
+                return provider.getAuthStatus() == OpenCodeAuthStatus.READY
+                        ? provider.executable() : null;
             }
 
             @Override
@@ -1074,6 +1088,7 @@ final class ProviderSetupDialog extends JDialog {
         openCodeDetected = false;
         openCodeDetectedPath = null;
         openCodeLastDetectedOverride = null;
+        copySettingsButton.setVisible(false);
         setStatus(" ", ThemeColors.secondaryText());
         scheduleOpenCodeDetection();
     }
@@ -1143,7 +1158,7 @@ final class ProviderSetupDialog extends JDialog {
                 } else {
                     openCodeDetectionStatus.setText(
                             "OpenCode CLI not found. Install it with 'npm install -g opencode-ai', "
-                                    + "or enter its path above.");
+                                    + "or enter its path below.");
                     openCodeDetectionStatus.setForeground(ThemeColors.warning());
                 }
                 updateActionButtons();

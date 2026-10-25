@@ -114,12 +114,21 @@ class ProviderSetupDialogTest {
     }
 
     @Test
+    void defaultOpenCodeProbeRejectsANonexistentExecutableOverride() {
+        ProviderSetupDialog.OpenCodeSetupProbe probe = ProviderSetupDialog.defaultOpenCodeSetupProbe();
+
+        assertNull(probe.detect("/nonexistent/opencode"));
+    }
+
+    @Test
     void missingOpenCodeCliDisablesSaveAndShowsInstallInstructions() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
+        AtomicReference<String> detectedOverride = new AtomicReference<>();
         ProviderSetupDialog dialog = createOpenCodeDialog(
                 new ProviderSetupDialog.OpenCodeSetupProbe() {
                     @Override
                     public String detect(String executableOverride) {
+                        detectedOverride.set(executableOverride);
                         return null;
                     }
 
@@ -132,14 +141,41 @@ class ProviderSetupDialogTest {
                 () -> { },
                 tempDir.resolve("missing-opencode.properties"));
         try {
-            SwingUtilities.invokeAndWait(() -> dialog.selectOption(ProviderSetupOption.OPENCODE));
+            SwingUtilities.invokeAndWait(() -> {
+                dialog.selectOption(ProviderSetupOption.OPENCODE);
+                component(dialog, "openCodeExecutableField", JTextField.class)
+                        .setText("/bogus/opencode");
+            });
             awaitOpenCodeDetection(dialog, false);
             SwingUtilities.invokeAndWait(() -> {
                 assertFalse(component(dialog, "saveButton", QuietButton.class).isEnabled());
                 assertEquals(
                         "OpenCode CLI not found. Install it with 'npm install -g opencode-ai', "
-                                + "or enter its path above.",
+                                + "or enter its path below.",
                         component(dialog, "openCodeDetectionStatus", JLabel.class).getText());
+            });
+            assertEquals("/bogus/opencode", detectedOverride.get());
+        } finally {
+            SwingUtilities.invokeAndWait(dialog::dispose);
+        }
+    }
+
+    @Test
+    void editingOpenCodeExecutableHidesStaleCopySettingsButton() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        ProviderSetupDialog dialog = createOpenCodeDialog(
+                openCodeProbe("/path/from/path", "OK"),
+                option -> { },
+                () -> { },
+                tempDir.resolve("copy-settings.properties"));
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                dialog.selectOption(ProviderSetupOption.OPENCODE);
+                QuietButton copySettings = component(dialog, "copySettingsButton", QuietButton.class);
+                copySettings.setVisible(true);
+                component(dialog, "openCodeExecutableField", JTextField.class)
+                        .setText("/new/opencode");
+                assertFalse(copySettings.isVisible());
             });
         } finally {
             SwingUtilities.invokeAndWait(dialog::dispose);

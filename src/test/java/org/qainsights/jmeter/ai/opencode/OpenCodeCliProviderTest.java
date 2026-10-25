@@ -73,11 +73,23 @@ class OpenCodeCliProviderTest {
     }
 
     @Test
-    void blankExecutableOverrideUsesTheConfiguredExecutable() {
+    void blankExecutableOverrideUsesPathDetectionInsteadOfTheConfiguredProperty() {
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, ""))
+                .thenReturn("/configured/opencode");
+        FakeAdapter adapter = new FakeAdapter("/path/opencode");
+
+        OpenCodeCliProvider provider = OpenCodeCliProvider.forExecutable("", adapter, runner);
+
+        assertEquals("/path/opencode", provider.executable());
+        assertEquals(1, adapter.detections);
+    }
+
+    @Test
+    void noArgumentConstructorStillUsesTheConfiguredExecutableProperty() {
         config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.EXECUTABLE_KEY, ""))
                 .thenReturn("/configured/opencode");
 
-        assertEquals("/configured/opencode", OpenCodeCliProvider.forExecutable("  ").executable());
+        assertEquals("/configured/opencode", new OpenCodeCliProvider().executable());
     }
 
     @Test

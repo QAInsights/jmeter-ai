@@ -931,21 +931,6 @@ public class AiChatPanel
             return;
         }
         pendingProviderSelection = option;
-        if (option == ProviderSetupOption.OPENCODE) {
-            new SwingWorker<Void, Void>() {
-                @Override
-                protected Void doInBackground() {
-                    openCodeService.getOpenCodeProvider().refresh();
-                    return null;
-                }
-
-                @Override
-                protected void done() {
-                    reloadProviders();
-                }
-            }.execute();
-            return;
-        }
         reloadProviders();
     }
 
