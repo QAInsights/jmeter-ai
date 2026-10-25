@@ -64,6 +64,27 @@ class OpenCodeCliProviderTest {
     }
 
     @Test
+    void featuredModelIdsUseDefaultThenConfiguredOrderWhenEnabled() {
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"))
+                .thenReturn("true");
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.MODELS_KEY, ""))
+                .thenReturn("opencode/nemotron-3.5-lightning-free,opencode/big-pickle");
+
+        assertEquals(List.of("opencode:default",
+                        "opencode:opencode/nemotron-3.5-lightning-free",
+                        "opencode:opencode/big-pickle"),
+                provider("opencode").featuredModelIds());
+    }
+
+    @Test
+    void featuredModelIdsAreEmptyWhenDisabled() {
+        config.when(() -> AiConfig.getProperty(OpenCodeCliProvider.MODELS_KEY, ""))
+                .thenReturn("opencode/nemotron-3.5-lightning-free,opencode/big-pickle");
+
+        assertEquals(List.of(), provider("opencode").featuredModelIds());
+    }
+
+    @Test
     void checksOnlyTheCliVersionForAuthStatus() {
         runner.queue(CliProcessResult.of(0, "1.19.4"));
 
@@ -208,6 +229,45 @@ class OpenCodeCliProviderTest {
                 () -> provider("opencode").execute("prompt", "example/model"));
 
         assertTrue(failure.getMessage().contains("doesn't know the model 'example/model'"), failure.getMessage());
+    }
+
+    @Test
+    void mapsUnknownErrorToUnknownModelWhenAbsentFromDiscoveredModels() {
+        runner.queue(CliProcessResult.of(0, "known/model\n"));
+        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
+        OpenCodeCliProvider provider = provider("opencode");
+        provider.listModels();
+
+        CliProviderException failure = assertThrows(CliProviderException.class,
+                () -> provider.execute("prompt", "nope/missing-model"));
+
+        assertEquals("OpenCode doesn't know the model 'nope/missing-model'. "
+                + "Pick one from the list or check 'opencode models'.", failure.getMessage());
+    }
+
+    @Test
+    void keepsUnknownErrorGenericWhenModelIsDiscovered() {
+        runner.queue(CliProcessResult.of(0, "known/model\n"));
+        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
+        OpenCodeCliProvider provider = provider("opencode");
+        provider.listModels();
+
+        CliProviderException failure = assertThrows(CliProviderException.class,
+                () -> provider.execute("prompt", "known/model"));
+
+        assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
+                failure.getMessage());
+    }
+
+    @Test
+    void keepsUnknownErrorGenericWhenModelsHaveNotBeenDiscovered() {
+        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
+
+        CliProviderException failure = assertThrows(CliProviderException.class,
+                () -> provider("opencode").execute("prompt", "nope/missing-model"));
+
+        assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
+                failure.getMessage());
     }
 
     @Test

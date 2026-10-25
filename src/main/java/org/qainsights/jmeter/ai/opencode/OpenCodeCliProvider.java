@@ -264,6 +264,15 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             return "OpenCode doesn't know the model '" + modelId
                     + "'. Pick one from the list or check 'opencode models'.";
         }
+        List<String> discovered = discoveredModels;
+        if ("unknownerror".equals(name)
+                && model != null && !model.isBlank()
+                && discovered != null && !discovered.isEmpty()
+                && !discovered.contains(model)
+                && !configuredModels().contains(model)) {
+            return "OpenCode doesn't know the model '" + model
+                    + "'. Pick one from the list or check 'opencode models'.";
+        }
         if (!message.isBlank()) {
             return "OpenCode failed: " + firstLines(message);
         }
@@ -403,6 +412,18 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             models.addAll(discovered);
         }
         return List.copyOf(models);
+    }
+
+    public List<String> featuredModelIds() {
+        if (!isEnabled()) {
+            return List.of();
+        }
+        Set<String> featured = new LinkedHashSet<>();
+        featured.add(MODEL_PREFIX + DEFAULT_MODEL);
+        for (String modelId : configuredModels()) {
+            featured.add(MODEL_PREFIX + modelId);
+        }
+        return List.copyOf(featured);
     }
 
     private List<String> configuredModels() {

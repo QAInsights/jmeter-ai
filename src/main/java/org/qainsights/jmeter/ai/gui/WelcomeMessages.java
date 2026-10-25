@@ -26,9 +26,14 @@ public final class WelcomeMessages {
 
     /** Welcome for the live configuration with an optional local Ollama detection. */
     public static String forCurrentConfig(boolean ollamaDetected) {
+        return forCurrentConfig(ollamaDetected, false);
+    }
+
+    /** Welcome for the live configuration with optional Ollama and CLI provider readiness. */
+    public static String forCurrentConfig(boolean ollamaDetected, boolean cliProviderReady) {
         return forCurrentConfig(new AgentModeNudge(), () -> AppleFoundationHelper.cachedStatus()
                 .map(AppleFoundationHelper.Status::isAvailable)
-                .orElse(false), ollamaDetected);
+                .orElse(false), ollamaDetected, cliProviderReady);
     }
 
     /** Adds the one-time Agent Mode tip when {@code nudge} says it is due. Has no side effects. */
@@ -39,12 +44,17 @@ public final class WelcomeMessages {
     }
 
     static String forCurrentConfig(AgentModeNudge nudge, BooleanSupplier appleAvailable) {
-        return forCurrentConfig(nudge, appleAvailable, false);
+        return forCurrentConfig(nudge, appleAvailable, false, false);
     }
 
     static String forCurrentConfig(
             AgentModeNudge nudge, BooleanSupplier appleAvailable, boolean ollamaDetected) {
-        ProviderStatus status = ProviderStatus.fromConfig(appleAvailable);
+        return forCurrentConfig(nudge, appleAvailable, ollamaDetected, false);
+    }
+
+    static String forCurrentConfig(AgentModeNudge nudge, BooleanSupplier appleAvailable,
+                                   boolean ollamaDetected, boolean cliProviderReady) {
+        ProviderStatus status = ProviderStatus.fromConfig(appleAvailable, cliProviderReady);
         String welcome = forStatus(status, ollamaDetected);
         if (nudge.shouldShow(status.hasAgentCapableProvider(), JMeterAgent.isEnabled())) {
             return welcome + AgentModeNudge.TIP;

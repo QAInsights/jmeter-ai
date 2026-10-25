@@ -65,6 +65,24 @@ class ProviderStatusTest {
         ProviderStatus status = ProviderStatus.fromConfig(() -> false);
         assertFalse(status.isReady());
         assertFalse(status.hasAnyCloudProvider());
+        assertFalse(status.hasAgentCapableProvider());
+    }
+
+    @Test
+    void fromConfig_cliProviderReadyWithoutKeysIsReadyAndAgentCapable() {
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false, true);
+
+        assertTrue(status.isReady());
+        assertTrue(status.hasAgentCapableProvider());
+        assertFalse(status.hasAnyCloudProvider());
+    }
+
+    @Test
+    void fromConfig_cliProviderNotReadyKeepsExistingReadinessBehavior() {
+        ProviderStatus status = ProviderStatus.fromConfig(() -> false, false);
+
+        assertFalse(status.isReady());
+        assertFalse(status.hasAgentCapableProvider());
     }
 
     @Test
