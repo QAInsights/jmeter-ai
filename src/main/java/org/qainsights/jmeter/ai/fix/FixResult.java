@@ -24,18 +24,34 @@ public final class FixResult {
     private final String reason;
     private final PlanDiff planDiff;
     private final List<PlanDiff> roundDiffs;
+    private final boolean concurrencyChecked;
+    private final int concurrencyBeforeFailed;
+    private final int concurrencyBeforeTotal;
+    private final int concurrencyAfterFailed;
+    private final int concurrencyAfterTotal;
 
     public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
                      int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
                      List<Failure> remainingFailures, String reason) {
         this(status, beforeFailed, beforeTotal, afterFailed, afterTotal, roundsUsed, guardRollbacks,
-                backupFile, agentSummaries, remainingFailures, reason, null, List.of());
+                backupFile, agentSummaries, remainingFailures, reason, null, List.of(),
+                false, 0, 0, 0, 0);
     }
 
     public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
                      int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
                      List<Failure> remainingFailures, String reason, PlanDiff planDiff,
                      List<PlanDiff> roundDiffs) {
+        this(status, beforeFailed, beforeTotal, afterFailed, afterTotal, roundsUsed, guardRollbacks,
+                backupFile, agentSummaries, remainingFailures, reason, planDiff, roundDiffs,
+                false, 0, 0, 0, 0);
+    }
+
+    public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
+                     int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
+                     List<Failure> remainingFailures, String reason, PlanDiff planDiff,
+                     List<PlanDiff> roundDiffs, boolean concurrencyChecked, int concurrencyBeforeFailed,
+                     int concurrencyBeforeTotal, int concurrencyAfterFailed, int concurrencyAfterTotal) {
         this.status = status;
         this.beforeFailed = beforeFailed;
         this.beforeTotal = beforeTotal;
@@ -49,6 +65,11 @@ public final class FixResult {
         this.reason = reason == null ? "" : reason;
         this.planDiff = planDiff;
         this.roundDiffs = List.copyOf(roundDiffs);
+        this.concurrencyChecked = concurrencyChecked;
+        this.concurrencyBeforeFailed = concurrencyBeforeFailed;
+        this.concurrencyBeforeTotal = concurrencyBeforeTotal;
+        this.concurrencyAfterFailed = concurrencyAfterFailed;
+        this.concurrencyAfterTotal = concurrencyAfterTotal;
     }
 
     public Status status() { return status; }
@@ -64,6 +85,11 @@ public final class FixResult {
     public String reason() { return reason; }
     public PlanDiff planDiff() { return planDiff; }
     public List<PlanDiff> roundDiffs() { return roundDiffs; }
+    public boolean concurrencyChecked() { return concurrencyChecked; }
+    public int concurrencyBeforeFailed() { return concurrencyBeforeFailed; }
+    public int concurrencyBeforeTotal() { return concurrencyBeforeTotal; }
+    public int concurrencyAfterFailed() { return concurrencyAfterFailed; }
+    public int concurrencyAfterTotal() { return concurrencyAfterTotal; }
 
     public boolean hasUndoableChanges() {
         return status != Status.ALREADY_PASSING && status != Status.NOTHING_RAN

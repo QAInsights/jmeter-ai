@@ -100,6 +100,32 @@ class TestPlanRunnerTest {
         assertEquals(3, original.getLoops());
     }
 
+    @Test
+    @Timeout(30)
+    void runTree_twoThreadsAndTwoLoopsCollectsFourSamples() {
+        HashTree plan = planWithLoops(1);
+
+        TestRunSummary summary = new TestPlanRunner().runTree(plan, 20, 2, 2);
+
+        assertEquals(4, summary.getTotalSamples());
+        assertEquals(4, summary.getSuccessCount());
+    }
+
+    @Test
+    void forceIterationsRejectsUnsupportedThreadGroupTypes() {
+        org.apache.jmeter.threads.AbstractThreadGroup pluginGroup =
+                org.mockito.Mockito.mock(org.apache.jmeter.threads.AbstractThreadGroup.class);
+        HashTree tree = new ListedHashTree();
+        tree.add(pluginGroup);
+
+        TestPlanRunner.TestExecutionException error = assertThrows(
+                TestPlanRunner.TestExecutionException.class,
+                () -> TestPlanRunner.forceIterations(tree, 2, 2));
+
+        assertTrue(error.getMessage().contains(pluginGroup.getClass().getName()));
+        assertTrue(error.getMessage().contains("Make it pass only supports standard Thread Groups"));
+    }
+
     private static LoopController originalController(HashTree plan) {
         Object testPlan = plan.list().iterator().next();
         HashTree planChildren = plan.getTree(testPlan);

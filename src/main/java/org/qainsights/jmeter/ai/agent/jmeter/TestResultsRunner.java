@@ -26,6 +26,10 @@ public interface TestResultsRunner {
         return run(timeoutSeconds);
     }
 
+    default TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+        return runSingleIteration(timeoutSeconds);
+    }
+
     /** Live runner, backed by {@link TestPlanRunner#run}. */
     static TestResultsRunner live() {
         TestPlanRunner runner = new TestPlanRunner();
@@ -38,6 +42,11 @@ public interface TestResultsRunner {
             @Override
             public TestRunSummary runSingleIteration(long timeoutSeconds) {
                 return runner.runSingleIteration(timeoutSeconds);
+            }
+
+            @Override
+            public TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+                return runner.runIterations(timeoutSeconds, threads, loops);
             }
         };
     }

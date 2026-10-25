@@ -79,7 +79,10 @@ public enum TelemetryFeature {
     FIX_ROUNDS_1("fix_rounds_1"),
     FIX_ROUNDS_2_3("fix_rounds_2_3"),
     FIX_ROUNDS_4P("fix_rounds_4p"),
-    FIX_ASSERTIONS_ADDED("fix_assertions_added");
+    FIX_ASSERTIONS_ADDED("fix_assertions_added"),
+    FIX_SOFT_FAILURE("fix_soft_failure"),
+    FIX_CONCURRENCY_FIXED("fix_concurrency_fixed"),
+    FIX_CONCURRENCY_WARN("fix_concurrency_warn");
 
     private final String wireName;
 

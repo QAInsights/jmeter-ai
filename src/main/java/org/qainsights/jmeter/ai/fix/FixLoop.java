@@ -20,6 +20,9 @@ import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /** GUI-free orchestration for Make it pass. Every repair is checked by a real JMeter run. */
 public final class FixLoop {
+    public static final String CONCURRENCY_PARTIAL_REASON =
+            "Passes with 1 user, fails with 2 users × 2 loops";
+
     @FunctionalInterface
     public interface AssertionInstaller {
         int addMissing(List<Observation> observations);
@@ -28,6 +31,10 @@ public final class FixLoop {
     @FunctionalInterface
     public interface SingleIterationRunner {
         TestRunSummary run(long timeoutSeconds);
+
+        default TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+            return run(timeoutSeconds);
+        }
     }
 
     public interface BackupStore {
@@ -46,6 +53,8 @@ public final class FixLoop {
     private final AssertionInstaller assertionInstaller;
     private Map<String, PlanDiff.ElementSnapshot> startSnapshot = Map.of();
     private final List<PlanDiff> roundDiffs = new ArrayList<>();
+    private TestRunSummary concurrencyBefore;
+    private TestRunSummary concurrencyAfter;
 
     public FixLoop(SingleIterationRunner runner, BackupStore backups, Supplier<PlanCensus> census,
                    Function<String, AgentLoop.AgentResult> fixRound, BooleanSupplier cancelled) {
@@ -74,6 +83,8 @@ public final class FixLoop {
         File overall = backups.backup();
         startSnapshot = PlanDiff.liveSnapshot();
         roundDiffs.clear();
+        concurrencyBefore = null;
+        concurrencyAfter = null;
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
         }
@@ -102,9 +113,22 @@ public final class FixLoop {
                     "JMeter did not produce any samples.");
         }
         if (passes(current)) {
-            return result(FixResult.Status.ALREADY_PASSING, current, current, 0, 0, overall, List.of(), "");
+            if (!request.concurrencyCheck()) {
+                return result(FixResult.Status.ALREADY_PASSING, current, current, 0, 0, overall, List.of(), "");
+            }
+            try {
+                TestRunSummary multiUser = runConcurrencyCheck(request);
+                if (passes(multiUser)) {
+                    return result(FixResult.Status.ALREADY_PASSING, current, multiUser, 0, 0, overall, List.of(), "");
+                }
+                current = multiUser;
+            } catch (RuntimeException e) {
+                return result(FixResult.Status.NOT_FIXED, current, current, 0, 0, overall, List.of(),
+                        checkFailureReason(e));
+            }
         }
 
+        boolean concurrencyMode = concurrencyBefore != null && !passes(concurrencyAfter);
         FixListeners.ensurePresent();
         addAssertions(current.getObservations());
         TestRunSummary before = current;
@@ -131,7 +155,8 @@ public final class FixLoop {
                         + current.getFailureCount() + " of " + current.getTotalSamples() + " requests failing");
                 AgentLoop.AgentResult agentResult;
                 try {
-                    agentResult = fixRound.apply(prompt.build(current));
+                    agentResult = fixRound.apply(concurrencyMode
+                            ? prompt.buildConcurrency(current) : prompt.build(current));
                 } catch (RuntimeException e) {
                     used = round;
                     boolean interrupted = causedByInterruption(e);
@@ -191,14 +216,40 @@ public final class FixLoop {
                         restoreRoundBackup(roundBackup);
                         break;
                     }
-                    if (passes(checked)) {
-                        int added = addAssertions(checked.getObservations());
-                        if (added == 0) {
-                            return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
-                                    overall, summaries, "");
+                    if (concurrencyMode) {
+                        if (!passes(checked)) {
+                            restoreRoundBackup(roundBackup);
+                            guardRollbacks++;
+                            Telemetry.record(TelemetryFeature.FIX_GUARD_ROLLBACK);
+                            stagnantRounds++;
+                            continue;
                         }
                         try {
-                            checked = runner.run(request.timeoutSeconds());
+                            TestRunSummary multiUser = runConcurrencyCheck(request);
+                            if (passes(multiUser)) {
+                                int added = addAssertions(multiUser.getObservations());
+                                if (added == 0) {
+                                    return result(FixResult.Status.FIXED, before, multiUser, used,
+                                            guardRollbacks, overall, summaries, "");
+                                }
+                                TestRunSummary verifiedSingle = runner.run(request.timeoutSeconds());
+                                if (passes(verifiedSingle)) {
+                                    TestRunSummary verifiedMulti = runConcurrencyCheck(request);
+                                    if (passes(verifiedMulti)) {
+                                        return result(FixResult.Status.FIXED, before, verifiedMulti, used,
+                                                guardRollbacks, overall, summaries, "");
+                                    }
+                                    current = verifiedMulti;
+                                } else {
+                                    restoreRoundBackup(roundBackup);
+                                    guardRollbacks++;
+                                    Telemetry.record(TelemetryFeature.FIX_GUARD_ROLLBACK);
+                                    stagnantRounds++;
+                                    continue;
+                                }
+                            } else {
+                                current = multiUser;
+                            }
                         } catch (RuntimeException e) {
                             boolean interrupted = causedByInterruption(e);
                             if (interrupted) {
@@ -209,27 +260,95 @@ public final class FixLoop {
                                 return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
                                         overall, summaries, "Cancelled.");
                             }
-                            return result(status(before, current), before, current, used, guardRollbacks,
-                                    overall, summaries, checkFailureReason(e));
+                            return result(FixResult.Status.PARTLY_FIXED, before, current, used, guardRollbacks,
+                                    overall, summaries, CONCURRENCY_PARTIAL_REASON);
+                        }
+                        if (passes(concurrencyAfter)) {
+                            return result(FixResult.Status.FIXED, before, concurrencyAfter, used,
+                                    guardRollbacks, overall, summaries, "");
+                        }
+                        if (current.getFailureCount() < bestFailures) {
+                            bestFailures = current.getFailureCount();
+                            stagnantRounds = 0;
+                        } else {
+                            stagnantRounds++;
+                        }
+                    } else if (passes(checked)) {
+                        int added = addAssertions(checked.getObservations());
+                        if (added > 0) {
+                            try {
+                                checked = runner.run(request.timeoutSeconds());
+                            } catch (RuntimeException e) {
+                                boolean interrupted = causedByInterruption(e);
+                                if (interrupted) {
+                                    Thread.currentThread().interrupt();
+                                }
+                                restoreRoundBackup(roundBackup);
+                                if (isCancelled() || interrupted) {
+                                    return result(FixResult.Status.CANCELLED, before, current, used,
+                                            guardRollbacks, overall, summaries, "Cancelled.");
+                                }
+                                return result(status(before, current), before, current, used, guardRollbacks,
+                                        overall, summaries, checkFailureReason(e));
+                            }
                         }
                         if (isCancelled()) {
                             restoreRoundBackup(roundBackup);
                             break;
                         }
                         if (passes(checked)) {
-                            return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
-                                    overall, summaries, "");
+                            if (!request.concurrencyCheck()) {
+                                return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
+                                        overall, summaries, "");
+                            }
+                            try {
+                                TestRunSummary multiUser = runConcurrencyCheck(request);
+                                if (passes(multiUser)) {
+                                    int postMultiAssertions = addAssertions(multiUser.getObservations());
+                                    if (postMultiAssertions > 0) {
+                                        checked = runner.run(request.timeoutSeconds());
+                                        if (!passes(checked)) {
+                                            current = checked;
+                                            continue;
+                                        }
+                                        multiUser = runConcurrencyCheck(request);
+                                    }
+                                    if (passes(multiUser)) {
+                                        return result(FixResult.Status.FIXED, before, multiUser, used,
+                                                guardRollbacks, overall, summaries, "");
+                                    }
+                                }
+                                current = multiUser;
+                                concurrencyMode = true;
+                                bestFailures = current.getFailureCount();
+                                stagnantRounds = 0;
+                                continue;
+                            } catch (RuntimeException e) {
+                                boolean interrupted = causedByInterruption(e);
+                                if (interrupted) {
+                                    Thread.currentThread().interrupt();
+                                }
+                                restoreRoundBackup(roundBackup);
+                                if (isCancelled() || interrupted) {
+                                    return result(FixResult.Status.CANCELLED, before, current, used,
+                                            guardRollbacks, overall, summaries, "Cancelled.");
+                                }
+                                return result(status(before, current), before, current, used, guardRollbacks,
+                                        overall, summaries, checkFailureReason(e));
+                            }
                         }
                     }
-                    if (checked.isTimedOut() || checked.getTotalSamples() == 0) {
-                        stagnantRounds++;
-                    } else {
-                        current = checked;
-                        if (current.getFailureCount() < bestFailures) {
-                            bestFailures = current.getFailureCount();
-                            stagnantRounds = 0;
-                        } else {
+                    if (!concurrencyMode) {
+                        if (checked.isTimedOut() || checked.getTotalSamples() == 0) {
                             stagnantRounds++;
+                        } else {
+                            current = checked;
+                            if (current.getFailureCount() < bestFailures) {
+                                bestFailures = current.getFailureCount();
+                                stagnantRounds = 0;
+                            } else {
+                                stagnantRounds++;
+                            }
                         }
                     }
                 }
@@ -244,7 +363,9 @@ public final class FixLoop {
             return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
                     overall, summaries, "Cancelled.");
         }
-        return result(status(before, current), before, current, used, guardRollbacks, overall, summaries, "");
+        return result(concurrencyMode ? FixResult.Status.PARTLY_FIXED : status(before, current),
+                before, current, used, guardRollbacks, overall, summaries,
+                concurrencyMode ? CONCURRENCY_PARTIAL_REASON : "");
     }
 
     private static FixResult.Status status(TestRunSummary before, TestRunSummary after) {
@@ -262,6 +383,15 @@ public final class FixLoop {
             Telemetry.record(TelemetryFeature.FIX_ASSERTIONS_ADDED);
         }
         return added;
+    }
+
+    private TestRunSummary runConcurrencyCheck(FixRequest request) {
+        TestRunSummary summary = runner.runIterations(request.timeoutSeconds(), 2, 2);
+        if (concurrencyBefore == null) {
+            concurrencyBefore = summary;
+        }
+        concurrencyAfter = summary;
+        return summary;
     }
 
     private static String timeoutReason(long timeoutSeconds) {
@@ -314,6 +444,11 @@ public final class FixLoop {
         List<Failure> remaining = after == null ? List.of() : after.getFailures();
         return new FixResult(status, beforeFailed, beforeTotal, afterFailed, afterTotal,
                 rounds, rollbacks, overall, summaries, remaining, reason,
-                PlanDiff.between(startSnapshot, PlanDiff.liveSnapshot()), roundDiffs);
+                PlanDiff.between(startSnapshot, PlanDiff.liveSnapshot()), roundDiffs,
+                concurrencyBefore != null,
+                concurrencyBefore == null ? 0 : concurrencyBefore.getFailureCount(),
+                concurrencyBefore == null ? 0 : concurrencyBefore.getTotalSamples(),
+                concurrencyAfter == null ? 0 : concurrencyAfter.getFailureCount(),
+                concurrencyAfter == null ? 0 : concurrencyAfter.getTotalSamples());
     }
 }

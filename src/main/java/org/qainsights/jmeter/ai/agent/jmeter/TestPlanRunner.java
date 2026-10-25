@@ -58,15 +58,19 @@ public final class TestPlanRunner {
 
     /** Live entry point: pulls the current plan from the live {@link GuiPackage} tree model. */
     public TestRunSummary run(long timeoutSeconds) {
-        return run(timeoutSeconds, false);
+        return run(timeoutSeconds, 0, 0);
     }
 
     /** Runs the current plan once with one thread per Thread Group. */
     public TestRunSummary runSingleIteration(long timeoutSeconds) {
-        return run(timeoutSeconds, true);
+        return run(timeoutSeconds, 1, 1);
     }
 
-    private TestRunSummary run(long timeoutSeconds, boolean singleIteration) {
+    public TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+        return run(timeoutSeconds, threads, loops);
+    }
+
+    private TestRunSummary run(long timeoutSeconds, int threads, int loops) {
         GuiPackage gui = GuiPackage.getInstance();
         if (gui == null) {
             throw new TestExecutionException("No live JMeter GUI available.");
@@ -75,7 +79,7 @@ public final class TestPlanRunner {
         if (testPlanTree == null || testPlanTree.size() == 0) {
             throw new TestExecutionException("No test plan is currently open.");
         }
-        return runTree(testPlanTree, timeoutSeconds, singleIteration);
+        return runTree(testPlanTree, timeoutSeconds, threads, loops);
     }
 
     /**
@@ -86,10 +90,14 @@ public final class TestPlanRunner {
      * returned by {@code SaveService.loadTree}) - {@link JMeter#convertSubTree} handles both.
      */
     synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds) {
-        return runTree(testPlanTree, timeoutSeconds, false);
+        return runTree(testPlanTree, timeoutSeconds, 0, 0);
     }
 
     synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, boolean singleIteration) {
+        return runTree(testPlanTree, timeoutSeconds, singleIteration ? 1 : 0, singleIteration ? 1 : 0);
+    }
+
+    synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, int threads, int loops) {
         ListedHashTree clonedTree;
         try {
             clonedTree = (ListedHashTree) testPlanTree.clone();
@@ -97,8 +105,8 @@ public final class TestPlanRunner {
             throw new TestExecutionException("Could not clone the test plan: " + e.getMessage());
         }
         HashTree execTree = JMeter.convertSubTree(clonedTree, true);
-        if (singleIteration) {
-            forceSingleIteration(execTree);
+        if (threads > 0 && loops > 0) {
+            forceIterations(execTree, threads, loops);
         }
 
         // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements

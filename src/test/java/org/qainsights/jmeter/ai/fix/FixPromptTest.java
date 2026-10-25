@@ -49,4 +49,16 @@ class FixPromptTest {
 
         assertTrue(prompt.contains("Showing 20 of 21 failing requests."));
     }
+
+    @Test
+    void concurrencyPromptExplainsLikelySharedDataFailures() {
+        String prompt = new FixPrompt().buildConcurrency(TestRunSummary.of(List.of(), false, 0));
+
+        assertTrue(prompt.contains("These requests pass with 1 user but fail with 2 users × 2 loops."));
+        assertTrue(prompt.contains("${__UUID()}"));
+        assertTrue(prompt.contains("${__time()}"));
+        assertTrue(prompt.contains("${__threadNum}"));
+        assertTrue(prompt.contains("separate accounts"));
+        assertTrue(prompt.contains("Never change thread counts."));
+    }
 }

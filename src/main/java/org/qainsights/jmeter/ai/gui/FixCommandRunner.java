@@ -100,7 +100,20 @@ final class FixCommandRunner {
             @Override
             protected FixResult doInBackground() {
                 workerThread.set(Thread.currentThread());
-                FixLoop loop = new FixLoop(TestResultsRunner.live()::runSingleIteration, backups,
+                TestResultsRunner runner = TestResultsRunner.live();
+                FixLoop.SingleIterationRunner testRunner = new FixLoop.SingleIterationRunner() {
+                    @Override
+                    public org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary run(long timeoutSeconds) {
+                        return runner.runSingleIteration(timeoutSeconds);
+                    }
+
+                    @Override
+                    public org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary runIterations(
+                            long timeoutSeconds, int threads, int loops) {
+                        return runner.runIterations(timeoutSeconds, threads, loops);
+                    }
+                };
+                FixLoop loop = new FixLoop(testRunner, backups,
                         PlanCensus::live,
                         message -> agent.runRestricted(message, registry, "",
                                 new AgentRunListeners(this::publish, null, null, null, null)),
@@ -218,6 +231,10 @@ final class FixCommandRunner {
             Telemetry.record(TelemetryFeature.FIX_ROUNDS_2_3);
         } else if (result.roundsUsed() >= 4) {
             Telemetry.record(TelemetryFeature.FIX_ROUNDS_4P);
+        }
+        if (result.concurrencyChecked()) {
+            Telemetry.record(result.concurrencyAfterFailed() == 0 && result.concurrencyAfterTotal() > 0
+                    ? TelemetryFeature.FIX_CONCURRENCY_FIXED : TelemetryFeature.FIX_CONCURRENCY_WARN);
         }
     }
 
