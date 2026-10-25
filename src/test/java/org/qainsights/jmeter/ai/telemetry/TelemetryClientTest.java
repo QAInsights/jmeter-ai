@@ -10,11 +10,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -167,6 +170,56 @@ class TelemetryClientTest {
         assertEquals(120, f.get("tool_t119").asInt());
         assertEquals(20, counters.snapshot().size());
         assertEquals(1, counters.snapshot().get("tool_t0"));
+    }
+
+    @Test
+    void worstCaseFeaturePayloadStaysWithinByteBudget() throws Exception {
+        Map<String, Integer> pending = new LinkedHashMap<>();
+        for (int i = 0; i < 100; i++) {
+            pending.put("f" + String.format(Locale.ROOT, "%02d", i) + "_" + "x".repeat(36), 1_000_000);
+        }
+        counters.loadPending(pending);
+
+        client(clockAt("2026-01-05")).tick();
+
+        assertEquals(1, sent.size());
+        assertTrue(sent.get(0).getBytes(StandardCharsets.UTF_8).length
+                <= TelemetryClient.MAX_PAYLOAD_BYTES);
+        JsonNode features = MAPPER.readTree(sent.get(0)).get("features");
+        assertEquals(100, features.size());
+        assertTrue(counters.snapshot().isEmpty());
+    }
+
+    @Test
+    void byteBudgetDropsLeastUsedFeaturesAndLeavesThemPending() throws Exception {
+        Map<String, Integer> pending = new LinkedHashMap<>();
+        for (int i = 0; i < 100; i++) {
+            pending.put("f" + String.format(Locale.ROOT, "%02d", i) + "_" + "x".repeat(36), i + 1);
+        }
+        counters.loadPending(pending);
+        TelemetryClient client = new TelemetryClient(new TelemetryConfig(k -> null), state, counters,
+                json -> {
+                    sent.add(json);
+                    return true;
+                }, clockAt("2026-01-05")) {
+            @Override
+            String buildPayload(Map<String, Integer> features) {
+                return super.buildPayload(features) + " ".repeat(4000);
+            }
+        };
+
+        client.tick();
+
+        String leastUsed = "f00_" + "x".repeat(36);
+        String mostUsed = "f99_" + "x".repeat(36);
+        JsonNode sentFeatures = MAPPER.readTree(sent.get(0)).get("features");
+        assertTrue(sent.get(0).getBytes(StandardCharsets.UTF_8).length
+                <= TelemetryClient.MAX_PAYLOAD_BYTES);
+        assertTrue(sentFeatures.size() < 100);
+        assertFalse(sentFeatures.has(leastUsed));
+        assertTrue(sentFeatures.has(mostUsed));
+        assertEquals(1, counters.snapshot().get(leastUsed));
+        assertFalse(counters.snapshot().containsKey(mostUsed));
     }
 
     private static Set<String> fieldSet(JsonNode n) {

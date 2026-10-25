@@ -22,6 +22,8 @@ import com.openai.errors.BadRequestException;
 import com.openai.errors.OpenAIIoException;
 import com.openai.errors.UnauthorizedException;
 import com.openai.models.ErrorObject;
+import org.qainsights.jmeter.ai.service.OpenAiDecisionsJudgmentProvider;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 
 class ProviderErrorsTest {
 
@@ -158,5 +160,31 @@ class ProviderErrorsTest {
         assertEquals("server", ProviderErrors.category(serviceError));
         assertEquals("unreachable", ProviderErrors.category(
                 software.amazon.awssdk.core.exception.SdkClientException.create("connection failed")));
+    }
+
+    @Test
+    void typeSafeDecisionsHttpStatusesMapToTelemetryCategories() {
+        assertDecisionStatus(401, "auth");
+        assertDecisionStatus(429, "rate_limit");
+        assertDecisionStatus(503, "server");
+    }
+
+    @Test
+    void openAiDecisionsExceptionUsesItsCauseStatus() {
+        TypeSafeJudgmentProvider.JudgmentException cause =
+                new TypeSafeJudgmentProvider.JudgmentException("request failed", 503);
+        OpenAiDecisionsJudgmentProvider.DecisionsException wrapped =
+                new OpenAiDecisionsJudgmentProvider.DecisionsException("OpenAI Decisions request failed", cause);
+
+        assertEquals(503, ProviderErrors.statusCode(wrapped));
+        assertEquals("server", ProviderErrors.category(wrapped));
+    }
+
+    private static void assertDecisionStatus(int status, String category) {
+        TypeSafeJudgmentProvider.JudgmentException error =
+                new TypeSafeJudgmentProvider.JudgmentException("request failed", status);
+
+        assertEquals(status, ProviderErrors.statusCode(error));
+        assertEquals(category, ProviderErrors.category(error));
     }
 }

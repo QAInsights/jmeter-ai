@@ -148,6 +148,13 @@ public final class ProviderErrors {
             if (t instanceof software.amazon.awssdk.awscore.exception.AwsServiceException) {
                 return ((software.amazon.awssdk.awscore.exception.AwsServiceException) t).statusCode();
             }
+            if (t instanceof org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException) {
+                int status = ((org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException) t)
+                        .httpCode();
+                if (status > 0) {
+                    return status;
+                }
+            }
         }
         return -1;
     }

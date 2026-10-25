@@ -4,7 +4,7 @@ export interface Env {
 	STATS_TOKEN?: string;
 }
 
-const MAX_BODY_BYTES = 4096;
+const MAX_BODY_BYTES = 8192;
 const MAX_STRING_FIELD = 64;
 const MAX_FEATURES = 100;
 const FEATURE_KEY_RE = /^[a-z0-9_]{1,40}$/;

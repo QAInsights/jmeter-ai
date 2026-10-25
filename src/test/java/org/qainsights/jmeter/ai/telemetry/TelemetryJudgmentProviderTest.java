@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.service.JudgmentProvider;
+import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider;
 
 class TelemetryJudgmentProviderTest {
     private TelemetryCounters counters;
@@ -63,6 +64,34 @@ class TelemetryJudgmentProviderTest {
         provider.choose(null, "instructions", Map.of());
 
         assertEquals(Map.of("decide_ok_openrouter", 1, "decide_slow_openrouter", 1), counters.snapshot());
+    }
+
+    @Test
+    void recordsHttpFailureCategoriesForTypesafeAndOpenRouter() {
+        Map<String, Integer> expected = new java.util.LinkedHashMap<>();
+        int[] statuses = {401, 429, 503};
+        String[] categories = {"auth", "rate_limit", "server"};
+        String[] backends = {"typesafe", "openrouter"};
+
+        for (String backend : backends) {
+            for (int i = 0; i < statuses.length; i++) {
+                RuntimeException failure = new TypeSafeJudgmentProvider.JudgmentException(
+                        "request failed", statuses[i]);
+                JudgmentProvider delegate = new StubProvider() {
+                    @Override
+                    public ChoiceAnswer choose(Object state, String instructions, Map<String, String> criteria) {
+                        throw failure;
+                    }
+                };
+                TelemetryJudgmentProvider provider = new TelemetryJudgmentProvider(delegate, backend, () -> 0L);
+
+                assertSame(failure, assertThrows(RuntimeException.class,
+                        () -> provider.choose(null, "instructions", Map.of())));
+                expected.put("decide_fail_" + backend + "_" + categories[i], 1);
+            }
+        }
+
+        assertEquals(expected, counters.snapshot());
     }
 
     private static class StubProvider implements JudgmentProvider {
