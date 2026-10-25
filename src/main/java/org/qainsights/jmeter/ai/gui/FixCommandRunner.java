@@ -20,6 +20,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
 import org.qainsights.jmeter.ai.fix.FixLoop;
+import org.qainsights.jmeter.ai.fix.FixListeners;
 import org.qainsights.jmeter.ai.fix.FixRequest;
 import org.qainsights.jmeter.ai.fix.FixResult;
 import org.qainsights.jmeter.ai.fix.FixTools;
@@ -125,6 +126,7 @@ final class FixCommandRunner {
                 }
                 try {
                     FixResult result = get();
+                    FixListeners.deliverLastResults();
                     recordResult(result);
                     if (!result.hasUndoableChanges()) {
                         backups.unpin(result.backupFile());

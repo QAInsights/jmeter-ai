@@ -100,6 +100,7 @@ public final class FixLoop {
             return result(FixResult.Status.ALREADY_PASSING, current, current, 0, 0, overall, List.of(), "");
         }
 
+        FixListeners.ensurePresent();
         addAssertions(current.getObservations());
         TestRunSummary before = current;
         List<String> summaries = new ArrayList<>();
