@@ -37,6 +37,17 @@ class FixResultCardTest {
         assertEquals(List.of("Keep"), buttonNames(card));
     }
 
+    @Test
+    void reportFileAddsOpenReportAction() throws Exception {
+        FixResult result = new FixResult(FixResult.Status.FIXED, 1, 1, 0, 1,
+                1, 0, new File("backup.jmx"), List.of(), List.of(), "");
+        result.setReportFile(File.createTempFile("fix-report", ".md"));
+
+        FixResultCard card = new FixResultCard(result, () -> true, () -> { }, () -> { });
+
+        assertTrue(buttonNames(card).contains("Open report"));
+    }
+
     private static List<String> buttonNames(JPanel panel) {
         List<String> names = new ArrayList<>();
         collectButtons(panel, names);

@@ -141,6 +141,11 @@ final class FixCommandRunner {
                     FixResult result = get();
                     FixListeners.deliverLastResults();
                     recordResult(result);
+                    try {
+                        result.setReportFile(new org.qainsights.jmeter.ai.fix.FixReport().write(result));
+                    } catch (java.io.IOException e) {
+                        cb.appendErrorMessageToChat("Could not write the Make it pass report", e);
+                    }
                     if (!result.hasUndoableChanges()) {
                         backups.unpin(result.backupFile());
                     }

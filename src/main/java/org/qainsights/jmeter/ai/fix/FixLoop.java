@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.fix;
 
 import java.io.File;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,7 @@ public final class FixLoop {
     private final AssertionInstaller assertionInstaller;
     private Map<String, PlanDiff.ElementSnapshot> startSnapshot = Map.of();
     private final List<PlanDiff> roundDiffs = new ArrayList<>();
+    private final List<String> roundSummaries = new ArrayList<>();
     private TestRunSummary concurrencyBefore;
     private TestRunSummary concurrencyAfter;
 
@@ -83,6 +85,7 @@ public final class FixLoop {
         File overall = backups.backup();
         startSnapshot = PlanDiff.liveSnapshot();
         roundDiffs.clear();
+        roundSummaries.clear();
         concurrencyBefore = null;
         concurrencyAfter = null;
         if (isCancelled()) {
@@ -90,7 +93,7 @@ public final class FixLoop {
         }
         TestRunSummary current;
         try {
-            current = runner.run(request.timeoutSeconds());
+            current = runSingleCheck(request.timeoutSeconds());
         } catch (RuntimeException e) {
             if (isCancelled() || causedByInterruption(e)) {
                 if (causedByInterruption(e)) {
@@ -141,6 +144,8 @@ public final class FixLoop {
             if (isCancelled()) {
                 break;
             }
+            int targetFailures = current.getFailureCount();
+            int targetTotal = current.getTotalSamples();
             File roundBackup = backups.roundBackup();
             try {
                 if (isCancelled()) {
@@ -198,7 +203,7 @@ public final class FixLoop {
                     }
                     TestRunSummary checked;
                     try {
-                        checked = runner.run(request.timeoutSeconds());
+                        checked = runSingleCheck(request.timeoutSeconds());
                     } catch (RuntimeException e) {
                         boolean interrupted = causedByInterruption(e);
                         if (interrupted) {
@@ -232,7 +237,7 @@ public final class FixLoop {
                                     return result(FixResult.Status.FIXED, before, multiUser, used,
                                             guardRollbacks, overall, summaries, "");
                                 }
-                                TestRunSummary verifiedSingle = runner.run(request.timeoutSeconds());
+                                TestRunSummary verifiedSingle = runSingleCheck(request.timeoutSeconds());
                                 if (passes(verifiedSingle)) {
                                     TestRunSummary verifiedMulti = runConcurrencyCheck(request);
                                     if (passes(verifiedMulti)) {
@@ -277,7 +282,7 @@ public final class FixLoop {
                         int added = addAssertions(checked.getObservations());
                         if (added > 0) {
                             try {
-                                checked = runner.run(request.timeoutSeconds());
+                                checked = runSingleCheck(request.timeoutSeconds());
                             } catch (RuntimeException e) {
                                 boolean interrupted = causedByInterruption(e);
                                 if (interrupted) {
@@ -306,7 +311,7 @@ public final class FixLoop {
                                 if (passes(multiUser)) {
                                     int postMultiAssertions = addAssertions(multiUser.getObservations());
                                     if (postMultiAssertions > 0) {
-                                        checked = runner.run(request.timeoutSeconds());
+                                        checked = runSingleCheck(request.timeoutSeconds());
                                         if (!passes(checked)) {
                                             current = checked;
                                             continue;
@@ -356,6 +361,9 @@ public final class FixLoop {
                     break;
                 }
             } finally {
+                roundSummaries.add("Round " + round + " targeted " + targetFailures + " of " + targetTotal
+                        + " failures; " + current.getFailureCount() + " of " + current.getTotalSamples()
+                        + " remained.");
                 backups.discard(roundBackup);
             }
         }
@@ -387,11 +395,24 @@ public final class FixLoop {
 
     private TestRunSummary runConcurrencyCheck(FixRequest request) {
         TestRunSummary summary = runner.runIterations(request.timeoutSeconds(), 2, 2);
+        recordSoftFailures(summary);
         if (concurrencyBefore == null) {
             concurrencyBefore = summary;
         }
         concurrencyAfter = summary;
         return summary;
+    }
+
+    private TestRunSummary runSingleCheck(long timeoutSeconds) {
+        TestRunSummary summary = runner.run(timeoutSeconds);
+        recordSoftFailures(summary);
+        return summary;
+    }
+
+    private static void recordSoftFailures(TestRunSummary summary) {
+        if (summary.getObservations().stream().anyMatch(observation -> observation.getSoftFailureReason() != null)) {
+            Telemetry.record(TelemetryFeature.FIX_SOFT_FAILURE);
+        }
     }
 
     private static String timeoutReason(long timeoutSeconds) {
@@ -442,7 +463,7 @@ public final class FixLoop {
         int afterFailed = after == null ? beforeFailed : after.getFailureCount();
         int afterTotal = after == null ? beforeTotal : after.getTotalSamples();
         List<Failure> remaining = after == null ? List.of() : after.getFailures();
-        return new FixResult(status, beforeFailed, beforeTotal, afterFailed, afterTotal,
+        FixResult result = new FixResult(status, beforeFailed, beforeTotal, afterFailed, afterTotal,
                 rounds, rollbacks, overall, summaries, remaining, reason,
                 PlanDiff.between(startSnapshot, PlanDiff.liveSnapshot()), roundDiffs,
                 concurrencyBefore != null,
@@ -450,5 +471,43 @@ public final class FixLoop {
                 concurrencyBefore == null ? 0 : concurrencyBefore.getTotalSamples(),
                 concurrencyAfter == null ? 0 : concurrencyAfter.getFailureCount(),
                 concurrencyAfter == null ? 0 : concurrencyAfter.getTotalSamples());
+        result.setBeforeFailures(before == null ? List.of() : before.getFailures());
+        result.setRoundSummaries(roundSummaries);
+        result.setDeterministicHints(deterministicHints(before));
+        return result;
+    }
+
+    private List<String> deterministicHints(TestRunSummary summary) {
+        List<String> hints = new ArrayList<>();
+        boolean literalPassword = startSnapshot.values().stream()
+                .flatMap(element -> element.properties().entrySet().stream())
+                .anyMatch(property -> (property.getKey() + " " + property.getValue())
+                        .matches("(?is).*\\b(password|passwd|pwd)\\b.*"));
+        if (literalPassword) {
+            hints.add("Move literal password, passwd, or pwd argument values to User Defined Variables or a CSV Data Set.");
+        }
+        if (summary == null) {
+            return List.copyOf(hints);
+        }
+        Map<String, Integer> hostCounts = new java.util.HashMap<>();
+        summary.getObservations().forEach(observation -> hostOf(observation.getFinalUrl())
+                .ifPresent(host -> hostCounts.merge(host, 1, Integer::sum)));
+        String primary = hostCounts.entrySet().stream()
+                .max(Map.Entry.<String, Integer>comparingByValue().thenComparing(Map.Entry::getKey))
+                .map(Map.Entry::getKey).orElse(null);
+        if (primary != null) {
+            summary.getFailures().stream().map(failure -> hostOf(failure.getUrl()).orElse(null))
+                    .filter(host -> host != null && !host.equalsIgnoreCase(primary)).distinct()
+                    .forEach(host -> hints.add(host + " is outside your app, not fixed."));
+        }
+        return List.copyOf(hints);
+    }
+
+    private static java.util.Optional<String> hostOf(String url) {
+        try {
+            return java.util.Optional.ofNullable(URI.create(url).getHost());
+        } catch (RuntimeException ignored) {
+            return java.util.Optional.empty();
+        }
     }
 }

@@ -41,6 +41,30 @@ class FixLoopTest {
     }
 
     @Test
+    void softFailureKeepsRepairLoopRunning() throws Exception {
+        org.apache.jmeter.protocol.http.sampler.HTTPSampleResult soft =
+                new org.apache.jmeter.protocol.http.sampler.HTTPSampleResult();
+        soft.setSampleLabel("Request");
+        soft.setSuccessful(true);
+        soft.setResponseCode("200");
+        soft.setContentType("text/html");
+        soft.setResponseData("<html><title>Not Found</title></html>", "UTF-8");
+        AtomicInteger runs = new AtomicInteger();
+        AtomicInteger rounds = new AtomicInteger();
+        FixLoop loop = new FixLoop(timeout -> runs.getAndIncrement() == 0
+                ? TestRunSummary.of(List.of(soft), false, 0) : summary(1, 0),
+                noOpBackups(), stableCensus(), ignored -> {
+                    rounds.incrementAndGet();
+                    return null;
+                }, () -> false, new FixPrompt(), ignored -> 0);
+
+        FixResult result = loop.run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.FIXED, result.status());
+        assertEquals(1, rounds.get());
+    }
+
+    @Test
     void partialProgressContinuesThroughRoundLimit() {
         AtomicInteger rounds = new AtomicInteger();
         FixResult result = loop(List.of(summary(6, 6), summary(6, 5), summary(6, 4),

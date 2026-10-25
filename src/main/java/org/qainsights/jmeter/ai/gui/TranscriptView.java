@@ -7,6 +7,7 @@ import java.awt.Font;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -231,9 +232,14 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
                       Runnable saveAs, Runnable keep) {
+        addFixResult(result, undo, saveAs, keep, ignored -> { });
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
+                      Runnable saveAs, Runnable keep, Consumer<String> reportFallback) {
         dismissWelcome();
         finishActivityIfRunning();
-        FixResultCard card = new FixResultCard(result, undo, saveAs, keep);
+        FixResultCard card = new FixResultCard(result, undo, saveAs, keep, reportFallback);
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(card);
         relayout(card);

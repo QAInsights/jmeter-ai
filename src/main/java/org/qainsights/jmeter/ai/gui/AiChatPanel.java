@@ -1584,7 +1584,9 @@ public class AiChatPanel
     @Override
     public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
                                 Runnable saveAs, Runnable keep) {
-        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs, keep));
+        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs, keep,
+                path -> transcript.addSystemMessage("Open the Make it pass report at: " + path,
+                        ThemeColors.error())));
     }
 
     @Override

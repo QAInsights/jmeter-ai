@@ -29,6 +29,10 @@ public final class FixResult {
     private final int concurrencyBeforeTotal;
     private final int concurrencyAfterFailed;
     private final int concurrencyAfterTotal;
+    private File reportFile;
+    private List<Failure> beforeFailures = List.of();
+    private List<String> roundSummaries = List.of();
+    private List<String> deterministicHints = List.of();
 
     public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
                      int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
@@ -90,6 +94,20 @@ public final class FixResult {
     public int concurrencyBeforeTotal() { return concurrencyBeforeTotal; }
     public int concurrencyAfterFailed() { return concurrencyAfterFailed; }
     public int concurrencyAfterTotal() { return concurrencyAfterTotal; }
+    public File reportFile() { return reportFile; }
+    public void setReportFile(File reportFile) { this.reportFile = reportFile; }
+    public List<Failure> beforeFailures() { return beforeFailures; }
+    public void setBeforeFailures(List<Failure> beforeFailures) {
+        this.beforeFailures = List.copyOf(beforeFailures);
+    }
+    public List<String> roundSummaries() { return roundSummaries; }
+    public void setRoundSummaries(List<String> roundSummaries) {
+        this.roundSummaries = List.copyOf(roundSummaries);
+    }
+    public List<String> deterministicHints() { return deterministicHints; }
+    public void setDeterministicHints(List<String> deterministicHints) {
+        this.deterministicHints = List.copyOf(deterministicHints);
+    }
 
     public boolean hasUndoableChanges() {
         return status != Status.ALREADY_PASSING && status != Status.NOTHING_RAN
