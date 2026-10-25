@@ -152,7 +152,7 @@ class ProviderSetupDialogTest {
                 assertEquals(
                         "OpenCode CLI not found. Install it with 'npm install -g opencode-ai', "
                                 + "or enter its path below.",
-                        component(dialog, "openCodeDetectionStatus", JLabel.class).getText());
+                        component(dialog, "openCodeDetectionStatus", JTextArea.class).getText());
             });
             assertEquals("/bogus/opencode", detectedOverride.get());
         } finally {
@@ -1227,7 +1227,8 @@ class ProviderSetupDialogTest {
                     Field detectingField = ProviderSetupDialog.class.getDeclaredField("openCodeDetecting");
                     detectingField.setAccessible(true);
                     boolean detecting = detectingField.getBoolean(dialog);
-                    String status = component(dialog, "openCodeDetectionStatus", JLabel.class).getText();
+                    String status = component(dialog, "openCodeDetectionStatus", JTextArea.class)
+                            .getText();
                     complete.set(!detecting && (found
                             ? status.startsWith("OpenCode CLI found:")
                             : status.startsWith("OpenCode CLI not found.")));

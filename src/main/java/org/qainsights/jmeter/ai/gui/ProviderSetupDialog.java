@@ -119,7 +119,7 @@ final class ProviderSetupDialog extends JDialog {
     private ProviderSetupOption selectedOption;
     private PlaceholderPasswordField keyField;
     private JTextField openCodeExecutableField;
-    private JLabel openCodeDetectionStatus;
+    private JTextArea openCodeDetectionStatus;
     private JLabel openCodeAlreadyEnabledHint;
     private Timer openCodeDetectionTimer;
     private String openCodeDetectedPath;
@@ -975,8 +975,17 @@ final class ProviderSetupDialog extends JDialog {
         pane.add(heading);
         pane.add(Box.createVerticalStrut(UiTokens.SPACE_4));
 
-        openCodeDetectionStatus = new JLabel("Checking for OpenCode…");
+        openCodeDetectionStatus = new JTextArea("Checking for OpenCode…");
+        openCodeDetectionStatus.setEditable(false);
+        openCodeDetectionStatus.setFocusable(false);
+        openCodeDetectionStatus.setOpaque(true);
+        openCodeDetectionStatus.setBackground(ThemeColors.surface());
+        openCodeDetectionStatus.setLineWrap(true);
+        openCodeDetectionStatus.setWrapStyleWord(true);
+        openCodeDetectionStatus.setRows(2);
+        openCodeDetectionStatus.setFont(UiTokens.body(openCodeDetectionStatus.getFont()));
         openCodeDetectionStatus.setForeground(ThemeColors.info());
+        openCodeDetectionStatus.setMargin(new Insets(0, 0, 0, 0));
         openCodeDetectionStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
         openCodeDetectionStatus.setMaximumSize(new Dimension(
                 Integer.MAX_VALUE, openCodeDetectionStatus.getPreferredSize().height));
