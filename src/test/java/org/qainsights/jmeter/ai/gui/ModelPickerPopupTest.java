@@ -247,6 +247,7 @@ class ModelPickerPopupTest {
         ModelPickerPopup popup = new ModelPickerPopup(owner, MODELS,
                 "google:gemini-2.5-pro", prefs(), ModelCapabilityCatalog.getInstance());
         try {
+            assertTrue(popup.modelList().getFixedCellWidth() > 0);
             assertEquals(4, popup.visibleModelCount());
             assertEquals("google:gemini-2.5-pro", popup.selectedVisibleModel());
             assertEquals("", popup.filterText());

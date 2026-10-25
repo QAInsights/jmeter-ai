@@ -160,6 +160,7 @@ class ModelPickerPopup extends JDialog {
         ModelPickerRenderer renderer = new ModelPickerRenderer(prefs, catalog);
         modelList.setCellRenderer(renderer);
         modelList.setFixedCellHeight(renderer.rowHeight(modelList));
+        modelList.setFixedCellWidth(MIN_WIDTH);
         modelList.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
