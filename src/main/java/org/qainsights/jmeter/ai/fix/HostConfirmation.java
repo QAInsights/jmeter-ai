@@ -28,7 +28,8 @@ public final class HostConfirmation {
         Runnable show = () -> {
             String list = hostSet.isEmpty() ? "no HTTP host could be determined" : String.join(", ", hostSet);
             int choice = JOptionPane.showConfirmDialog(parent,
-                    "Make it pass will send real requests from 1 user to: " + list,
+                    "Make it pass will send real requests from 1 user (then 2 users for a final check) to: "
+                            + list + ". This can create real data such as orders or emails on these hosts.",
                     "Make it pass", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
             accepted.set(choice == JOptionPane.OK_OPTION);
         };

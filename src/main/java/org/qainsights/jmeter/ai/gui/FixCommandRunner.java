@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 /** SwingWorker-backed command runner for the guarded Make it pass workflow. */
 final class FixCommandRunner {
     private static final Logger log = LoggerFactory.getLogger(FixCommandRunner.class);
+    private static final AtomicReference<Object> ACTIVE_RUN_TOKEN = new AtomicReference<>();
     private final CommandCallback cb;
     private final Function<AiService, JMeterAgent> agentFactory;
     private final TestRunController testRunController;
@@ -63,6 +64,11 @@ final class FixCommandRunner {
             finishWithMessage("Open a JMeter test plan before using @fix.");
             return;
         }
+        String planPrerequisite = planPrerequisite(true, PlanCensus.live().enabledSamplerCount());
+        if (planPrerequisite != null) {
+            finishWithMessage(planPrerequisite);
+            return;
+        }
         if (!JMeterAgent.isEnabled()) {
             finishWithMessage("Make it pass requires Agent Mode. Enable it in JMeter settings, then retry.");
             return;
@@ -87,6 +93,8 @@ final class FixCommandRunner {
         FixRequest request = FixRequest.fromConfig();
         AtomicBoolean cancelled = new AtomicBoolean();
         AtomicReference<Thread> workerThread = new AtomicReference<>();
+        Object runToken = new Object();
+        ACTIVE_RUN_TOKEN.set(runToken);
         SwingWorker<FixResult, String> worker = new SwingWorker<>() {
             @Override
             protected FixResult doInBackground() {
@@ -110,9 +118,11 @@ final class FixCommandRunner {
 
             @Override
             protected void done() {
-                cb.hideStopButton();
-                cb.setCancelHandle(null);
-                cb.setInputEnabled(true);
+                if (ACTIVE_RUN_TOKEN.compareAndSet(runToken, null)) {
+                    cb.hideStopButton();
+                    cb.setCancelHandle(null);
+                    cb.setInputEnabled(true);
+                }
                 try {
                     FixResult result = get();
                     recordResult(result);
@@ -120,17 +130,24 @@ final class FixCommandRunner {
                         backups.unpin(result.backupFile());
                     }
                     cb.appendFixResult(result,
-                            () -> runCardAction("Could not undo Make it pass", () -> {
+                            () -> runUndoAction("Could not undo Make it pass", () -> {
                                 java.io.File backup = result.backupFile();
                                 if (backup == null || !backup.isFile()) {
                                     cb.appendMessageToChat(
                                             "The Make it pass backup is missing. Undo all is unavailable.");
-                                    backups.unpin(backup);
-                                    return;
+                                    return false;
                                 }
-                                backups.restore(backup);
+                                if (!backups.currentPlanMatches(backup) && !confirmUndoPlanChange()) {
+                                    return false;
+                                }
+                                boolean savedFileChanged = backups.restoreAndCheckSavedFileChanged(backup);
                                 Telemetry.record(TelemetryFeature.FIX_UNDO);
                                 backups.unpin(backup);
+                                if (savedFileChanged) {
+                                    cb.appendMessageToChat("Your saved file still has the Make it pass changes. "
+                                            + "Save the plan to keep the undo.");
+                                }
+                                return true;
                             }),
                             () -> runCardAction("Could not save the test plan", () ->
                                     ActionRouter.getInstance().doActionNow(
@@ -149,6 +166,9 @@ final class FixCommandRunner {
             }
         };
         cb.setCancelHandle(() -> {
+            if (ACTIVE_RUN_TOKEN.get() != runToken) {
+                return;
+            }
             cancelled.set(true);
             TestPlanRunner.stopActive(true);
             Thread thread = workerThread.get();
@@ -164,6 +184,16 @@ final class FixCommandRunner {
         org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
         return gui != null && gui.getTreeModel() != null && gui.getTreeModel().getTestPlan() != null
                 && gui.getTreeModel().getTestPlan().size() > 0;
+    }
+
+    static String planPrerequisite(boolean hasPlan, int enabledSamplers) {
+        if (!hasPlan) {
+            return "Open a JMeter test plan before using @fix.";
+        }
+        if (enabledSamplers <= 0) {
+            return "This plan has no requests yet. Record a session or add an HTTP Request first.";
+        }
+        return null;
     }
 
     private void finishWithMessage(String message) {
@@ -195,6 +225,25 @@ final class FixCommandRunner {
         } catch (RuntimeException e) {
             cb.appendErrorMessageToChat(failureMessage, e);
         }
+    }
+
+    private boolean runUndoAction(String failureMessage, java.util.function.BooleanSupplier action) {
+        try {
+            return action.getAsBoolean();
+        } catch (RuntimeException e) {
+            cb.appendErrorMessageToChat(failureMessage, e);
+            return false;
+        }
+    }
+
+    private boolean confirmUndoPlanChange() {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        int choice = javax.swing.JOptionPane.showConfirmDialog(
+                gui == null ? null : gui.getMainFrame(),
+                "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
+                        + "Continue?",
+                "Undo all", javax.swing.JOptionPane.YES_NO_OPTION, javax.swing.JOptionPane.WARNING_MESSAGE);
+        return choice == javax.swing.JOptionPane.YES_OPTION;
     }
 
     private static Exception asException(Throwable error) {

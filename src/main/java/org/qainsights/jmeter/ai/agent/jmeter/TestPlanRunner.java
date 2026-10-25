@@ -16,6 +16,7 @@ import org.apache.jmeter.samplers.SampleListener;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.AbstractTestElement;
 import org.apache.jmeter.testelement.TestStateListener;
+import org.apache.jmeter.threads.AbstractThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
@@ -35,6 +36,7 @@ import org.apache.jorphan.collections.ListedHashTree;
 public final class TestPlanRunner {
 
     private static volatile StandardJMeterEngine active;
+    private static volatile List<SampleResult> lastSampleResults = Collections.emptyList();
     /** Pending stop for the active run: TRUE stops at once, FALSE gracefully, null means keep running. */
     private static volatile Boolean stopRequest;
 
@@ -48,6 +50,10 @@ public final class TestPlanRunner {
         }
         stopRequest = now;
         return true;
+    }
+
+    public static List<SampleResult> lastSampleResults() {
+        return Collections.unmodifiableList(new ArrayList<>(lastSampleResults));
     }
 
     /** Live entry point: pulls the current plan from the live {@link GuiPackage} tree model. */
@@ -100,6 +106,7 @@ public final class TestPlanRunner {
         // here would not survive that clone. Collector/Ender therefore coordinate via static state,
         // reset per call by prepare(), mirroring CorrelationEngine.Collector/Ender's proven pattern.
         SampleCollector.prepare();
+        lastSampleResults = Collections.emptyList();
         CountDownLatch done = new CountDownLatch(1);
         RunEndedListener.prepare(done);
         for (Object key : execTree.list()) {
@@ -150,27 +157,40 @@ public final class TestPlanRunner {
             stopRequest = null;
         }
         long elapsed = System.currentTimeMillis() - start;
-        return TestRunSummary.of(SampleCollector.collected(), timedOut, elapsed);
+        List<SampleResult> results = SampleCollector.collected();
+        lastSampleResults = Collections.unmodifiableList(new ArrayList<>(
+                results.subList(0, Math.min(results.size(), 1000))));
+        return TestRunSummary.of(results, timedOut, elapsed);
     }
 
     /** Applies the one-user, one-loop override to an execution tree, never the live plan. */
     public static void forceSingleIteration(HashTree execTree) {
+        forceIterations(execTree, 1, 1);
+    }
+
+    public static void forceIterations(HashTree execTree, int threads, int loops) {
         if (execTree == null) {
             return;
         }
+        if (threads < 1 || loops < 1) {
+            throw new IllegalArgumentException("threads and loops must be positive");
+        }
         for (Object key : execTree.list()) {
-            if (key instanceof ThreadGroup) {
-                ThreadGroup threadGroup = (ThreadGroup) key;
-                threadGroup.setNumThreads(1);
+            if (key instanceof AbstractThreadGroup && !(key instanceof ThreadGroup)) {
+                throw new TestExecutionException(key.getClass().getName()
+                        + ": Make it pass only supports standard Thread Groups");
+            }
+            if (key instanceof ThreadGroup threadGroup) {
+                threadGroup.setNumThreads(threads);
                 if (threadGroup.getSamplerController() instanceof LoopController) {
                     LoopController loopController = (LoopController) threadGroup.getSamplerController();
-                    loopController.setLoops(1);
+                    loopController.setLoops(loops);
                     loopController.setContinueForever(false);
                 }
             }
             HashTree children = execTree.getTree(key);
             if (children != null) {
-                forceSingleIteration(children);
+                forceIterations(children, threads, loops);
             }
         }
     }

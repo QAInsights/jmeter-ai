@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.samplers.SampleResult;
+import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
 import org.qainsights.jmeter.ai.utils.SafeText;
 
 /**
@@ -17,6 +18,7 @@ public final class TestRunSummary {
 
     /** Max number of individual failures kept in {@link #getFailures()}; later ones are only counted. */
     public static final int MAX_FAILURES_KEPT = 20;
+    public static final int MAX_OBSERVATIONS_KEPT = 500;
     public static final int MAX_RESPONSE_EXCERPT_CHARS = 2048;
     private static final int MAX_RESPONSE_REDACTION_CHARS = 8192;
 
@@ -26,15 +28,17 @@ public final class TestRunSummary {
     private final boolean timedOut;
     private final long elapsedMillis;
     private final List<Failure> failures;
+    private final List<Observation> observations;
 
     private TestRunSummary(int totalSamples, int successCount, int failureCount, boolean timedOut,
-                            long elapsedMillis, List<Failure> failures) {
+                            long elapsedMillis, List<Failure> failures, List<Observation> observations) {
         this.totalSamples = totalSamples;
         this.successCount = successCount;
         this.failureCount = failureCount;
         this.timedOut = timedOut;
         this.elapsedMillis = elapsedMillis;
         this.failures = Collections.unmodifiableList(failures);
+        this.observations = Collections.unmodifiableList(observations);
     }
 
     /** Builds a summary by aggregating the raw sample results collected during a run. */
@@ -42,8 +46,16 @@ public final class TestRunSummary {
         int success = 0;
         int failure = 0;
         List<Failure> failures = new ArrayList<>();
+        List<Observation> observations = new ArrayList<>();
         for (SampleResult result : results) {
-            if (result.isSuccessful()) {
+            String softFailure = SoftFailureDetector.reason(result);
+            if (observations.size() < MAX_OBSERVATIONS_KEPT) {
+                String url = result instanceof HTTPSampleResult && result.getURL() != null
+                        ? SafeText.redactUrls(result.getURL().toExternalForm()) : "";
+                observations.add(new Observation(result.getSampleLabel(), result.getResponseCode(), url,
+                        SoftFailureDetector.titleText(result), result.getContentType(), softFailure));
+            }
+            if (result.isSuccessful() && softFailure == null) {
                 success++;
             } else {
                 failure++;
@@ -66,12 +78,14 @@ public final class TestRunSummary {
                     } else if (excerpt.length() > MAX_RESPONSE_EXCERPT_CHARS) {
                         excerpt = excerpt.substring(0, MAX_RESPONSE_EXCERPT_CHARS);
                     }
+                    String message = softFailure == null ? SafeText.redactUrls(result.getResponseMessage())
+                            : "Soft failure: " + softFailure;
                     failures.add(new Failure(result.getSampleLabel(), result.getResponseCode(),
-                            SafeText.redactUrls(result.getResponseMessage()), method, url, excerpt));
+                            message, method, url, excerpt));
                 }
             }
         }
-        return new TestRunSummary(results.size(), success, failure, timedOut, elapsedMillis, failures);
+        return new TestRunSummary(results.size(), success, failure, timedOut, elapsedMillis, failures, observations);
     }
 
     public int getTotalSamples() {
@@ -97,6 +111,10 @@ public final class TestRunSummary {
     /** Up to {@link #MAX_FAILURES_KEPT} failed samples; see {@link #hasMoreFailuresThanShown()}. */
     public List<Failure> getFailures() {
         return failures;
+    }
+
+    public List<Observation> getObservations() {
+        return observations;
     }
 
     /** True when there were more failures than fit in {@link #getFailures()}. */
@@ -150,5 +168,31 @@ public final class TestRunSummary {
         public String getResponseExcerpt() {
             return responseExcerpt;
         }
+    }
+
+    public static final class Observation {
+        private final String label;
+        private final String responseCode;
+        private final String finalUrl;
+        private final String title;
+        private final String contentType;
+        private final String softFailureReason;
+
+        public Observation(String label, String responseCode, String finalUrl, String title,
+                           String contentType, String softFailureReason) {
+            this.label = label == null ? "" : label;
+            this.responseCode = responseCode == null ? "" : responseCode;
+            this.finalUrl = finalUrl == null ? "" : finalUrl;
+            this.title = title == null ? "" : title;
+            this.contentType = contentType == null ? "" : contentType;
+            this.softFailureReason = softFailureReason;
+        }
+
+        public String getLabel() { return label; }
+        public String getResponseCode() { return responseCode; }
+        public String getFinalUrl() { return finalUrl; }
+        public String getTitle() { return title; }
+        public String getContentType() { return contentType; }
+        public String getSoftFailureReason() { return softFailureReason; }
     }
 }

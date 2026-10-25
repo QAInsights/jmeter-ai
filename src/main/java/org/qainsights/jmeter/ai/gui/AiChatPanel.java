@@ -14,6 +14,7 @@ import java.net.URI;
 import java.text.AttributedCharacterIterator;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.*;
 import org.apache.jmeter.control.TransactionController;
@@ -1577,6 +1578,12 @@ public class AiChatPanel
     @Override
     public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs,
                                 Runnable keep) {
+        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs, keep));
+    }
+
+    @Override
+    public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
+                                Runnable saveAs, Runnable keep) {
         runOnEdt(() -> transcript.addFixResult(result, undo, saveAs, keep));
     }
 

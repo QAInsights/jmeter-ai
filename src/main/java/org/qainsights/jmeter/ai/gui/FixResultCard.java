@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -21,7 +22,7 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 final class FixResultCard extends JPanel {
     private final JPanel actions = new JPanel();
 
-    FixResultCard(FixResult result, Runnable undo, Runnable saveAs, Runnable keepAction) {
+    FixResultCard(FixResult result, BooleanSupplier undo, Runnable saveAs, Runnable keepAction) {
         super(new BorderLayout());
         setOpaque(true);
         setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -64,8 +65,9 @@ final class FixResultCard extends JPanel {
         });
         JButton undoButton = new JButton("Undo all");
         undoButton.addActionListener(event -> {
-            undo.run();
-            actions.setVisible(false);
+            if (undo.getAsBoolean()) {
+                actions.setVisible(false);
+            }
         });
         actions.add(keep);
         if (result.hasUndoableChanges()) {

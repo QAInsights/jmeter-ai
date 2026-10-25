@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,5 +38,14 @@ class CommandDispatcherFixCommandTest {
         new FixCommandRunner(callback, ignored -> null, running).run();
 
         verify(callback).appendRedMessage("A test is already running. Stop it before using @fix.");
+    }
+
+    @Test
+    void emptyPlanShowsPrerequisiteBeforeHostConfirmation() {
+        assertEquals("This plan has no requests yet. Record a session or add an HTTP Request first.",
+                FixCommandRunner.planPrerequisite(true, 0));
+        assertEquals("Open a JMeter test plan before using @fix.",
+                FixCommandRunner.planPrerequisite(false, 0));
+        assertNull(FixCommandRunner.planPrerequisite(true, 1));
     }
 }

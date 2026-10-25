@@ -134,6 +134,26 @@ class PlanBackupTest {
         }
     }
 
+    @Test
+    void savedFileHashDetectsExternalSaveWithoutChangingFile() throws Exception {
+        Path savedPlan = Files.writeString(directory.resolve("saved.jmx"), "original plan");
+        String originalHash = PlanBackup.sha256(savedPlan.toString());
+        assertFalse(PlanBackup.savedFileChanged(savedPlan.toString(), originalHash));
+
+        Files.writeString(savedPlan, "saved Make it pass changes");
+
+        assertTrue(PlanBackup.savedFileChanged(savedPlan.toString(), originalHash));
+        assertEquals("saved Make it pass changes", Files.readString(savedPlan));
+    }
+
+    @Test
+    void samePlanRequiresMatchingPathOrMatchingUnsavedRootName() {
+        assertTrue(PlanBackup.samePlan("/plans/a.jmx", "A", "/plans/a.jmx", "Other"));
+        assertFalse(PlanBackup.samePlan("/plans/a.jmx", "A", "/plans/b.jmx", "A"));
+        assertTrue(PlanBackup.samePlan(null, "Unsaved", "", "Unsaved"));
+        assertFalse(PlanBackup.samePlan(null, "Unsaved", null, "Another"));
+    }
+
     private static HashTree plan() {
         HashTree tree = new ListedHashTree();
         tree.add(new TestPlan("Test Plan")).add(new DebugSampler());

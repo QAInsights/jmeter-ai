@@ -133,8 +133,8 @@ final class AgentCommandRunner {
                                         notice -> cb.appendJevRoute(notice, selectedModel),
                                         triage -> cb.appendJevTriage(triage, selectedModel),
                                         summary -> {
-                                            if (summary.getFailureCount() > 0 && offeredFix.compareAndSet(false, true)) {
-                                                cb.offerMakeItPass();
+                                            if (summary.getFailureCount() > 0) {
+                                                offeredFix.set(true);
                                             }
                                         }));
                     } finally {
@@ -228,6 +228,9 @@ final class AgentCommandRunner {
                         cb.onWorkerSuccess(response);
                     }
                     cb.addToConversationHistory(response);
+                    if (offeredFix.get()) {
+                        cb.offerMakeItPass();
+                    }
                 } catch (InterruptedException | ExecutionException e) {
                     Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                     cb.onWorkerError("Error running the agent", e,

@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.fix;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -9,7 +11,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,6 +22,7 @@ import java.util.function.Supplier;
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.services.FileServer;
 import org.apache.jorphan.collections.HashTree;
 import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
@@ -106,6 +111,37 @@ public class PlanBackup implements FixLoop.BackupStore {
 
     @Override
     public synchronized void restore(File file) {
+        restoreInternal(file);
+    }
+
+    /** Restores a snapshot and reports whether its associated saved file changed since backup. */
+    public synchronized boolean restoreAndCheckSavedFileChanged(File file) {
+        return restoreInternal(file);
+    }
+
+    public synchronized boolean currentPlanMatches(File file) {
+        PlanState state = file == null ? null : states.get(key(file));
+        GuiPackage gui = GuiPackage.getInstance();
+        if (state == null || gui == null || gui.getTreeModel() == null) {
+            return false;
+        }
+        String currentPath = gui.getTestPlanFile();
+        String currentRoot = rootName(gui.getTreeModel().getTestPlan());
+        return samePlan(state.filePath, state.rootName, currentPath, currentRoot);
+    }
+
+    static boolean samePlan(String expectedPath, String expectedRoot, String currentPath, String currentRoot) {
+        boolean expectedSaved = expectedPath != null && !expectedPath.isBlank();
+        boolean currentSaved = currentPath != null && !currentPath.isBlank();
+        if (expectedSaved || currentSaved) {
+            return expectedSaved && currentSaved
+                    && Path.of(expectedPath).toAbsolutePath().normalize()
+                    .equals(Path.of(currentPath).toAbsolutePath().normalize());
+        }
+        return expectedRoot != null && expectedRoot.equals(currentRoot);
+    }
+
+    private boolean restoreInternal(File file) {
         if (file == null) {
             throw new IllegalArgumentException("backup file must not be null");
         }
@@ -143,9 +179,12 @@ public class PlanBackup implements FixLoop.BackupStore {
                 throw restoreFailure;
             }
             PlanState state = states.get(key(file));
+            boolean savedFileChanged = state != null && savedFileChanged(state.filePath, state.sha256);
             if (state != null) {
-                EdtExecutor.swing().run(() -> restoreState(state));
+                PlanState restoredState = state.withDirty(state.dirty || savedFileChanged);
+                EdtExecutor.swing().run(() -> restoreState(restoredState));
             }
+            return savedFileChanged;
         } finally {
             if (safetyFile != null) {
                 try {
@@ -237,8 +276,44 @@ public class PlanBackup implements FixLoop.BackupStore {
     }
 
     private static PlanState captureState(GuiPackage gui) {
-        return new PlanState(gui == null ? null : gui.getTestPlanFile(),
-                gui != null && gui.isDirty(), FileServer.getFileServer().getBaseDir(), gui != null);
+        String filePath = gui == null ? null : gui.getTestPlanFile();
+        return new PlanState(filePath, gui != null && gui.isDirty(),
+                FileServer.getFileServer().getBaseDir(), gui != null, sha256(filePath),
+                gui == null || gui.getTreeModel() == null ? null : rootName(gui.getTreeModel().getTestPlan()));
+    }
+
+    private static String rootName(HashTree tree) {
+        if (tree == null || tree.list().isEmpty()) {
+            return null;
+        }
+        Object key = tree.list().iterator().next();
+        if (key instanceof JMeterTreeNode node) {
+            return node.getName();
+        }
+        if (key instanceof org.apache.jmeter.testelement.TestElement element) {
+            return element.getName();
+        }
+        return null;
+    }
+
+    static boolean savedFileChanged(String filePath, String expectedHash) {
+        return filePath != null && !filePath.isBlank() && expectedHash != null
+                && !Objects.equals(expectedHash, sha256(filePath));
+    }
+
+    static String sha256(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            return null;
+        }
+        try {
+            if (!Files.isRegularFile(Path.of(filePath))) {
+                return null;
+            }
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(Files.readAllBytes(Path.of(filePath))));
+        } catch (IOException | NoSuchAlgorithmException e) {
+            return null;
+        }
     }
 
     private static void restoreState(PlanState state) {
@@ -295,12 +370,21 @@ public class PlanBackup implements FixLoop.BackupStore {
         private final boolean dirty;
         private final String baseDirectory;
         private final boolean guiCaptured;
+        private final String sha256;
+        private final String rootName;
 
-        private PlanState(String filePath, boolean dirty, String baseDirectory, boolean guiCaptured) {
+        private PlanState(String filePath, boolean dirty, String baseDirectory, boolean guiCaptured,
+                          String sha256, String rootName) {
             this.filePath = filePath;
             this.dirty = dirty;
             this.baseDirectory = baseDirectory;
             this.guiCaptured = guiCaptured;
+            this.sha256 = sha256;
+            this.rootName = rootName;
+        }
+
+        private PlanState withDirty(boolean newDirty) {
+            return new PlanState(filePath, newDirty, baseDirectory, guiCaptured, sha256, rootName);
         }
     }
 }

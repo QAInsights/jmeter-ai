@@ -20,7 +20,7 @@ class FixResultCardTest {
                 FixResult.Status.ALREADY_PASSING, FixResult.Status.NOTHING_RAN)) {
             FixResult result = new FixResult(status, 0, 1, 0, 1,
                     0, 0, new File("backup.jmx"), List.of(), List.of(), "");
-            FixResultCard card = new FixResultCard(result, () -> { }, () -> { }, () -> { });
+            FixResultCard card = new FixResultCard(result, () -> true, () -> { }, () -> { });
 
             assertFalse(result.hasUndoableChanges());
             assertEquals(List.of("Keep"), buttonNames(card));
@@ -31,7 +31,7 @@ class FixResultCardTest {
     void noUndoableRoundDoesNotOfferUndoActions() {
         FixResult result = new FixResult(FixResult.Status.NOT_FIXED, 1, 1, 1, 1,
                 2, 2, new File("backup.jmx"), List.of(), List.of(), "");
-        FixResultCard card = new FixResultCard(result, () -> { }, () -> { }, () -> { });
+        FixResultCard card = new FixResultCard(result, () -> true, () -> { }, () -> { });
 
         assertFalse(result.hasUndoableChanges());
         assertEquals(List.of("Keep"), buttonNames(card));

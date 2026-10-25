@@ -4,6 +4,7 @@ import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
 import org.qainsights.jmeter.ai.agent.TriageNotice;
 import org.qainsights.jmeter.ai.fix.FixResult;
 import org.qainsights.jmeter.ai.service.AiService;
+import java.util.function.BooleanSupplier;
 
 import java.util.List;
 
@@ -118,6 +119,10 @@ public interface CommandCallback {
 
     default void appendFixResult(FixResult result, Runnable undo, Runnable saveAs, Runnable keep) {
         appendFixResult(result, undo, saveAs);
+    }
+
+    default void appendFixResult(FixResult result, BooleanSupplier undo, Runnable saveAs, Runnable keep) {
+        appendFixResult(result, (Runnable) () -> undo.getAsBoolean(), saveAs, keep);
     }
 
     default void offerMakeItPass() {

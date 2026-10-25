@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.proxy.ProxyControl;
+import org.apache.jmeter.protocol.http.proxy.gui.ProxyControlGui;
 import org.apache.jmeter.reporters.ResultCollector;
 import org.apache.jmeter.samplers.SampleSaveConfiguration;
 import org.apache.jmeter.testelement.TestElement;
@@ -218,8 +219,15 @@ public final class JMeterProxyRecorder {
         return counter.count();
     }
 
-    private void configure(JMeterTreeNode initialTarget, int port) {
+    void configure(JMeterTreeNode initialTarget, int port) {
+        configureProxy(proxy, model, initialTarget, port);
+    }
+
+    static void configureProxy(ProxyControl proxy, JMeterTreeModel model,
+                               JMeterTreeNode initialTarget, int port) {
         proxy.setName(RECORDER_NAME);
+        proxy.setProperty(TestElement.TEST_CLASS, ProxyControl.class.getName());
+        proxy.setProperty(TestElement.GUI_CLASS, ProxyControlGui.class.getName());
         proxy.setNonGuiTreeModel(model);
         proxy.setTarget(initialTarget);
         proxy.setPort(String.valueOf(port));
