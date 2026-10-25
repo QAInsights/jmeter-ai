@@ -1,10 +1,10 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.event.ActionEvent;
-import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import javax.swing.SwingWorker;
@@ -21,6 +21,7 @@ import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
 import org.qainsights.jmeter.ai.fix.FixLoop;
 import org.qainsights.jmeter.ai.fix.FixRequest;
 import org.qainsights.jmeter.ai.fix.FixResult;
+import org.qainsights.jmeter.ai.fix.FixTools;
 import org.qainsights.jmeter.ai.fix.HostConfirmation;
 import org.qainsights.jmeter.ai.fix.PlanBackup;
 import org.qainsights.jmeter.ai.fix.PlanCensus;
@@ -28,18 +29,12 @@ import org.qainsights.jmeter.ai.fix.PlanHosts;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
-import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** SwingWorker-backed command runner for the guarded Make it pass workflow. */
 final class FixCommandRunner {
     private static final Logger log = LoggerFactory.getLogger(FixCommandRunner.class);
-    private static final Set<String> FIX_TOOLS = Set.of(
-            "get_tree_state", "get_element_config", "get_element_children", "get_element_schema",
-            "add_element", "update_element_property", "set_property_list", "set_structured_property_list",
-            "find_correlation_candidates", "apply_correlation");
-
     private final CommandCallback cb;
     private final Function<AiService, JMeterAgent> agentFactory;
 
@@ -67,27 +62,33 @@ final class FixCommandRunner {
                     + "OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, Codex, Claude Code, or OpenCode.");
             return;
         }
-        if (!HostConfirmation.confirm(null, PlanHosts.live())) {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        java.awt.Component parent = gui == null ? null : gui.getMainFrame();
+        if (!HostConfirmation.confirm(parent, PlanHosts.live())) {
             Telemetry.record(TelemetryFeature.FIX_DECLINED);
             finishWithMessage("Make it pass was cancelled. No requests were sent.");
             return;
         }
 
         PlanBackup backups = new PlanBackup();
-        ToolRegistry registry = AgentToolRegistry.createDefault().subset(FIX_TOOLS);
-        FixRequest request = new FixRequest(
-                integer("jmeter.ai.fix.max.rounds", 5, 1, 10),
-                number("jmeter.ai.fix.timeout.seconds", 120, 10, 900));
+        ToolRegistry registry = AgentToolRegistry.createDefault().subset(FixTools.NAMES);
+        FixRequest request = FixRequest.fromConfig();
         AtomicBoolean cancelled = new AtomicBoolean();
+        AtomicReference<Thread> workerThread = new AtomicReference<>();
         SwingWorker<FixResult, String> worker = new SwingWorker<>() {
             @Override
             protected FixResult doInBackground() {
+                workerThread.set(Thread.currentThread());
                 FixLoop loop = new FixLoop(TestResultsRunner.live()::runSingleIteration, backups,
                         PlanCensus::live,
-                                message -> agent.runRestricted(message, registry, "",
-                                        new AgentRunListeners(this::publish, null, null, null, null)),
+                        message -> agent.runRestricted(message, registry, "",
+                                new AgentRunListeners(this::publish, null, null, null, null)),
                         cancelled::get);
-                return loop.run(request, this::publish);
+                try {
+                    return loop.run(request, this::publish);
+                } finally {
+                    workerThread.set(null);
+                }
             }
 
             @Override
@@ -103,11 +104,14 @@ final class FixCommandRunner {
                 try {
                     FixResult result = get();
                     recordResult(result);
-                    cb.appendFixResult(result, () -> {
-                        backups.restore(result.backupFile());
-                        Telemetry.record(TelemetryFeature.FIX_UNDO);
-                    }, () -> ActionRouter.getInstance().doActionNow(
-                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS)));
+                    cb.appendFixResult(result,
+                            () -> runCardAction("Could not undo Make it pass", () -> {
+                                backups.restore(result.backupFile());
+                                Telemetry.record(TelemetryFeature.FIX_UNDO);
+                            }),
+                            () -> runCardAction("Could not save the test plan", () ->
+                                    ActionRouter.getInstance().doActionNow(
+                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS))));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("Make it pass was interrupted", e);
@@ -121,6 +125,10 @@ final class FixCommandRunner {
         cb.setCancelHandle(() -> {
             cancelled.set(true);
             TestPlanRunner.stopActive(true);
+            Thread thread = workerThread.get();
+            if (thread != null) {
+                thread.interrupt();
+            }
         });
         cb.showStopButton();
         worker.execute();
@@ -155,19 +163,11 @@ final class FixCommandRunner {
         }
     }
 
-    private static int integer(String key, int fallback, int min, int max) {
+    private void runCardAction(String failureMessage, Runnable action) {
         try {
-            return Math.max(min, Math.min(max, Integer.parseInt(AiConfig.getProperty(key, String.valueOf(fallback)))));
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
-    }
-
-    private static long number(String key, long fallback, long min, long max) {
-        try {
-            return Math.max(min, Math.min(max, Long.parseLong(AiConfig.getProperty(key, String.valueOf(fallback)))));
-        } catch (NumberFormatException e) {
-            return fallback;
+            action.run();
+        } catch (RuntimeException e) {
+            cb.appendErrorMessageToChat(failureMessage, e);
         }
     }
 

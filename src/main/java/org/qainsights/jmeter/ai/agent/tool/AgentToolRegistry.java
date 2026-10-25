@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.tool;
 
 import org.qainsights.jmeter.ai.agent.TriageNotice;
+import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
@@ -40,6 +41,12 @@ public final class AgentToolRegistry {
      * failure-triage notices emitted by {@code get_test_results}.
      */
     public static ToolRegistry createDefault(java.util.function.Consumer<TriageNotice> triageNotice) {
+        return createDefault(triageNotice, null);
+    }
+
+    /** Builds a registry with optional failure-triage and completed-test-result sinks. */
+    public static ToolRegistry createDefault(java.util.function.Consumer<TriageNotice> triageNotice,
+                                             java.util.function.Consumer<TestRunSummary> testResults) {
         ToolRegistry registry = new ToolRegistry();
         for (Tool tool : new ReadToolHandlers().tools()) {
             registry.register(tool);
@@ -56,7 +63,7 @@ public final class AgentToolRegistry {
         registry.register(new ReorderElementHandler().tool());
         registry.register(new RunTestHandler().tool());
         registry.register(new StopTestHandler().tool());
-        registry.register(new GetTestResultsHandler(triageNotice).tool());
+        registry.register(new GetTestResultsHandler(triageNotice, testResults).tool());
         registry.register(new SavePlanHandler().tool());
         registry.register(new OpenPlanHandler().tool());
         registry.register(new FindCorrelationCandidatesHandler().tool());

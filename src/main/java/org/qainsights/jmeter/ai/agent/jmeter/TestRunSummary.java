@@ -18,6 +18,7 @@ public final class TestRunSummary {
     /** Max number of individual failures kept in {@link #getFailures()}; later ones are only counted. */
     public static final int MAX_FAILURES_KEPT = 20;
     public static final int MAX_RESPONSE_EXCERPT_CHARS = 2048;
+    private static final int MAX_RESPONSE_REDACTION_CHARS = 8192;
 
     private final int totalSamples;
     private final int successCount;
@@ -55,7 +56,11 @@ public final class TestRunSummary {
                             url = SafeText.redactUrls(result.getURL().toExternalForm());
                         }
                     }
-                    String excerpt = SafeText.redactSensitiveValues(result.getResponseDataAsString());
+                    String response = result.getResponseDataAsString();
+                    if (response != null && response.length() > MAX_RESPONSE_REDACTION_CHARS) {
+                        response = response.substring(0, MAX_RESPONSE_REDACTION_CHARS);
+                    }
+                    String excerpt = SafeText.redactSensitiveValues(response);
                     if (excerpt == null) {
                         excerpt = "";
                     } else if (excerpt.length() > MAX_RESPONSE_EXCERPT_CHARS) {

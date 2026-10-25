@@ -4,8 +4,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.Locale;
 
 import org.apache.jmeter.assertions.Assertion;
+import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -21,13 +24,17 @@ public final class PlanCensus {
     private final int enabledSamplerCount;
     private final List<String> assertions;
     private final List<String> loadSettings;
+    private final List<String> successOverrides;
+    private final Set<String> hosts;
 
     private PlanCensus(int samplerCount, int enabledSamplerCount, List<String> assertions,
-                       List<String> loadSettings) {
+                       List<String> loadSettings, List<String> successOverrides, Set<String> hosts) {
         this.samplerCount = samplerCount;
         this.enabledSamplerCount = enabledSamplerCount;
         this.assertions = List.copyOf(assertions);
         this.loadSettings = List.copyOf(loadSettings);
+        this.successOverrides = List.copyOf(successOverrides);
+        this.hosts = Set.copyOf(hosts);
     }
 
     public static PlanCensus live() {
@@ -39,7 +46,8 @@ public final class PlanCensus {
         Counts counts = new Counts();
         walk(tree, true, counts);
         Collections.sort(counts.assertions);
-        return new PlanCensus(counts.samplers, counts.enabledSamplers, counts.assertions, counts.loadSettings);
+        return new PlanCensus(counts.samplers, counts.enabledSamplers, counts.assertions, counts.loadSettings,
+                counts.successOverrides, PlanHosts.collect(tree));
     }
 
     public List<String> violations(PlanCensus after) {
@@ -62,6 +70,20 @@ public final class PlanCensus {
         if (!loadSettings.equals(after.loadSettings)) {
             violations.add("Thread Group load settings were changed.");
         }
+        List<String> existingOverrides = new ArrayList<>(successOverrides);
+        boolean addedOverride = false;
+        for (String override : after.successOverrides) {
+            if (!existingOverrides.remove(override)) {
+                addedOverride = true;
+                break;
+            }
+        }
+        if (addedOverride) {
+            violations.add("A new element forces requests to pass.");
+        }
+        after.hosts.stream().filter(host -> !hosts.contains(host))
+                .sorted().forEach(host -> violations.add("A request now targets a host you did not confirm: "
+                        + host + "."));
         return List.copyOf(violations);
     }
 
@@ -93,6 +115,10 @@ public final class PlanCensus {
             if (element instanceof Assertion) {
                 counts.assertions.add(fingerprint(element));
             }
+            String override = successOverride(element);
+            if (override != null) {
+                counts.successOverrides.add(override);
+            }
             if (element instanceof ThreadGroup) {
                 ThreadGroup group = (ThreadGroup) element;
                 int loops = -1;
@@ -123,10 +149,29 @@ public final class PlanCensus {
         return element.getName() + "|" + String.join("|", values);
     }
 
+    private static String successOverride(TestElement element) {
+        if (element instanceof ResponseAssertion
+                && ((ResponseAssertion) element).getAssumeSuccess()) {
+            return fingerprint(element);
+        }
+        String type = element.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        if (!type.contains("jsr223") && !type.contains("beanshell")) {
+            return null;
+        }
+        String script = element.getPropertyAsString("script");
+        String normalized = script.toLowerCase(Locale.ROOT);
+        if (normalized.contains("setsuccessful(") || normalized.contains("setresponseok(")
+                || normalized.contains("setresponsecodeok(")) {
+            return type + "|" + element.getName() + "|" + script;
+        }
+        return null;
+    }
+
     private static final class Counts {
         int samplers;
         int enabledSamplers;
         final List<String> assertions = new ArrayList<>();
         final List<String> loadSettings = new ArrayList<>();
+        final List<String> successOverrides = new ArrayList<>();
     }
 }

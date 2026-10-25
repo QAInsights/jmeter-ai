@@ -393,7 +393,7 @@ public final class JMeterAgent {
     public AgentLoop.AgentResult run(String userMessage, String routingMessage,
                                       List<String> priorConversationTurns, AgentRunListeners listeners) {
         AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
-        ToolRegistry fullRegistry = AgentToolRegistry.createDefault(sinks.triageNotice());
+        ToolRegistry fullRegistry = AgentToolRegistry.createDefault(sinks.triageNotice(), sinks.testResults());
         AgentRequestRouter.Decision decision = route(routingMessage);
         ToolRegistry registry = AgentToolPacks.select(fullRegistry, decision);
         AgentToolExpander expander = AgentToolExpander.registerIfEnabled(requestRouter, routingMessage,
@@ -469,7 +469,7 @@ public final class JMeterAgent {
                 String.valueOf(DEFAULT_MAX_ITERATIONS)), DEFAULT_MAX_ITERATIONS);
     }
 
-    static long parseLong(String value, long fallback) {
+    public static long parseLong(String value, long fallback) {
         try {
             return Long.parseLong(value.trim());
         } catch (RuntimeException e) {

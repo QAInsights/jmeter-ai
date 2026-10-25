@@ -12,6 +12,7 @@ import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.Failure;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
@@ -55,7 +56,16 @@ public final class FixLoop {
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
         }
-        TestRunSummary current = runner.run(request.timeoutSeconds());
+        TestRunSummary current;
+        try {
+            current = runner.run(request.timeoutSeconds());
+        } catch (RuntimeException e) {
+            if (isCancelled()) {
+                return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
+            }
+            return result(FixResult.Status.NOTHING_RAN, null, null, 0, 0, overall, List.of(),
+                    checkFailureReason(e));
+        }
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, current, current, 0, 0, overall, List.of(), "Cancelled.");
         }
@@ -87,7 +97,18 @@ public final class FixLoop {
             }
             sink.accept("Round " + round + " of " + request.maxRounds() + ": "
                     + current.getFailureCount() + " of " + current.getTotalSamples() + " requests failing");
-            AgentLoop.AgentResult agentResult = fixRound.apply(prompt.build(current));
+            AgentLoop.AgentResult agentResult;
+            try {
+                agentResult = fixRound.apply(prompt.build(current));
+            } catch (RuntimeException e) {
+                backups.restore(roundBackup);
+                if (isCancelled()) {
+                    return result(FixResult.Status.CANCELLED, before, current, round, guardRollbacks,
+                            overall, summaries, "Cancelled.");
+                }
+                return result(status(before, current), before, current, round, guardRollbacks,
+                        overall, summaries, ProviderErrors.describe(e, "running Make it pass", true));
+            }
             used = round;
             if (agentResult != null) {
                 summaries.add(agentResult.getFinalText());
@@ -111,7 +132,17 @@ public final class FixLoop {
                 if (isCancelled()) {
                     break;
                 }
-                current = runner.run(request.timeoutSeconds());
+                try {
+                    current = runner.run(request.timeoutSeconds());
+                } catch (RuntimeException e) {
+                    backups.restore(roundBackup);
+                    if (isCancelled()) {
+                        return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
+                                overall, summaries, "Cancelled.");
+                    }
+                    return result(status(before, current), before, current, used, guardRollbacks,
+                            overall, summaries, checkFailureReason(e));
+                }
                 if (isCancelled()) {
                     break;
                 }
@@ -134,9 +165,17 @@ public final class FixLoop {
             return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
                     overall, summaries, "Cancelled.");
         }
-        FixResult.Status status = current.getFailureCount() < before.getFailureCount()
+        return result(status(before, current), before, current, used, guardRollbacks, overall, summaries, "");
+    }
+
+    private static FixResult.Status status(TestRunSummary before, TestRunSummary after) {
+        return after.getFailureCount() < before.getFailureCount()
                 ? FixResult.Status.PARTLY_FIXED : FixResult.Status.NOT_FIXED;
-        return result(status, before, current, used, guardRollbacks, overall, summaries, "");
+    }
+
+    private static String checkFailureReason(RuntimeException error) {
+        String detail = error.getMessage();
+        return "JMeter check failed" + (detail == null || detail.isBlank() ? "." : ": " + detail);
     }
 
     private boolean isCancelled() {

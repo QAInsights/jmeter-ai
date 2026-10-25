@@ -131,9 +131,9 @@ final class AgentCommandRunner {
                                         call -> glowController.onToolCallStarted(elementIdOf(call)),
                                         reasoning -> cb.appendReasoningToken(reasoning),
                                         notice -> cb.appendJevRoute(notice, selectedModel),
-                                        triage -> {
-                                            cb.appendJevTriage(triage, selectedModel);
-                                            if (triage.totalFailures() > 0 && offeredFix.compareAndSet(false, true)) {
+                                        triage -> cb.appendJevTriage(triage, selectedModel),
+                                        summary -> {
+                                            if (summary.getFailureCount() > 0 && offeredFix.compareAndSet(false, true)) {
                                                 cb.offerMakeItPass();
                                             }
                                         }));

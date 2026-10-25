@@ -5,6 +5,10 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.jmeter.sampler.DebugSampler;
 import org.apache.jmeter.testelement.TestPlan;
@@ -99,6 +103,95 @@ class FixLoopTest {
         assertEquals(10, request.timeoutSeconds());
     }
 
+    @Test
+    void firstCheckFailureReturnsNothingRanWithReason() {
+        FixLoop fixLoop = new FixLoop(timeout -> {
+            throw new org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner.TestExecutionException(
+                    "engine unavailable");
+        }, noOpBackups(), stableCensus(), ignored -> null, () -> false);
+
+        FixResult result = fixLoop.run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.NOTHING_RAN, result.status());
+        assertTrue(result.reason().contains("engine unavailable"));
+    }
+
+    @Test
+    void providerFailureRestoresRoundAndReturnsReason() {
+        AtomicInteger restores = new AtomicInteger();
+        FixLoop.BackupStore backups = new FixLoop.BackupStore() {
+            private int count;
+            @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public void restore(File file) { restores.incrementAndGet(); }
+        };
+        FixLoop fixLoop = new FixLoop(timeout -> summary(2, 1), backups, stableCensus(),
+                ignored -> { throw new IllegalStateException("provider unavailable"); }, () -> false);
+
+        FixResult result = fixLoop.run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertTrue(result.reason().contains("provider unavailable"));
+        assertEquals(1, restores.get());
+    }
+
+    @Test
+    void checkFailureAfterRoundRestoresAndReturnsReason() {
+        AtomicInteger runs = new AtomicInteger();
+        AtomicInteger restores = new AtomicInteger();
+        FixLoop.BackupStore backups = new FixLoop.BackupStore() {
+            private int count;
+            @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public void restore(File file) { restores.incrementAndGet(); }
+        };
+        FixLoop fixLoop = new FixLoop(timeout -> {
+            if (runs.incrementAndGet() == 1) {
+                return summary(2, 1);
+            }
+            throw new org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner.TestExecutionException(
+                    "engine failed");
+        }, backups, stableCensus(), ignored -> null, () -> false);
+
+        FixResult result = fixLoop.run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertTrue(result.reason().contains("engine failed"));
+        assertEquals(1, restores.get());
+    }
+
+    @Test
+    void interruptionDuringRoundRestoresAndReturnsCancelled() throws Exception {
+        CountDownLatch enteredRound = new CountDownLatch(1);
+        AtomicBoolean cancelled = new AtomicBoolean();
+        AtomicInteger restores = new AtomicInteger();
+        AtomicReference<FixResult> result = new AtomicReference<>();
+        FixLoop.BackupStore backups = new FixLoop.BackupStore() {
+            private int count;
+            @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public void restore(File file) { restores.incrementAndGet(); }
+        };
+        FixLoop fixLoop = new FixLoop(timeout -> summary(2, 1), backups, stableCensus(), ignored -> {
+            enteredRound.countDown();
+            try {
+                new CountDownLatch(1).await();
+                return null;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }, cancelled::get);
+        Thread worker = new Thread(() -> result.set(fixLoop.run(new FixRequest(1, 120), null)));
+
+        worker.start();
+        assertTrue(enteredRound.await(2, TimeUnit.SECONDS));
+        cancelled.set(true);
+        worker.interrupt();
+        worker.join(2000);
+
+        assertFalse(worker.isAlive());
+        assertEquals(FixResult.Status.CANCELLED, result.get().status());
+        assertEquals(1, restores.get());
+    }
+
     private static FixLoop loop(List<TestRunSummary> runs, AtomicInteger rounds,
                                 java.util.function.Supplier<PlanCensus> census, java.util.function.BooleanSupplier cancel) {
         Deque<TestRunSummary> pending = new ArrayDeque<>(runs);
@@ -111,6 +204,14 @@ class FixLoopTest {
 
     private static java.util.function.Supplier<PlanCensus> stableCensus() {
         return () -> census(1);
+    }
+
+    private static FixLoop.BackupStore noOpBackups() {
+        return new FixLoop.BackupStore() {
+            private int count;
+            @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public void restore(File file) { }
+        };
     }
 
     private static PlanCensus census(int requests) {

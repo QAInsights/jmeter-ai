@@ -47,6 +47,7 @@ public final class GetTestResultsHandler {
     private final TestResultsRunner runner;
     private final Supplier<FailureTriage> triageSupplier;
     private final Consumer<TriageNotice> triageNotice;
+    private final Consumer<TestRunSummary> testResults;
 
     /** Production constructor wiring the live JMeter tree, run controller and engine runner. */
     public GetTestResultsHandler() {
@@ -55,8 +56,12 @@ public final class GetTestResultsHandler {
 
     /** Production wiring plus the sink the run's {@code Jev Failure Triage} card consumes. */
     public GetTestResultsHandler(Consumer<TriageNotice> triageNotice) {
+        this(triageNotice, null);
+    }
+
+    public GetTestResultsHandler(Consumer<TriageNotice> triageNotice, Consumer<TestRunSummary> testResults) {
         this(ReadToolHandlers.guiPackageTree()::getRoot, TestRunController.live(), TestResultsRunner.live(),
-                AgentTriageConfig::createTriage, triageNotice);
+                AgentTriageConfig::createTriage, triageNotice, testResults);
     }
 
     public GetTestResultsHandler(Supplier<JMeterTreeNode> rootSupplier, TestRunController controller,
@@ -67,11 +72,18 @@ public final class GetTestResultsHandler {
     GetTestResultsHandler(Supplier<JMeterTreeNode> rootSupplier, TestRunController controller,
                           TestResultsRunner runner, Supplier<FailureTriage> triageSupplier,
                           Consumer<TriageNotice> triageNotice) {
+        this(rootSupplier, controller, runner, triageSupplier, triageNotice, null);
+    }
+
+    GetTestResultsHandler(Supplier<JMeterTreeNode> rootSupplier, TestRunController controller,
+                          TestResultsRunner runner, Supplier<FailureTriage> triageSupplier,
+                          Consumer<TriageNotice> triageNotice, Consumer<TestRunSummary> testResults) {
         this.rootSupplier = rootSupplier;
         this.controller = controller;
         this.runner = runner;
         this.triageSupplier = triageSupplier;
         this.triageNotice = triageNotice;
+        this.testResults = testResults;
     }
 
     public Tool tool() {
@@ -122,6 +134,9 @@ public final class GetTestResultsHandler {
             summary = runner.run(timeoutSeconds);
         } catch (TestPlanRunner.TestExecutionException e) {
             return ToolResult.error(ERR_EXECUTION_FAILED, "Could not run the test plan: " + e.getMessage());
+        }
+        if (testResults != null) {
+            testResults.accept(summary);
         }
 
         return ToolResult.ok(withTriage(summary));
