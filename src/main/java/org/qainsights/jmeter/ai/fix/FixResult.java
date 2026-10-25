@@ -22,10 +22,20 @@ public final class FixResult {
     private final List<String> agentSummaries;
     private final List<Failure> remainingFailures;
     private final String reason;
+    private final PlanDiff planDiff;
+    private final List<PlanDiff> roundDiffs;
 
     public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
                      int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
                      List<Failure> remainingFailures, String reason) {
+        this(status, beforeFailed, beforeTotal, afterFailed, afterTotal, roundsUsed, guardRollbacks,
+                backupFile, agentSummaries, remainingFailures, reason, null, List.of());
+    }
+
+    public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
+                     int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
+                     List<Failure> remainingFailures, String reason, PlanDiff planDiff,
+                     List<PlanDiff> roundDiffs) {
         this.status = status;
         this.beforeFailed = beforeFailed;
         this.beforeTotal = beforeTotal;
@@ -37,6 +47,8 @@ public final class FixResult {
         this.agentSummaries = List.copyOf(agentSummaries);
         this.remainingFailures = List.copyOf(remainingFailures);
         this.reason = reason == null ? "" : reason;
+        this.planDiff = planDiff;
+        this.roundDiffs = List.copyOf(roundDiffs);
     }
 
     public Status status() { return status; }
@@ -50,6 +62,8 @@ public final class FixResult {
     public List<String> agentSummaries() { return agentSummaries; }
     public List<Failure> remainingFailures() { return remainingFailures; }
     public String reason() { return reason; }
+    public PlanDiff planDiff() { return planDiff; }
+    public List<PlanDiff> roundDiffs() { return roundDiffs; }
 
     public boolean hasUndoableChanges() {
         return status != Status.ALREADY_PASSING && status != Status.NOTHING_RAN

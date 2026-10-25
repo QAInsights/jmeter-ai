@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.fix;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -43,6 +44,8 @@ public final class FixLoop {
     private final BooleanSupplier cancelled;
     private final FixPrompt prompt;
     private final AssertionInstaller assertionInstaller;
+    private Map<String, PlanDiff.ElementSnapshot> startSnapshot = Map.of();
+    private final List<PlanDiff> roundDiffs = new ArrayList<>();
 
     public FixLoop(SingleIterationRunner runner, BackupStore backups, Supplier<PlanCensus> census,
                    Function<String, AgentLoop.AgentResult> fixRound, BooleanSupplier cancelled) {
@@ -69,6 +72,8 @@ public final class FixLoop {
     public FixResult run(FixRequest request, Consumer<String> progress) {
         Consumer<String> sink = progress == null ? ignored -> { } : progress;
         File overall = backups.backup();
+        startSnapshot = PlanDiff.liveSnapshot();
+        roundDiffs.clear();
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
         }
@@ -118,6 +123,7 @@ public final class FixLoop {
                     break;
                 }
                 PlanCensus beforeCensus = census.get();
+                Map<String, PlanDiff.ElementSnapshot> roundBefore = PlanDiff.liveSnapshot();
                 if (isCancelled()) {
                     break;
                 }
@@ -144,6 +150,7 @@ public final class FixLoop {
                 if (agentResult != null) {
                     summaries.add(agentResult.getFinalText());
                 }
+                roundDiffs.add(PlanDiff.between(roundBefore, PlanDiff.liveSnapshot()));
                 if (isCancelled()) {
                     restoreRoundBackup(roundBackup);
                     break;
@@ -298,14 +305,15 @@ public final class FixLoop {
         return false;
     }
 
-    private static FixResult result(FixResult.Status status, TestRunSummary before, TestRunSummary after,
-                                   int rounds, int rollbacks, File overall, List<String> summaries, String reason) {
+    private FixResult result(FixResult.Status status, TestRunSummary before, TestRunSummary after,
+                             int rounds, int rollbacks, File overall, List<String> summaries, String reason) {
         int beforeFailed = before == null ? 0 : before.getFailureCount();
         int beforeTotal = before == null ? 0 : before.getTotalSamples();
         int afterFailed = after == null ? beforeFailed : after.getFailureCount();
         int afterTotal = after == null ? beforeTotal : after.getTotalSamples();
         List<Failure> remaining = after == null ? List.of() : after.getFailures();
         return new FixResult(status, beforeFailed, beforeTotal, afterFailed, afterTotal,
-                rounds, rollbacks, overall, summaries, remaining, reason);
+                rounds, rollbacks, overall, summaries, remaining, reason,
+                PlanDiff.between(startSnapshot, PlanDiff.liveSnapshot()), roundDiffs);
     }
 }
