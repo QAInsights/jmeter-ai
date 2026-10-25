@@ -7,6 +7,8 @@ import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.AWTEventListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -64,7 +66,7 @@ class ModelPickerPopup extends JDialog {
     private final List<String> featuredModels;
     private String pendingCustomModel;
     private final ModelSelectorPreferences prefs;
-    private final DefaultListModel<String> listModel = new DefaultListModel<>();
+    private DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> modelList;
     private final JScrollPane modelScroll;
     private final JTextField filterField;
@@ -155,7 +157,18 @@ class ModelPickerPopup extends JDialog {
         modelList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         modelList.setSelectionBackground(ThemeColors.selectedBackground());
         modelList.setSelectionForeground(ThemeColors.foreground());
-        modelList.setCellRenderer(new ModelPickerRenderer(prefs, catalog));
+        ModelPickerRenderer renderer = new ModelPickerRenderer(prefs, catalog);
+        modelList.setCellRenderer(renderer);
+        modelList.setFixedCellHeight(renderer.rowHeight(modelList));
+        modelList.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int width = modelList.getWidth();
+                if (width > 0 && modelList.getFixedCellWidth() != width) {
+                    modelList.setFixedCellWidth(width);
+                }
+            }
+        });
         modelList.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -454,6 +467,14 @@ class ModelPickerPopup extends JDialog {
         return filterField.getText();
     }
 
+    void setFilterTextForTest(String text) {
+        filterField.setText(text);
+    }
+
+    JList<String> modelList() {
+        return modelList;
+    }
+
     int horizontalScrollBarPolicy() {
         return modelScroll.getHorizontalScrollBarPolicy();
     }
@@ -468,10 +489,12 @@ class ModelPickerPopup extends JDialog {
 
     private void refresh() {
         String keep = modelList.getSelectedValue();
-        listModel.clear();
-        for (String model : filterAndSort(allModels, filterField.getText(), prefs, featuredModels)) {
-            listModel.addElement(model);
-        }
+        List<String> visibleModels =
+                filterAndSort(allModels, filterField.getText(), prefs, featuredModels);
+        DefaultListModel<String> next = new DefaultListModel<>();
+        next.addAll(visibleModels);
+        listModel = next;
+        modelList.setModel(next);
         if (!selectVisible(keep) && listModel.getSize() > 0) {
             modelList.setSelectedIndex(0);
         }

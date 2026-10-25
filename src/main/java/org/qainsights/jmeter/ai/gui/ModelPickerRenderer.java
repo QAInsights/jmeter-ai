@@ -23,8 +23,8 @@ import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
  * provider on top, a de-emphasized metadata line below with context window,
  * $/Mtok pricing, and capability tags from the vendored models.dev catalog.
  * Every row paints a ★ (accent when pinned, muted otherwise) so the clickable
- * pin zone is a visible affordance. Models with no catalog entry (Ollama
- * locals, unknown ids) show a "local model" line or no second line at all.
+ * pin zone is a visible affordance. Models without catalog metadata show a
+ * provider-specific fallback line.
  */
 class ModelPickerRenderer extends DefaultListCellRenderer {
 
@@ -34,6 +34,12 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
     ModelPickerRenderer(ModelSelectorPreferences prefs, ModelCapabilityCatalog catalog) {
         this.prefs = prefs;
         this.catalog = catalog;
+    }
+
+    int rowHeight(JList<?> list) {
+        Component prototype = getListCellRendererComponent(
+                list, "claude-sonnet-4-6", 0, false, false);
+        return prototype.getPreferredSize().height;
     }
 
     /**
@@ -68,6 +74,29 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
             parts.add("thinking");
         }
         return String.join(" · ", parts);
+    }
+
+    static String secondLineFor(String modelId, ModelCapabilityCatalog catalog) {
+        String metadata = metadataFor(modelId, catalog);
+        if (!metadata.isEmpty()) {
+            return metadata;
+        }
+        if (modelId != null) {
+            if (modelId.startsWith("codex:")) {
+                return "Uses your ChatGPT plan through the Codex CLI";
+            }
+            if (modelId.startsWith("claude-code:")) {
+                return "Uses your Claude plan through Claude Code";
+            }
+            if (modelId.startsWith("opencode:")) {
+                return "Runs through the OpenCode CLI";
+            }
+            if (modelId.startsWith("openrouter:")) {
+                return "Routed through OpenRouter";
+            }
+        }
+        String provider = ModelDisplay.parse(modelId)[1];
+        return provider.isEmpty() ? "Model" : provider + " model";
     }
 
     /** Compact token count: 1048576 → "1M", 1500000 → "1.5M", 131072 → "131k". */
@@ -122,7 +151,7 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
             boolean isSelected, boolean cellHasFocus) {
         String modelId = value == null ? "" : value.toString();
         String[] parts = ModelDisplay.parse(modelId);
-        String metadata = metadataFor(modelId, catalog);
+        String secondLine = secondLineFor(modelId, catalog);
         boolean pinned = prefs.isPinned(modelId);
 
         Component c = super.getListCellRendererComponent(
@@ -166,13 +195,11 @@ class ModelPickerRenderer extends DefaultListCellRenderer {
             html.append(" · ").append(escapeHtml(parts[1]));
         }
         html.append("</span></nobr>");
-        if (!metadata.isEmpty()) {
-            html.append("<br><nobr><span style='color:rgb(")
-                    .append(secondary.getRed()).append(',')
-                    .append(secondary.getGreen()).append(',').append(secondary.getBlue())
-                    .append(");font-size:9px;'>").append(escapeHtml(metadata))
-                    .append("</span></nobr>");
-        }
+        html.append("<br><nobr><span style='color:rgb(")
+                .append(secondary.getRed()).append(',')
+                .append(secondary.getGreen()).append(',').append(secondary.getBlue())
+                .append(");font-size:9px;'>").append(escapeHtml(secondLine))
+                .append("</span></nobr>");
         html.append("</html>");
         label.setText(html.toString());
         label.setOpaque(true);
