@@ -116,6 +116,9 @@ final class FixCommandRunner {
                 try {
                     FixResult result = get();
                     recordResult(result);
+                    if (!result.hasUndoableChanges()) {
+                        backups.unpin(result.backupFile());
+                    }
                     cb.appendFixResult(result,
                             () -> runCardAction("Could not undo Make it pass", () -> {
                                 java.io.File backup = result.backupFile();
@@ -131,7 +134,8 @@ final class FixCommandRunner {
                             }),
                             () -> runCardAction("Could not save the test plan", () ->
                                     ActionRouter.getInstance().doActionNow(
-                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS))),
+                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED,
+                                                    ActionNames.SAVE_ALL_AS))),
                             () -> runCardAction("Could not release Make it pass backup",
                                     () -> backups.unpin(result.backupFile())));
                 } catch (InterruptedException e) {

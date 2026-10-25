@@ -8,6 +8,7 @@ import org.apache.jmeter.protocol.http.control.CacheManager;
 import org.apache.jmeter.protocol.http.control.CookieManager;
 import org.apache.jmeter.protocol.http.control.RecordingController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBaseSchema;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
@@ -129,6 +130,7 @@ class RecordingScaffoldTest {
         assertEquals("shop.test", defaults.getPropertyAsString(HTTPSamplerBase.DOMAIN));
         assertEquals("https", defaults.getPropertyAsString(HTTPSamplerBase.PROTOCOL));
         assertEquals("8443", defaults.getPropertyAsString(HTTPSamplerBase.PORT));
+        assertNotNull(defaults.getPropertyOrNull(HTTPSamplerBaseSchema.INSTANCE.getArguments()));
     }
 
     @Test

@@ -50,4 +50,9 @@ public final class FixResult {
     public List<String> agentSummaries() { return agentSummaries; }
     public List<Failure> remainingFailures() { return remainingFailures; }
     public String reason() { return reason; }
+
+    public boolean hasUndoableChanges() {
+        return status != Status.ALREADY_PASSING && status != Status.NOTHING_RAN
+                && roundsUsed > guardRollbacks;
+    }
 }

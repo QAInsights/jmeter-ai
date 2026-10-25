@@ -83,6 +83,7 @@ public interface ElementSaver {
     public static void writeTree(HashTree testPlanTree, File file) throws IOException {
         HashTree serializableTree = (HashTree) testPlanTree.clone();
         unwrapTreeNodes(serializableTree);
+        HttpDefaultsSupport.normalizeSerializedTree(serializableTree);
         try (OutputStream out = new FileOutputStream(file)) {
             SaveService.saveTree(serializableTree, out);
         }

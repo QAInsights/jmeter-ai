@@ -11,6 +11,8 @@ import org.apache.jmeter.services.FileServer;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
+import org.apache.jmeter.exceptions.IllegalUserActionException;
+import org.qainsights.jmeter.ai.agent.jmeter.ElementLoader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,6 +84,53 @@ class PlanBackupTest {
                 backups.discard(round);
             }
             overall.forEach(backups::unpin);
+        }
+    }
+
+    @Test
+    void restoresSafetySnapshotWhenLoaderClearsPlanThenThrows() throws Exception {
+        Path backupDirectory = directory.resolve("fix-backups");
+        File requestedBackup = Files.writeString(directory.resolve("requested.jmx"), "requested").toFile();
+        java.util.concurrent.atomic.AtomicReference<String> livePlan =
+                new java.util.concurrent.atomic.AtomicReference<>("original plan");
+        List<File> loadedFiles = new ArrayList<>();
+        ElementLoader loader = new ElementLoader() {
+            @Override
+            public boolean load(File file) throws IllegalUserActionException {
+                loadedFiles.add(file);
+                if (file.equals(requestedBackup)) {
+                    livePlan.set("");
+                    throw new IllegalStateException("insertion failed");
+                }
+                livePlan.set(read(file));
+                return true;
+            }
+
+            @Override
+            public void validate(File file) {
+            }
+
+            private String read(File file) {
+                try {
+                    return Files.readString(file.toPath());
+                } catch (java.io.IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        };
+        PlanBackup backups = new PlanBackup(PlanBackupTest::plan, loader, backupDirectory,
+                (tree, file) -> Files.writeString(file.toPath(), "original plan"));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> backups.restore(requestedBackup));
+
+        assertTrue(failure.getMessage().contains("Could not restore"));
+        assertEquals("original plan", livePlan.get());
+        assertEquals(2, loadedFiles.size());
+        assertEquals(requestedBackup, loadedFiles.get(0));
+        assertTrue(loadedFiles.get(1).toPath().startsWith(backupDirectory.resolve("rounds")));
+        try (var files = Files.list(backupDirectory.resolve("rounds"))) {
+            assertEquals(0, files.count());
         }
     }
 

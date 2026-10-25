@@ -230,6 +230,7 @@ class FixLoopTest {
         AtomicInteger restores = new AtomicInteger();
         AtomicInteger discards = new AtomicInteger();
         AtomicReference<FixResult> result = new AtomicReference<>();
+        AtomicBoolean interruptRestored = new AtomicBoolean();
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
@@ -247,7 +248,10 @@ class FixLoopTest {
                 throw new IllegalStateException(e);
             }
         }, cancelled::get);
-        Thread worker = new Thread(() -> result.set(fixLoop.run(new FixRequest(1, 120), null)));
+        Thread worker = new Thread(() -> {
+            result.set(fixLoop.run(new FixRequest(1, 120), null));
+            interruptRestored.set(Thread.currentThread().isInterrupted());
+        });
 
         worker.start();
         assertTrue(enteredRound.await(2, TimeUnit.SECONDS));
@@ -257,6 +261,8 @@ class FixLoopTest {
 
         assertFalse(worker.isAlive());
         assertEquals(FixResult.Status.CANCELLED, result.get().status());
+        assertTrue(result.get().hasUndoableChanges());
+        assertTrue(interruptRestored.get());
         assertEquals(1, restores.get());
         assertEquals(1, discards.get());
     }

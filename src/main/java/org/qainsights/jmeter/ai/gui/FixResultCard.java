@@ -67,11 +67,13 @@ final class FixResultCard extends JPanel {
             undo.run();
             actions.setVisible(false);
         });
-        JButton save = new JButton("Save as");
-        save.addActionListener(event -> saveAs.run());
         actions.add(keep);
-        actions.add(undoButton);
-        actions.add(save);
+        if (result.hasUndoableChanges()) {
+            JButton save = new JButton("Save as");
+            save.addActionListener(event -> saveAs.run());
+            actions.add(undoButton);
+            actions.add(save);
+        }
         add(actions, BorderLayout.SOUTH);
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 3, 0, 0, ThemeColors.accent()),

@@ -62,7 +62,10 @@ public final class FixLoop {
         try {
             current = runner.run(request.timeoutSeconds());
         } catch (RuntimeException e) {
-            if (isCancelled()) {
+            if (isCancelled() || causedByInterruption(e)) {
+                if (causedByInterruption(e)) {
+                    Thread.currentThread().interrupt();
+                }
                 return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
             }
             return result(FixResult.Status.NOTHING_RAN, null, null, 0, 0, overall, List.of(),
@@ -108,8 +111,13 @@ public final class FixLoop {
                 try {
                     agentResult = fixRound.apply(prompt.build(current));
                 } catch (RuntimeException e) {
-                    backups.restore(roundBackup);
-                    if (isCancelled()) {
+                    used = round;
+                    boolean interrupted = causedByInterruption(e);
+                    if (interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                    restoreRoundBackup(roundBackup);
+                    if (isCancelled() || interrupted) {
                         return result(FixResult.Status.CANCELLED, before, current, round, guardRollbacks,
                                 overall, summaries, "Cancelled.");
                     }
@@ -121,31 +129,35 @@ public final class FixLoop {
                     summaries.add(agentResult.getFinalText());
                 }
                 if (isCancelled()) {
-                    backups.restore(roundBackup);
+                    restoreRoundBackup(roundBackup);
                     break;
                 }
                 List<String> violations = beforeCensus.violations(census.get());
                 if (isCancelled()) {
-                    backups.restore(roundBackup);
+                    restoreRoundBackup(roundBackup);
                     break;
                 }
                 if (!violations.isEmpty()) {
-                    backups.restore(roundBackup);
+                    restoreRoundBackup(roundBackup);
                     guardRollbacks++;
                     Telemetry.record(TelemetryFeature.FIX_GUARD_ROLLBACK);
                     violations.forEach(v -> sink.accept("Safety guard: " + v + " Restored this round."));
                     stagnantRounds++;
                 } else {
                     if (isCancelled()) {
-                        backups.restore(roundBackup);
+                        restoreRoundBackup(roundBackup);
                         break;
                     }
                     TestRunSummary checked;
                     try {
                         checked = runner.run(request.timeoutSeconds());
                     } catch (RuntimeException e) {
-                        backups.restore(roundBackup);
-                        if (isCancelled()) {
+                        boolean interrupted = causedByInterruption(e);
+                        if (interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                        restoreRoundBackup(roundBackup);
+                        if (isCancelled() || interrupted) {
                             return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
                                     overall, summaries, "Cancelled.");
                         }
@@ -153,7 +165,7 @@ public final class FixLoop {
                                 overall, summaries, checkFailureReason(e));
                     }
                     if (isCancelled()) {
-                        backups.restore(roundBackup);
+                        restoreRoundBackup(roundBackup);
                         break;
                     }
                     if (passes(checked)) {
@@ -211,6 +223,29 @@ public final class FixLoop {
         }
         TestPlanRunner.stopActive(true);
         return true;
+    }
+
+    private void restoreRoundBackup(File file) {
+        boolean interrupted = Thread.interrupted();
+        try {
+            backups.restore(file);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private static boolean causedByInterruption(Throwable error) {
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current instanceof InterruptedException) {
+                return true;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static FixResult result(FixResult.Status status, TestRunSummary before, TestRunSummary after,

@@ -69,7 +69,10 @@ public class PlanBackup implements FixLoop.BackupStore {
     }
 
     private File saveSnapshot(Path targetDirectory, String prefix, boolean pin) {
-        Snapshot snapshot = snapshotSupplier.get();
+        return saveSnapshot(snapshotSupplier.get(), targetDirectory, prefix, pin);
+    }
+
+    private File saveSnapshot(Snapshot snapshot, Path targetDirectory, String prefix, boolean pin) {
         if (snapshot == null || snapshot.tree == null || snapshot.tree.size() == 0) {
             throw new IllegalStateException("No test plan is currently open.");
         }
@@ -107,15 +110,54 @@ public class PlanBackup implements FixLoop.BackupStore {
             throw new IllegalArgumentException("backup file must not be null");
         }
         try {
-            if (!loader.load(file)) {
-                throw new IllegalStateException("No live JMeter GUI available to restore the plan.");
-            }
-        } catch (IOException | IllegalUserActionException e) {
-            throw new IllegalStateException("Could not restore the test plan backup.", e);
+            loader.validate(file);
+        } catch (IOException | IllegalUserActionException | RuntimeException e) {
+            throw new IllegalStateException("Could not validate the test plan backup.", e);
         }
-        PlanState state = states.get(key(file));
-        if (state != null) {
-            EdtExecutor.swing().run(() -> restoreState(state));
+
+        Snapshot safetySnapshot = snapshotSupplier.get();
+        File safetyFile = null;
+        if (safetySnapshot != null && safetySnapshot.tree != null && safetySnapshot.tree.size() > 0) {
+            safetyFile = saveSnapshot(safetySnapshot, directory.resolve("rounds"),
+                    "restore-safety-", false);
+        }
+
+        RuntimeException restoreFailure = null;
+        try {
+            try {
+                if (!loader.load(file)) {
+                    throw new IllegalStateException("No live JMeter GUI available to restore the plan.");
+                }
+            } catch (IOException | IllegalUserActionException | RuntimeException e) {
+                restoreFailure = new IllegalStateException("Could not restore the test plan backup.", e);
+                if (safetyFile != null) {
+                    try {
+                        if (!loader.load(safetyFile)) {
+                            throw new IllegalStateException("No live JMeter GUI available to recover the plan.");
+                        }
+                        EdtExecutor.swing().run(() -> restoreState(safetySnapshot.state));
+                    } catch (IOException | IllegalUserActionException | RuntimeException recoveryFailure) {
+                        e.addSuppressed(recoveryFailure);
+                    }
+                }
+                throw restoreFailure;
+            }
+            PlanState state = states.get(key(file));
+            if (state != null) {
+                EdtExecutor.swing().run(() -> restoreState(state));
+            }
+        } finally {
+            if (safetyFile != null) {
+                try {
+                    discard(safetyFile);
+                } catch (RuntimeException cleanupFailure) {
+                    if (restoreFailure != null) {
+                        restoreFailure.addSuppressed(cleanupFailure);
+                    } else {
+                        throw cleanupFailure;
+                    }
+                }
+            }
         }
     }
 
