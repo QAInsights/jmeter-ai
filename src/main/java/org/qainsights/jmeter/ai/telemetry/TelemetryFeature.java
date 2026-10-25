@@ -78,7 +78,8 @@ public enum TelemetryFeature {
     FIX_DECLINED("fix_declined"),
     FIX_ROUNDS_1("fix_rounds_1"),
     FIX_ROUNDS_2_3("fix_rounds_2_3"),
-    FIX_ROUNDS_4P("fix_rounds_4p");
+    FIX_ROUNDS_4P("fix_rounds_4p"),
+    FIX_ASSERTIONS_ADDED("fix_assertions_added");
 
     private final String wireName;
 

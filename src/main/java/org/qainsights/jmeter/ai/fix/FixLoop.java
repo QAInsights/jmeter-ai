@@ -12,12 +12,18 @@ import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.Failure;
+import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.Observation;
 import org.qainsights.jmeter.ai.utils.ProviderErrors;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 
 /** GUI-free orchestration for Make it pass. Every repair is checked by a real JMeter run. */
 public final class FixLoop {
+    @FunctionalInterface
+    public interface AssertionInstaller {
+        int addMissing(List<Observation> observations);
+    }
+
     @FunctionalInterface
     public interface SingleIterationRunner {
         TestRunSummary run(long timeoutSeconds);
@@ -36,6 +42,7 @@ public final class FixLoop {
     private final Function<String, AgentLoop.AgentResult> fixRound;
     private final BooleanSupplier cancelled;
     private final FixPrompt prompt;
+    private final AssertionInstaller assertionInstaller;
 
     public FixLoop(SingleIterationRunner runner, BackupStore backups, Supplier<PlanCensus> census,
                    Function<String, AgentLoop.AgentResult> fixRound, BooleanSupplier cancelled) {
@@ -44,12 +51,19 @@ public final class FixLoop {
 
     public FixLoop(SingleIterationRunner runner, BackupStore backups, Supplier<PlanCensus> census,
                    Function<String, AgentLoop.AgentResult> fixRound, BooleanSupplier cancelled, FixPrompt prompt) {
+        this(runner, backups, census, fixRound, cancelled, prompt, new FixAssertions()::addMissing);
+    }
+
+    public FixLoop(SingleIterationRunner runner, BackupStore backups, Supplier<PlanCensus> census,
+                   Function<String, AgentLoop.AgentResult> fixRound, BooleanSupplier cancelled, FixPrompt prompt,
+                   AssertionInstaller assertionInstaller) {
         this.runner = runner;
         this.backups = backups;
         this.census = census;
         this.fixRound = fixRound;
         this.cancelled = cancelled == null ? () -> false : cancelled;
         this.prompt = prompt;
+        this.assertionInstaller = assertionInstaller == null ? ignored -> 0 : assertionInstaller;
     }
 
     public FixResult run(FixRequest request, Consumer<String> progress) {
@@ -86,6 +100,7 @@ public final class FixLoop {
             return result(FixResult.Status.ALREADY_PASSING, current, current, 0, 0, overall, List.of(), "");
         }
 
+        addAssertions(current.getObservations());
         TestRunSummary before = current;
         List<String> summaries = new ArrayList<>();
         int guardRollbacks = 0;
@@ -169,8 +184,34 @@ public final class FixLoop {
                         break;
                     }
                     if (passes(checked)) {
-                        return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
-                                overall, summaries, "");
+                        int added = addAssertions(checked.getObservations());
+                        if (added == 0) {
+                            return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
+                                    overall, summaries, "");
+                        }
+                        try {
+                            checked = runner.run(request.timeoutSeconds());
+                        } catch (RuntimeException e) {
+                            boolean interrupted = causedByInterruption(e);
+                            if (interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                            restoreRoundBackup(roundBackup);
+                            if (isCancelled() || interrupted) {
+                                return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
+                                        overall, summaries, "Cancelled.");
+                            }
+                            return result(status(before, current), before, current, used, guardRollbacks,
+                                    overall, summaries, checkFailureReason(e));
+                        }
+                        if (isCancelled()) {
+                            restoreRoundBackup(roundBackup);
+                            break;
+                        }
+                        if (passes(checked)) {
+                            return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
+                                    overall, summaries, "");
+                        }
                     }
                     if (checked.isTimedOut() || checked.getTotalSamples() == 0) {
                         stagnantRounds++;
@@ -205,6 +246,14 @@ public final class FixLoop {
 
     private static boolean passes(TestRunSummary summary) {
         return summary.getTotalSamples() > 0 && summary.getFailureCount() == 0 && !summary.isTimedOut();
+    }
+
+    private int addAssertions(List<Observation> observations) {
+        int added = assertionInstaller.addMissing(observations);
+        if (added > 0) {
+            Telemetry.record(TelemetryFeature.FIX_ASSERTIONS_ADDED);
+        }
+        return added;
     }
 
     private static String timeoutReason(long timeoutSeconds) {

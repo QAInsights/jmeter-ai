@@ -154,6 +154,27 @@ class FixLoopTest {
     }
 
     @Test
+    void failedPageAssertionAfterInitialFixRequiresAnotherRepairRound() {
+        Deque<TestRunSummary> runs = new ArrayDeque<>(List.of(
+                summary(2, 1), summary(2, 0), summary(2, 1), summary(2, 0)));
+        AtomicInteger rounds = new AtomicInteger();
+        AtomicInteger assertionCalls = new AtomicInteger();
+        FixLoop fixLoop = new FixLoop(timeout -> runs.removeFirst(), noOpBackups(), stableCensus(),
+                ignored -> {
+                    rounds.incrementAndGet();
+                    return null;
+                }, () -> false, new FixPrompt(), observations ->
+                        assertionCalls.getAndIncrement() == 1 ? 1 : 0);
+
+        FixResult result = fixLoop.run(new FixRequest(3, 120), null);
+
+        assertEquals(FixResult.Status.FIXED, result.status());
+        assertEquals(2, rounds.get());
+        assertEquals(3, assertionCalls.get());
+        assertEquals(0, result.afterFailed());
+    }
+
+    @Test
     void requestClampsRoundAndTimeoutLimits() {
         FixRequest request = new FixRequest(99, 1);
         assertEquals(10, request.maxRounds());
