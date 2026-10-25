@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.fix;
 
 import java.util.List;
 
+import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.testelement.TestPlan;
@@ -53,6 +54,46 @@ class FixAssertionsTest {
 
         assertTrue(FixAssertions.candidates(tree, List.of(
                 observation("Catalog", "200", "text/html", "Catalog", null))).isEmpty());
+    }
+
+    @Test
+    void ignoresDuplicateSamplerLabelsAndInconsistentObservedTitles() {
+        HashTree duplicateTree = plan();
+        duplicateTree.add(sampler("Catalog"));
+        duplicateTree.add(sampler("Catalog"));
+        assertTrue(FixAssertions.candidates(duplicateTree, List.of(
+                observation("Catalog", "200", "text/html", "Catalog", null))).isEmpty());
+
+        HashTree uniqueTree = plan().add(sampler("Catalog"));
+        assertTrue(FixAssertions.candidates(uniqueTree, List.of(
+                observation("Catalog", "200", "text/html", "Catalog", null),
+                observation("Catalog", "200", "text/html", "Other", null))).isEmpty());
+    }
+
+    @Test
+    void skipsParameterizedAndFunctionBasedTitles() {
+        HashTree tree = plan();
+        tree.add(sampler("Variable"));
+        tree.add(sampler("Function"));
+
+        assertTrue(FixAssertions.candidates(tree, List.of(
+                observation("Variable", "200", "text/html", "${pageTitle}", null),
+                observation("Function", "200", "text/html", "Page __UUID()", null))).isEmpty());
+    }
+
+    @Test
+    void removalTargetsOnlyOurNamedPageChecksOnRequestedSamplerLabels() {
+        ResponseAssertion ours = new ResponseAssertion();
+        ours.setName("Make it pass: page check");
+        ResponseAssertion other = new ResponseAssertion();
+        other.setName("Existing check");
+
+        assertTrue(FixAssertions.shouldRemoveAddedAssertion("Catalog", List.of("Catalog"), ours));
+        assertFalse(FixAssertions.shouldRemoveAddedAssertion("Catalog", List.of("Other"), ours));
+        assertFalse(FixAssertions.shouldRemoveAddedAssertion("Catalog", List.of("Catalog"), other));
+        ConfigTestElement notAssertion = new ConfigTestElement();
+        notAssertion.setName("Make it pass: page check");
+        assertFalse(FixAssertions.shouldRemoveAddedAssertion("Catalog", List.of("Catalog"), notAssertion));
     }
 
     private static HashTree plan() {

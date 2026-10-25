@@ -72,6 +72,7 @@ final class FixResultCard extends JPanel {
             content.add(label("Assertions added: " + assertions));
             content.add(label("Listeners added: " + listeners));
         }
+        result.skippedPageChecks().forEach(line -> content.add(label(line)));
         for (String round : result.roundSummaries()) {
             content.add(label(round));
         }

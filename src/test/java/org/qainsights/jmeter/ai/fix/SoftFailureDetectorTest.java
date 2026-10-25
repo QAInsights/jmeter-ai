@@ -46,6 +46,20 @@ class SoftFailureDetectorTest {
     }
 
     @Test
+    void usesTitleWordBoundariesAndTextContentTypesForBodyFailures() throws Exception {
+        assertNull(SoftFailureDetector.reason(
+                html("Errorish", "", "https://shop.test/item", "/item")));
+
+        HTTPSampleResult javascript = html("Catalog", "Exception: bundled code", "https://shop.test/app.js", "/app.js");
+        javascript.setContentType("application/javascript");
+        assertNull(SoftFailureDetector.reason(javascript));
+
+        HTTPSampleResult plainText = html("Catalog", "Exception: server failure", "https://shop.test/status", "/status");
+        plainText.setContentType("text/plain; charset=UTF-8");
+        assertNotNull(SoftFailureDetector.reason(plainText));
+    }
+
+    @Test
     void summaryCountsSoftFailuresAndKeepsBoundedObservations() throws Exception {
         HTTPSampleResult result = html("Invalid request", "", "https://shop.test/item?token=secret", "/item");
         var summary = org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.of(

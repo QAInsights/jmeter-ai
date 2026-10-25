@@ -11,7 +11,7 @@ import org.apache.jmeter.samplers.SampleResult;
 public final class SoftFailureDetector {
     private static final Pattern TITLE = Pattern.compile("(?is)<title\\b[^>]*>(.*?)</title>");
     private static final Pattern TITLE_FAILURE = Pattern.compile(
-            "(?i)not found|error|exception|forbidden|unauthorized|access denied|invalid");
+            "(?i)\\b(?:not found|error|exception|forbidden|unauthorized|access denied|invalid)\\b");
     private static final Pattern BODY_FAILURE = Pattern.compile(
             "HTTP Status [45]|Stack trace|Exception:");
     private static final Pattern AUTH_PATH = Pattern.compile("(?i)(?:login|signin|signon|logon)");
@@ -38,7 +38,9 @@ public final class SoftFailureDetector {
         if (TITLE_FAILURE.matcher(title).find()) {
             return "page title indicates an error: " + title;
         }
-        if (body != null && BODY_FAILURE.matcher(body).find()) {
+        String contentType = result.getContentType() == null ? "" : result.getContentType().toLowerCase(Locale.ROOT);
+        if ((contentType.contains("html") || contentType.contains("text/plain"))
+                && body != null && BODY_FAILURE.matcher(body).find()) {
             return "response body contains a server error";
         }
         String finalPath = path(result.getURL() == null ? null : result.getURL().toExternalForm());

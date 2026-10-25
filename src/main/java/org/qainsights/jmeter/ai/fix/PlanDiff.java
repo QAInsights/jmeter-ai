@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.fix;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,8 +30,8 @@ public final class PlanDiff {
     private final List<ElementChange> modified;
 
     private PlanDiff(Map<String, ElementSnapshot> before, Map<String, ElementSnapshot> after) {
-        this.before = Map.copyOf(before);
-        this.after = Map.copyOf(after);
+        this.before = orderedMap(before);
+        this.after = orderedMap(after);
         List<ElementChange> additions = new ArrayList<>();
         List<ElementChange> removals = new ArrayList<>();
         List<ElementChange> modifications = new ArrayList<>();
@@ -55,7 +56,7 @@ public final class PlanDiff {
     public static Map<String, ElementSnapshot> snapshot(HashTree tree) {
         Map<String, ElementSnapshot> result = new LinkedHashMap<>();
         walk(tree, "", result);
-        return Map.copyOf(result);
+        return orderedMap(result);
     }
 
     public static Map<String, ElementSnapshot> liveSnapshot() {
@@ -125,7 +126,11 @@ public final class PlanDiff {
             String value = isSensitive(name) ? "[REDACTED]" : SafeText.redactSensitiveValues(property.getStringValue());
             properties.put(name, value == null ? "" : value);
         }
-        return Map.copyOf(properties);
+        return orderedMap(properties);
+    }
+
+    private static <K, V> Map<K, V> orderedMap(Map<K, V> values) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
     private static boolean isSensitive(String name) {
@@ -144,7 +149,7 @@ public final class PlanDiff {
 
         ElementSnapshot(String className, Map<String, String> properties) {
             this.className = className;
-            this.properties = Map.copyOf(properties);
+            this.properties = orderedMap(properties);
         }
 
         public String className() {
@@ -180,8 +185,8 @@ public final class PlanDiff {
                               Map<String, String> afterProperties) {
             this.path = path;
             this.className = className;
-            this.beforeProperties = beforeProperties;
-            this.afterProperties = afterProperties;
+            this.beforeProperties = orderedMap(beforeProperties);
+            this.afterProperties = orderedMap(afterProperties);
         }
 
         private static ElementChange element(String path, ElementSnapshot snapshot) {

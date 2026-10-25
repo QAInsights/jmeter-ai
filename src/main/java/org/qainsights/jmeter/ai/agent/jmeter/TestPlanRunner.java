@@ -56,6 +56,12 @@ public final class TestPlanRunner {
         return Collections.unmodifiableList(new ArrayList<>(lastSampleResults));
     }
 
+    public static synchronized List<SampleResult> takeLastSampleResults() {
+        List<SampleResult> results = lastSampleResults;
+        lastSampleResults = Collections.emptyList();
+        return Collections.unmodifiableList(new ArrayList<>(results));
+    }
+
     /** Live entry point: pulls the current plan from the live {@link GuiPackage} tree model. */
     public TestRunSummary run(long timeoutSeconds) {
         return run(timeoutSeconds, 0, 0);
@@ -211,6 +217,7 @@ public final class TestPlanRunner {
      * against a non-public nested class.
      */
     public static final class SampleCollector extends AbstractTestElement implements SampleListener {
+        private static final int MAX_RESULTS_KEPT = 1000;
         private static volatile List<SampleResult> shared;
 
         /** Resets the shared results list; call once before each run. */
@@ -234,7 +241,11 @@ public final class TestPlanRunner {
             List<SampleResult> current = shared;
             SampleResult result = event.getResult();
             if (current != null && result != null && result.getParent() == null) {
-                current.add(result);
+                synchronized (current) {
+                    if (current.size() < MAX_RESULTS_KEPT) {
+                        current.add(result);
+                    }
+                }
             }
         }
 

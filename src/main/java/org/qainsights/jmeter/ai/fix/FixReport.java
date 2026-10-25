@@ -72,6 +72,7 @@ public final class FixReport {
         }
         text.append("\n## Assertions added\n\n");
         appendByClass(text, diff, "org.apache.jmeter.assertions.ResponseAssertion");
+        result.skippedPageChecks().forEach(label -> text.append("- ").append(label).append('\n'));
         text.append("\n## Listeners added\n\n");
         if (diff != null) {
             diff.added().stream().filter(change -> change.className().contains("ViewResultsFullVisualizer")

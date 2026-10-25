@@ -90,6 +90,16 @@ class TestPlanRunnerTest {
 
     @Test
     @Timeout(30)
+    void takeLastSampleResultsClearsStaticRetention() {
+        TestRunSummary summary = new TestPlanRunner().runTree(planWithLoops(2), 20);
+        assertEquals(2, summary.getTotalSamples());
+
+        assertEquals(2, TestPlanRunner.takeLastSampleResults().size());
+        assertTrue(TestPlanRunner.takeLastSampleResults().isEmpty());
+    }
+
+    @Test
+    @Timeout(30)
     void runTree_singleIterationOverridesOnlyTheExecutionTree() {
         HashTree plan = planWithLoops(3);
         LoopController original = originalController(plan);

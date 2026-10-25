@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -11,6 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.jmeter.sampler.DebugSampler;
+import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
@@ -31,9 +34,56 @@ class FixLoopTest {
     }
 
     @Test
+    void alreadyPassingPlanStillInstallsAndVerifiesAssertions() {
+        AtomicInteger assertions = new AtomicInteger();
+        AtomicInteger checks = new AtomicInteger();
+        FixLoop loop = new FixLoop(timeout -> {
+            checks.incrementAndGet();
+            return summary(1, 0);
+        }, noOpBackups(), stableCensus(), ignored -> null, () -> false, new FixPrompt(),
+                assertionInstaller(observations -> {
+                    assertions.incrementAndGet();
+                    return List.of();
+                }));
+
+        FixResult result = loop.run(new FixRequest(1, 120, false), null);
+
+        assertEquals(FixResult.Status.ALREADY_PASSING, result.status());
+        assertEquals(1, assertions.get());
+        assertEquals(2, checks.get());
+    }
+
+    @Test
+    void aSoftFailureExposedByVerificationContinuesIntoRepairRounds() throws Exception {
+        org.apache.jmeter.protocol.http.sampler.HTTPSampleResult soft =
+                new org.apache.jmeter.protocol.http.sampler.HTTPSampleResult();
+        soft.setSampleLabel("Request");
+        soft.setSuccessful(true);
+        soft.setResponseCode("200");
+        soft.setContentType("text/html");
+        soft.setResponseData("<title>Not Found</title>", "UTF-8");
+        AtomicInteger checks = new AtomicInteger();
+        AtomicInteger rounds = new AtomicInteger();
+        FixLoop loop = new FixLoop(timeout -> switch (checks.getAndIncrement()) {
+            case 0 -> summary(1, 0);
+            case 1 -> TestRunSummary.of(List.of(soft), false, 0);
+            default -> summary(1, 0);
+        }, noOpBackups(), stableCensus(), ignored -> {
+            rounds.incrementAndGet();
+            return null;
+        }, () -> false, new FixPrompt(), assertionInstaller(ignored -> List.of()));
+
+        FixResult result = loop.run(new FixRequest(1, 120, false), null);
+
+        assertEquals(FixResult.Status.FIXED, result.status());
+        assertEquals(1, rounds.get());
+    }
+
+    @Test
     void fixesInTwoRoundsWhenRealRunsPass() {
         AtomicInteger rounds = new AtomicInteger();
-        FixResult result = loop(List.of(summary(3, 2), summary(3, 1), summary(3, 0)),
+        FixResult result = loop(List.of(summary(3, 2), summary(3, 2), summary(3, 1),
+                summary(3, 0), summary(3, 0)),
                 rounds, stableCensus(), () -> false).run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.FIXED, result.status());
         assertEquals(2, result.roundsUsed());
@@ -56,7 +106,7 @@ class FixLoopTest {
                 noOpBackups(), stableCensus(), ignored -> {
                     rounds.incrementAndGet();
                     return null;
-                }, () -> false, new FixPrompt(), ignored -> 0);
+                }, () -> false, new FixPrompt(), assertionInstaller(ignored -> List.of()));
 
         FixResult result = loop.run(new FixRequest(1, 120), null);
 
@@ -67,7 +117,7 @@ class FixLoopTest {
     @Test
     void partialProgressContinuesThroughRoundLimit() {
         AtomicInteger rounds = new AtomicInteger();
-        FixResult result = loop(List.of(summary(6, 6), summary(6, 5), summary(6, 4),
+        FixResult result = loop(List.of(summary(6, 6), summary(6, 6), summary(6, 5), summary(6, 4),
                 summary(6, 3), summary(6, 2), summary(6, 1)),
                 rounds, stableCensus(), () -> false).run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.PARTLY_FIXED, result.status());
@@ -77,7 +127,7 @@ class FixLoopTest {
     @Test
     void stopsAfterTwoConsecutiveNonImprovingRounds() {
         AtomicInteger rounds = new AtomicInteger();
-        FixResult result = loop(List.of(summary(2, 2), summary(2, 2), summary(2, 3)),
+        FixResult result = loop(List.of(summary(2, 2), summary(2, 2), summary(2, 2), summary(2, 3)),
                 rounds, stableCensus(), () -> false).run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
         assertEquals(2, result.roundsUsed());
@@ -149,7 +199,7 @@ class FixLoopTest {
 
     @Test
     void timedOutPostRoundCheckIsNotProgress() {
-        FixResult result = loop(List.of(summary(3, 3), summary(2, 1, true)),
+        FixResult result = loop(List.of(summary(3, 3), summary(3, 3), summary(2, 1, true)),
                 new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(1, 120), null);
 
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
@@ -159,7 +209,7 @@ class FixLoopTest {
 
     @Test
     void zeroSamplePostRoundCheckIsNotProgress() {
-        FixResult result = loop(List.of(summary(3, 3), summary(0, 0)),
+        FixResult result = loop(List.of(summary(3, 3), summary(3, 3), summary(0, 0)),
                 new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(1, 120), null);
 
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
@@ -169,7 +219,7 @@ class FixLoopTest {
 
     @Test
     void zeroSampleAfterProgressComparesWithLastCheckThatHadSamples() {
-        FixResult result = loop(List.of(summary(3, 3), summary(3, 1), summary(0, 0)),
+        FixResult result = loop(List.of(summary(3, 3), summary(3, 3), summary(3, 1), summary(0, 0)),
                 new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(2, 120), null);
 
         assertEquals(FixResult.Status.PARTLY_FIXED, result.status());
@@ -178,31 +228,45 @@ class FixLoopTest {
     }
 
     @Test
-    void failedPageAssertionAfterInitialFixRequiresAnotherRepairRound() {
+    void failingPageAssertionIsRemovedAndReportedInsteadOfBlockingRepair() {
         Deque<TestRunSummary> runs = new ArrayDeque<>(List.of(
-                summary(2, 1), summary(2, 0), summary(2, 1), summary(2, 0)));
+                summary(2, 1), summary(2, 1), summary(2, 0), summary(2, 1), summary(2, 0)));
         AtomicInteger rounds = new AtomicInteger();
         AtomicInteger assertionCalls = new AtomicInteger();
+        AtomicInteger removed = new AtomicInteger();
         FixLoop fixLoop = new FixLoop(timeout -> runs.removeFirst(), noOpBackups(), stableCensus(),
                 ignored -> {
                     rounds.incrementAndGet();
                     return null;
-                }, () -> false, new FixPrompt(), observations ->
-                        assertionCalls.getAndIncrement() == 1 ? 1 : 0);
+                }, () -> false, new FixPrompt(), new FixLoop.AssertionInstaller() {
+                    @Override
+                    public List<String> addMissing(List<TestRunSummary.Observation> observations) {
+                        return assertionCalls.getAndIncrement() == 1 ? List.of("Request 0") : List.of();
+                    }
+
+                    @Override
+                    public void removeAdded(java.util.Collection<String> labels) {
+                        removed.addAndGet(labels.size());
+                    }
+                });
 
         FixResult result = fixLoop.run(new FixRequest(3, 120), null);
 
         assertEquals(FixResult.Status.FIXED, result.status());
-        assertEquals(2, rounds.get());
-        assertEquals(3, assertionCalls.get());
+        assertEquals(1, rounds.get());
+        assertEquals(2, assertionCalls.get());
+        assertEquals(1, removed.get());
         assertEquals(0, result.afterFailed());
+        assertEquals(List.of("Skipped page check for Request 0: the page changes between runs."),
+                result.skippedPageChecks());
     }
 
     @Test
     void repairsMultiUserFailuresAndRequiresBothChecksToPass() {
         AtomicInteger rounds = new AtomicInteger();
-        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0)),
-                List.of(summary(4, 2), summary(4, 0)), rounds, new AtomicInteger());
+        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0), summary(2, 0), summary(2, 0)),
+                List.of(summary(4, 2), summary(4, 2), summary(4, 0), summary(4, 0)),
+                rounds, new AtomicInteger());
 
         FixResult result = loop.run(new FixRequest(3, 120, true), null);
 
@@ -215,8 +279,9 @@ class FixLoopTest {
     @Test
     void stagnantMultiUserFailuresReturnPartlyFixed() {
         AtomicInteger rounds = new AtomicInteger();
-        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0), summary(2, 0)),
-                List.of(summary(4, 2), summary(4, 2), summary(4, 2)), rounds, new AtomicInteger());
+        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0), summary(2, 0), summary(2, 0)),
+                List.of(summary(4, 2), summary(4, 2), summary(4, 2), summary(4, 2)),
+                rounds, new AtomicInteger());
 
         FixResult result = loop.run(new FixRequest(5, 120, true), null);
 
@@ -230,8 +295,8 @@ class FixLoopTest {
     void multiUserRepairThatRegressesSingleUserIsRolledBack() {
         AtomicInteger rounds = new AtomicInteger();
         AtomicInteger restores = new AtomicInteger();
-        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 1)),
-                List.of(summary(4, 2)), rounds, restores);
+        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0), summary(2, 1)),
+                List.of(summary(4, 2), summary(4, 2)), rounds, restores);
 
         FixResult result = loop.run(new FixRequest(1, 120, true), null);
 
@@ -263,6 +328,36 @@ class FixLoopTest {
         FixRequest request = new FixRequest(99, 1);
         assertEquals(10, request.maxRounds());
         assertEquals(10, request.timeoutSeconds());
+    }
+
+    @Test
+    void literalPasswordHintsNameSamplerAndNeverExposeValues() {
+        HTTPSamplerProxy literal = samplerWithArgument("Login", "password", "literal-secret");
+        HTTPSamplerProxy variable = samplerWithArgument("Profile", "pwd", "${userPassword}");
+        HashTree tree = new ListedHashTree();
+        HashTree plan = tree.add(new TestPlan("Test Plan"));
+        plan.add(literal);
+        plan.add(variable);
+
+        List<String> hints = FixLoop.literalPasswordHints(tree);
+
+        assertEquals(1, hints.size());
+        assertTrue(hints.get(0).contains("Login"));
+        assertFalse(hints.get(0).contains("literal-secret"));
+        assertFalse(hints.get(0).contains("Profile"));
+    }
+
+    @Test
+    void undoabilityFollowsOnlyTheOverallPlanDiff() {
+        PlanDiff changed = PlanDiff.between(Map.of(), Map.of("Listener",
+                new PlanDiff.ElementSnapshot("Listener", Map.of())));
+        FixResult alreadyPassing = new FixResult(FixResult.Status.ALREADY_PASSING, 0, 1, 0, 1,
+                0, 0, null, List.of(), List.of(), "", changed, List.of());
+        FixResult noChanges = new FixResult(FixResult.Status.NOTHING_RAN, 0, 0, 0, 0,
+                0, 0, null, List.of(), List.of(), "", PlanDiff.between(Map.of(), Map.of()), List.of());
+
+        assertTrue(alreadyPassing.hasUndoableChanges());
+        assertFalse(noChanges.hasUndoableChanges());
     }
 
     @Test
@@ -313,7 +408,7 @@ class FixLoopTest {
             @Override public void discard(File file) { discards.incrementAndGet(); }
         };
         FixLoop fixLoop = new FixLoop(timeout -> {
-            if (runs.incrementAndGet() == 1) {
+            if (runs.incrementAndGet() <= 2) {
                 return summary(2, 1);
             }
             throw new org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner.TestExecutionException(
@@ -366,7 +461,6 @@ class FixLoopTest {
 
         assertFalse(worker.isAlive());
         assertEquals(FixResult.Status.CANCELLED, result.get().status());
-        assertTrue(result.get().hasUndoableChanges());
         assertTrue(interruptRestored.get());
         assertEquals(1, restores.get());
         assertEquals(1, discards.get());
@@ -375,7 +469,13 @@ class FixLoopTest {
     private static FixLoop loop(List<TestRunSummary> runs, AtomicInteger rounds,
                                 java.util.function.Supplier<PlanCensus> census, java.util.function.BooleanSupplier cancel) {
         Deque<TestRunSummary> pending = new ArrayDeque<>(runs);
-        return new FixLoop(timeout -> pending.removeFirst(), new FixLoop.BackupStore() {
+        AtomicReference<TestRunSummary> last = new AtomicReference<>(runs.get(0));
+        return new FixLoop(timeout -> {
+            if (!pending.isEmpty()) {
+                last.set(pending.removeFirst());
+            }
+            return last.get();
+        }, new FixLoop.BackupStore() {
             private int backups;
             @Override public File backup() { return new File("backup-" + (++backups) + ".jmx"); }
             @Override public File roundBackup() { return new File("round-" + (++backups) + ".jmx"); }
@@ -402,10 +502,20 @@ class FixLoopTest {
                                          AtomicInteger rounds, AtomicInteger restores) {
         Deque<TestRunSummary> singleRuns = new ArrayDeque<>(singles);
         Deque<TestRunSummary> multiRuns = new ArrayDeque<>(multis);
+        AtomicReference<TestRunSummary> lastSingle = new AtomicReference<>(singles.get(0));
+        AtomicReference<TestRunSummary> lastMulti = new AtomicReference<>(multis.get(0));
         FixLoop.SingleIterationRunner runner = new FixLoop.SingleIterationRunner() {
-            @Override public TestRunSummary run(long timeout) { return singleRuns.removeFirst(); }
+            @Override public TestRunSummary run(long timeout) {
+                if (!singleRuns.isEmpty()) {
+                    lastSingle.set(singleRuns.removeFirst());
+                }
+                return lastSingle.get();
+            }
             @Override public TestRunSummary runIterations(long timeout, int threads, int loops) {
-                return multiRuns.removeFirst();
+                if (!multiRuns.isEmpty()) {
+                    lastMulti.set(multiRuns.removeFirst());
+                }
+                return lastMulti.get();
             }
         };
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
@@ -418,7 +528,7 @@ class FixLoopTest {
         return new FixLoop(runner, backups, stableCensus(), ignored -> {
             rounds.incrementAndGet();
             return null;
-        }, () -> false, new FixPrompt(), ignored -> 0);
+        }, () -> false, new FixPrompt(), assertionInstaller(ignored -> List.of()));
     }
 
     private static PlanCensus census(int requests) {
@@ -448,5 +558,28 @@ class FixLoopTest {
             samples.add(result);
         }
         return TestRunSummary.of(samples, timedOut, 1);
+    }
+
+    private static HTTPSamplerProxy samplerWithArgument(String samplerName, String argumentName, String value) {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setName(samplerName);
+        Arguments arguments = new Arguments();
+        arguments.addArgument(argumentName, value);
+        sampler.setArguments(arguments);
+        return sampler;
+    }
+
+    private static FixLoop.AssertionInstaller assertionInstaller(
+            java.util.function.Function<List<TestRunSummary.Observation>, List<String>> adder) {
+        return new FixLoop.AssertionInstaller() {
+            @Override
+            public List<String> addMissing(List<TestRunSummary.Observation> observations) {
+                return adder.apply(observations);
+            }
+
+            @Override
+            public void removeAdded(java.util.Collection<String> samplerLabels) {
+            }
+        };
     }
 }

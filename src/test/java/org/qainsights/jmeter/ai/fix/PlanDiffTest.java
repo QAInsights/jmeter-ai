@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.fix;
 
 import java.util.Map;
+import java.util.List;
+import java.util.LinkedHashMap;
 
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.testelement.TestPlan;
@@ -11,6 +13,25 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PlanDiffTest {
+    @Test
+    void preservesTreeInsertionOrderInSnapshotsAndDiffs() {
+        HashTree tree = plan();
+        HashTree children = tree.getTree(tree.list().iterator().next());
+        children.add(sampler("First", "/one"));
+        children.add(sampler("Second", "/two"));
+
+        Map<String, PlanDiff.ElementSnapshot> snapshot = PlanDiff.snapshot(tree);
+
+        assertEquals(List.of("Test Plan", "Test Plan/First", "Test Plan/Second"),
+                List.copyOf(snapshot.keySet()));
+
+        Map<String, String> properties = new LinkedHashMap<>();
+        properties.put("first", "1");
+        properties.put("second", "2");
+        PlanDiff.ElementSnapshot element = new PlanDiff.ElementSnapshot("Sampler", properties);
+        assertEquals(List.of("first", "second"), List.copyOf(element.properties().keySet()));
+    }
+
     @Test
     void reportsAddedAndModifiedElements() {
         HashTree beforeTree = plan();

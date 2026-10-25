@@ -53,7 +53,8 @@ public final class TestRunSummary {
                 String url = result instanceof HTTPSampleResult && result.getURL() != null
                         ? SafeText.redactUrls(result.getURL().toExternalForm()) : "";
                 observations.add(new Observation(result.getSampleLabel(), result.getResponseCode(), url,
-                        SoftFailureDetector.titleText(result), result.getContentType(), softFailure));
+                        SoftFailureDetector.titleText(result), result.getContentType(), softFailure,
+                        !result.isSuccessful() || softFailure != null));
             }
             if (result.isSuccessful() && softFailure == null) {
                 success++;
@@ -177,15 +178,23 @@ public final class TestRunSummary {
         private final String title;
         private final String contentType;
         private final String softFailureReason;
+        private final boolean failure;
 
         public Observation(String label, String responseCode, String finalUrl, String title,
                            String contentType, String softFailureReason) {
+            this(label, responseCode, finalUrl, title, contentType, softFailureReason,
+                    softFailureReason != null || isErrorCode(responseCode));
+        }
+
+        public Observation(String label, String responseCode, String finalUrl, String title,
+                           String contentType, String softFailureReason, boolean failure) {
             this.label = label == null ? "" : label;
             this.responseCode = responseCode == null ? "" : responseCode;
             this.finalUrl = finalUrl == null ? "" : finalUrl;
             this.title = title == null ? "" : title;
             this.contentType = contentType == null ? "" : contentType;
             this.softFailureReason = softFailureReason;
+            this.failure = failure;
         }
 
         public String getLabel() { return label; }
@@ -194,5 +203,15 @@ public final class TestRunSummary {
         public String getTitle() { return title; }
         public String getContentType() { return contentType; }
         public String getSoftFailureReason() { return softFailureReason; }
+        public boolean isFailure() { return failure; }
+
+        private static boolean isErrorCode(String responseCode) {
+            try {
+                int code = Integer.parseInt(responseCode);
+                return code < 200 || code >= 400;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
     }
 }

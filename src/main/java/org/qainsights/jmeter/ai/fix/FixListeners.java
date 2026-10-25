@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.SampleResult;
@@ -54,39 +55,25 @@ public final class FixListeners {
     }
 
     static List<String> missingListeners(HashTree tree) {
-        HashTree planChildren = null;
-        for (Object key : tree == null ? List.of() : tree.list()) {
-            if (element(key) instanceof TestPlan) {
-                planChildren = tree.getTree(key);
-                break;
-            }
-        }
-        boolean hasView = false;
-        boolean hasSummary = false;
-        if (planChildren != null) {
-            for (Object key : planChildren.list()) {
-                TestElement element = element(key);
-                String guiClass = element == null ? "" : element.getPropertyAsString(TestElement.GUI_CLASS);
-                hasView |= VIEW_RESULTS_GUI.equals(guiClass);
-                hasSummary |= SUMMARY_REPORT_GUI.equals(guiClass);
-            }
-        }
+        boolean[] found = new boolean[2];
+        findListeners(tree, found);
         List<String> missing = new ArrayList<>();
-        if (!hasView) {
+        if (!found[0]) {
             missing.add("viewresultstree");
         }
-        if (!hasSummary) {
+        if (!found[1]) {
             missing.add("summaryreport");
         }
         return List.copyOf(missing);
     }
 
     public static void deliverLastResults() {
+        List<SampleResult> results = TestPlanRunner.takeLastSampleResults();
         GuiPackage gui = GuiPackage.getInstance();
         if (gui == null || gui.getTreeModel() == null) {
             return;
         }
-        List<SampleResult> results = TestPlanRunner.lastSampleResults();
+        results.forEach(FixListeners::markSoftFailure);
         EdtExecutor.swing().run(() -> {
             HashTree tree = gui.getTreeModel().getTestPlan();
             deliver(tree, gui, results);
@@ -99,10 +86,55 @@ public final class FixListeners {
         }
         for (Object key : tree.list()) {
             TestElement element = element(key);
-            if (element != null && gui.getGui(element) instanceof Visualizer visualizer) {
+            if (isVisualizerElement(element) && gui.getGui(element) instanceof Visualizer visualizer) {
                 results.forEach(visualizer::add);
             }
             deliver(tree.getTree(key), gui, results);
+        }
+    }
+
+    static boolean isVisualizerElement(TestElement element) {
+        if (element == null) {
+            return false;
+        }
+        String guiClass = element.getPropertyAsString(TestElement.GUI_CLASS);
+        if (guiClass == null || guiClass.isBlank()) {
+            return false;
+        }
+        try {
+            ClassLoader loader = Thread.currentThread().getContextClassLoader();
+            Class<?> type = Class.forName(guiClass, false,
+                    loader == null ? FixListeners.class.getClassLoader() : loader);
+            return Visualizer.class.isAssignableFrom(type);
+        } catch (ClassNotFoundException | LinkageError | SecurityException e) {
+            return false;
+        }
+    }
+
+    static void markSoftFailure(SampleResult result) {
+        String reason = SoftFailureDetector.reason(result);
+        if (reason == null) {
+            return;
+        }
+        result.setSuccessful(false);
+        AssertionResult assertion = new AssertionResult("Make it pass: soft failure");
+        assertion.setFailure(true);
+        assertion.setFailureMessage(reason);
+        result.addAssertionResult(assertion);
+    }
+
+    private static void findListeners(HashTree tree, boolean[] found) {
+        if (tree == null) {
+            return;
+        }
+        for (Object key : tree.list()) {
+            TestElement element = element(key);
+            if (element != null) {
+                String guiClass = element.getPropertyAsString(TestElement.GUI_CLASS);
+                found[0] |= VIEW_RESULTS_GUI.equals(guiClass);
+                found[1] |= SUMMARY_REPORT_GUI.equals(guiClass);
+            }
+            findListeners(tree.getTree(key), found);
         }
     }
 

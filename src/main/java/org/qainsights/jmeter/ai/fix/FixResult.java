@@ -33,6 +33,7 @@ public final class FixResult {
     private List<Failure> beforeFailures = List.of();
     private List<String> roundSummaries = List.of();
     private List<String> deterministicHints = List.of();
+    private List<String> skippedPageChecks = List.of();
 
     public FixResult(Status status, int beforeFailed, int beforeTotal, int afterFailed, int afterTotal,
                      int roundsUsed, int guardRollbacks, File backupFile, List<String> agentSummaries,
@@ -108,9 +109,13 @@ public final class FixResult {
     public void setDeterministicHints(List<String> deterministicHints) {
         this.deterministicHints = List.copyOf(deterministicHints);
     }
+    public List<String> skippedPageChecks() { return skippedPageChecks; }
+    public void setSkippedPageChecks(List<String> skippedPageChecks) {
+        this.skippedPageChecks = List.copyOf(skippedPageChecks);
+    }
 
     public boolean hasUndoableChanges() {
-        return status != Status.ALREADY_PASSING && status != Status.NOTHING_RAN
-                && roundsUsed > guardRollbacks;
+        return planDiff != null && (!planDiff.added().isEmpty()
+                || !planDiff.removed().isEmpty() || !planDiff.modified().isEmpty());
     }
 }

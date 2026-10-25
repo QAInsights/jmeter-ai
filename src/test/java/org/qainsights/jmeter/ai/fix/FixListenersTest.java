@@ -2,7 +2,9 @@ package org.qainsights.jmeter.ai.fix;
 
 import java.util.List;
 
+import org.apache.jmeter.assertions.AssertionResult;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.reporters.ResultCollector;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
@@ -20,7 +22,7 @@ class FixListenersTest {
     }
 
     @Test
-    void recognizesDirectListenersButNotListenersNestedUnderAGroup() {
+    void recognizesListenersAnywhereInTheTree() {
         HashTree tree = plan();
         HashTree testPlan = tree.getTree(tree.list().iterator().next());
         ResultCollector viewResults = listener("org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
@@ -28,7 +30,36 @@ class FixListenersTest {
         ThreadGroup group = new ThreadGroup();
         testPlan.add(group).add(listener("org.apache.jmeter.visualizers.StatVisualizer"));
 
-        assertEquals(List.of("summaryreport"), FixListeners.missingListeners(tree));
+        assertTrue(FixListeners.missingListeners(tree).isEmpty());
+    }
+
+    @Test
+    void onlyVisualizerGuiClassesAreEligibleForDelivery() {
+        ResultCollector visualizer = listener("org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
+        ResultCollector nonVisualizer = listener("org.apache.jmeter.config.gui.SimpleConfigGui");
+        ResultCollector empty = listener("");
+
+        assertTrue(FixListeners.isVisualizerElement(visualizer));
+        assertFalse(FixListeners.isVisualizerElement(nonVisualizer));
+        assertFalse(FixListeners.isVisualizerElement(empty));
+    }
+
+    @Test
+    void marksSoftFailuresAsRedAssertionsBeforeDelivery() throws Exception {
+        HTTPSampleResult result = new HTTPSampleResult();
+        result.setSampleLabel("Catalog");
+        result.setSuccessful(true);
+        result.setResponseCode("200");
+        result.setContentType("text/html");
+        result.setResponseData("<title>Not Found</title>", "UTF-8");
+
+        FixListeners.markSoftFailure(result);
+
+        assertFalse(result.isSuccessful());
+        AssertionResult assertion = result.getAssertionResults()[0];
+        assertEquals("Make it pass: soft failure", assertion.getName());
+        assertTrue(assertion.isFailure());
+        assertTrue(assertion.getFailureMessage().contains("Not Found"));
     }
 
     private static HashTree plan() {
@@ -42,4 +73,5 @@ class FixListenersTest {
         listener.setProperty(ConfigTestElement.GUI_CLASS, guiClass);
         return listener;
     }
+
 }
