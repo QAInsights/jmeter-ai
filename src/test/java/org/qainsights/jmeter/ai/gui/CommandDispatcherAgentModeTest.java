@@ -96,6 +96,7 @@ class CommandDispatcherAgentModeTest {
         when(cb.resolveAiService("openai:gpt-4o")).thenReturn(service);
     }
 
+
     private static RateLimitException openAi429(String message) {
         return RateLimitException.builder()
                 .headers(Headers.builder().build())

@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.samplers.SampleResult;
+import org.qainsights.jmeter.ai.utils.SafeText;
 
 /**
  * Immutable summary of a {@link TestPlanRunner} run: aggregate pass/fail counts plus a
@@ -15,6 +17,7 @@ public final class TestRunSummary {
 
     /** Max number of individual failures kept in {@link #getFailures()}; later ones are only counted. */
     public static final int MAX_FAILURES_KEPT = 20;
+    public static final int MAX_RESPONSE_EXCERPT_CHARS = 2048;
 
     private final int totalSamples;
     private final int successCount;
@@ -44,8 +47,22 @@ public final class TestRunSummary {
             } else {
                 failure++;
                 if (failures.size() < MAX_FAILURES_KEPT) {
+                    String method = "";
+                    String url = "";
+                    if (result instanceof HTTPSampleResult) {
+                        method = ((HTTPSampleResult) result).getHTTPMethod();
+                        if (result.getURL() != null) {
+                            url = SafeText.redactUrls(result.getURL().toExternalForm());
+                        }
+                    }
+                    String excerpt = SafeText.redactSensitiveValues(result.getResponseDataAsString());
+                    if (excerpt == null) {
+                        excerpt = "";
+                    } else if (excerpt.length() > MAX_RESPONSE_EXCERPT_CHARS) {
+                        excerpt = excerpt.substring(0, MAX_RESPONSE_EXCERPT_CHARS);
+                    }
                     failures.add(new Failure(result.getSampleLabel(), result.getResponseCode(),
-                            result.getResponseMessage()));
+                            SafeText.redactUrls(result.getResponseMessage()), method, url, excerpt));
                 }
             }
         }
@@ -87,11 +104,22 @@ public final class TestRunSummary {
         private final String label;
         private final String responseCode;
         private final String message;
+        private final String method;
+        private final String url;
+        private final String responseExcerpt;
 
         public Failure(String label, String responseCode, String message) {
+            this(label, responseCode, message, "", "", "");
+        }
+
+        public Failure(String label, String responseCode, String message, String method, String url,
+                       String responseExcerpt) {
             this.label = label == null ? "" : label;
             this.responseCode = responseCode == null ? "" : responseCode;
             this.message = message == null ? "" : message;
+            this.method = method == null ? "" : method;
+            this.url = url == null ? "" : url;
+            this.responseExcerpt = responseExcerpt == null ? "" : responseExcerpt;
         }
 
         public String getLabel() {
@@ -104,6 +132,18 @@ public final class TestRunSummary {
 
         public String getMessage() {
             return message;
+        }
+
+        public String getMethod() {
+            return method;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public String getResponseExcerpt() {
+            return responseExcerpt;
         }
     }
 }

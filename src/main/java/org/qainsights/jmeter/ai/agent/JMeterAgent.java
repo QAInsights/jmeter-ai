@@ -405,8 +405,29 @@ public final class JMeterAgent {
             sinks.routingNotice().accept(new AgentRequestRouter.Notice(decision, toolNames, fullRegistry.size()));
         }
         maybeWarnAboutUndoHistory(sinks.progress());
+        return runShared(userMessage, priorConversationTurns, sinks, registry, expander, "");
+    }
+
+    /** Runs one agent loop using only the supplied tools and no Jev routing. */
+    public AgentLoop.AgentResult runRestricted(String message, ToolRegistry registry, String extraInstructions,
+                                                AgentRunListeners listeners) {
+        if (registry == null) {
+            throw new IllegalArgumentException("registry must not be null");
+        }
+        AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
+        maybeWarnAboutUndoHistory(sinks.progress());
+        return runShared(message, Collections.emptyList(), sinks, registry, null, extraInstructions);
+    }
+
+    private AgentLoop.AgentResult runShared(String userMessage, List<String> priorConversationTurns,
+                                            AgentRunListeners sinks, ToolRegistry registry,
+                                            AgentToolExpander expander, String extraInstructions) {
         ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
+        List<ToolSpec> specs = registry.getSpecs();
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
+        if (extraInstructions != null && !extraInstructions.isBlank()) {
+            systemPrompt += "\n\n" + extraInstructions.trim();
+        }
         List<String> seedTurns = ConversationSeed.normalize(priorConversationTurns, MAX_HISTORY_TURN_PAIRS);
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
         if (expander != null) {

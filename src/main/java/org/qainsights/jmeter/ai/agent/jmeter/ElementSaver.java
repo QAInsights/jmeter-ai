@@ -62,12 +62,8 @@ public interface ElementSaver {
                 if (testPlanTree == null || testPlanTree.size() == 0) {
                     return;
                 }
-                // getTestPlan() returns a tree keyed by JMeterTreeNode, not TestElement - XStream
-                // can't marshal JMeterTreeNode (it's a Swing DefaultMutableTreeNode). JMeter's own
-                // Save action unwraps each node to its TestElement first; mirror that here.
-                unwrapTreeNodes(testPlanTree);
-                try (OutputStream out = new FileOutputStream(file)) {
-                    SaveService.saveTree(testPlanTree, out);
+                try {
+                    writeTree(testPlanTree, file);
                     gui.setTestPlanFile(file.getAbsolutePath());
                     gui.setDirty(false);
                     saved.set(true);
@@ -83,6 +79,15 @@ public interface ElementSaver {
         };
     }
 
+    /** Writes a cloned tree after unwrapping any live Swing tree nodes. */
+    public static void writeTree(HashTree testPlanTree, File file) throws IOException {
+        HashTree serializableTree = (HashTree) testPlanTree.clone();
+        unwrapTreeNodes(serializableTree);
+        try (OutputStream out = new FileOutputStream(file)) {
+            SaveService.saveTree(serializableTree, out);
+        }
+    }
+
     /**
      * Replaces every {@link JMeterTreeNode} key in {@code tree} (recursively) with its
      * underlying {@link TestElement}, in place - the same conversion JMeter's own
@@ -91,9 +96,14 @@ public interface ElementSaver {
      */
     private static void unwrapTreeNodes(HashTree tree) {
         for (Object key : new LinkedList<>(tree.list())) {
-            JMeterTreeNode item = (JMeterTreeNode) key;
-            unwrapTreeNodes(tree.getTree(item));
-            tree.replaceKey(item, item.getTestElement());
+            HashTree children = tree.getTree(key);
+            if (children != null) {
+                unwrapTreeNodes(children);
+            }
+            if (key instanceof JMeterTreeNode) {
+                JMeterTreeNode item = (JMeterTreeNode) key;
+                tree.replaceKey(item, item.getTestElement());
+            }
         }
     }
 }

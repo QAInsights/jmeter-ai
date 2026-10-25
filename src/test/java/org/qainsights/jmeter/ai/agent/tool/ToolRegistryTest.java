@@ -71,6 +71,18 @@ class ToolRegistryTest {
     }
 
     @Test
+    void subset_keepsRequestedToolsInRegistrationOrder() {
+        registry.register(tool("first"));
+        registry.register(tool("second"));
+        registry.register(tool("third"));
+
+        ToolRegistry subset = registry.subset(java.util.Set.of("third", "first"));
+
+        assertEquals(List.of("first", "third"),
+                subset.getSpecs().stream().map(ToolSpec::getName).toList());
+    }
+
+    @Test
     void getAll_isUnmodifiable() {
         registry.register(tool("a"));
         assertThrows(UnsupportedOperationException.class, () -> registry.getAll().clear());

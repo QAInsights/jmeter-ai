@@ -217,6 +217,30 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         relayout(card);
     }
 
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs) {
+        dismissWelcome();
+        finishActivityIfRunning();
+        FixResultCard card = new FixResultCard(result, undo, saveAs);
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        insertBeforeGlue(card);
+        relayout(card);
+    }
+
+    void addMakeItPassOffer(Runnable onClick) {
+        dismissWelcome();
+        JPanel offer = new JPanel();
+        offer.setOpaque(false);
+        offer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        javax.swing.JButton button = new javax.swing.JButton("Make it pass");
+        button.addActionListener(event -> {
+            offer.setVisible(false);
+            onClick.run();
+        });
+        offer.add(button);
+        insertBeforeGlue(offer);
+        relayout(offer);
+    }
+
     private void finishActivityIfRunning() {
         if (activityGroup != null && activityGroup.isRunning()) {
             activityGroup.finish();

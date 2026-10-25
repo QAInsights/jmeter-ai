@@ -1,0 +1,177 @@
+package org.qainsights.jmeter.ai.gui;
+
+import java.awt.event.ActionEvent;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+
+import javax.swing.SwingWorker;
+
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.action.ActionRouter;
+import org.qainsights.jmeter.ai.agent.AgentRunListeners;
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
+import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
+import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
+import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
+import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
+import org.qainsights.jmeter.ai.fix.FixLoop;
+import org.qainsights.jmeter.ai.fix.FixRequest;
+import org.qainsights.jmeter.ai.fix.FixResult;
+import org.qainsights.jmeter.ai.fix.HostConfirmation;
+import org.qainsights.jmeter.ai.fix.PlanBackup;
+import org.qainsights.jmeter.ai.fix.PlanCensus;
+import org.qainsights.jmeter.ai.fix.PlanHosts;
+import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/** SwingWorker-backed command runner for the guarded Make it pass workflow. */
+final class FixCommandRunner {
+    private static final Logger log = LoggerFactory.getLogger(FixCommandRunner.class);
+    private static final Set<String> FIX_TOOLS = Set.of(
+            "get_tree_state", "get_element_config", "get_element_children", "get_element_schema",
+            "add_element", "update_element_property", "set_property_list", "set_structured_property_list",
+            "find_correlation_candidates", "apply_correlation");
+
+    private final CommandCallback cb;
+    private final Function<AiService, JMeterAgent> agentFactory;
+
+    FixCommandRunner(CommandCallback cb, Function<AiService, JMeterAgent> agentFactory) {
+        this.cb = cb;
+        this.agentFactory = agentFactory;
+    }
+
+    void run() {
+        cb.setLastCommandType("NONE");
+        cb.setInputEnabled(false);
+        cb.removeLoadingIndicator();
+        if (!hasPlan()) {
+            finishWithMessage("Open a JMeter test plan before using @fix.");
+            return;
+        }
+        if (!JMeterAgent.isEnabled()) {
+            finishWithMessage("Make it pass requires Agent Mode. Enable it in JMeter settings, then retry.");
+            return;
+        }
+        AiService service = cb.resolveAiService(cb.getSelectedModel());
+        JMeterAgent agent = agentFactory.apply(service);
+        if (agent == null) {
+            finishWithMessage("Make it pass requires an Agent Mode provider. Select a supported provider such as Claude, "
+                    + "OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, Codex, Claude Code, or OpenCode.");
+            return;
+        }
+        if (!HostConfirmation.confirm(null, PlanHosts.live())) {
+            Telemetry.record(TelemetryFeature.FIX_DECLINED);
+            finishWithMessage("Make it pass was cancelled. No requests were sent.");
+            return;
+        }
+
+        PlanBackup backups = new PlanBackup();
+        ToolRegistry registry = AgentToolRegistry.createDefault().subset(FIX_TOOLS);
+        FixRequest request = new FixRequest(
+                integer("jmeter.ai.fix.max.rounds", 5, 1, 10),
+                number("jmeter.ai.fix.timeout.seconds", 120, 10, 900));
+        AtomicBoolean cancelled = new AtomicBoolean();
+        SwingWorker<FixResult, String> worker = new SwingWorker<>() {
+            @Override
+            protected FixResult doInBackground() {
+                FixLoop loop = new FixLoop(TestResultsRunner.live()::runSingleIteration, backups,
+                        PlanCensus::live,
+                                message -> agent.runRestricted(message, registry, "",
+                                        new AgentRunListeners(this::publish, null, null, null, null)),
+                        cancelled::get);
+                return loop.run(request, this::publish);
+            }
+
+            @Override
+            protected void process(java.util.List<String> lines) {
+                lines.forEach(cb::appendToolActivity);
+            }
+
+            @Override
+            protected void done() {
+                cb.hideStopButton();
+                cb.setCancelHandle(null);
+                cb.setInputEnabled(true);
+                try {
+                    FixResult result = get();
+                    recordResult(result);
+                    cb.appendFixResult(result, () -> {
+                        backups.restore(result.backupFile());
+                        Telemetry.record(TelemetryFeature.FIX_UNDO);
+                    }, () -> ActionRouter.getInstance().doActionNow(
+                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS)));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Make it pass was interrupted", e);
+                } catch (ExecutionException e) {
+                    cb.appendErrorMessageToChat("Make it pass failed", asException(e.getCause()));
+                } catch (CancellationException e) {
+                    cb.appendErrorMessageToChat("Make it pass was cancelled", e);
+                }
+            }
+        };
+        cb.setCancelHandle(() -> {
+            cancelled.set(true);
+            TestPlanRunner.stopActive(true);
+        });
+        cb.showStopButton();
+        worker.execute();
+    }
+
+    private boolean hasPlan() {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        return gui != null && gui.getTreeModel() != null && gui.getTreeModel().getTestPlan() != null
+                && gui.getTreeModel().getTestPlan().size() > 0;
+    }
+
+    private void finishWithMessage(String message) {
+        cb.appendRedMessage(message);
+        cb.setInputEnabled(true);
+    }
+
+    private static void recordResult(FixResult result) {
+        Telemetry.record(switch (result.status()) {
+            case ALREADY_PASSING -> TelemetryFeature.FIX_ALREADY_PASSING;
+            case FIXED -> TelemetryFeature.FIX_FIXED;
+            case PARTLY_FIXED -> TelemetryFeature.FIX_PARTLY_FIXED;
+            case NOT_FIXED -> TelemetryFeature.FIX_NOT_FIXED;
+            case CANCELLED -> TelemetryFeature.FIX_CANCELLED;
+            case NOTHING_RAN -> TelemetryFeature.FIX_NOTHING_RAN;
+        });
+        if (result.roundsUsed() == 1) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_1);
+        } else if (result.roundsUsed() <= 3 && result.roundsUsed() > 1) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_2_3);
+        } else if (result.roundsUsed() >= 4) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_4P);
+        }
+    }
+
+    private static int integer(String key, int fallback, int min, int max) {
+        try {
+            return Math.max(min, Math.min(max, Integer.parseInt(AiConfig.getProperty(key, String.valueOf(fallback)))));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static long number(String key, long fallback, long min, long max) {
+        try {
+            return Math.max(min, Math.min(max, Long.parseLong(AiConfig.getProperty(key, String.valueOf(fallback)))));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static Exception asException(Throwable error) {
+        return error instanceof Exception ? (Exception) error : new RuntimeException(error);
+    }
+}

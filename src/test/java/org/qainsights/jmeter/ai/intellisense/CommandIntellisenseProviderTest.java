@@ -49,5 +49,8 @@ public class CommandIntellisenseProviderTest {
         assertTrue(suggestions.contains("@optimize"));
         assertTrue(suggestions.contains("@this"));
         assertTrue(suggestions.contains("@testplan"));
+        assertTrue(suggestions.contains("@fix"));
+        assertEquals("Run the plan with 1 user and fix failures until it passes",
+                CommandIntellisenseProvider.getDescription("@fix"));
     }
 }

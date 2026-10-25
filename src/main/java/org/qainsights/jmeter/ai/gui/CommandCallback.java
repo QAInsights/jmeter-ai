@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.agent.AgentRequestRouter;
 import org.qainsights.jmeter.ai.agent.TriageNotice;
+import org.qainsights.jmeter.ai.fix.FixResult;
 import org.qainsights.jmeter.ai.service.AiService;
 
 import java.util.List;
@@ -110,6 +111,12 @@ public interface CommandCallback {
      * failures. Default no-op for implementations without a styled transcript.
      */
     default void appendJevTriage(TriageNotice notice, String modelId) {
+    }
+
+    default void appendFixResult(FixResult result, Runnable undo, Runnable saveAs) {
+    }
+
+    default void offerMakeItPass() {
     }
 
     void appendErrorMessageToChat(String context, Exception e);

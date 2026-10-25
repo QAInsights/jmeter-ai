@@ -69,10 +69,11 @@
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
 | 🎯 **Extract this** | Highlight a value in a View Results Tree response, right-click and pick **Extract this (Feather Wand)**. Feather Wand builds JSON, CSS selector, regex and boundary extractors, runs each one through JMeter's own extractor code against the real response, and offers only the ones that return exactly that value. Pick one, name the variable and it lands under the sampler that produced the response, optionally replacing later hard-coded copies with `${var}`. Works without an API key. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
-| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@code`, `@usage`, each tailored to your test plan. |
+| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@fix`, `@code`, `@usage`, each tailored to your test plan. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex, Claude Code, and OpenCode CLI providers. |
+| 🛠️ **Make it pass** | Run a plan once with one user, let a restricted Agent repair failures, and verify each round with a real JMeter run. |
 | **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, OpenRouter Decisions with Microsoft-Decision-1, or local EmbeddingGemma through Ollama) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
 | ⚙️ **Fully Configurable** | Customize prompts, temperature, tokens, history, CLI timeouts/sandboxing, and more via JMeter properties. |
@@ -650,6 +651,7 @@ Type any of these directly in the chat box. All commands are context-aware and w
 | `@code` | Extract the last AI code block into the JSR223 editor. | `@code` |
 | `@usage` | Show token-usage stats and recent conversation history. | `@usage` |
 | `@sla` | Add SLA assertions (Duration Assertion and response-code Response Assertion) under the selected element. No AI call. | `@sla p95 under 800 ms and no 5xx` |
+| `@fix` | Run the plan with 1 user and fix failures until it passes. | `@fix` |
 | `@prompts` | Browse and insert prompts from the prompt library. | `@prompts analyze` |
 
 ### 📚 Prompt Library
@@ -709,6 +711,17 @@ All supported providers share the same tool registry, system prompt, safety gate
 > 💡 **OpenAI-compatible provider note**: for DeepSeek, Grok, OpenRouter, and Meta Muse agent runs, `reasoning_effort` is not sent; the vendor default applies. For Meta Muse, agent runs go through Chat Completions rather than the Responses API used for plain chat, so the Thoughts card is not populated during agent runs.
 
 > 💡 **Thinking in Agent Mode (Claude & Gemini)**: when the Thinking checkbox is on, each agent turn's reasoning accumulates in a collapsed **Thoughts** card next to the tool-activity group. Agent loops pay the thinking budget on *every* iteration; keep the effort at `medium`, or pin an agent-only level with `jmeter.ai.agent.thinking.effort` (empty = follows the toolbar).
+
+### Make it pass
+
+Type `@fix` or click the **Make it pass** offer after a recording or a failed Agent test. Feather Wand backs up the plan, runs a real JMeter check with one user and one loop, and asks the selected Agent provider to repair failures using a restricted set of plan-editing tools. JMeter results decide whether the plan passes. The workflow repeats for up to five rounds by default.
+
+Before the first run, Feather Wand shows the HTTP sampler and HTTP Request Defaults hosts and asks for confirmation. Confirmed host sets are remembered only for the current JMeter session. Domains such as `${host}` remain literal. The repair agent cannot remove, disable, or move requests, remove or weaken assertions, or change load settings. A result card offers **Keep**, **Undo all**, and JMeter's **Save as** action. Automatic backups are saved under `~/.jmeter-ai/fix-backups/`; the newest ten are kept.
+
+| Property | Description | Default |
+| --- | --- | --- |
+| `jmeter.ai.fix.max.rounds` | Maximum repair rounds, clamped from 1 to 10 | `5` |
+| `jmeter.ai.fix.timeout.seconds` | Timeout for each single-iteration JMeter check, clamped from 10 to 900 seconds | `120` |
 
 ### Optional Jev Smart Routing
 
@@ -1313,7 +1326,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
-Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Additional counts cover provider families used for Chat and Agent messages, provider setup opens/tests/saves, model-picker actions, reasoning changes, attachments, exports, undo and redo, `@` suggestion picks, JSR223 formatting and try/catch, Extract This, correlation runs and applies, CLI launches, MCP setup copies, and Donate clicks. Only the count is sent, never what you typed or what the feature produced.
+Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, `@fix`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Additional counts cover provider families used for Chat and Agent messages, provider setup opens/tests/saves, model-picker actions, reasoning changes, attachments, exports, undo and redo, `@` suggestion picks, JSR223 formatting and try/catch, Extract This, correlation runs and applies, CLI launches, MCP setup copies, Donate clicks, and Make it pass outcomes, guard rollbacks, and round buckets. Only fixed counter names and counts are sent, never prompts, responses, plan content, hosts, or file paths.
 
 These counters are also sent, again as counts only:
 
@@ -1322,6 +1335,9 @@ These counters are also sent, again as counts only:
 | `outcome_completed`, `outcome_step_limit`, `outcome_error`, `outcome_fallback` | How each Agent run ended: finished, stopped at the step limit, failed with a provider or configuration error, or fell back to a plain AI response. |
 | `outcome_tool_failed` | Agent tool calls that returned an error, including calls with a missing required parameter or an unknown tool name. |
 | `outcome_tool_declined` | Agent tool calls you declined at a confirmation prompt. The tool never ran. |
+| `fix_already_passing`, `fix_fixed`, `fix_partly_fixed`, `fix_not_fixed`, `fix_cancelled`, `fix_nothing_ran` | Make it pass result status. |
+| `fix_guard_rollback`, `fix_undo`, `fix_declined` | Safety rollback, user undo, and declined host confirmation counts. |
+| `fix_rounds_1`, `fix_rounds_2_3`, `fix_rounds_4p` | Make it pass round-count buckets. |
 | `outcome_cancelled` | A response stopped by the user while a cancel handle was active. |
 | `msg_<provider>` and `agentrun_<provider>` | Chat messages and Agent runs grouped by provider family, using fixed provider labels such as `anthropic`, `openai`, `opencode`, or `claudecode`. These are counts, not model names. |
 | `agent_steps_1_5`, `agent_steps_6_15`, `agent_steps_16p` | Agent run size grouped into iteration buckets. |

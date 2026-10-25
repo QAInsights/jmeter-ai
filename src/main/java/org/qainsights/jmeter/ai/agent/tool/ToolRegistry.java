@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Holds the set of {@link Tool}s available to the agent and exposes their
@@ -54,6 +55,20 @@ public final class ToolRegistry {
             specs.add(tool.getSpec());
         }
         return Collections.unmodifiableList(specs);
+    }
+
+    /** Returns a registry containing the requested tools in registration order. */
+    public ToolRegistry subset(Set<String> names) {
+        ToolRegistry subset = new ToolRegistry();
+        if (names == null || names.isEmpty()) {
+            return subset;
+        }
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            if (names.contains(entry.getKey())) {
+                subset.register(entry.getValue());
+            }
+        }
+        return subset;
     }
 
     public int size() {

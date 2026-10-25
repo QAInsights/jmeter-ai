@@ -402,6 +402,7 @@ function statsPage(s: Record<string, unknown>): string {
 	const setup = features.filter(r => name(r).startsWith("setup_") || name(r) === "welcome_no_provider");
 	const decisions = features.filter(r => name(r).startsWith("decide_"));
 	const picker = features.filter(r => name(r).startsWith("picker_"));
+	const fixUsage = features.filter(r => name(r).startsWith("fix_"));
 	const setupOutcomes = ["auth_rejected", "rate_limited", "network_error", "http_error", "ok"];
 	const setupRows = setup.map(r => {
 		const feature = name(r);
@@ -428,7 +429,7 @@ function statsPage(s: Record<string, unknown>): string {
 		feature.startsWith("msg_") || feature.startsWith("agentrun_")
 		|| feature.startsWith("agent_steps_") || feature.startsWith("setup_")
 		|| feature === "welcome_no_provider" || feature.startsWith("decide_")
-		|| feature.startsWith("picker_");
+		|| feature.startsWith("picker_") || feature.startsWith("fix_");
 	const usage = features.filter(r => !errors.includes(r) && !outcomes.includes(r)
 		&& !tools.includes(r) && !toolFailures.includes(r) && !judgment.includes(r)
 		&& !isSpecialized(name(r)));
@@ -505,6 +506,7 @@ ${table("Agent run size (30d)", ["size", "total", "installs", "per install"], us
 ${table("Provider setup funnel (30d)", ["event", "option", "outcome", "total", "installs"], setupRows)}
 ${table("Decisions calls (30d)", ["backend", "result", "error category", "total", "installs"], decisionRows)}
 ${table("Model picker (30d)", ["action", "total", "installs", "per install"], usageRows(picker, "picker_"))}
+${table("Make it pass (30d)", ["event", "total", "installs", "per install"], usageRows(fixUsage, "fix_"))}
 ${table("Agent outcomes (30d)", ["outcome", "total", "installs", "per install"], usageRows(outcomes, "outcome_"))}
 ${table("Agent tool calls (30d)", ["tool", "total", "installs", "per install"], usageRows(tools, "tool_"))}
 ${table("Agent tool failures (30d)", ["tool", "failures", "installs", "of calls"], failureRows)}

@@ -109,6 +109,7 @@ final class AgentCommandRunner {
 
         boolean streamFinalText = AiConfig.isStreamingEnabled();
         String selectedModel = cb.getSelectedModel();
+        java.util.concurrent.atomic.AtomicBoolean offeredFix = new java.util.concurrent.atomic.AtomicBoolean();
 
         SwingWorker<String, AgentChunk> worker = new SwingWorker<>() {
             @Override
@@ -130,7 +131,12 @@ final class AgentCommandRunner {
                                         call -> glowController.onToolCallStarted(elementIdOf(call)),
                                         reasoning -> cb.appendReasoningToken(reasoning),
                                         notice -> cb.appendJevRoute(notice, selectedModel),
-                                        triage -> cb.appendJevTriage(triage, selectedModel)));
+                                        triage -> {
+                                            cb.appendJevTriage(triage, selectedModel);
+                                            if (triage.totalFailures() > 0 && offeredFix.compareAndSet(false, true)) {
+                                                cb.offerMakeItPass();
+                                            }
+                                        }));
                     } finally {
                         glowController.onRunFinished();
                     }

@@ -90,6 +90,26 @@ class TestPlanRunnerTest {
 
     @Test
     @Timeout(30)
+    void runTree_singleIterationOverridesOnlyTheExecutionTree() {
+        HashTree plan = planWithLoops(3);
+        LoopController original = originalController(plan);
+
+        TestRunSummary summary = new TestPlanRunner().runTree(plan, 20, true);
+
+        assertEquals(1, summary.getTotalSamples());
+        assertEquals(3, original.getLoops());
+    }
+
+    private static LoopController originalController(HashTree plan) {
+        Object testPlan = plan.list().iterator().next();
+        HashTree planChildren = plan.getTree(testPlan);
+        Object group = planChildren.list().iterator().next();
+        ThreadGroup threadGroup = (ThreadGroup) group;
+        return (LoopController) threadGroup.getSamplerController();
+    }
+
+    @Test
+    @Timeout(30)
     void stopActive_endsARunningToolRunEarly() throws Exception {
         assertFalse(TestPlanRunner.stopActive(false), "nothing to stop before a run");
         TestPlanRunner runner = new TestPlanRunner();

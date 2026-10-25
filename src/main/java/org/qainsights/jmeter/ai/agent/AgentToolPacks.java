@@ -6,7 +6,6 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
@@ -50,12 +49,7 @@ public final class AgentToolPacks {
         if (allowed == null || !allowed.stream().allMatch(full::isRegistered)) {
             return full;
         }
-        ToolRegistry selected = new ToolRegistry();
-        for (Tool tool : full.getAll()) {
-            if (allowed.contains(tool.getSpec().getName())) {
-                selected.register(tool);
-            }
-        }
+        ToolRegistry selected = full.subset(allowed);
         return selected.size() == allowed.size() ? selected : full;
     }
 

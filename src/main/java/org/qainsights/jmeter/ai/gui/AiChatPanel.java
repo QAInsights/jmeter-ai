@@ -1569,6 +1569,16 @@ public class AiChatPanel
         runOnEdt(() -> transcript.addJevTriage(notice, modelId));
     }
 
+    @Override
+    public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs) {
+        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs));
+    }
+
+    @Override
+    public void offerMakeItPass() {
+        runOnEdt(() -> transcript.addMakeItPassOffer(() -> commandDispatcher.dispatch("@fix")));
+    }
+
     /**
      * Appends a red error message to the chat area and logs the exception.
      *
