@@ -714,7 +714,7 @@ All supported providers share the same tool registry, system prompt, safety gate
 
 ### Make it pass
 
-Type `@fix` or click the **Make it pass** offer after a recording or a failed Agent test. Feather Wand backs up the plan, runs a real JMeter check with one user and one loop, and asks the selected Agent provider to repair failures using a restricted set of plan-editing tools. JMeter results decide whether the plan passes. The workflow repeats for up to five rounds by default.
+Type `@fix` or click the **Make it pass** offer after a recording or a failed Agent test. Feather Wand backs up the plan, runs a real JMeter check with one user and one loop, and asks the selected Agent provider to repair failures using a restricted set of plan-editing tools. It also detects common soft failures such as an error page returned with HTTP 200, adds title-based response assertions, and installs View Results Tree and Summary Report listeners when missing. After a passing one-user run, it checks two users for two loops and repairs multi-user failures within the same round limit by default. JMeter results decide whether the plan passes. A result card includes a redacted plan diff, remaining failures, and an Open report action. Markdown reports are retained under `~/.jmeter-ai/fix-reports/`, keeping the latest 20.
 
 Before the first run, Feather Wand shows the HTTP sampler and HTTP Request Defaults hosts and asks for confirmation. Confirmed host sets are remembered only for the current JMeter session. Domains such as `${host}` remain literal. The repair agent cannot remove, disable, or move requests, remove or weaken assertions, or change load settings. A result card offers **Keep**, **Undo all**, and JMeter's **Save as** action. Automatic backups are saved under `~/.jmeter-ai/fix-backups/`; the newest ten are kept.
 
@@ -722,6 +722,7 @@ Before the first run, Feather Wand shows the HTTP sampler and HTTP Request Defau
 | --- | --- | --- |
 | `jmeter.ai.fix.max.rounds` | Maximum repair rounds, clamped from 1 to 10 | `5` |
 | `jmeter.ai.fix.timeout.seconds` | Timeout for each single-iteration JMeter check, clamped from 10 to 900 seconds | `120` |
+| `jmeter.ai.fix.concurrency.check` | Run the final two-user, two-loop check and repair its failures | `true` |
 
 ### Optional Jev Smart Routing
 
@@ -1338,6 +1339,7 @@ These counters are also sent, again as counts only:
 | `fix_already_passing`, `fix_fixed`, `fix_partly_fixed`, `fix_not_fixed`, `fix_cancelled`, `fix_nothing_ran` | Make it pass result status. |
 | `fix_guard_rollback`, `fix_undo`, `fix_declined` | Safety rollback, user undo, and declined host confirmation counts. |
 | `fix_rounds_1`, `fix_rounds_2_3`, `fix_rounds_4p` | Make it pass round-count buckets. |
+| `fix_soft_failure`, `fix_assertions_added`, `fix_concurrency_fixed`, `fix_concurrency_warn` | Soft failures, deterministic assertions, and multi-user check outcomes. |
 | `outcome_cancelled` | A response stopped by the user while a cancel handle was active. |
 | `msg_<provider>` and `agentrun_<provider>` | Chat messages and Agent runs grouped by provider family, using fixed provider labels such as `anthropic`, `openai`, `opencode`, or `claudecode`. These are counts, not model names. |
 | `agent_steps_1_5`, `agent_steps_6_15`, `agent_steps_16p` | Agent run size grouped into iteration buckets. |

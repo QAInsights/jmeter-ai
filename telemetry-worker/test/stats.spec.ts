@@ -188,6 +188,8 @@ describe("extended stats", () => {
 			 ('b', ?1, 'decide_fail_openrouter_timeout', 1), ('a', ?1, 'decide_slow_typesafe', 1),
 			 ('a', ?1, 'picker_open', 4), ('b', ?1, 'picker_search', 2),
 			 ('a', ?1, 'fix_fixed', 2), ('b', ?1, 'fix_guard_rollback', 1),
+			 ('a', ?1, 'fix_soft_failure', 1), ('a', ?1, 'fix_assertions_added', 1),
+			 ('a', ?1, 'fix_concurrency_fixed', 2), ('b', ?1, 'fix_concurrency_warn', 1),
 			 ('a', ?1, 'chat_message', 1)`
 		).bind(day(0)).run();
 
@@ -210,6 +212,10 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>open</td><td></td><td></td><td>1</td><td>1</td>");
 		expect(html).toContain("<td>open</td><td>4</td><td>1</td><td>4.0</td>");
 		expect(html).toContain("<td>fixed</td><td>2</td><td>1</td><td>2.0</td>");
+		expect(html).toContain("<td>soft_failure</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>assertions_added</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>concurrency_fixed</td><td>2</td><td>1</td><td>2.0</td>");
+		expect(html).toContain("<td>concurrency_warn</td><td>1</td><td>1</td><td>1.0</td>");
 
 		const usageStart = html.indexOf("<h2>Feature usage (30d)</h2>");
 		const usageEnd = html.indexOf("<h2>Chat messages by provider (30d)</h2>");
