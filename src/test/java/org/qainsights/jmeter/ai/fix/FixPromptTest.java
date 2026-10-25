@@ -4,6 +4,7 @@ import java.net.URL;
 import java.util.List;
 
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
+import org.apache.jmeter.samplers.SampleResult;
 import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.junit.jupiter.api.Test;
 
@@ -30,5 +31,19 @@ class FixPromptTest {
         assertTrue(prompt.contains("Login"));
         assertFalse(prompt.contains("raw-password"));
         assertFalse(prompt.contains("raw-query-token"));
+    }
+
+    @Test
+    void reportsFailureCountWhenDiagnosticsAreTruncated() {
+        List<SampleResult> results = new java.util.ArrayList<>();
+        for (int i = 0; i < TestRunSummary.MAX_FAILURES_KEPT + 1; i++) {
+            SampleResult sample = new SampleResult();
+            sample.setSampleLabel("Request " + i);
+            sample.setSuccessful(false);
+            results.add(sample);
+        }
+        String prompt = new FixPrompt().build(TestRunSummary.of(results, false, 0));
+
+        assertTrue(prompt.contains("Showing 20 of 21 failing requests."));
     }
 }

@@ -25,7 +25,9 @@ public final class FixLoop {
 
     public interface BackupStore {
         File backup();
+        File roundBackup();
         void restore(File file);
+        void discard(File file);
     }
 
     private final SingleIterationRunner runner;
@@ -69,11 +71,15 @@ public final class FixLoop {
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, current, current, 0, 0, overall, List.of(), "Cancelled.");
         }
+        if (current.isTimedOut()) {
+            return result(FixResult.Status.NOT_FIXED, current, current, 0, 0, overall, List.of(),
+                    timeoutReason(request.timeoutSeconds()));
+        }
         if (current.getTotalSamples() == 0) {
             return result(FixResult.Status.NOTHING_RAN, current, current, 0, 0, overall, List.of(),
                     "JMeter did not produce any samples.");
         }
-        if (current.getFailureCount() == 0) {
+        if (passes(current)) {
             return result(FixResult.Status.ALREADY_PASSING, current, current, 0, 0, overall, List.of(), "");
         }
 
@@ -87,78 +93,90 @@ public final class FixLoop {
             if (isCancelled()) {
                 break;
             }
-            File roundBackup = backups.backup();
-            if (isCancelled()) {
-                break;
-            }
-            PlanCensus beforeCensus = census.get();
-            if (isCancelled()) {
-                break;
-            }
-            sink.accept("Round " + round + " of " + request.maxRounds() + ": "
-                    + current.getFailureCount() + " of " + current.getTotalSamples() + " requests failing");
-            AgentLoop.AgentResult agentResult;
+            File roundBackup = backups.roundBackup();
             try {
-                agentResult = fixRound.apply(prompt.build(current));
-            } catch (RuntimeException e) {
-                backups.restore(roundBackup);
-                if (isCancelled()) {
-                    return result(FixResult.Status.CANCELLED, before, current, round, guardRollbacks,
-                            overall, summaries, "Cancelled.");
-                }
-                return result(status(before, current), before, current, round, guardRollbacks,
-                        overall, summaries, ProviderErrors.describe(e, "running Make it pass", true));
-            }
-            used = round;
-            if (agentResult != null) {
-                summaries.add(agentResult.getFinalText());
-            }
-            if (isCancelled()) {
-                backups.restore(roundBackup);
-                break;
-            }
-            List<String> violations = beforeCensus.violations(census.get());
-            if (isCancelled()) {
-                backups.restore(roundBackup);
-                break;
-            }
-            if (!violations.isEmpty()) {
-                backups.restore(roundBackup);
-                guardRollbacks++;
-                Telemetry.record(TelemetryFeature.FIX_GUARD_ROLLBACK);
-                violations.forEach(v -> sink.accept("Safety guard: " + v + " Restored this round."));
-                stagnantRounds++;
-            } else {
                 if (isCancelled()) {
                     break;
                 }
+                PlanCensus beforeCensus = census.get();
+                if (isCancelled()) {
+                    break;
+                }
+                sink.accept("Round " + round + " of " + request.maxRounds() + ": "
+                        + current.getFailureCount() + " of " + current.getTotalSamples() + " requests failing");
+                AgentLoop.AgentResult agentResult;
                 try {
-                    current = runner.run(request.timeoutSeconds());
+                    agentResult = fixRound.apply(prompt.build(current));
                 } catch (RuntimeException e) {
                     backups.restore(roundBackup);
                     if (isCancelled()) {
-                        return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
+                        return result(FixResult.Status.CANCELLED, before, current, round, guardRollbacks,
                                 overall, summaries, "Cancelled.");
                     }
-                    return result(status(before, current), before, current, used, guardRollbacks,
-                            overall, summaries, checkFailureReason(e));
+                    return result(status(before, current), before, current, round, guardRollbacks,
+                            overall, summaries, ProviderErrors.describe(e, "running Make it pass", true));
+                }
+                used = round;
+                if (agentResult != null) {
+                    summaries.add(agentResult.getFinalText());
                 }
                 if (isCancelled()) {
+                    backups.restore(roundBackup);
                     break;
                 }
-                if (current.getTotalSamples() > 0 && current.getFailureCount() == 0) {
-                    return result(FixResult.Status.FIXED, before, current, used, guardRollbacks,
-                            overall, summaries, "");
+                List<String> violations = beforeCensus.violations(census.get());
+                if (isCancelled()) {
+                    backups.restore(roundBackup);
+                    break;
                 }
-                if (current.getFailureCount() < bestFailures) {
-                    bestFailures = current.getFailureCount();
-                    stagnantRounds = 0;
-                } else {
+                if (!violations.isEmpty()) {
+                    backups.restore(roundBackup);
+                    guardRollbacks++;
+                    Telemetry.record(TelemetryFeature.FIX_GUARD_ROLLBACK);
+                    violations.forEach(v -> sink.accept("Safety guard: " + v + " Restored this round."));
                     stagnantRounds++;
+                } else {
+                    if (isCancelled()) {
+                        backups.restore(roundBackup);
+                        break;
+                    }
+                    TestRunSummary checked;
+                    try {
+                        checked = runner.run(request.timeoutSeconds());
+                    } catch (RuntimeException e) {
+                        backups.restore(roundBackup);
+                        if (isCancelled()) {
+                            return result(FixResult.Status.CANCELLED, before, current, used, guardRollbacks,
+                                    overall, summaries, "Cancelled.");
+                        }
+                        return result(status(before, current), before, current, used, guardRollbacks,
+                                overall, summaries, checkFailureReason(e));
+                    }
+                    if (isCancelled()) {
+                        backups.restore(roundBackup);
+                        break;
+                    }
+                    if (passes(checked)) {
+                        return result(FixResult.Status.FIXED, before, checked, used, guardRollbacks,
+                                overall, summaries, "");
+                    }
+                    if (checked.isTimedOut() || checked.getTotalSamples() == 0) {
+                        stagnantRounds++;
+                    } else {
+                        current = checked;
+                        if (current.getFailureCount() < bestFailures) {
+                            bestFailures = current.getFailureCount();
+                            stagnantRounds = 0;
+                        } else {
+                            stagnantRounds++;
+                        }
+                    }
                 }
-            }
-            if (stagnantRounds >= 2) {
-                break;
+                if (stagnantRounds >= 2) {
+                    break;
+                }
+            } finally {
+                backups.discard(roundBackup);
             }
         }
         if (isCancelled()) {
@@ -171,6 +189,15 @@ public final class FixLoop {
     private static FixResult.Status status(TestRunSummary before, TestRunSummary after) {
         return after.getFailureCount() < before.getFailureCount()
                 ? FixResult.Status.PARTLY_FIXED : FixResult.Status.NOT_FIXED;
+    }
+
+    private static boolean passes(TestRunSummary summary) {
+        return summary.getTotalSamples() > 0 && summary.getFailureCount() == 0 && !summary.isTimedOut();
+    }
+
+    private static String timeoutReason(long timeoutSeconds) {
+        return "The check run timed out after " + timeoutSeconds
+                + " s before every request ran. Raise jmeter.ai.fix.timeout.seconds.";
     }
 
     private static String checkFailureReason(RuntimeException error) {

@@ -65,10 +65,13 @@ class FixLoopTest {
         PlanCensus before = census(1);
         PlanCensus after = census(0);
         AtomicInteger restores = new AtomicInteger();
+        AtomicInteger discards = new AtomicInteger();
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++count) + ".jmx"); }
             @Override public void restore(File file) { restores.incrementAndGet(); }
+            @Override public void discard(File file) { discards.incrementAndGet(); }
         };
         FixLoop fixLoop = new FixLoop(timeout -> summary(1, 1), backups,
                 () -> censusCalls.incrementAndGet() == 1 ? before : after,
@@ -78,6 +81,7 @@ class FixLoopTest {
 
         assertEquals(1, result.guardRollbacks());
         assertEquals(1, restores.get());
+        assertEquals(1, discards.get());
     }
 
     @Test
@@ -94,6 +98,59 @@ class FixLoopTest {
                 .run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.NOTHING_RAN, result.status());
         assertFalse(result.reason().isBlank());
+    }
+
+    @Test
+    void firstCheckTimedOutWithNoFailuresIsNotPassing() {
+        FixResult result = loop(List.of(summary(2, 0, true)), new AtomicInteger(), stableCensus(), () -> false)
+                .run(new FixRequest(5, 17), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertEquals(0, result.afterFailed());
+        assertEquals(2, result.afterTotal());
+        assertEquals("The check run timed out after 17 s before every request ran. "
+                + "Raise jmeter.ai.fix.timeout.seconds.", result.reason());
+    }
+
+    @Test
+    void firstCheckTimeoutKeepsPartialFailures() {
+        FixResult result = loop(List.of(summary(3, 1, true)), new AtomicInteger(), stableCensus(), () -> false)
+                .run(new FixRequest(5, 19), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertEquals(1, result.afterFailed());
+        assertEquals(1, result.remainingFailures().size());
+        assertTrue(result.reason().contains("timed out after 19 s"));
+    }
+
+    @Test
+    void timedOutPostRoundCheckIsNotProgress() {
+        FixResult result = loop(List.of(summary(3, 3), summary(2, 1, true)),
+                new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertEquals(3, result.afterFailed());
+        assertEquals(3, result.afterTotal());
+    }
+
+    @Test
+    void zeroSamplePostRoundCheckIsNotProgress() {
+        FixResult result = loop(List.of(summary(3, 3), summary(0, 0)),
+                new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(1, 120), null);
+
+        assertEquals(FixResult.Status.NOT_FIXED, result.status());
+        assertEquals(3, result.afterFailed());
+        assertEquals(3, result.afterTotal());
+    }
+
+    @Test
+    void zeroSampleAfterProgressComparesWithLastCheckThatHadSamples() {
+        FixResult result = loop(List.of(summary(3, 3), summary(3, 1), summary(0, 0)),
+                new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(2, 120), null);
+
+        assertEquals(FixResult.Status.PARTLY_FIXED, result.status());
+        assertEquals(1, result.afterFailed());
+        assertEquals(3, result.afterTotal());
     }
 
     @Test
@@ -119,10 +176,13 @@ class FixLoopTest {
     @Test
     void providerFailureRestoresRoundAndReturnsReason() {
         AtomicInteger restores = new AtomicInteger();
+        AtomicInteger discards = new AtomicInteger();
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++count) + ".jmx"); }
             @Override public void restore(File file) { restores.incrementAndGet(); }
+            @Override public void discard(File file) { discards.incrementAndGet(); }
         };
         FixLoop fixLoop = new FixLoop(timeout -> summary(2, 1), backups, stableCensus(),
                 ignored -> { throw new IllegalStateException("provider unavailable"); }, () -> false);
@@ -132,16 +192,20 @@ class FixLoopTest {
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
         assertTrue(result.reason().contains("provider unavailable"));
         assertEquals(1, restores.get());
+        assertEquals(1, discards.get());
     }
 
     @Test
     void checkFailureAfterRoundRestoresAndReturnsReason() {
         AtomicInteger runs = new AtomicInteger();
         AtomicInteger restores = new AtomicInteger();
+        AtomicInteger discards = new AtomicInteger();
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++count) + ".jmx"); }
             @Override public void restore(File file) { restores.incrementAndGet(); }
+            @Override public void discard(File file) { discards.incrementAndGet(); }
         };
         FixLoop fixLoop = new FixLoop(timeout -> {
             if (runs.incrementAndGet() == 1) {
@@ -156,6 +220,7 @@ class FixLoopTest {
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
         assertTrue(result.reason().contains("engine failed"));
         assertEquals(1, restores.get());
+        assertEquals(1, discards.get());
     }
 
     @Test
@@ -163,11 +228,14 @@ class FixLoopTest {
         CountDownLatch enteredRound = new CountDownLatch(1);
         AtomicBoolean cancelled = new AtomicBoolean();
         AtomicInteger restores = new AtomicInteger();
+        AtomicInteger discards = new AtomicInteger();
         AtomicReference<FixResult> result = new AtomicReference<>();
         FixLoop.BackupStore backups = new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++count) + ".jmx"); }
             @Override public void restore(File file) { restores.incrementAndGet(); }
+            @Override public void discard(File file) { discards.incrementAndGet(); }
         };
         FixLoop fixLoop = new FixLoop(timeout -> summary(2, 1), backups, stableCensus(), ignored -> {
             enteredRound.countDown();
@@ -190,6 +258,7 @@ class FixLoopTest {
         assertFalse(worker.isAlive());
         assertEquals(FixResult.Status.CANCELLED, result.get().status());
         assertEquals(1, restores.get());
+        assertEquals(1, discards.get());
     }
 
     private static FixLoop loop(List<TestRunSummary> runs, AtomicInteger rounds,
@@ -198,7 +267,9 @@ class FixLoopTest {
         return new FixLoop(timeout -> pending.removeFirst(), new FixLoop.BackupStore() {
             private int backups;
             @Override public File backup() { return new File("backup-" + (++backups) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++backups) + ".jmx"); }
             @Override public void restore(File file) { }
+            @Override public void discard(File file) { }
         }, census, message -> { rounds.incrementAndGet(); return null; }, cancel);
     }
 
@@ -210,7 +281,9 @@ class FixLoopTest {
         return new FixLoop.BackupStore() {
             private int count;
             @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return new File("round-" + (++count) + ".jmx"); }
             @Override public void restore(File file) { }
+            @Override public void discard(File file) { }
         };
     }
 
@@ -225,6 +298,10 @@ class FixLoopTest {
     }
 
     private static TestRunSummary summary(int total, int failed) {
+        return summary(total, failed, false);
+    }
+
+    private static TestRunSummary summary(int total, int failed, boolean timedOut) {
         java.util.ArrayList<SampleResult> samples = new java.util.ArrayList<>();
         for (int i = 0; i < total; i++) {
             SampleResult result = new SampleResult();
@@ -236,6 +313,6 @@ class FixLoopTest {
             }
             samples.add(result);
         }
-        return TestRunSummary.of(samples, false, 1);
+        return TestRunSummary.of(samples, timedOut, 1);
     }
 }

@@ -17,6 +17,10 @@ public final class FixPrompt {
                 .append("or missing test data, do not guess. State one line beginning with NEEDS USER:.\n")
                 .append("After the tool calls, end with a short list of changes.\n\n")
                 .append("Current failures:\n");
+        if (summary.hasMoreFailuresThanShown()) {
+            prompt.append("Showing ").append(summary.getFailures().size())
+                    .append(" of ").append(summary.getFailureCount()).append(" failing requests.\n");
+        }
         for (Failure failure : summary.getFailures()) {
             prompt.append("- label: ").append(failure.getLabel())
                     .append("; code: ").append(failure.getResponseCode())

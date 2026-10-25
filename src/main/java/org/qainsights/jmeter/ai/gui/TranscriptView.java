@@ -218,9 +218,13 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
     }
 
     void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs) {
+        addFixResult(result, undo, saveAs, () -> { });
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs, Runnable keep) {
         dismissWelcome();
         finishActivityIfRunning();
-        FixResultCard card = new FixResultCard(result, undo, saveAs);
+        FixResultCard card = new FixResultCard(result, undo, saveAs, keep);
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(card);
         relayout(card);

@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.fix;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collection;
 import java.util.Set;
 import java.util.TreeSet;
@@ -35,7 +37,9 @@ public final class PlanHosts {
                     ? ((JMeterTreeNode) key).getTestElement()
                     : key instanceof TestElement ? (TestElement) key : null;
             if (element instanceof HTTPSamplerBase) {
-                add(hosts, ((HTTPSamplerBase) element).getDomain());
+                HTTPSamplerBase sampler = (HTTPSamplerBase) element;
+                add(hosts, sampler.getDomain());
+                addAbsoluteUrlHost(hosts, sampler.getPath());
             } else if (element != null) {
                 add(hosts, element.getPropertyAsString(HTTPSamplerBase.DOMAIN));
             }
@@ -46,6 +50,21 @@ public final class PlanHosts {
     private static void add(Collection<String> hosts, String domain) {
         if (domain != null && !domain.isBlank()) {
             hosts.add(domain.trim());
+        }
+    }
+
+    private static void addAbsoluteUrlHost(Collection<String> hosts, String path) {
+        if (path == null || !(path.regionMatches(true, 0, "http://", 0, 7)
+                || path.regionMatches(true, 0, "https://", 0, 8))) {
+            return;
+        }
+        try {
+            String host = new URI(path).getHost();
+            if (host != null && !host.contains("${")) {
+                add(hosts, host);
+            }
+        } catch (URISyntaxException ignored) {
+            // Ignore invalid sampler paths; JMeter will report them during the check run.
         }
     }
 }

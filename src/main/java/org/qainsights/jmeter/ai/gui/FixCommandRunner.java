@@ -14,6 +14,7 @@ import org.apache.jmeter.gui.action.ActionRouter;
 import org.qainsights.jmeter.ai.agent.AgentRunListeners;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.jmeter.TestRunController;
 import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
@@ -37,16 +38,27 @@ final class FixCommandRunner {
     private static final Logger log = LoggerFactory.getLogger(FixCommandRunner.class);
     private final CommandCallback cb;
     private final Function<AiService, JMeterAgent> agentFactory;
+    private final TestRunController testRunController;
 
     FixCommandRunner(CommandCallback cb, Function<AiService, JMeterAgent> agentFactory) {
+        this(cb, agentFactory, TestRunController.live());
+    }
+
+    FixCommandRunner(CommandCallback cb, Function<AiService, JMeterAgent> agentFactory,
+                     TestRunController testRunController) {
         this.cb = cb;
         this.agentFactory = agentFactory;
+        this.testRunController = testRunController;
     }
 
     void run() {
         cb.setLastCommandType("NONE");
         cb.setInputEnabled(false);
         cb.removeLoadingIndicator();
+        if (testRunController.isRunning()) {
+            finishWithMessage("A test is already running. Stop it before using @fix.");
+            return;
+        }
         if (!hasPlan()) {
             finishWithMessage("Open a JMeter test plan before using @fix.");
             return;
@@ -106,12 +118,22 @@ final class FixCommandRunner {
                     recordResult(result);
                     cb.appendFixResult(result,
                             () -> runCardAction("Could not undo Make it pass", () -> {
-                                backups.restore(result.backupFile());
+                                java.io.File backup = result.backupFile();
+                                if (backup == null || !backup.isFile()) {
+                                    cb.appendMessageToChat(
+                                            "The Make it pass backup is missing. Undo all is unavailable.");
+                                    backups.unpin(backup);
+                                    return;
+                                }
+                                backups.restore(backup);
                                 Telemetry.record(TelemetryFeature.FIX_UNDO);
+                                backups.unpin(backup);
                             }),
                             () -> runCardAction("Could not save the test plan", () ->
                                     ActionRouter.getInstance().doActionNow(
-                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS))));
+                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED, ActionNames.SAVE_AS))),
+                            () -> runCardAction("Could not release Make it pass backup",
+                                    () -> backups.unpin(result.backupFile())));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("Make it pass was interrupted", e);

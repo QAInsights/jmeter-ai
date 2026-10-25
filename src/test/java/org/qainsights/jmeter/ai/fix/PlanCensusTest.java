@@ -62,6 +62,13 @@ class PlanCensusTest {
                 .contains("A request now targets a host you did not confirm: new.example.test."));
     }
 
+    @Test
+    void flagsHostDriftInAbsoluteSamplerPath() {
+        assertTrue(withAbsolutePath("https://confirmed.example.test/path")
+                .violations(withAbsolutePath("https://new.example.test/path"))
+                .contains("A request now targets a host you did not confirm: new.example.test."));
+    }
+
     private static PlanCensus withChild(org.apache.jmeter.testelement.TestElement child) {
         HashTree root = new ListedHashTree();
         ThreadGroup threadGroup = new ThreadGroup();
@@ -96,6 +103,15 @@ class PlanCensusTest {
         HTTPSamplerProxy sampler = new HTTPSamplerProxy();
         sampler.setDomain(host);
         root.add(new TestPlan("Test Plan")).add(threadGroup).add(sampler);
+        return PlanCensus.capture(root);
+    }
+
+    private static PlanCensus withAbsolutePath(String path) {
+        HashTree root = new ListedHashTree();
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("");
+        sampler.setPath(path);
+        root.add(new TestPlan("Test Plan")).add(sampler);
         return PlanCensus.capture(root);
     }
 

@@ -116,6 +116,10 @@ public interface CommandCallback {
     default void appendFixResult(FixResult result, Runnable undo, Runnable saveAs) {
     }
 
+    default void appendFixResult(FixResult result, Runnable undo, Runnable saveAs, Runnable keep) {
+        appendFixResult(result, undo, saveAs);
+    }
+
     default void offerMakeItPass() {
     }
 

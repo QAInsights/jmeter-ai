@@ -21,7 +21,7 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 final class FixResultCard extends JPanel {
     private final JPanel actions = new JPanel();
 
-    FixResultCard(FixResult result, Runnable undo, Runnable saveAs) {
+    FixResultCard(FixResult result, Runnable undo, Runnable saveAs, Runnable keepAction) {
         super(new BorderLayout());
         setOpaque(true);
         setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -58,7 +58,10 @@ final class FixResultCard extends JPanel {
         add(content, BorderLayout.CENTER);
         actions.setOpaque(false);
         JButton keep = new JButton("Keep");
-        keep.addActionListener(event -> actions.setVisible(false));
+        keep.addActionListener(event -> {
+            keepAction.run();
+            actions.setVisible(false);
+        });
         JButton undoButton = new JButton("Undo all");
         undoButton.addActionListener(event -> {
             undo.run();

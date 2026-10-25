@@ -1571,7 +1571,13 @@ public class AiChatPanel
 
     @Override
     public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs) {
-        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs));
+        appendFixResult(result, undo, saveAs, () -> { });
+    }
+
+    @Override
+    public void appendFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs,
+                                Runnable keep) {
+        runOnEdt(() -> transcript.addFixResult(result, undo, saveAs, keep));
     }
 
     @Override
