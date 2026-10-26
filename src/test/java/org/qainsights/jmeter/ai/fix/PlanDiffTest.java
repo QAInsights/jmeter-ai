@@ -57,6 +57,64 @@ class PlanDiffTest {
     }
 
     @Test
+    void missingEnabledPropertyIsEquivalentToTrueInSnapshots() {
+        HashTree beforeTree = plan();
+        HTTPSamplerProxy original = sampler("Catalog", "/same");
+        original.setProperty(TestElement.ENABLED, "true");
+        beforeTree.getTree(beforeTree.list().iterator().next()).add(original);
+
+        HashTree afterTree = plan();
+        HTTPSamplerProxy withoutEnabled = sampler("Catalog", "/same");
+        withoutEnabled.removeProperty(TestElement.ENABLED);
+        afterTree.getTree(afterTree.list().iterator().next()).add(withoutEnabled);
+
+        Map<String, PlanDiff.ElementSnapshot> before = PlanDiff.snapshot(beforeTree);
+        Map<String, PlanDiff.ElementSnapshot> after = PlanDiff.snapshot(afterTree);
+        PlanDiff diff = PlanDiff.between(before, after);
+
+        assertEquals("true", before.get("Test Plan/Catalog").properties().get(TestElement.ENABLED));
+        assertFalse(after.get("Test Plan/Catalog").properties().containsKey(TestElement.ENABLED));
+        assertTrue(diff.modified().isEmpty());
+    }
+
+    @Test
+    void explicitEnabledChangesStillAppearAsModified() {
+        HashTree beforeTree = plan();
+        HTTPSamplerProxy original = sampler("Catalog", "/same");
+        original.setProperty(TestElement.ENABLED, "true");
+        beforeTree.getTree(beforeTree.list().iterator().next()).add(original);
+
+        HashTree afterTree = plan();
+        HTTPSamplerProxy disabled = sampler("Catalog", "/same");
+        disabled.setProperty(TestElement.ENABLED, "false");
+        afterTree.getTree(afterTree.list().iterator().next()).add(disabled);
+
+        PlanDiff diff = PlanDiff.between(PlanDiff.snapshot(beforeTree), PlanDiff.snapshot(afterTree));
+
+        assertEquals(1, diff.modified().size());
+        assertEquals("true", diff.modified().get(0).beforeProperties().get(TestElement.ENABLED));
+        assertEquals("false", diff.modified().get(0).afterProperties().get(TestElement.ENABLED));
+    }
+
+    @Test
+    void explicitEmptyEnabledPropertyRemainsDifferentFromTrue() {
+        HashTree beforeTree = plan();
+        HTTPSamplerProxy original = sampler("Catalog", "/same");
+        original.setProperty(TestElement.ENABLED, "true");
+        beforeTree.getTree(beforeTree.list().iterator().next()).add(original);
+
+        HashTree afterTree = plan();
+        HTTPSamplerProxy withEmptyEnabled = sampler("Catalog", "/same");
+        withEmptyEnabled.setProperty(TestElement.ENABLED, "");
+        afterTree.getTree(afterTree.list().iterator().next()).add(withEmptyEnabled);
+
+        PlanDiff diff = PlanDiff.between(PlanDiff.snapshot(beforeTree), PlanDiff.snapshot(afterTree));
+
+        assertEquals(1, diff.modified().size());
+        assertEquals("", diff.modified().get(0).afterProperties().get(TestElement.ENABLED));
+    }
+
+    @Test
     void removedElementsKeepTheirSnapshotProperties() {
         HashTree beforeTree = plan();
         HashTree beforeChildren = beforeTree.getTree(beforeTree.list().iterator().next());

@@ -196,6 +196,7 @@ public final class FixLoop {
             int targetTotal = current.getTotalSamples();
             File roundBackup = backups.roundBackup();
             boolean providerFailure = false;
+            boolean roundSummaryRecorded = false;
             try {
                 if (isCancelled()) {
                     restoreRoundBackup(roundBackup);
@@ -268,6 +269,8 @@ public final class FixLoop {
                                 } else if (concurrencyFailureObserved) {
                                     recordConcurrencyFixed();
                                 }
+                                recordRoundSummary(round, targetFailures, targetTotal, checked.decisive());
+                                roundSummaryRecorded = true;
                                 return result(FixResult.Status.FIXED, before, checked.decisive(), used,
                                         guardRollbacks, overall, summaries, "");
                             }
@@ -293,12 +296,14 @@ public final class FixLoop {
                 }
             } catch (Exception e) {
                 used = round;
+                recordRoundSummary(round, targetFailures, targetTotal, current);
+                roundSummaryRecorded = true;
                 return roundFailure(asRuntimeException(e), providerFailure, roundBackup, before, current, round,
                         guardRollbacks, overall, summaries);
             } finally {
-                roundSummaries.add("Round " + round + " targeted " + targetFailures + " of " + targetTotal
-                        + " failures; " + current.getFailureCount() + " of " + current.getTotalSamples()
-                        + " remained.");
+                if (!roundSummaryRecorded) {
+                    recordRoundSummary(round, targetFailures, targetTotal, current);
+                }
                 backups.discard(roundBackup);
             }
         }
@@ -312,6 +317,11 @@ public final class FixLoop {
         return result(concurrencyMode ? FixResult.Status.PARTLY_FIXED : status(before, current),
                 before, current, used, guardRollbacks, overall, summaries,
                 concurrencyMode ? CONCURRENCY_PARTIAL_REASON : "");
+    }
+
+    private void recordRoundSummary(int round, int targetFailures, int targetTotal, TestRunSummary after) {
+        roundSummaries.add("Round " + round + " targeted " + targetFailures + " of " + targetTotal
+                + " failures; " + after.getFailureCount() + " of " + after.getTotalSamples() + " remained.");
     }
 
     private static FixResult.Status status(TestRunSummary before, TestRunSummary after) {

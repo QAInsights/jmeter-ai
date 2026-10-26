@@ -88,6 +88,20 @@ class FixLoopTest {
         assertEquals(FixResult.Status.FIXED, result.status());
         assertEquals(2, result.roundsUsed());
         assertEquals(0, result.afterFailed());
+        assertEquals(List.of("Round 1 targeted 2 of 3 failures; 1 of 3 remained.",
+                "Round 2 targeted 1 of 3 failures; 0 of 3 remained."), result.roundSummaries());
+        assertEquals(2, result.roundDiffs().size());
+    }
+
+    @Test
+    void passingFirstRoundIsRecordedWithPostRoundSummary() {
+        FixResult result = loop(List.of(summary(3, 2), summary(3, 2), summary(3, 0)),
+                new AtomicInteger(), stableCensus(), () -> false).run(new FixRequest(5, 120), null);
+
+        assertEquals(FixResult.Status.FIXED, result.status());
+        assertEquals(1, result.roundSummaries().size());
+        assertTrue(result.roundSummaries().get(0).endsWith("0 of 3 remained."));
+        assertEquals(1, result.roundDiffs().size());
     }
 
     @Test
@@ -122,6 +136,8 @@ class FixLoopTest {
                 rounds, stableCensus(), () -> false).run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.PARTLY_FIXED, result.status());
         assertEquals(5, result.roundsUsed());
+        assertEquals(5, result.roundSummaries().size());
+        assertEquals(5, result.roundSummaries().stream().distinct().count());
     }
 
     @Test
@@ -131,6 +147,8 @@ class FixLoopTest {
                 rounds, stableCensus(), () -> false).run(new FixRequest(5, 120), null);
         assertEquals(FixResult.Status.NOT_FIXED, result.status());
         assertEquals(2, result.roundsUsed());
+        assertEquals(2, result.roundSummaries().size());
+        assertEquals(2, result.roundSummaries().stream().distinct().count());
     }
 
     @Test
@@ -274,6 +292,8 @@ class FixLoopTest {
         assertEquals(1, rounds.get());
         assertEquals(2, result.concurrencyBeforeFailed());
         assertEquals(0, result.concurrencyAfterFailed());
+        assertEquals(1, result.roundSummaries().size());
+        assertTrue(result.roundSummaries().get(0).endsWith("0 of 4 remained."));
     }
 
     @Test
@@ -511,6 +531,7 @@ class FixLoopTest {
         assertTrue(interruptRestored.get());
         assertEquals(1, restores.get());
         assertEquals(1, discards.get());
+        assertEquals(1, result.get().roundSummaries().size());
     }
 
     @Test
@@ -529,6 +550,7 @@ class FixLoopTest {
 
         assertEquals(FixResult.Status.CANCELLED, result.status());
         assertEquals(roundBackup, restored.get());
+        assertEquals(1, result.roundSummaries().size());
     }
 
     @Test
@@ -545,6 +567,7 @@ class FixLoopTest {
 
         assertEquals(FixResult.Status.CANCELLED, result.status());
         assertEquals(roundBackup, restored.get());
+        assertEquals(1, result.roundSummaries().size());
     }
 
     private static FixLoop loop(List<TestRunSummary> runs, AtomicInteger rounds,

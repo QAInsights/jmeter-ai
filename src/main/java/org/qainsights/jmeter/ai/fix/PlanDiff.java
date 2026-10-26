@@ -43,7 +43,7 @@ public final class PlanDiff {
             ElementSnapshot newElement = after.get(path);
             if (newElement == null) {
                 removals.add(ElementChange.removed(path, oldElement));
-            } else if (!oldElement.equals(newElement)) {
+            } else if (!sameForComparison(oldElement, newElement)) {
                 modifications.add(ElementChange.modified(path, oldElement, newElement));
             }
         });
@@ -55,6 +55,20 @@ public final class PlanDiff {
         this.added = List.copyOf(additions);
         this.removed = List.copyOf(removals);
         this.modified = List.copyOf(modifications);
+    }
+
+    private static boolean sameForComparison(ElementSnapshot before, ElementSnapshot after) {
+        return before.className.equals(after.className)
+                && comparisonProperties(before.properties).equals(comparisonProperties(after.properties));
+    }
+
+    private static Map<String, String> comparisonProperties(Map<String, String> properties) {
+        if (properties.get(TestElement.ENABLED) != null) {
+            return properties;
+        }
+        Map<String, String> normalized = new LinkedHashMap<>(properties);
+        normalized.put(TestElement.ENABLED, "true");
+        return orderedMap(normalized);
     }
 
     public static Map<String, ElementSnapshot> snapshot(HashTree tree) {
@@ -202,7 +216,8 @@ public final class PlanDiff {
         }
 
         private static ElementChange modified(String path, ElementSnapshot before, ElementSnapshot after) {
-            return new ElementChange(path, before.className, before.properties, after.properties);
+            return new ElementChange(path, before.className,
+                    comparisonProperties(before.properties), comparisonProperties(after.properties));
         }
 
         public String path() { return path; }
