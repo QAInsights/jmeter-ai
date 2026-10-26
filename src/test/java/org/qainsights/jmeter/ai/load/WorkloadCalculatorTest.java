@@ -239,6 +239,100 @@ class WorkloadCalculatorTest {
         assertFalse(plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \"")));
     }
 
+    @Test
+    void buildsExactCoreOpenModelSchedulesForEachShape() {
+        WorkloadPlan step = shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
+                1.0, 2.0, 1.0, 10L, 5L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM));
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) random_arrivals(${__P(load.s1.secs,5)} sec) "
+                + "rate(${__P(load.s2.rate,1)}/sec) random_arrivals(${__P(load.s2.secs,10)} sec) "
+                + "rate(${__P(load.s3.rate,1)}/sec) random_arrivals(${__P(load.s3.secs,5)} sec) "
+                + "rate(${__P(load.s4.rate,2)}/sec) random_arrivals(${__P(load.s4.secs,10)} sec) "
+                + "rate(${__P(load.s5.rate,2)}/sec)", step.openModelSchedule());
+
+        WorkloadPlan spike = shaped(new WorkloadShapeConfig(WorkloadShape.SPIKE,
+                null, null, null, null, null, 1.0, 3.0, 4L, 5L, 6L,
+                List.of(), null, ArrivalMode.RANDOM));
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) random_arrivals(${__P(load.s1.secs,5)} sec) "
+                + "rate(${__P(load.s2.rate,1)}/sec) random_arrivals(${__P(load.s2.secs,4)} sec) "
+                + "rate(${__P(load.s3.rate,1)}/sec) random_arrivals(${__P(load.s3.secs,5)} sec) "
+                + "rate(${__P(load.s4.rate,3)}/sec) random_arrivals(${__P(load.s4.secs,5)} sec) "
+                + "rate(${__P(load.s5.rate,3)}/sec) random_arrivals(${__P(load.s5.secs,5)} sec) "
+                + "rate(${__P(load.s6.rate,1)}/sec) random_arrivals(${__P(load.s6.secs,6)} sec) "
+                + "rate(${__P(load.s7.rate,1)}/sec)", spike.openModelSchedule());
+
+        WorkloadPlan stress = shaped(new WorkloadShapeConfig(WorkloadShape.STRESS,
+                1.0, 3.0, 1.0, 10L, null, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM));
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) random_arrivals(${__P(load.s1.secs,10)} sec) "
+                + "rate(${__P(load.s2.rate,1)}/sec) random_arrivals(${__P(load.s2.secs,10)} sec) "
+                + "rate(${__P(load.s3.rate,2)}/sec) random_arrivals(${__P(load.s3.secs,10)} sec) "
+                + "rate(${__P(load.s4.rate,3)}/sec)", stress.openModelSchedule());
+
+        WorkloadShapeConfig customConfig = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 2, 10), new WorkloadStage(2, 4, 20)),
+                5L, ArrivalMode.EVEN);
+        WorkloadPlan custom = shaped(customConfig);
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) even_arrivals(${__P(load.s1.secs,10)} sec) "
+                + "rate(${__P(load.s2.rate,2)}/sec) even_arrivals(${__P(load.s2.secs,20)} sec) "
+                + "rate(${__P(load.s3.rate,4)}/sec) even_arrivals(${__P(load.s3.secs,5)} sec) "
+                + "rate(${__P(load.s4.rate,0)}/sec)", custom.openModelSchedule());
+    }
+
+    @Test
+    void convertsUsersToIterationsAndSizesFromThePeakStage() {
+        assertEquals(250.0, WorkloadCalculator.toIterationsPerSecond(500,
+                WorkloadInputs.TargetType.USERS, 2, 1, 500, 500));
+        WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 4, 10), new WorkloadStage(4, 0, 5)),
+                null, ArrivalMode.RANDOM), WorkloadInputs.TargetType.ITERATION_RATE, 2, 2, List.of());
+        assertEquals(6, plan.threads());
+    }
+
+    @Test
+    void distributesOpenModelRatesPerGeneratorAndDefaultsEnduranceToFourHours() {
+        WorkloadPlan distributed = shaped(new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 4, 10)), null, ArrivalMode.RANDOM),
+                WorkloadInputs.TargetType.ITERATION_RATE, 1, 2, List.of("load-a", "load-b"));
+        assertTrue(distributed.openModelSchedule().contains("rate(${__P(load.s1.rate,0)}/sec)"));
+        assertTrue(distributed.cliCommand().contains("-Gload.s1.rate=0"));
+        assertTrue(distributed.cliCommand().contains("-Gload.s1.secs=10"));
+
+        WorkloadPlan endurance = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                null, null, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.ENDURANCE, null, null, null,
+                        null, null, null, null, null, null, null, List.of(), null, ArrivalMode.RANDOM)));
+        assertEquals(14_400, endurance.holdSeconds());
+    }
+
+    @Test
+    void customShapeRejectsMoreThanTenStages() {
+        List<WorkloadStage> stages = java.util.stream.IntStream.range(0, 11)
+                .mapToObj(index -> new WorkloadStage(index, index + 1, 1))
+                .toList();
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                stages, null, ArrivalMode.RANDOM);
+
+        assertThrows(IllegalArgumentException.class, () -> shaped(config));
+    }
+
+    private static WorkloadPlan shaped(WorkloadShapeConfig config) {
+        return shaped(config, WorkloadInputs.TargetType.REQUEST_RATE, 1, 1, List.of());
+    }
+
+    private static WorkloadPlan shaped(WorkloadShapeConfig config, WorkloadInputs.TargetType type,
+                                       int samplers, int agents, List<String> hosts) {
+        return WorkloadCalculator.calculate(new WorkloadInputs(type, 1, null, 500L, 0L,
+                10L, 20L, agents, samplers, "load", "plan.jmx", 1.0, null,
+                hosts, List.of(), List.of(), null, null, null, false, config));
+    }
+
     private static final class KafkaProducerSampler {
     }
 

@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WorkloadShapeChartTest {
 
@@ -31,6 +32,24 @@ class WorkloadShapeChartTest {
         paint(fresh, freshImage);
 
         assertArrayEquals(pixels(freshImage), pixels(reusedImage));
+    }
+
+    @Test
+    void modelPreviewFollowsPiecewiseOpenModelStages() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 1000L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.CUSTOM, null, null, null,
+                        null, null, null, null, null, null, null,
+                        List.of(new WorkloadStage(0, 2, 10), new WorkloadStage(2, 0, 10)),
+                        null, ArrivalMode.RANDOM)));
+
+        assertEquals(0, WorkloadChartModel.at(plan, 0).requestsPerSecond());
+        assertEquals(1, WorkloadChartModel.at(plan, 5).requestsPerSecond());
+        assertEquals(2, WorkloadChartModel.at(plan, 10).requestsPerSecond());
+        assertEquals(1, WorkloadChartModel.at(plan, 15).requestsPerSecond());
+        assertEquals(0, WorkloadChartModel.at(plan, 20).requestsPerSecond());
     }
 
     private static LoadShapeChart chart(int width, int height) {

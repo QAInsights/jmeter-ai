@@ -18,6 +18,7 @@ import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.threads.PostThreadGroup;
 import org.apache.jmeter.threads.SetupThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.threads.openmodel.OpenModelThreadGroup;
 
 /** Resolves the Thread Group and sampler count for an {@code @load} dialog. */
 public final class LoadCommandHandler {
@@ -223,7 +224,8 @@ public final class LoadCommandHandler {
     }
 
     private static void collectGroups(JMeterTreeNode node, List<JMeterTreeNode> groups) {
-        if (node.isEnabled() && node.getTestElement() instanceof ThreadGroup
+        if (node.isEnabled() && (node.getTestElement() instanceof ThreadGroup
+                || node.getTestElement() instanceof OpenModelThreadGroup)
                 && !(node.getTestElement() instanceof SetupThreadGroup)
                 && !(node.getTestElement() instanceof PostThreadGroup)) {
             groups.add(node);

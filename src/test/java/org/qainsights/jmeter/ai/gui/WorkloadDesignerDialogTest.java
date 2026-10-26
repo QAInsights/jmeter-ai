@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -22,6 +23,7 @@ import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadShape;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +58,24 @@ class WorkloadDesignerDialogTest {
 
         assertEquals("60", value.getText());
         assertEquals("min", unit.getSelectedItem());
+    }
+
+    @Test
+    void switchesShapeCardsAndUsesLoadFieldsForEndurance() {
+        JPanel cards = new JPanel(new java.awt.CardLayout());
+        JPanel load = new JPanel();
+        JPanel step = new JPanel();
+        cards.add(load, WorkloadDesignerDialog.shapeCardFor(WorkloadShape.LOAD));
+        cards.add(step, WorkloadDesignerDialog.shapeCardFor(WorkloadShape.STEP));
+
+        WorkloadDesignerDialog.showShapeCard(cards, WorkloadShape.STEP);
+        assertTrue(step.isVisible());
+        assertFalse(load.isVisible());
+        assertEquals("LOAD", WorkloadDesignerDialog.shapeCardFor(WorkloadShape.ENDURANCE));
+
+        WorkloadDesignerDialog.showShapeCard(cards, WorkloadShape.LOAD);
+        assertTrue(load.isVisible());
+        assertFalse(step.isVisible());
     }
 
     @Test

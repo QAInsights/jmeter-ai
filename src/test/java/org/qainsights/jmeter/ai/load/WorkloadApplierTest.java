@@ -15,6 +15,7 @@ import org.apache.jmeter.timers.poissonarrivals.PreciseThroughputTimer;
 import org.apache.jmeter.threads.PostThreadGroup;
 import org.apache.jmeter.threads.SetupThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.threads.openmodel.OpenModelThreadGroup;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -357,6 +358,92 @@ class WorkloadApplierTest {
                 LoadCommandHandler.prepare("@load 100 rps", node, model).error());
     }
 
+    @Test
+    void migratesChildrenToOpenModelAndUndoRestoresTheExactOrder() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        JMeterTreeNode firstSampler = (JMeterTreeNode) fixture.groupNode.getChildAt(0);
+        LoopController nested = new LoopController();
+        JMeterTreeNode secondChild = fixture.model.addComponent(nested, fixture.groupNode);
+        JMeterTreeNode planNode = (JMeterTreeNode) fixture.groupNode.getParent();
+        int originalIndex = planNode.getIndex(fixture.groupNode);
+
+        WorkloadApplier.ApplyResult result = WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                openModelPlan());
+
+        JMeterTreeNode openModelNode = (JMeterTreeNode) planNode.getChildAt(originalIndex + 1);
+        OpenModelThreadGroup openModel = assertInstanceOf(OpenModelThreadGroup.class,
+                openModelNode.getTestElement());
+        assertEquals("Checkout (Spike)", openModelNode.getName());
+        assertEquals("true", openModel.getPropertyAsString(WorkloadApplier.OPEN_MODEL_MANAGED));
+        assertEquals(openModelPlan().openModelSchedule(),
+                openModel.getPropertyAsString(WorkloadApplier.OPEN_MODEL_SCHEDULE));
+        assertFalse(fixture.groupNode.isEnabled());
+        assertEquals(0, fixture.groupNode.getChildCount());
+        assertEquals(firstSampler, openModelNode.getChildAt(0));
+        assertEquals(secondChild, openModelNode.getChildAt(1));
+        assertTrue(result.changes().contains("Added Checkout (Spike)"));
+        assertEquals(List.of(openModelNode), LoadCommandHandler.eligibleThreadGroups(fixture.model));
+
+        WorkloadApplier.undoLast(fixture.model);
+
+        assertEquals(-1, planNode.getIndex(openModelNode));
+        assertTrue(fixture.groupNode.isEnabled());
+        assertEquals(firstSampler, fixture.groupNode.getChildAt(0));
+        assertEquals(secondChild, fixture.groupNode.getChildAt(1));
+    }
+
+    @Test
+    void disablesManagedCttAndWarnsForUserCttNestedUnderSampler() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        ConstantThroughputTimer managed = new ConstantThroughputTimer();
+        managed.setName(WorkloadApplier.CTT_NAME);
+        JMeterTreeNode managedNode = fixture.model.addComponent(managed, fixture.groupNode);
+        ConstantThroughputTimer userTimer = new ConstantThroughputTimer();
+        userTimer.setName("User CTT");
+        JMeterTreeNode samplerNode = (JMeterTreeNode) fixture.groupNode.getChildAt(0);
+        JMeterTreeNode userTimerNode = fixture.model.addComponent(userTimer, samplerNode);
+
+        WorkloadApplier.ApplyResult result = WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                openModelPlan());
+        JMeterTreeNode openModelNode = (JMeterTreeNode) ((JMeterTreeNode) fixture.groupNode.getParent())
+                .getChildAt(((JMeterTreeNode) fixture.groupNode.getParent()).getIndex(fixture.groupNode) + 1);
+
+        assertFalse(managedNode.isEnabled());
+        assertEquals(1, countChildren(openModelNode, ConstantThroughputTimer.class,
+                WorkloadApplier.CTT_NAME));
+        assertFalse(managedNode.isEnabled());
+        assertTrue(result.warnings().stream().anyMatch(value ->
+                value.contains("user-owned Constant Throughput Timer")));
+        assertTrue(userTimerNode.isEnabled());
+
+        WorkloadApplier.undoLast(fixture.model);
+        assertTrue(managedNode.isEnabled());
+        assertEquals(1, countChildren(fixture.groupNode, ConstantThroughputTimer.class,
+                WorkloadApplier.CTT_NAME));
+        assertEquals(1, countChildren(samplerNode, ConstantThroughputTimer.class, "User CTT"));
+    }
+
+    @Test
+    void updatesManagedOpenModelScheduleAndRejectsLoadOnOpenModel() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
+        JMeterTreeNode openModelNode = (JMeterTreeNode) ((JMeterTreeNode) fixture.groupNode.getParent())
+                .getChildAt(((JMeterTreeNode) fixture.groupNode.getParent()).getIndex(fixture.groupNode) + 1);
+        WorkloadPlan updated = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 500L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.STEP, 1.0, 2.0, 1.0,
+                        10L, 5L, null, null, null, null, null, List.of(), null, ArrivalMode.EVEN)));
+
+        WorkloadApplier.apply(fixture.model, openModelNode, updated);
+        assertEquals(updated.openModelSchedule(), openModelNode.getTestElement()
+                .getPropertyAsString(WorkloadApplier.OPEN_MODEL_SCHEDULE));
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> WorkloadApplier.apply(fixture.model, openModelNode, plan("load", 20, 60, 660, 600.0, 0)));
+        assertTrue(error.getMessage().contains("standard Thread Group"));
+    }
+
     private static Fixture fixture(String name, boolean withSampler) throws Exception {
         JMeterTreeModel model = new JMeterTreeModel();
         ThreadGroup group = new ThreadGroup();
@@ -387,6 +474,15 @@ class WorkloadApplierTest {
         return new WorkloadPlan(WorkloadInputs.TargetType.REQUEST_RATE, 10, threads, 1,
                 rpm == null ? null : rpm / 60.0, null, rpm, ramp, duration - ramp, duration,
                 1, null, null, 500, think, prefix, List.of(), List.of(), "");
+    }
+
+    private static WorkloadPlan openModelPlan() {
+        return WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.ITERATION_RATE, 2, null, 500L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.SPIKE, null, null, null,
+                        null, null, 1.0, 2.0, 10L, 20L, 10L, List.of(), null, ArrivalMode.RANDOM)));
     }
 
     private static <T> T directChild(JMeterTreeNode parent, Class<T> type) {

@@ -21,8 +21,19 @@ public final class WorkloadFormState {
                                       String ramp, String rampUnit, String hold, String holdUnit,
                                       String agents, int samplerCount, String prefix, String planFile,
                                       Context context) {
+        return evaluate(targetType, target, rateCap, response, think, ramp, rampUnit,
+                hold, holdUnit, agents, samplerCount, prefix, planFile, context,
+                WorkloadShapeConfig.load());
+    }
+
+    public static Evaluation evaluate(WorkloadInputs.TargetType targetType, String target,
+                                      String rateCap, String response, String think,
+                                      String ramp, String rampUnit, String hold, String holdUnit,
+                                      String agents, int samplerCount, String prefix, String planFile,
+                                      Context context, WorkloadShapeConfig shapeConfig) {
         try {
-            double targetValue = requiredNumber(target, "Enter a positive target value.");
+            double targetValue = shapeConfig.shape().usesOpenModelThreadGroup()
+                    ? 1 : requiredNumber(target, "Enter a positive target value.");
             Double cap = optionalNumber(rateCap, "Enter a positive samples-per-second cap.");
             Long responseMs = optionalLong(response, "Average response time must be a whole number of milliseconds.");
             Long thinkMs = optionalLong(think, "Think time must be a whole number of milliseconds.");
@@ -51,7 +62,7 @@ public final class WorkloadFormState {
                     cap, responseMs, thinkMs, rampSeconds, holdSeconds, agentCount, samplerCount,
                     prefix, planFile, messagesPerSample == null ? 1.0 : messagesPerSample,
                     maxThreads, hosts, context.samplerClasses(), context.jdbcPools(),
-                    generatorVcpus, generatorRamGb, samplesPerVcpu, context.scriptHeavy()));
+                    generatorVcpus, generatorRamGb, samplesPerVcpu, context.scriptHeavy(), shapeConfig));
             return new Evaluation(plan, "");
         } catch (IllegalArgumentException | ArithmeticException e) {
             return new Evaluation(null, e.getMessage() == null ? "Check the workload values." : e.getMessage());

@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
@@ -28,7 +29,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -37,6 +40,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTable;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
@@ -45,12 +49,14 @@ import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.load.CommandShell;
+import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.LoadShapeChart;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
@@ -59,6 +65,9 @@ import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadShape;
+import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
+import org.qainsights.jmeter.ai.load.WorkloadStage;
 import org.qainsights.jmeter.ai.load.WorkloadSpec;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
@@ -73,7 +82,12 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final FormRow capRow;
     private final FormRow messagesPerSampleRow;
     private final FormRow hostsRow;
+    private FormRow targetRow;
+    private FormRow rampRow;
+    private FormRow holdRow;
+    private FormRow shapeSettingsRow;
     private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
+    private final JComboBox<WorkloadShape> shapeCombo = new JComboBox<>(WorkloadShape.values());
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
     private final JTextField target = new JTextField();
@@ -84,6 +98,34 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JComboBox<String> rampUnit = new JComboBox<>(new String[]{"s", "min", "h"});
     private final JTextField hold = new JTextField();
     private final JComboBox<String> holdUnit = new JComboBox<>(new String[]{"s", "min", "h"});
+    private final JTextField stepStart = new JTextField("100");
+    private final JTextField stepEnd = new JTextField("500");
+    private final JTextField stepSize = new JTextField("100");
+    private final JTextField stepDuration = new JTextField("300");
+    private final JTextField stepRamp = new JTextField();
+    private final JTextField spikeBaseline = new JTextField("100");
+    private final JTextField spikePeak = new JTextField("500");
+    private final JTextField spikeWarmup = new JTextField("60");
+    private final JTextField spikeDuration = new JTextField("60");
+    private final JTextField spikeRecovery = new JTextField("60");
+    private final JTextField stressStart = new JTextField("100");
+    private final JTextField stressCeiling = new JTextField("1000");
+    private final JTextField stressStep = new JTextField("100");
+    private final JTextField stressDuration = new JTextField("120");
+    private final JTextField rampDown = new JTextField("120");
+    private final JCheckBox rampDownEnabled = new JCheckBox("Ramp down");
+    private final JComboBox<ArrivalMode> arrivalModeCombo = new JComboBox<>(ArrivalMode.values());
+    private final CardLayout shapeCardLayout = new CardLayout();
+    private final JPanel shapeCards = new JPanel(shapeCardLayout);
+    private final JPanel shapeSettings = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
+    private final DefaultTableModel customStageModel = new DefaultTableModel(
+            new Object[][]{{"100", "10", "60"}}, new Object[]{"Target", "Ramp (s)", "Hold (s)"}) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return true;
+        }
+    };
+    private final JTable customStagesTable = new JTable(customStageModel);
     private final JTextField agents = new JTextField();
     private final JTextField generatorHosts = new JTextField();
     private final JTextField maxThreadsPerGenerator = new JTextField();
@@ -306,14 +348,46 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         groupCombo.setSelectedItem(preparation.selectedGroup());
         addFormRow("Thread Group", groupCombo);
+        addFormRow("Shape", shapeCombo);
         addFormRow("Target type", targetCombo);
-        addFormRow("Target value", target);
+        targetRow = addFormRow("Target value", target);
         formRows.add(messagesPerSampleRow);
         formRows.add(capRow);
         addFormRow("<html>Average response time<br>(ms, default 500)</html>", response);
         addFormRow("<html>Think time per sample<br>(ms, default 0)</html>", think);
-        addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
-        addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
+        rampRow = addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
+        holdRow = addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
+        shapeCards.setOpaque(false);
+        shapeCards.add(new JLabel("Standard Thread Group workload."), shapeCardFor(WorkloadShape.LOAD));
+        shapeCards.add(shapeFields("Start target", stepStart, "End target", stepEnd,
+                "Step size", stepSize, "Step duration (s)", stepDuration,
+                "Ramp per step (s, default min 10 or 1/5 duration)", stepRamp), shapeCardFor(WorkloadShape.STEP));
+        shapeCards.add(shapeFields("Baseline", spikeBaseline, "Peak", spikePeak,
+                "Warm-up hold (s)", spikeWarmup, "Spike duration (s)", spikeDuration,
+                "Recovery hold (s)", spikeRecovery), shapeCardFor(WorkloadShape.SPIKE));
+        shapeCards.add(shapeFields("Start target", stressStart, "Ceiling", stressCeiling,
+                "Step size", stressStep, "Step duration (s)", stressDuration), shapeCardFor(WorkloadShape.STRESS));
+        shapeCards.add(customShapePanel(), shapeCardFor(WorkloadShape.CUSTOM));
+        JPanel shapeFooter = new JPanel();
+        shapeFooter.setOpaque(false);
+        shapeFooter.setLayout(new BoxLayout(shapeFooter, BoxLayout.Y_AXIS));
+        JPanel rampDownOptions = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
+        rampDownOptions.setOpaque(false);
+        rampDownOptions.add(rampDownEnabled);
+        rampDownOptions.add(rampDown);
+        rampDownOptions.add(new JLabel("seconds"));
+        JPanel arrivalOptions = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
+        arrivalOptions.setOpaque(false);
+        arrivalOptions.add(new JLabel("Arrivals:"));
+        arrivalOptions.add(arrivalModeCombo);
+        shapeFooter.add(rampDownOptions);
+        shapeFooter.add(arrivalOptions);
+        shapeSettings.setOpaque(false);
+        shapeSettings.add(shapeCards, BorderLayout.CENTER);
+        shapeSettings.add(shapeFooter, BorderLayout.SOUTH);
+        shapeSettingsRow = addFormRow("Shape settings", shapeSettings);
+        formRows.remove(shapeSettingsRow);
+        formRows.add(2, shapeSettingsRow);
         formRows.add(hostsRow);
         addFormRow("Generator vCPUs", generatorVcpus);
         addFormRow("Generator RAM (GB)", generatorRamGb);
@@ -323,8 +397,90 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
+        shapeCombo.addActionListener(event -> {
+            showShapeCard((JPanel) shapeCards, (WorkloadShape) shapeCombo.getSelectedItem());
+            updateShapeRows();
+            rebuildFormRows();
+            updatePreview();
+        });
+        showShapeCard(shapeCards, (WorkloadShape) shapeCombo.getSelectedItem());
+        updateShapeRows();
         rebuildFormRows();
         return form;
+    }
+
+    private JPanel shapeFields(Object... labelsAndFields) {
+        JPanel panel = new JPanel(new GridLayout(0, 2, UiTokens.SPACE_2, UiTokens.SPACE_1));
+        panel.setOpaque(false);
+        for (int index = 0; index < labelsAndFields.length; index += 2) {
+            panel.add(new JLabel((String) labelsAndFields[index]));
+            panel.add((JComponent) labelsAndFields[index + 1]);
+        }
+        return panel;
+    }
+
+    private JPanel customShapePanel() {
+        JPanel panel = new JPanel(new BorderLayout(UiTokens.SPACE_1, UiTokens.SPACE_1));
+        panel.setOpaque(false);
+        JScrollPane tableScroll = new JScrollPane(customStagesTable);
+        tableScroll.setPreferredSize(new Dimension(360, 110));
+        panel.add(tableScroll, BorderLayout.CENTER);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
+        buttons.setOpaque(false);
+        JButton add = new JButton("Add stage");
+        JButton remove = new JButton("Remove");
+        add.addActionListener(event -> {
+            if (customStageModel.getRowCount() < 10) {
+                customStageModel.addRow(new Object[]{"200", "10", "60"});
+                updatePreview();
+            }
+        });
+        remove.addActionListener(event -> {
+            int row = customStagesTable.getSelectedRow();
+            if (row >= 0) {
+                customStageModel.removeRow(row);
+                updatePreview();
+            }
+        });
+        buttons.add(add);
+        buttons.add(remove);
+        panel.add(buttons, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    static String shapeCardFor(WorkloadShape shape) {
+        return shape == WorkloadShape.ENDURANCE ? WorkloadShape.LOAD.name() : shape.name();
+    }
+
+    static void showShapeCard(JPanel cards, WorkloadShape shape) {
+        ((CardLayout) cards.getLayout()).show(cards, shapeCardFor(shape));
+    }
+
+    private void updateShapeRows() {
+        WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
+        boolean openModel = shape != null && shape.usesOpenModelThreadGroup();
+        targetRowVisibility(openModel);
+        if (shapeSettingsRow != null) {
+            shapeSettingsRow.field().setVisible(openModel);
+            shapeSettingsRow.label().setVisible(openModel);
+        }
+        rampDownEnabled.setVisible(openModel);
+        rampDown.setVisible(openModel);
+        rampDown.setEnabled(rampDownEnabled.isSelected());
+        arrivalModeCombo.setVisible(openModel);
+        if (rampRow != null) {
+            rampRow.label().setVisible(!openModel);
+            rampRow.field().setVisible(!openModel);
+            holdRow.label().setVisible(!openModel);
+            holdRow.field().setVisible(!openModel);
+        }
+    }
+
+    private void targetRowVisibility(boolean hidden) {
+        if (targetRow != null) {
+            targetRow.label().setVisible(!hidden);
+            targetRow.field().setVisible(!hidden);
+        }
     }
 
     private void buildAiPanel() {
@@ -591,8 +747,10 @@ public final class WorkloadDesignerDialog extends JDialog {
         showAiSuggestion(suggestion);
     }
 
-    private void addFormRow(String label, JComponent field) {
-        formRows.add(new FormRow(new JLabel(label), field));
+    private FormRow addFormRow(String label, JComponent field) {
+        FormRow row = new FormRow(new JLabel(label), field);
+        formRows.add(row);
+        return row;
     }
 
     private void rebuildFormRows() {
@@ -610,7 +768,15 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         for (FormRow row : formRows) {
             if ((row == capRow && !capRowVisible)
-                    || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)) {
+                    || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)
+                    || (row == shapeSettingsRow && !((WorkloadShape) shapeCombo.getSelectedItem())
+                    .usesOpenModelThreadGroup())
+                    || (row == targetRow && ((WorkloadShape) shapeCombo.getSelectedItem())
+                    .usesOpenModelThreadGroup())
+                    || (row == rampRow && ((WorkloadShape) shapeCombo.getSelectedItem())
+                    .usesOpenModelThreadGroup())
+                    || (row == holdRow && ((WorkloadShape) shapeCombo.getSelectedItem())
+                    .usesOpenModelThreadGroup())) {
                 continue;
             }
             GridBagConstraints labelConstraints = new GridBagConstraints();
@@ -783,6 +949,25 @@ public final class WorkloadDesignerDialog extends JDialog {
         setLong(think, spec.thinkMillis());
         setDuration(ramp, rampUnit, spec.rampSeconds());
         setDuration(hold, holdUnit, spec.holdSeconds());
+        WorkloadShapeConfig config = spec.shapeConfig();
+        shapeCombo.setSelectedItem(config.shape());
+        setDouble(stepStart, config.startTarget());
+        setDouble(stepEnd, config.endTarget());
+        setDouble(stepSize, config.stepTarget());
+        setLong(stepDuration, config.stepDurationSeconds());
+        setLong(stepRamp, config.rampSeconds());
+        setDouble(spikeBaseline, config.baselineTarget());
+        setDouble(spikePeak, config.peakTarget());
+        setLong(spikeWarmup, config.warmupSeconds());
+        setLong(spikeDuration, config.spikeSeconds());
+        setLong(spikeRecovery, config.recoverySeconds());
+        setDouble(stressStart, config.startTarget());
+        setDouble(stressCeiling, config.endTarget());
+        setDouble(stressStep, config.stepTarget());
+        setLong(stressDuration, config.stepDurationSeconds());
+        rampDownEnabled.setSelected(config.rampDownSeconds() != null);
+        setLong(rampDown, config.rampDownSeconds());
+        arrivalModeCombo.setSelectedItem(config.arrivalMode());
         if (spec.agents() != null) {
             agents.setText(Integer.toString(spec.agents()));
         }
@@ -799,9 +984,17 @@ public final class WorkloadDesignerDialog extends JDialog {
                 }, () -> updatingPreview);
         for (JTextField field : List.of(target, cap, response, think, ramp, hold, agents,
                 generatorHosts, maxThreadsPerGenerator, messagesPerSample, prefix, generatorVcpus,
-                generatorRamGb, samplesPerVcpu)) {
+                generatorRamGb, samplesPerVcpu, stepStart, stepEnd, stepSize, stepDuration, stepRamp,
+                spikeBaseline, spikePeak, spikeWarmup, spikeDuration, spikeRecovery, stressStart,
+                stressCeiling, stressStep, stressDuration, rampDown)) {
             field.getDocument().addDocumentListener(listener);
         }
+        customStageModel.addTableModelListener(event -> updatePreview());
+        rampDownEnabled.addActionListener(event -> {
+            rampDown.setEnabled(rampDownEnabled.isSelected());
+            updatePreview();
+        });
+        arrivalModeCombo.addActionListener(event -> updatePreview());
         generatorHosts.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent event) {
@@ -884,7 +1077,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         evaluation = WorkloadFormState.evaluate(targetType,
                 target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
                 (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
-                agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context);
+                agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context,
+                shapeConfigForForm(targetType, samplers));
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
         errorLabel.setText(error == null || error.isBlank() ? " " : error);
         applyButton.setEnabled(samplers > 0 && evaluation.valid());
@@ -976,6 +1170,67 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
+    private WorkloadShapeConfig shapeConfigForForm(WorkloadInputs.TargetType targetType, int samplers) {
+        WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
+        Long rampDownSeconds = rampDownEnabled.isSelected() ? parseLong(rampDown.getText()) : null;
+        List<WorkloadStage> customStages = new ArrayList<>();
+        if (shape == WorkloadShape.CUSTOM) {
+            long responseMillis = parseLong(response.getText()) == null ? 500 : parseLong(response.getText());
+            long thinkMillis = parseLong(think.getText()) == null ? 0 : parseLong(think.getText());
+            double messagesPerSampleValue = parseDouble(messagesPerSample.getText()) == null
+                    ? 1 : parseDouble(messagesPerSample.getText());
+            double previous = 0;
+            for (int row = 0; row < customStageModel.getRowCount(); row++) {
+                Double targetValue = parseDouble(String.valueOf(customStageModel.getValueAt(row, 0)));
+                Long rowRamp = parseLong(String.valueOf(customStageModel.getValueAt(row, 1)));
+                Long rowHold = parseLong(String.valueOf(customStageModel.getValueAt(row, 2)));
+                if (targetValue == null || rowRamp == null || rowHold == null || rowRamp < 0 || rowHold <= 0) {
+                    customStages.clear();
+                    break;
+                }
+                double rate = WorkloadCalculator.toIterationsPerSecond(targetValue, targetType,
+                        Math.max(1, samplers), messagesPerSampleValue, responseMillis, thinkMillis);
+                if (rowRamp > 0) {
+                    customStages.add(new WorkloadStage(previous, rate, rowRamp));
+                }
+                customStages.add(new WorkloadStage(rate, rate, rowHold));
+                previous = rate;
+            }
+        }
+        return new WorkloadShapeConfig(shape, fieldDouble(shape == WorkloadShape.STRESS ? stressStart : stepStart),
+                fieldDouble(shape == WorkloadShape.STRESS ? stressCeiling : stepEnd),
+                fieldDouble(shape == WorkloadShape.STRESS ? stressStep : stepSize),
+                fieldLong(shape == WorkloadShape.STRESS ? stressDuration : stepDuration),
+                fieldLong(stepRamp), fieldDouble(spikeBaseline), fieldDouble(spikePeak),
+                fieldLong(spikeWarmup), fieldLong(spikeDuration), fieldLong(spikeRecovery),
+                customStages, rampDownSeconds, (ArrivalMode) arrivalModeCombo.getSelectedItem());
+    }
+
+    private static Double fieldDouble(JTextField field) {
+        return parseDouble(field.getText());
+    }
+
+    private static Long fieldLong(JTextField field) {
+        return parseLong(field.getText());
+    }
+
+    private static Double parseDouble(String value) {
+        try {
+            double parsed = Double.parseDouble(value.trim());
+            return Double.isFinite(parsed) ? parsed : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static Long parseLong(String value) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private void apply() {
         if (completed || evaluation == null || !evaluation.valid()) {
             return;
@@ -1055,6 +1310,12 @@ public final class WorkloadDesignerDialog extends JDialog {
     private static void setLong(JTextField field, Long value) {
         if (value != null) {
             field.setText(Long.toString(value));
+        }
+    }
+
+    private static void setDouble(JTextField field, Double value) {
+        if (value != null) {
+            field.setText(Double.toString(value));
         }
     }
 

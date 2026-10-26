@@ -119,6 +119,10 @@ public final class LoadShapeChart extends JComponent {
     }
 
     private void drawLoad(Graphics2D g, int left, int right, int top, int bottom) {
+        if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
+            drawOpenModel(g, left, right, top, bottom);
+            return;
+        }
         double width = right - left;
         double height = bottom - top;
         double total = Math.max(1, plan.durationSeconds());
@@ -157,6 +161,37 @@ public final class LoadShapeChart extends JComponent {
                     0, new float[]{5, 4}, 0));
             g.draw(rateLine);
         }
+    }
+
+    private void drawOpenModel(Graphics2D g, int left, int right, int top, int bottom) {
+        double width = right - left;
+        double height = bottom - top;
+        double total = Math.max(1, plan.durationSeconds());
+        double maxThreads = WorkloadChartModel.threadAxisMaximum(plan);
+        double maxRps = WorkloadChartModel.sampleRateAxisMaximum(plan);
+        Path2D threadPath = new Path2D.Double();
+        Path2D ratePath = new Path2D.Double();
+        for (int index = 0; index <= 120; index++) {
+            double elapsed = total * index / 120.0;
+            WorkloadChartModel.Series point = WorkloadChartModel.at(plan, elapsed);
+            double x = left + width * elapsed / total;
+            double threadY = bottom - height * point.threads() / maxThreads;
+            double rateY = bottom - height * point.requestsPerSecond() / maxRps;
+            if (index == 0) {
+                threadPath.moveTo(x, threadY);
+                ratePath.moveTo(x, rateY);
+            } else {
+                threadPath.lineTo(x, threadY);
+                ratePath.lineTo(x, rateY);
+            }
+        }
+        g.setColor(ThemeColors.accent());
+        g.setStroke(new BasicStroke(2f));
+        g.draw(threadPath);
+        g.setColor(ThemeColors.info());
+        g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL,
+                0, new float[]{5, 4}, 0));
+        g.draw(ratePath);
     }
 
     private void drawTimeTicks(Graphics2D g, int left, int right, int bottom) {
