@@ -28,7 +28,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import javax.swing.BorderFactory;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -107,7 +106,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JButton copyButton = new JButton("Copy");
     private final JButton askAiButton = new JButton("Ask AI");
     private final JButton copySuggestionButton = new JButton("Copy");
-    private final JLabel hostsSourceLabel = new JLabel("From remote_hosts in jmeter.properties");
+    private final JLabel hostsSourceLabel = createHostsSourceLabel();
     private final JPanel hostsFieldPanel = new JPanel(new BorderLayout());
     private final JPanel aiPanel = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_1));
     private final PlaceholderTextArea aiGoal = new PlaceholderTextArea(3, 30);
@@ -326,14 +325,27 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void buildAiPanel() {
+        JTextField inputStyle = new JTextField();
         aiGoal.setLineWrap(true);
         aiGoal.setWrapStyleWord(true);
+        aiGoal.setFont(inputStyle.getFont());
+        aiGoal.setForeground(inputStyle.getForeground());
+        aiGoal.setBackground(inputStyle.getBackground());
+        aiGoal.setCaretColor(inputStyle.getCaretColor());
+        aiGoal.setSelectionColor(inputStyle.getSelectionColor());
+        aiGoal.setMargin(inputStyle.getMargin());
+        aiGoal.setBorder(inputStyle.getBorder());
+        aiGoal.setOpaque(inputStyle.isOpaque());
         aiGoal.setPlaceholder(
                 "e.g. Black Friday peak, 2x last year's 120k orders/hour, checkout in 1 of 10 visits");
-        JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, UiTokens.SPACE_1));
+        JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         content.setOpaque(false);
         content.setBorder(BorderFactory.createTitledBorder("Describe the goal"));
-        content.add(new JScrollPane(aiGoal), BorderLayout.CENTER);
+        JScrollPane goalScroll = new JScrollPane(aiGoal);
+        goalScroll.setBorder(BorderFactory.createEmptyBorder());
+        goalScroll.setOpaque(false);
+        goalScroll.getViewport().setOpaque(false);
+        content.add(goalScroll, BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
         actions.setOpaque(false);
         JButton run = new JButton("Run");
@@ -360,6 +372,12 @@ public final class WorkloadDesignerDialog extends JDialog {
         copySuggestionButton.addActionListener(event -> copySuggestionSummary());
         aiSuggestionPanel.add(copySuggestionButton, BorderLayout.EAST);
         aiSuggestionPanel.setVisible(false);
+    }
+
+    static JLabel createHostsSourceLabel() {
+        JLabel label = new JLabel("From remote_hosts in jmeter.properties");
+        label.setVisible(false);
+        return label;
     }
 
     private void openAiPanel() {
@@ -619,21 +637,31 @@ public final class WorkloadDesignerDialog extends JDialog {
         preview.add(chart, BorderLayout.NORTH);
         JPanel lower = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         lower.setOpaque(false);
-        JPanel grid = new JPanel(new GridLayout(10, 2, UiTokens.SPACE_1, UiTokens.SPACE_1));
+        JPanel grid = new JPanel(new GridBagLayout());
         grid.setOpaque(false);
         String[] labels = {"Threads", "Samples / iteration", "Samples / second",
                 "Throughput samples / min", "Total duration", "Per agent",
                 "Sampler mix", "Generators needed", "Capacity per generator", "Heap per generator"};
         for (int index = 0; index < labels.length; index++) {
-            grid.add(new JLabel(labels[index]));
+            GridBagConstraints labelConstraints = new GridBagConstraints();
+            labelConstraints.gridx = 0;
+            labelConstraints.gridy = index;
+            labelConstraints.anchor = GridBagConstraints.NORTHWEST;
+            labelConstraints.fill = GridBagConstraints.HORIZONTAL;
+            labelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, UiTokens.SPACE_2);
+            grid.add(new JLabel(labels[index]), labelConstraints);
             resultValues[index] = new JLabel("-");
-            grid.add(resultValues[index]);
+            GridBagConstraints valueConstraints = new GridBagConstraints();
+            valueConstraints.gridx = 1;
+            valueConstraints.gridy = index;
+            valueConstraints.weightx = 1;
+            valueConstraints.anchor = GridBagConstraints.NORTHWEST;
+            valueConstraints.fill = GridBagConstraints.HORIZONTAL;
+            valueConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
+            grid.add(resultValues[index], valueConstraints);
         }
         lower.add(grid, BorderLayout.NORTH);
-        notes = new ScrollablePanel();
-        notes.setLayout(new BoxLayout(notes, BoxLayout.Y_AXIS));
-        notes.setOpaque(false);
-        notes.setAlignmentY(Component.TOP_ALIGNMENT);
+        notes = new ScrollablePanel(new GridBagLayout());
         JScrollPane notesScroll = new JScrollPane(notes);
         notesScroll.setBorder(BorderFactory.createTitledBorder("Notes"));
         notesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -881,16 +909,40 @@ public final class WorkloadDesignerDialog extends JDialog {
         setNotesText(parsedArea, parsedNotes(preparation.spec()));
         parsedArea.setVisible(!parsedArea.getText().isBlank());
         notes.removeAll();
+        int noteRow = 0;
         for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
             if (area.isVisible()) {
                 area.setAlignmentX(Component.LEFT_ALIGNMENT);
-                notes.add(area);
+                GridBagConstraints noteConstraints = new GridBagConstraints();
+                noteConstraints.gridx = 0;
+                noteConstraints.gridy = noteRow++;
+                noteConstraints.weightx = 1;
+                noteConstraints.anchor = GridBagConstraints.NORTHWEST;
+                noteConstraints.fill = GridBagConstraints.HORIZONTAL;
+                noteConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
+                notes.add(area, noteConstraints);
             }
         }
         aiSuggestionPanel.setVisible(latestSuggestion != null);
         if (latestSuggestion != null) {
-            notes.add(aiSuggestionPanel);
+            GridBagConstraints suggestionConstraints = new GridBagConstraints();
+            suggestionConstraints.gridx = 0;
+            suggestionConstraints.gridy = noteRow++;
+            suggestionConstraints.weightx = 1;
+            suggestionConstraints.anchor = GridBagConstraints.NORTHWEST;
+            suggestionConstraints.fill = GridBagConstraints.HORIZONTAL;
+            suggestionConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
+            notes.add(aiSuggestionPanel, suggestionConstraints);
         }
+        GridBagConstraints notesFillerConstraints = new GridBagConstraints();
+        notesFillerConstraints.gridx = 0;
+        notesFillerConstraints.gridy = noteRow;
+        notesFillerConstraints.weightx = 1;
+        notesFillerConstraints.weighty = 1;
+        notesFillerConstraints.fill = GridBagConstraints.VERTICAL;
+        JPanel notesFiller = new JPanel();
+        notesFiller.setOpaque(false);
+        notes.add(notesFiller, notesFillerConstraints);
         notes.revalidate();
         notes.repaint();
     }

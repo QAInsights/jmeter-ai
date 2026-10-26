@@ -9,6 +9,7 @@ public final class WorkloadChartModel {
     private static final long[] TICK_STEPS_SECONDS = {
             10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200
     };
+    private static final double[] AXIS_INTERVAL_STEPS = {1, 2, 2.5, 5, 7.5, 10};
 
     private WorkloadChartModel() {
     }
@@ -44,6 +45,41 @@ public final class WorkloadChartModel {
     public static double requestRateAxisMaximum(WorkloadPlan plan) {
         Double cap = plan.targetRequestsPerSecond();
         return cap == null ? maximumRequestsPerSecond(plan) : cap;
+    }
+
+    public static double threadAxisMaximum(WorkloadPlan plan) {
+        return axisMaximum(plan.threads());
+    }
+
+    public static double sampleRateAxisMaximum(WorkloadPlan plan) {
+        return axisMaximum(requestRateAxisMaximum(plan));
+    }
+
+    static double axisMaximum(double maximum) {
+        if (!Double.isFinite(maximum) || maximum <= 0) {
+            return 1;
+        }
+        double requiredStep = maximum / 4;
+        double magnitude = Math.pow(10, Math.floor(Math.log10(requiredStep)));
+        double normalizedStep = requiredStep / magnitude;
+        for (double step : AXIS_INTERVAL_STEPS) {
+            if (normalizedStep <= step) {
+                return step * magnitude * 4;
+            }
+        }
+        return 10 * magnitude * 4;
+    }
+
+    static List<Double> axisTicks(double maximum) {
+        double step = maximum / 4;
+        return List.of(0.0, step, step * 2, step * 3, maximum);
+    }
+
+    static String formatAxisTick(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1e-9) {
+            return Long.toString(Math.round(value));
+        }
+        return WorkloadCalculator.format(value);
     }
 
     public static long tickStepSeconds(long totalSeconds) {

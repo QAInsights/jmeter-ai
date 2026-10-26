@@ -97,18 +97,18 @@ public final class LoadShapeChart extends JComponent {
         g.setFont(getFont());
         FontMetrics metrics = g.getFontMetrics();
         g.setColor(ThemeColors.secondaryText());
-        double maxRps = plan == null ? 0 : WorkloadChartModel.requestRateAxisMaximum(plan);
+        double maxThreads = plan == null ? 0 : WorkloadChartModel.threadAxisMaximum(plan);
+        double maxRps = plan == null ? 0 : WorkloadChartModel.sampleRateAxisMaximum(plan);
         for (int tick = 0; tick <= 4; tick++) {
             int y = bottom - (bottom - top) * tick / 4;
             g.setColor(ThemeColors.separator());
             g.drawLine(left, y, right, y);
             if (plan != null) {
                 g.setColor(ThemeColors.secondaryText());
-                String threads = Integer.toString(plan.threads() * tick / 4);
+                String threads = WorkloadChartModel.formatAxisTick(maxThreads * tick / 4.0);
                 g.drawString(threads, left - metrics.stringWidth(threads) - 7,
                         y + metrics.getAscent() / 2);
-                double requestTick = Math.round(maxRps * tick / 4 * 100) / 100.0;
-                String samples = WorkloadCalculator.format(requestTick);
+                String samples = WorkloadChartModel.formatAxisTick(maxRps * tick / 4.0);
                 g.drawString(samples, right + 7, y + metrics.getAscent() / 2);
             }
         }
@@ -123,10 +123,12 @@ public final class LoadShapeChart extends JComponent {
         double height = bottom - top;
         double total = Math.max(1, plan.durationSeconds());
         double rampX = left + width * plan.rampSeconds() / total;
+        double maxThreads = WorkloadChartModel.threadAxisMaximum(plan);
+        double threadPeakY = bottom - height * plan.threads() / maxThreads;
         Path2D area = new Path2D.Double();
         area.moveTo(left, bottom);
-        area.lineTo(rampX, top);
-        area.lineTo(right, top);
+        area.lineTo(rampX, threadPeakY);
+        area.lineTo(right, threadPeakY);
         area.lineTo(right, bottom);
         area.closePath();
         Color fill = new Color(ThemeColors.accentSoft().getRed(), ThemeColors.accentSoft().getGreen(),
@@ -135,10 +137,12 @@ public final class LoadShapeChart extends JComponent {
         g.fill(area);
         g.setColor(ThemeColors.accent());
         g.setStroke(new BasicStroke(2f));
-        g.drawLine(left, bottom, (int) rampX, top);
-        g.drawLine((int) rampX, top, right, top);
+        int rampPixelX = (int) Math.round(rampX);
+        int threadPeakPixelY = (int) Math.round(threadPeakY);
+        g.drawLine(left, bottom, rampPixelX, threadPeakPixelY);
+        g.drawLine(rampPixelX, threadPeakPixelY, right, threadPeakPixelY);
 
-        double maxRps = WorkloadChartModel.requestRateAxisMaximum(plan);
+        double maxRps = WorkloadChartModel.sampleRateAxisMaximum(plan);
         double finalRate = WorkloadChartModel.maximumRequestsPerSecond(plan);
         if (maxRps > 0 && finalRate > 0) {
             double plateau = WorkloadChartModel.ratePlateauSeconds(plan);

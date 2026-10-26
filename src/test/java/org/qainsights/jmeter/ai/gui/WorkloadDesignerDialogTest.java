@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.swing.JComboBox;
+import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentListener;
@@ -14,8 +15,16 @@ import javax.swing.event.DocumentListener;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class WorkloadDesignerDialogTest {
+
+    @Test
+    void hidesRemoteHostsCaptionByDefault() {
+        JLabel label = WorkloadDesignerDialog.createHostsSourceLabel();
+
+        assertFalse(label.isVisible());
+    }
 
     @Test
     void prefillsAnHourLongRampAsOneHour() {

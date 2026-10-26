@@ -37,6 +37,31 @@ class WorkloadChartModelTest {
     }
 
     @Test
+    void choosesIndependentNiceAxesWithFourRoundIntervals() {
+        WorkloadPlan threads150 = plan(WorkloadInputs.TargetType.USERS, 150, null,
+                500, 0, 60, 660, 150);
+        WorkloadPlan threads169 = plan(WorkloadInputs.TargetType.USERS, 169, null,
+                500, 0, 60, 660, 169);
+        WorkloadPlan samples250 = plan(WorkloadInputs.TargetType.REQUEST_RATE, 250, null,
+                500, 0, 60, 660, 150);
+
+        double threadMaximum = WorkloadChartModel.threadAxisMaximum(threads150);
+        assertEquals(200, threadMaximum);
+        assertEquals(50, threadMaximum / 4);
+        assertEquals(200, WorkloadChartModel.threadAxisMaximum(threads169));
+        assertEquals(List.of("0", "50", "100", "150", "200"),
+                WorkloadChartModel.axisTicks(threadMaximum).stream()
+                        .map(WorkloadChartModel::formatAxisTick).toList());
+
+        double sampleMaximum = WorkloadChartModel.sampleRateAxisMaximum(samples250);
+        assertEquals(300, sampleMaximum);
+        assertEquals(75, sampleMaximum / 4);
+        assertEquals(List.of("0", "75", "150", "225", "300"),
+                WorkloadChartModel.axisTicks(sampleMaximum).stream()
+                        .map(WorkloadChartModel::formatAxisTick).toList());
+    }
+
+    @Test
     void choosesNiceTicksAndFormatsHoursConsistently() {
         assertEquals(900, WorkloadChartModel.tickStepSeconds(4200));
         assertEquals(List.of(0L, 900L, 1800L, 2700L, 3600L),
