@@ -196,6 +196,7 @@ describe("extended stats", () => {
 			 ('b', ?1, 'load_generators_short', 1), ('a', ?1, 'load_ai_used', 2),
 			 ('b', ?1, 'load_ai_failed', 1), ('a', ?1, 'load_spec_set', 1),
 			 ('b', ?1, 'load_measured_set', 1), ('a', ?1, 'load_hosts_from_props', 1),
+			 ('a', ?1, 'load_toolbar_open', 3),
 			 ('a', ?1, 'chat_message', 1)`
 		).bind(day(0)).run();
 
@@ -235,6 +236,7 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>spec_set</td><td>1</td><td>1</td><td>1.0</td>");
 		expect(html).toContain("<td>measured_set</td><td>1</td><td>1</td><td>1.0</td>");
 		expect(html).toContain("<td>hosts_from_props</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>toolbar_open</td><td>3</td><td>1</td><td>3.0</td>");
 
 		const usageStart = html.indexOf("<h2>Feature usage (30d)</h2>");
 		const usageEnd = html.indexOf("<h2>Chat messages by provider (30d)</h2>");
@@ -249,7 +251,7 @@ describe("extended stats", () => {
 			"load_applied", "load_target_users", "load_distributed", "load_target_messages",
 			"load_hosts_set", "load_jdbc_warned", "load_generators_short",
 			"load_ai_used", "load_ai_failed", "load_spec_set", "load_measured_set",
-			"load_hosts_from_props",
+			"load_hosts_from_props", "load_toolbar_open",
 		]) {
 			expect(genericUsage).not.toContain(`<td>${key}</td>`);
 		}

@@ -29,6 +29,7 @@ public enum TelemetryFeature {
     LOAD_SPEC_SET("load_spec_set"),
     LOAD_MEASURED_SET("load_measured_set"),
     LOAD_HOSTS_FROM_PROPS("load_hosts_from_props"),
+    LOAD_TOOLBAR_OPEN("load_toolbar_open"),
     LOAD_WARNED("load_warned"),
     MCP_SERVER_START("mcp_server_start"),
     MCP_TOOL_CALL("mcp_tool_call"),

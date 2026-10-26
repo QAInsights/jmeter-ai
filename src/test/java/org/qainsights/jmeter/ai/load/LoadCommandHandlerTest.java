@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoadCommandHandlerTest {
 
@@ -40,6 +41,18 @@ class LoadCommandHandlerTest {
         assertEquals(nextNode, preparation.selectedGroup());
         assertEquals("plan.jmx", preparation.planFileName());
         assertNotNull(preparation.spec().requestsPerSecond());
+    }
+
+    @Test
+    void noArgumentLoadPreparesAnEmptyTargetForTheFirstEligibleGroup() throws Exception {
+        JMeterTreeModel model = modelWithSampler();
+
+        LoadCommandHandler.Preparation preparation =
+                LoadCommandHandler.prepare("@load", null, model, key -> "");
+
+        assertNull(preparation.error());
+        assertTrue(preparation.spec().isEmpty());
+        assertNotNull(preparation.selectedGroup());
     }
 
     @Test

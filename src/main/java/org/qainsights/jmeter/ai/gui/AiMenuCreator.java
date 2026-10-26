@@ -62,6 +62,7 @@ public class AiMenuCreator implements MenuCreator {
                 items.add(new AiMenuItem(parentMenu));
                 items.add(new CorrelationMenuItem());
                 items.add(new ClaudeCodeMenuItem(parentMenu));
+                items.add(new WorkloadDesignerMenuItem());
                 items.add(new McpServerMenuItem());
                 if (isDevMenuEnabled()) {
                     items.add(new AddElementDevMenuItem());

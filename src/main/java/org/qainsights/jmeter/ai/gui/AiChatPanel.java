@@ -1408,6 +1408,13 @@ public class AiChatPanel
         messageField.setText("");
     }
 
+    public void runCommand(String command) {
+        if (command == null || command.isBlank()) {
+            return;
+        }
+        runOnEdt(() -> commandDispatcher.dispatch(command.trim()));
+    }
+
     @Override
     public void appendUserMessage(String message) {
         runOnEdt(() -> {
