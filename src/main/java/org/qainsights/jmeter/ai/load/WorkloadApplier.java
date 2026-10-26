@@ -104,8 +104,8 @@ public final class WorkloadApplier {
                 if (containsShapingTimer(threadGroupNode)) {
                     warnings.add("A Precise Throughput Timer or Throughput Shaping Timer already controls rate; "
                             + "no Constant Throughput Timer was changed.");
-                } else if (hasEnabledNestedThroughputTimer(threadGroupNode, false)) {
-                    warnings.add("A Constant Throughput Timer nested under a controller already affects part of this "
+                } else if (hasEnabledNestedThroughputTimer(threadGroupNode)) {
+                    warnings.add("A Constant Throughput Timer nested under a request or controller already affects part of this "
                             + "Thread Group; no group-level Constant Throughput Timer was added or changed.");
                 } else {
                     JMeterTreeNode timerNode = enabledDirectChild(threadGroupNode, ConstantThroughputTimer.class);
@@ -330,17 +330,27 @@ public final class WorkloadApplier {
         return false;
     }
 
-    private static boolean hasEnabledNestedThroughputTimer(JMeterTreeNode node, boolean underController) {
+    private static boolean hasEnabledNestedThroughputTimer(JMeterTreeNode threadGroupNode) {
+        for (int index = 0; index < threadGroupNode.getChildCount(); index++) {
+            JMeterTreeNode child = (JMeterTreeNode) threadGroupNode.getChildAt(index);
+            if (!child.isEnabled()) {
+                continue;
+            }
+            if (!(child.getTestElement() instanceof ConstantThroughputTimer)
+                    && hasEnabledThroughputTimer(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasEnabledThroughputTimer(JMeterTreeNode node) {
         for (int index = 0; index < node.getChildCount(); index++) {
             JMeterTreeNode child = (JMeterTreeNode) node.getChildAt(index);
             if (!child.isEnabled()) {
                 continue;
             }
-            Object element = child.getTestElement();
-            if (underController && element instanceof ConstantThroughputTimer) {
-                return true;
-            }
-            if (hasEnabledNestedThroughputTimer(child, underController || element instanceof Controller)) {
+            if (child.getTestElement() instanceof ConstantThroughputTimer || hasEnabledThroughputTimer(child)) {
                 return true;
             }
         }

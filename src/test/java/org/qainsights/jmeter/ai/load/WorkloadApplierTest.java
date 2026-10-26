@@ -216,7 +216,25 @@ class WorkloadApplierTest {
         assertNull(directChild(fixture.groupNode, ConstantThroughputTimer.class));
         assertEquals("300", nestedTimer.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
         assertTrue(nestedTimerNode.isEnabled());
-        assertTrue(result.warnings().stream().anyMatch(text -> text.contains("nested under a controller")));
+        assertTrue(result.warnings().stream().anyMatch(text -> text.contains("nested under a request or controller")));
+    }
+
+    @Test
+    void requestScopedThroughputTimerPreventsAddingOrChangingAGroupTimer() throws Exception {
+        Fixture fixture = fixture("Request-scoped rate", true);
+        JMeterTreeNode samplerNode = (JMeterTreeNode) fixture.groupNode.getChildAt(0);
+        ConstantThroughputTimer nestedTimer = new ConstantThroughputTimer();
+        nestedTimer.setName("Request-scoped user rate");
+        nestedTimer.setProperty(new StringProperty(ConstantThroughputTimer.THROUGHPUT, "300"));
+        JMeterTreeNode nestedTimerNode = fixture.model.addComponent(nestedTimer, samplerNode);
+
+        WorkloadApplier.ApplyResult result = WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 20, 60, 660, 600.0, 0));
+
+        assertNull(directChild(fixture.groupNode, ConstantThroughputTimer.class));
+        assertEquals("300", nestedTimer.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
+        assertTrue(nestedTimerNode.isEnabled());
+        assertTrue(result.warnings().stream().anyMatch(text -> text.contains("nested under a request or controller")));
     }
 
     @Test
