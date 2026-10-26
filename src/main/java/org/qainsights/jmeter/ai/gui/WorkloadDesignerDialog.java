@@ -20,9 +20,12 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -39,6 +42,7 @@ import javax.swing.JViewport;
 import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -50,10 +54,15 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.LoadShapeChart;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
+import org.qainsights.jmeter.ai.load.WorkloadAiAssistant;
+import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadSpec;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.qainsights.jmeter.ai.utils.ProviderErrors;
 
 /** Modal, deterministic workload editor with a live load-shape preview. */
 public final class WorkloadDesignerDialog extends JDialog {
@@ -63,6 +72,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final List<FormRow> formRows = new ArrayList<>();
     private final FormRow capRow;
     private final FormRow messagesPerSampleRow;
+    private final FormRow hostsRow;
     private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
@@ -76,12 +86,15 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JComboBox<String> holdUnit = new JComboBox<>(new String[]{"s", "min", "h"});
     private final JTextField agents = new JTextField();
     private final JTextField generatorHosts = new JTextField();
-    private final JTextField maxThreadsPerGenerator = new JTextField("1000");
+    private final JTextField maxThreadsPerGenerator = new JTextField();
+    private final JTextField generatorVcpus = new JTextField();
+    private final JTextField generatorRamGb = new JTextField();
+    private final PlaceholderTextField samplesPerVcpu = new PlaceholderTextField();
     private final JTextField messagesPerSample = new JTextField("1");
     private final JTextField prefix = new JTextField();
     private final LoadShapeChart chart = new LoadShapeChart();
     private final JLabel errorLabel = new JLabel(" ");
-    private final JLabel[] resultValues = new JLabel[9];
+    private final JLabel[] resultValues = new JLabel[10];
     private final JTextArea warningsArea = notesArea(2, ThemeColors.warning());
     private final JTextArea assumptionsArea = notesArea(2, ThemeColors.info());
     private final JTextArea infoArea = notesArea(2, ThemeColors.info());
@@ -92,6 +105,21 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final JButton applyButton = new JButton("Apply to Thread Group");
     private final JButton copyButton = new JButton("Copy");
+    private final JButton askAiButton = new JButton("Ask AI");
+    private final JButton copySuggestionButton = new JButton("Copy");
+    private final JLabel hostsSourceLabel = new JLabel("From remote_hosts in jmeter.properties");
+    private final JPanel hostsFieldPanel = new JPanel(new BorderLayout());
+    private final JPanel aiPanel = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_1));
+    private final PlaceholderTextArea aiGoal = new PlaceholderTextArea(3, 30);
+    private final JLabel aiErrorLabel = new JLabel(" ");
+    private final JPanel aiSuggestionPanel = new JPanel();
+    private final JTextArea aiSuggestionText = notesArea(3, ThemeColors.info());
+    private final Function<String, String> aiCall;
+    private WorkloadAiAssistant.Suggestion latestSuggestion;
+    private SwingWorker<WorkloadAiAssistant.Suggestion, Void> aiWorker;
+    private long aiRequestId;
+    private boolean aiPanelVisible;
+    private boolean hostsFromPropertiesVisible;
     private boolean prefixEdited;
     private boolean capRowVisible;
     private boolean messagesPerSampleRowVisible;
@@ -102,11 +130,29 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     public WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
                                   Consumer<Completion> onFinish) {
+        this(preparation, onFinish, null);
+    }
+
+    public WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
+                                  Consumer<Completion> onFinish, Function<String, String> aiCall) {
         super(mainFrame(), "Workload Designer", ModalityType.APPLICATION_MODAL);
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
+        this.aiCall = aiCall;
+        maxThreadsPerGenerator.setToolTipText(
+                "From a calibration run on one generator at under 80% CPU");
+        samplesPerVcpu.setPlaceholder("Default: 250 samples/s per vCPU");
+        hostsSourceLabel.setForeground(ThemeColors.secondaryText());
+        hostsSourceLabel.setFont(UiTokens.caption(hostsSourceLabel.getFont()));
+        hostsFieldPanel.setOpaque(false);
+        hostsFieldPanel.add(generatorHosts, BorderLayout.CENTER);
+        hostsFieldPanel.add(hostsSourceLabel, BorderLayout.SOUTH);
+        aiPanel.setOpaque(false);
+        aiSuggestionPanel.setOpaque(false);
         capRow = new FormRow(new JLabel("<html>Cap at samples<br>per second</html>"), cap);
         messagesPerSampleRow = new FormRow(new JLabel("Messages per sample"), messagesPerSample);
+        hostsRow = new FormRow(new JLabel("Generator hosts"), hostsFieldPanel);
+        buildAiPanel();
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -181,6 +227,14 @@ public final class WorkloadDesignerDialog extends JDialog {
         footer.setOpaque(false);
         errorLabel.setForeground(ThemeColors.error());
         footer.add(errorLabel, BorderLayout.CENTER);
+        JPanel leftButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        leftButtons.setOpaque(false);
+        askAiButton.setVisible(aiCall != null);
+        askAiButton.addActionListener(event -> openAiPanel());
+        if (aiCall != null) {
+            leftButtons.add(askAiButton);
+        }
+        footer.add(leftButtons, BorderLayout.WEST);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_2, 0));
         buttons.setOpaque(false);
         JButton cancel = new JButton("Cancel");
@@ -258,14 +312,252 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow("<html>Think time per sample<br>(ms, default 0)</html>", think);
         addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
         addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
-        addFormRow("Generator hosts", generatorHosts);
+        formRows.add(hostsRow);
+        addFormRow("Generator vCPUs", generatorVcpus);
+        addFormRow("Generator RAM (GB)", generatorRamGb);
+        addFormRow("Measured max threads per generator (optional)", maxThreadsPerGenerator);
         addFormRow("Load generators (default 1)", agents);
-        addFormRow("Max threads per generator", maxThreadsPerGenerator);
+        addFormRow("Samples/s per vCPU", samplesPerVcpu);
         addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
         rebuildFormRows();
         return form;
+    }
+
+    private void buildAiPanel() {
+        aiGoal.setLineWrap(true);
+        aiGoal.setWrapStyleWord(true);
+        aiGoal.setPlaceholder(
+                "e.g. Black Friday peak, 2x last year's 120k orders/hour, checkout in 1 of 10 visits");
+        JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, UiTokens.SPACE_1));
+        content.setOpaque(false);
+        content.setBorder(BorderFactory.createTitledBorder("Describe the goal"));
+        content.add(new JScrollPane(aiGoal), BorderLayout.CENTER);
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
+        actions.setOpaque(false);
+        JButton run = new JButton("Run");
+        JButton close = new JButton("Close");
+        run.addActionListener(event -> runAi(run));
+        close.addActionListener(event -> closeAiPanel(run));
+        actions.add(aiErrorLabel);
+        actions.add(run);
+        actions.add(close);
+        content.add(actions, BorderLayout.SOUTH);
+        aiPanel.add(content, BorderLayout.CENTER);
+        aiPanel.setVisible(false);
+        aiErrorLabel.setForeground(ThemeColors.error());
+
+        aiSuggestionPanel.setLayout(new BorderLayout(UiTokens.SPACE_1, UiTokens.SPACE_1));
+        JLabel title = new JLabel("AI suggestion. Check the values before applying.");
+        title.setForeground(ThemeColors.info());
+        aiSuggestionPanel.add(title, BorderLayout.NORTH);
+        aiSuggestionText.setRows(3);
+        JScrollPane suggestionScroll = new JScrollPane(aiSuggestionText);
+        suggestionScroll.setBorder(null);
+        suggestionScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        aiSuggestionPanel.add(suggestionScroll, BorderLayout.CENTER);
+        copySuggestionButton.addActionListener(event -> copySuggestionSummary());
+        aiSuggestionPanel.add(copySuggestionButton, BorderLayout.EAST);
+        aiSuggestionPanel.setVisible(false);
+    }
+
+    private void openAiPanel() {
+        if (completed) {
+            return;
+        }
+        aiPanelVisible = true;
+        aiPanel.setVisible(true);
+        rebuildFormRows();
+        aiGoal.requestFocusInWindow();
+    }
+
+    private void closeAiPanel(JButton runButton) {
+        aiRequestId++;
+        if (aiWorker != null) {
+            aiWorker.cancel(true);
+            aiWorker = null;
+        }
+        runButton.setEnabled(true);
+        runButton.setText("Run");
+        aiPanelVisible = false;
+        aiPanel.setVisible(false);
+        rebuildFormRows();
+    }
+
+    private void runAi(JButton runButton) {
+        if (aiCall == null || completed || aiWorker != null && !aiWorker.isDone()) {
+            return;
+        }
+        if (aiGoal.getText().isBlank()) {
+            aiErrorLabel.setText("Describe the workload goal first.");
+            return;
+        }
+        aiErrorLabel.setText(" ");
+        runButton.setEnabled(false);
+        runButton.setText("Working...");
+        String prompt;
+        try {
+            prompt = WorkloadAiAssistant.buildPrompt(aiGoal.getText(), currentFormValues(),
+                    LoadCommandHandler.planSummary((JMeterTreeNode) groupCombo.getSelectedItem()));
+        } catch (RuntimeException e) {
+            runButton.setEnabled(true);
+            runButton.setText("Run");
+            failAi(e.getMessage() == null ? "Could not prepare the AI prompt." : e.getMessage());
+            return;
+        }
+        long requestId = ++aiRequestId;
+        Telemetry.record(TelemetryFeature.LOAD_AI_USED);
+        aiWorker = new SwingWorker<>() {
+            @Override
+            protected WorkloadAiAssistant.Suggestion doInBackground() {
+                return WorkloadAiAssistant.parse(aiCall.apply(prompt));
+            }
+
+            @Override
+            protected void done() {
+                if (requestId != aiRequestId || completed || isCancelled()) {
+                    return;
+                }
+                aiWorker = null;
+                runButton.setEnabled(true);
+                runButton.setText("Run");
+                try {
+                    showAiSuggestion(get());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    failAi("The AI suggestion was interrupted.");
+                } catch (java.util.concurrent.ExecutionException e) {
+                    Throwable cause = e.getCause() == null ? e : e.getCause();
+                    String message = cause instanceof IllegalArgumentException
+                            ? cause.getMessage()
+                            : ProviderErrors.describe(cause, "suggesting workload inputs", false);
+                    failAi(message == null ? "Could not read the AI suggestion." : message);
+                }
+            }
+        };
+        aiWorker.execute();
+    }
+
+    private Map<String, Object> currentFormValues() {
+        Map<String, Object> values = new LinkedHashMap<>();
+        WorkloadInputs.TargetType type = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
+        values.put("target_type", jsonTargetType(type));
+        values.put("target_value", target.getText());
+        values.put("rate_cap_per_second", blankToNull(cap.getText()));
+        values.put("response_ms", blankToNull(response.getText()));
+        values.put("think_ms", blankToNull(think.getText()));
+        values.put("ramp_seconds", blankToNull(durationSecondsText(ramp, rampUnit)));
+        values.put("hold_seconds", blankToNull(durationSecondsText(hold, holdUnit)));
+        values.put("samples_per_vcpu", blankToNull(samplesPerVcpu.getText()));
+        values.put("generator_vcpus", blankToNull(generatorVcpus.getText()));
+        values.put("generator_ram_gb", blankToNull(generatorRamGb.getText()));
+        values.put("max_threads_per_generator", blankToNull(maxThreadsPerGenerator.getText()));
+        return values;
+    }
+
+    private static String jsonTargetType(WorkloadInputs.TargetType type) {
+        if (type == null) {
+            return "";
+        }
+        return switch (type) {
+            case REQUEST_RATE -> "samples_per_second";
+            case ITERATION_RATE -> "iterations_per_second";
+            case MESSAGE_RATE -> "messages_per_second";
+            case USERS -> "users";
+        };
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String durationSecondsText(JTextField field, JComboBox<String> unit) {
+        String value = blankToNull(field.getText());
+        if (value == null) {
+            return null;
+        }
+        long multiplier = switch ((String) unit.getSelectedItem()) {
+            case "min" -> 60;
+            case "h" -> 3600;
+            default -> 1;
+        };
+        try {
+            return Long.toString(Math.round(Double.parseDouble(value) * multiplier));
+        } catch (NumberFormatException e) {
+            return value;
+        }
+    }
+
+    private void showAiSuggestion(WorkloadAiAssistant.Suggestion suggestion) {
+        latestSuggestion = suggestion;
+        targetCombo.setSelectedItem(suggestion.targetType());
+        target.setText(WorkloadCalculatorFormat.format(suggestion.targetValue()));
+        if (suggestion.rateCap() != null) {
+            cap.setText(WorkloadCalculatorFormat.format(suggestion.rateCap()));
+        }
+        setSuggestedLong(response, suggestion.responseMs());
+        setSuggestedLong(think, suggestion.thinkMs());
+        setSuggestedDuration(ramp, rampUnit, suggestion.rampSeconds());
+        setSuggestedDuration(hold, holdUnit, suggestion.holdSeconds());
+        if (suggestion.samplesPerVcpu() != null) {
+            samplesPerVcpu.setText(WorkloadCalculatorFormat.format(suggestion.samplesPerVcpu()));
+        }
+        StringBuilder text = new StringBuilder(suggestion.summary());
+        appendSuggestionSection(text, "Reasoning", suggestion.reasoning());
+        appendSuggestionSection(text, "Risks", suggestion.risks());
+        aiSuggestionText.setText(text.toString());
+        aiSuggestionText.setCaretPosition(0);
+        aiSuggestionPanel.setVisible(true);
+        copySuggestionButton.setEnabled(true);
+        updatePreview();
+    }
+
+    private static void appendSuggestionSection(StringBuilder text, String heading, List<String> items) {
+        if (!items.isEmpty()) {
+            text.append("\n\n").append(heading);
+            items.forEach(item -> text.append("\n• ").append(item));
+        }
+    }
+
+    private static void setSuggestedLong(JTextField field, Double value) {
+        if (value != null) {
+            field.setText(Long.toString(Math.round(value)));
+        }
+    }
+
+    private static void setSuggestedDuration(JTextField field, JComboBox<String> unit, Double value) {
+        if (value != null) {
+            setDuration(field, unit, Math.round(value));
+        }
+    }
+
+    private void failAi(String message) {
+        Telemetry.record(TelemetryFeature.LOAD_AI_FAILED);
+        aiErrorLabel.setText(message);
+    }
+
+    private void copySuggestionSummary() {
+        if (latestSuggestion == null) {
+            return;
+        }
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new StringSelection(latestSuggestion.summary()), null);
+            copySuggestionButton.setText("Copied");
+            javax.swing.Timer timer = new javax.swing.Timer(1500,
+                    event -> copySuggestionButton.setText("Copy"));
+            timer.setRepeats(false);
+            timer.start();
+        } catch (Exception ignored) {
+            // Clipboard access is not available in every desktop environment.
+        }
+    }
+
+    void showAiSuggestionForRender(WorkloadAiAssistant.Suggestion suggestion) {
+        openAiPanel();
+        aiGoal.setText("Black Friday peak, 2x last year's 120k orders/hour");
+        showAiSuggestion(suggestion);
     }
 
     private void addFormRow(String label, JComponent field) {
@@ -275,6 +567,16 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void rebuildFormRows() {
         form.removeAll();
         int gridy = 0;
+        if (aiPanelVisible) {
+            GridBagConstraints panelConstraints = new GridBagConstraints();
+            panelConstraints.gridx = 0;
+            panelConstraints.gridy = gridy++;
+            panelConstraints.gridwidth = 2;
+            panelConstraints.weightx = 1;
+            panelConstraints.fill = GridBagConstraints.HORIZONTAL;
+            panelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_2, 0);
+            form.add(aiPanel, panelConstraints);
+        }
         for (FormRow row : formRows) {
             if ((row == capRow && !capRowVisible)
                     || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)) {
@@ -317,11 +619,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         preview.add(chart, BorderLayout.NORTH);
         JPanel lower = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         lower.setOpaque(false);
-        JPanel grid = new JPanel(new GridLayout(9, 2, UiTokens.SPACE_1, UiTokens.SPACE_1));
+        JPanel grid = new JPanel(new GridLayout(10, 2, UiTokens.SPACE_1, UiTokens.SPACE_1));
         grid.setOpaque(false);
         String[] labels = {"Threads", "Samples / iteration", "Samples / second",
                 "Throughput samples / min", "Total duration", "Per agent",
-                "Sampler mix", "Generators needed", "Heap per generator"};
+                "Sampler mix", "Generators needed", "Capacity per generator", "Heap per generator"};
         for (int index = 0; index < labels.length; index++) {
             grid.add(new JLabel(labels[index]));
             resultValues[index] = new JLabel("-");
@@ -420,6 +722,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         targetCombo.setSelectedItem(type);
         target.setText(amount);
+        if (spec.generatorVcpus() != null) {
+            generatorVcpus.setText(Integer.toString(spec.generatorVcpus()));
+        }
+        if (spec.generatorRamGb() != null) {
+            generatorRamGb.setText(WorkloadCalculatorFormat.format(spec.generatorRamGb()));
+        }
+        if (!preparation.generatorHosts().isEmpty()) {
+            generatorHosts.setText(String.join(",", preparation.generatorHosts()));
+            hostsFromPropertiesVisible = preparation.hostsFromProperties();
+            hostsSourceLabel.setVisible(hostsFromPropertiesVisible);
+        }
         setLong(response, spec.responseMillis());
         setLong(think, spec.thinkMillis());
         setDuration(ramp, rampUnit, spec.rampSeconds());
@@ -439,9 +752,34 @@ public final class WorkloadDesignerDialog extends JDialog {
                     updatePreview();
                 }, () -> updatingPreview);
         for (JTextField field : List.of(target, cap, response, think, ramp, hold, agents,
-                generatorHosts, maxThreadsPerGenerator, messagesPerSample, prefix)) {
+                generatorHosts, maxThreadsPerGenerator, messagesPerSample, prefix, generatorVcpus,
+                generatorRamGb, samplesPerVcpu)) {
             field.getDocument().addDocumentListener(listener);
         }
+        generatorHosts.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                hideHostsSource();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                hideHostsSource();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                hideHostsSource();
+            }
+
+            private void hideHostsSource() {
+                if (hostsFromPropertiesVisible) {
+                    hostsFromPropertiesVisible = false;
+                    hostsSourceLabel.setVisible(false);
+                    hostsFieldPanel.revalidate();
+                }
+            }
+        });
         targetCombo.addActionListener(event -> {
             updateTargetRows();
             updatePreview();
@@ -473,6 +811,12 @@ public final class WorkloadDesignerDialog extends JDialog {
         updateTargetRows();
         JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
         int samplers = WorkloadApplier.countEnabledSamplers(node);
+        boolean scriptHeavy = LoadCommandHandler.scriptHeavy(node);
+        int defaultSamplesPerVcpu = (int) (scriptHeavy
+                ? WorkloadCalculator.DEFAULT_SAMPLES_PER_VCPU / 2
+                : WorkloadCalculator.DEFAULT_SAMPLES_PER_VCPU);
+        samplesPerVcpu.setPlaceholder("Default: " + defaultSamplesPerVcpu + " samples/s/vCPU");
+        samplesPerVcpu.setToolTipText("Default: " + defaultSamplesPerVcpu + " samples/s per vCPU");
         String hostText = generatorHosts.getText().trim();
         boolean hostsSet = !hostText.isEmpty();
         agents.setEnabled(!hostsSet);
@@ -485,7 +829,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         WorkloadFormState.Context context = new WorkloadFormState.Context(hostText,
                 maxThreadsPerGenerator.getText(), messagesPerSample.getText(),
-                LoadCommandHandler.enabledSamplerClasses(node), LoadCommandHandler.jdbcPools(node));
+                LoadCommandHandler.enabledSamplerClasses(node), LoadCommandHandler.jdbcPools(node),
+                generatorVcpus.getText(), generatorRamGb.getText(), samplesPerVcpu.getText(),
+                scriptHeavy);
         WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
         String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
         evaluation = WorkloadFormState.evaluate(targetType,
@@ -510,9 +856,12 @@ public final class WorkloadDesignerDialog extends JDialog {
                     : "Single generator");
             resultValues[6].setText(plan.samplerMix().display());
             resultValues[7].setText(Integer.toString(plan.generatorsNeeded()));
+            String capacity = plan.capacityPerGenerator();
+            resultValues[8].setText("<html>" + capacity.replace(", ", ",<br>") + "</html>");
+            resultValues[8].setToolTipText(capacity);
             String heapSize = plan.heapPerGeneratorMb() % 1024 == 0
                     ? plan.heapPerGeneratorMb() / 1024 + "g" : plan.heapPerGeneratorMb() + "m";
-            resultValues[8].setText("HEAP=\"-Xms" + heapSize + " -Xmx" + heapSize + "\"");
+            resultValues[9].setText("HEAP=\"-Xms" + heapSize + " -Xmx" + heapSize + "\"");
             cliArea.setText(plan.cliCommand());
             setNotesText(warningsArea, String.join("\n", plan.warnings()));
             setNotesText(assumptionsArea, String.join("\n", plan.assumptions()));
@@ -538,6 +887,10 @@ public final class WorkloadDesignerDialog extends JDialog {
                 notes.add(area);
             }
         }
+        aiSuggestionPanel.setVisible(latestSuggestion != null);
+        if (latestSuggestion != null) {
+            notes.add(aiSuggestionPanel);
+        }
         notes.revalidate();
         notes.repaint();
     }
@@ -560,10 +913,12 @@ public final class WorkloadDesignerDialog extends JDialog {
             JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
             WorkloadApplier.ApplyResult result = WorkloadApplier.apply(
                     preparation.model(), node, evaluation.plan());
+            cancelAiWorker();
             completed = true;
             onFinish.accept(new Completion(evaluation.plan(), result, "", false));
             dispose();
         } catch (Exception e) {
+            cancelAiWorker();
             completed = true;
             onFinish.accept(new Completion(null, null,
                     e.getMessage() == null ? "Could not apply the workload." : e.getMessage(), false));
@@ -573,10 +928,19 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private void cancel() {
         if (!completed) {
+            cancelAiWorker();
             completed = true;
             onFinish.accept(new Completion(null, null, "", true));
         }
         dispose();
+    }
+
+    private void cancelAiWorker() {
+        aiRequestId++;
+        if (aiWorker != null) {
+            aiWorker.cancel(true);
+            aiWorker = null;
+        }
     }
 
     private void copyCommand() {

@@ -19,7 +19,11 @@ public record WorkloadInputs(
         Integer maxThreadsPerGenerator,
         List<String> generatorHosts,
         List<Class<?>> samplerClasses,
-        List<JdbcPool> jdbcPools) {
+        List<JdbcPool> jdbcPools,
+        Integer generatorVcpus,
+        Double generatorRamGb,
+        Double samplesPerVcpu,
+        boolean scriptHeavy) {
 
     public WorkloadInputs {
         generatorHosts = generatorHosts == null ? List.of() : List.copyOf(generatorHosts);
@@ -31,8 +35,20 @@ public record WorkloadInputs(
                           Long thinkMillis, Long rampSeconds, Long holdSeconds, Integer agents,
                           int samplersPerIteration, String propertyPrefix, String planFileName) {
         this(targetType, targetValue, rateCapRps, responseMillis, thinkMillis, rampSeconds, holdSeconds,
-                agents, samplersPerIteration, propertyPrefix, planFileName, 1.0, 1000,
-                List.of(), List.of(), List.of());
+                agents, samplersPerIteration, propertyPrefix, planFileName, 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false);
+    }
+
+    public WorkloadInputs(TargetType targetType, double targetValue, Double rateCapRps, Long responseMillis,
+                          Long thinkMillis, Long rampSeconds, Long holdSeconds, Integer agents,
+                          int samplersPerIteration, String propertyPrefix, String planFileName,
+                          Double messagesPerSample, Integer maxThreadsPerGenerator,
+                          List<String> generatorHosts, List<Class<?>> samplerClasses,
+                          List<JdbcPool> jdbcPools) {
+        this(targetType, targetValue, rateCapRps, responseMillis, thinkMillis, rampSeconds, holdSeconds,
+                agents, samplersPerIteration, propertyPrefix, planFileName, messagesPerSample,
+                maxThreadsPerGenerator, generatorHosts, samplerClasses, jdbcPools,
+                null, null, null, false);
     }
 
     public enum TargetType {

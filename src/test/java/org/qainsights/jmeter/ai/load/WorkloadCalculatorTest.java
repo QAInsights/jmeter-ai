@@ -100,7 +100,7 @@ class WorkloadCalculatorTest {
                 null, 10L, 600L, null, 1, "load", "plan.jmx"));
 
         assertTrue(plan.warnings().stream().anyMatch(value ->
-                value.equals("1500 threads need at least 2 generators at 1000 threads each.")));
+                value.equals("1500 threads need at least 2 generators: each generator supports 1000 threads (default capacity).")));
         assertTrue(plan.warnings().stream().anyMatch(value -> value.contains("Steep ramp-up")));
     }
 
@@ -144,7 +144,74 @@ class WorkloadCalculatorTest {
                 1.0, 500, List.of(), List.of(), List.of()));
 
         assertEquals(3, plan.generatorsNeeded());
-        assertTrue(plan.warnings().contains("1500 threads need at least 3 generators at 500 threads each."));
+        assertTrue(plan.warnings().contains(
+                "1500 threads need at least 3 generators: each generator supports 500 threads (measured capacity)."));
+    }
+
+    @Test
+    void derivesTheMemoryThreadCapFromRam() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 200, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, 8.0, null, false));
+
+        assertEquals(2816, plan.maxThreadsPerGenerator());
+        assertEquals("memory", plan.threadCapacityBasis());
+        assertEquals("2816 threads (memory)", plan.capacityPerGenerator());
+    }
+
+    @Test
+    void appliesCpuCapacityAndHalvesTheDefaultForScriptHeavyGroups() {
+        WorkloadInputs regular = new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 2500, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), 4, null, null, false);
+        WorkloadPlan regularPlan = WorkloadCalculator.calculate(regular);
+        WorkloadPlan scriptPlan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 2500, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), 4, null, null, true));
+
+        assertEquals(1000.0, regularPlan.cpuSamplesPerSecond());
+        assertEquals(500.0, scriptPlan.cpuSamplesPerSecond());
+        assertEquals(3, regularPlan.generatorsNeeded());
+        assertEquals(5, scriptPlan.generatorsNeeded());
+        assertTrue(regularPlan.warnings().stream().anyMatch(value ->
+                value.contains("each 4 vCPU generator handles about 1000 samples/s (CPU estimate)")));
+    }
+
+    @Test
+    void measuredCapacityOverridesMemoryAndCpuLimits() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 200, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, 800,
+                List.of(), List.of(), List.of(), 4, 8.0, null, false));
+
+        assertEquals(800, plan.maxThreadsPerGenerator());
+        assertEquals("measured", plan.threadCapacityBasis());
+        assertNull(plan.cpuSamplesPerSecond());
+        assertEquals("800 threads (measured)", plan.capacityPerGenerator());
+    }
+
+    @Test
+    void warnsWhenPerGeneratorHeapExceedsSpecifiedRamBudget() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10000, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, 2.0, null, false));
+
+        assertTrue(plan.warnings().stream().anyMatch(value ->
+                value.startsWith("Each generator needs about ") && value.contains("75% of 2 GB RAM is")));
+    }
+
+    @Test
+    void defaultsToOneThousandThreadsWithoutGeneratorSpecifications() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 200, null, 500L, null,
+                60L, 600L, null, 1, "load", "plan.jmx"));
+
+        assertEquals(1000, plan.maxThreadsPerGenerator());
+        assertEquals("default", plan.threadCapacityBasis());
     }
 
     @Test

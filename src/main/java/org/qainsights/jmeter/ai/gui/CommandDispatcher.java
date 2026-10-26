@@ -417,6 +417,8 @@ public class CommandDispatcher {
                     cb.setInputEnabled(true);
                     return;
                 }
+                String selectedModel = cb.getSelectedModel();
+                Function<String, String> aiCall = workloadAiCall(selectedModel, cb::resolveAiService);
                 new WorkloadDesignerDialog(preparation, completion -> {
                     if (completion.cancelled()) {
                         Telemetry.record(TelemetryFeature.LOAD_CANCELLED);
@@ -441,6 +443,16 @@ public class CommandDispatcher {
                         if (!plan.generatorHosts().isEmpty()) {
                             Telemetry.record(TelemetryFeature.LOAD_HOSTS_SET);
                         }
+                        if (plan.generatorVcpus() != null || plan.generatorRamGb() != null) {
+                            Telemetry.record(TelemetryFeature.LOAD_SPEC_SET);
+                        }
+                        if (plan.measuredCapacitySet()) {
+                            Telemetry.record(TelemetryFeature.LOAD_MEASURED_SET);
+                        }
+                        if (preparation.hostsFromProperties()
+                                && plan.generatorHosts().equals(preparation.generatorHosts())) {
+                            Telemetry.record(TelemetryFeature.LOAD_HOSTS_FROM_PROPS);
+                        }
                         if (plan.warnings().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
                             Telemetry.record(TelemetryFeature.LOAD_JDBC_WARNED);
                         }
@@ -453,13 +465,22 @@ public class CommandDispatcher {
                         cb.onWorkerSuccess(loadReply(plan, result));
                     }
                     cb.setInputEnabled(true);
-                }).setVisible(true);
+                }, aiCall).setVisible(true);
             } catch (RuntimeException e) {
                 cb.onWorkerError("Error processing @load command", e,
                         ProviderErrors.describe(e, "processing the @load command", false));
                 cb.setInputEnabled(true);
             }
         });
+    }
+
+    static Function<String, String> workloadAiCall(String selectedModel,
+                                                    Function<String, AiService> serviceResolver) {
+        if (selectedModel == null) {
+            return null;
+        }
+        AiService service = serviceResolver.apply(selectedModel);
+        return service == null ? null : prompt -> service.generateResponse(List.of(prompt));
     }
 
     private static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result) {

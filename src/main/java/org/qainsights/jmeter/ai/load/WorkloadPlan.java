@@ -28,7 +28,12 @@ public record WorkloadPlan(
         List<String> generatorHosts,
         int maxThreadsPerGenerator,
         int generatorsNeeded,
-        long heapPerGeneratorMb) {
+        long heapPerGeneratorMb,
+        String threadCapacityBasis,
+        Double cpuSamplesPerSecond,
+        Integer generatorVcpus,
+        Double generatorRamGb,
+        boolean measuredCapacitySet) {
 
     public WorkloadPlan {
         assumptions = List.copyOf(assumptions);
@@ -36,6 +41,7 @@ public record WorkloadPlan(
         samplerMix = samplerMix == null ? SamplerMix.classify(List.of()) : samplerMix;
         notes = List.copyOf(notes);
         generatorHosts = List.copyOf(generatorHosts);
+        threadCapacityBasis = threadCapacityBasis == null ? "default" : threadCapacityBasis;
     }
 
     public WorkloadPlan(WorkloadInputs.TargetType targetType, double targetValue, int threads,
@@ -47,6 +53,13 @@ public record WorkloadPlan(
         this(targetType, targetValue, threads, samplersPerIteration, targetRequestsPerSecond,
                 expectedRequestsPerSecond, rpm, rampSeconds, holdSeconds, durationSeconds, agents,
                 perAgentThreads, perAgentRpm, responseMillis, thinkMillis, propertyPrefix, assumptions,
-                warnings, cliCommand, SamplerMix.classify(List.of()), List.of(), List.of(), 1000, 1, 1024);
+                warnings, cliCommand, SamplerMix.classify(List.of()), List.of(), List.of(), 1000, 1, 1024,
+                "default", null, null, null, false);
+    }
+
+    public String capacityPerGenerator() {
+        String threadCapacity = maxThreadsPerGenerator + " threads (" + threadCapacityBasis + ")";
+        return cpuSamplesPerSecond == null ? threadCapacity : threadCapacity + ", "
+                + WorkloadCalculator.format(cpuSamplesPerSecond) + " samples/s (CPU estimate)";
     }
 }

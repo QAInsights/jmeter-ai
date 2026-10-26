@@ -13,6 +13,7 @@ import static org.qainsights.jmeter.ai.load.WorkloadInputs.TargetType.USERS;
 
 /** Deterministic Little's Law calculator for closed-model JMeter workloads. */
 public final class WorkloadCalculator {
+    public static final double DEFAULT_SAMPLES_PER_VCPU = 250;
     private static final String RESPONSE_ASSUMPTION =
             "Assumed 500 ms average response time. Measure it with a 1-user run (for example `@fix`) and update it.";
     private static final Pattern SAFE_PLAN_PATH = Pattern.compile("[A-Za-z0-9._/-]+");
@@ -44,7 +45,25 @@ public final class WorkloadCalculator {
         }
         List<String> hosts = inputs.generatorHosts();
         int agents = hosts.isEmpty() ? (inputs.agents() == null ? 1 : inputs.agents()) : hosts.size();
-        int maxThreads = inputs.maxThreadsPerGenerator() == null ? 1000 : inputs.maxThreadsPerGenerator();
+        int maxThreads;
+        String capacityBasis;
+        if (inputs.maxThreadsPerGenerator() != null) {
+            maxThreads = inputs.maxThreadsPerGenerator();
+            capacityBasis = "measured";
+        } else if (inputs.generatorRamGb() != null) {
+            long usableHeapMb = floorTo512(inputs.generatorRamGb() * 1024 * 0.75);
+            maxThreads = (int) Math.max(1, Math.min(Integer.MAX_VALUE, (usableHeapMb - 512) / 2));
+            capacityBasis = "memory";
+        } else {
+            maxThreads = 1000;
+            capacityBasis = "default";
+        }
+        double samplesPerVcpu = inputs.samplesPerVcpu() == null
+                ? inputs.scriptHeavy() ? DEFAULT_SAMPLES_PER_VCPU / 2 : DEFAULT_SAMPLES_PER_VCPU
+                : inputs.samplesPerVcpu();
+        Double cpuSamplesPerSecond = inputs.generatorVcpus() == null
+                || inputs.maxThreadsPerGenerator() != null
+                ? null : inputs.generatorVcpus() * samplesPerVcpu;
         String prefix = inputs.propertyPrefix() == null || inputs.propertyPrefix().isBlank()
                 ? "load" : inputs.propertyPrefix();
         String planFile = inputs.planFileName() == null || inputs.planFileName().isBlank()
@@ -95,18 +114,44 @@ public final class WorkloadCalculator {
         if (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50) {
             warnings.add("Steep ramp-up: more than 50 threads start per second, which can overload the generator and skew early results.");
         }
-        int generatorsNeeded = (int) Math.ceil(threads / (double) maxThreads);
+        int threadGeneratorsNeeded = ceilCount(threads, maxThreads);
+        double capacityTargetRps = inputs.targetType() == USERS ? expectedRps : rps;
+        int cpuGeneratorsNeeded = cpuSamplesPerSecond == null
+                ? 0 : ceilCount(capacityTargetRps, cpuSamplesPerSecond);
+        int generatorsNeeded = Math.max(1, Math.max(threadGeneratorsNeeded, cpuGeneratorsNeeded));
         if (agents < generatorsNeeded) {
-            warnings.add(threads + " threads need at least " + generatorsNeeded + " generators at "
-                    + maxThreads + " threads each.");
+            if (cpuGeneratorsNeeded > threadGeneratorsNeeded) {
+                warnings.add(format(capacityTargetRps) + " samples/s needs " + generatorsNeeded
+                        + " generators: each " + inputs.generatorVcpus() + " vCPU generator handles about "
+                        + format(cpuSamplesPerSecond) + " samples/s (CPU estimate).");
+            } else if (threadGeneratorsNeeded > cpuGeneratorsNeeded) {
+                warnings.add(threads + " threads need at least " + generatorsNeeded + " generators: each "
+                        + "generator supports " + maxThreads + " threads (" + capacityBasis + " capacity).");
+            } else {
+                warnings.add(format(capacityTargetRps) + " samples/s and " + threads
+                        + " threads need at least " + generatorsNeeded + " generators: each "
+                        + inputs.generatorVcpus() + " vCPU generator handles about "
+                        + format(cpuSamplesPerSecond) + " samples/s (CPU estimate) and supports "
+                        + maxThreads + " threads (" + capacityBasis + " capacity).");
+            }
         }
         long threadsPerGenerator = perAgentThreads == null ? threads : perAgentThreads;
         long heapPerGeneratorMb = ceilTo512(Math.max(1024, 512 + 2 * threadsPerGenerator));
+        if (inputs.generatorRamGb() != null
+                && heapPerGeneratorMb > inputs.generatorRamGb() * 1024 * 0.75) {
+            long availableHeapMb = floorTo512(inputs.generatorRamGb() * 1024 * 0.75);
+            warnings.add("Each generator needs about " + heapSize(heapPerGeneratorMb)
+                    + " heap, but 75% of " + format(inputs.generatorRamGb())
+                    + " GB RAM is " + heapSize(availableHeapMb) + ". Add generators or RAM.");
+        }
         SamplerMix samplerMix = SamplerMix.classify(inputs.samplerClasses());
         warnings.addAll(protocolWarnings(inputs.jdbcPools(), samplerMix, (int) threadsPerGenerator));
         List<String> notes = protocolNotes(samplerMix);
         if (inputs.targetType() == ITERATION_RATE) {
             notes.add("Samples per iteration counts each enabled sampler once; If, Loop, Throughput and Transaction (parent sample) controllers change the real number.");
+        }
+        if (inputs.generatorVcpus() != null || inputs.generatorRamGb() != null) {
+            notes.add("CPU and memory limits are estimates. Confirm with a calibration run on one generator.");
         }
         notes.add("Rule of thumb (about 2 MB per thread plus 512 MB). Heavy listeners, large responses or scripts need more; confirm with a short run.");
         if (agents > 1) {
@@ -124,7 +169,8 @@ public final class WorkloadCalculator {
                 inputs.samplersPerIteration(), targetRps, expectedRps, rpm, rampSeconds, holdSeconds,
                 durationSeconds, agents, perAgentThreads, perAgentRpm, responseMillis, thinkMillis,
                 prefix, assumptions, warnings, command, samplerMix, notes, hosts, maxThreads,
-                generatorsNeeded, heapPerGeneratorMb);
+                generatorsNeeded, heapPerGeneratorMb, capacityBasis, cpuSamplesPerSecond,
+                inputs.generatorVcpus(), inputs.generatorRamGb(), inputs.maxThreadsPerGenerator() != null);
     }
 
     private static void validate(WorkloadInputs inputs) {
@@ -170,8 +216,20 @@ public final class WorkloadCalculator {
         if (inputs.maxThreadsPerGenerator() != null && inputs.maxThreadsPerGenerator() < 1) {
             throw new IllegalArgumentException("Max threads per generator must be at least 1.");
         }
+        if (inputs.generatorVcpus() != null && inputs.generatorVcpus() < 1) {
+            throw new IllegalArgumentException("Generator vCPUs must be at least 1.");
+        }
+        if (inputs.generatorRamGb() != null && (!Double.isFinite(inputs.generatorRamGb())
+                || inputs.generatorRamGb() <= 0
+                || inputs.generatorRamGb() * 1024 * 0.75 > Long.MAX_VALUE - 512)) {
+            throw new IllegalArgumentException("Generator RAM must be a positive, representable number of GB.");
+        }
+        if (inputs.samplesPerVcpu() != null && (!Double.isFinite(inputs.samplesPerVcpu())
+                || inputs.samplesPerVcpu() <= 0)) {
+            throw new IllegalArgumentException("Samples per vCPU must be greater than zero.");
+        }
         for (String host : inputs.generatorHosts()) {
-            if (host == null || !VALID_HOST.matcher(host).matches()) {
+            if (!validGeneratorHost(host)) {
                 throw new IllegalArgumentException("Enter generator hosts using letters, numbers, dots, underscores, colons, or hyphens.");
             }
         }
@@ -179,6 +237,10 @@ public final class WorkloadCalculator {
                 && !VALID_PREFIX.matcher(inputs.propertyPrefix()).matches()) {
             throw new IllegalArgumentException("Property prefix can use letters, numbers, dots, underscores, and hyphens only.");
         }
+    }
+
+    static boolean validGeneratorHost(String host) {
+        return host != null && VALID_HOST.matcher(host).matches();
     }
 
     private static String cliCommand(String plan, String prefix, int threads, long ramp, long duration,
@@ -226,6 +288,18 @@ public final class WorkloadCalculator {
 
     private static long ceilTo512(long value) {
         return ((value + 511) / 512) * 512;
+    }
+
+    private static long floorTo512(double value) {
+        return (long) Math.floor(value / 512) * 512;
+    }
+
+    private static int ceilCount(double numerator, double denominator) {
+        double count = Math.ceil(numerator / denominator);
+        if (!Double.isFinite(count) || count > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("The calculated generator count is too large.");
+        }
+        return (int) count;
     }
 
     private static String heapSize(long megabytes) {

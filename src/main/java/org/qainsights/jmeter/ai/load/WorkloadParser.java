@@ -56,6 +56,10 @@ public final class WorkloadParser {
     private static final Pattern AGENTS = Pattern.compile(
             "(?i)\\b(?:across|on|over|using)\\s+" + NUMBER
                     + "\\s+(agents?|generators?|engines?|machines?|injectors?|servers?|nodes?)\\b");
+    private static final Pattern GENERATOR_VCPUS = Pattern.compile(
+            "(?i)(?<![\\w.])" + NUMBER + "\\s*(?:vcpus?|cpus?|cores?)\\b");
+    private static final Pattern GENERATOR_RAM = Pattern.compile(
+            "(?i)(?<![\\w.])" + NUMBER + "\\s*gb(?:\\s*(?:ram|memory))?\\b");
 
     private WorkloadParser() {
     }
@@ -91,6 +95,8 @@ public final class WorkloadParser {
             remaining = consumeThinkTime(remaining, values);
             remaining = consumeResponseTime(remaining, values);
             remaining = consumeAgents(remaining, values);
+            remaining = consumeGeneratorVcpus(remaining, values);
+            remaining = consumeGeneratorRam(remaining, values);
             String leftover = remaining.replaceAll("[\\s:]+", " ").trim();
             if (!leftover.isEmpty()) {
                 unrecognized.add(leftover);
@@ -99,7 +105,8 @@ public final class WorkloadParser {
         return new WorkloadSpec(values.requestsPerSecond, values.messagesPerSecond,
                 values.iterationsPerSecond, values.users,
                 values.rampSeconds, values.holdSeconds, values.thinkMillis, values.responseMillis,
-                values.agents, unsupported, unrecognized, values.duplicates);
+                values.agents, values.generatorVcpus, values.generatorRamGb,
+                unsupported, unrecognized, values.duplicates);
     }
 
     private static String normalizeThousands(String text) {
@@ -242,6 +249,37 @@ public final class WorkloadParser {
         return rest.toString();
     }
 
+    private static String consumeGeneratorVcpus(String text, Values values) {
+        Matcher matcher = GENERATOR_VCPUS.matcher(text);
+        StringBuilder rest = new StringBuilder();
+        int cursor = 0;
+        while (matcher.find()) {
+            rest.append(text, cursor, matcher.start());
+            rest.append(" ".repeat(matcher.end() - matcher.start()));
+            cursor = matcher.end();
+            double parsed = number(matcher.group(1));
+            int count = (int) Math.ceil(parsed);
+            values.set("generator vCPUs", count, () -> values.generatorVcpus = count);
+        }
+        rest.append(text.substring(cursor));
+        return rest.toString();
+    }
+
+    private static String consumeGeneratorRam(String text, Values values) {
+        Matcher matcher = GENERATOR_RAM.matcher(text);
+        StringBuilder rest = new StringBuilder();
+        int cursor = 0;
+        while (matcher.find()) {
+            rest.append(text, cursor, matcher.start());
+            rest.append(" ".repeat(matcher.end() - matcher.start()));
+            cursor = matcher.end();
+            double amount = number(matcher.group(1));
+            values.set("generator RAM", amount, () -> values.generatorRamGb = amount);
+        }
+        rest.append(text.substring(cursor));
+        return rest.toString();
+    }
+
     private static double durationMillis(String amount, String unit) {
         double value = number(amount);
         String normalized = unit.toLowerCase(Locale.ROOT);
@@ -283,6 +321,8 @@ public final class WorkloadParser {
         private Long thinkMillis;
         private Long responseMillis;
         private Integer agents;
+        private Integer generatorVcpus;
+        private Double generatorRamGb;
         private final List<String> duplicates = new ArrayList<>();
 
         private void set(String field, Object value, Assignment assignment) {
@@ -296,6 +336,8 @@ public final class WorkloadParser {
                 case "think time" -> thinkMillis;
                 case "response time" -> responseMillis;
                 case "agents" -> agents;
+                case "generator vCPUs" -> generatorVcpus;
+                case "generator RAM" -> generatorRamGb;
                 default -> null;
             };
             if (previous != null) {

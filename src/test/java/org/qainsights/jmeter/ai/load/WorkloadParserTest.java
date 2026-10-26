@@ -40,6 +40,20 @@ class WorkloadParserTest {
     }
 
     @Test
+    void parsesGeneratorVcpuAndRamSpecificationsWithLastValueWins() {
+        for (String value : new String[]{"4 vcpu", "4 vcpus", "4 cpu", "4 cpus", "4 core", "4 cores"}) {
+            assertEquals(4, WorkloadParser.parse(value).generatorVcpus(), value);
+        }
+        for (String value : new String[]{"8 gb", "8gb ram", "8 gb memory"}) {
+            assertEquals(8.0, WorkloadParser.parse(value).generatorRamGb(), value);
+        }
+        WorkloadSpec repeated = WorkloadParser.parse("4 vcpus, 8 gb, 6 cores, 16gb ram");
+        assertEquals(6, repeated.generatorVcpus());
+        assertEquals(16.0, repeated.generatorRamGb());
+        assertEquals(2, repeated.duplicates().size());
+    }
+
+    @Test
     void parsesIterationRatesAndDoesNotTreatUsersPerSecondAsConcurrentUsers() {
         for (String noun : new String[]{"iterations", "journeys", "sessions", "arrivals", "users"}) {
             WorkloadSpec spec = WorkloadParser.parse("10 " + noun + " per second");

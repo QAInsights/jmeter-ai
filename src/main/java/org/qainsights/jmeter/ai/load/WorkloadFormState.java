@@ -34,14 +34,22 @@ public final class WorkloadFormState {
                             "Messages per sample must be greater than zero.")
                     : null;
             Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator());
+            Integer generatorVcpus = optionalInteger(context.generatorVcpus());
+            if (generatorVcpus != null && generatorVcpus < 1) {
+                throw new IllegalArgumentException("Generator vCPUs must be at least 1.");
+            }
+            Double generatorRamGb = optionalNumber(context.generatorRamGb(),
+                    "Generator RAM must be greater than zero.");
+            Double samplesPerVcpu = optionalNumber(context.samplesPerVcpu(),
+                    "Samples per vCPU must be greater than zero.");
             List<String> hosts = context.generatorHosts() == null || context.generatorHosts().isBlank()
                     ? List.of() : Arrays.stream(context.generatorHosts().split(",", -1))
                     .map(String::trim).toList();
             WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(targetType, targetValue,
                     cap, responseMs, thinkMs, rampSeconds, holdSeconds, agentCount, samplerCount,
                     prefix, planFile, messagesPerSample == null ? 1.0 : messagesPerSample,
-                    maxThreads == null ? 1000 : maxThreads, hosts,
-                    context.samplerClasses(), context.jdbcPools()));
+                    maxThreads, hosts, context.samplerClasses(), context.jdbcPools(),
+                    generatorVcpus, generatorRamGb, samplesPerVcpu, context.scriptHeavy()));
             return new Evaluation(plan, "");
         } catch (IllegalArgumentException | ArithmeticException e) {
             return new Evaluation(null, e.getMessage() == null ? "Check the workload values." : e.getMessage());
@@ -111,14 +119,21 @@ public final class WorkloadFormState {
 
     public record Context(String generatorHosts, String maxThreadsPerGenerator,
                           String messagesPerSample, List<Class<?>> samplerClasses,
-                          List<JdbcPool> jdbcPools) {
+                          List<JdbcPool> jdbcPools, String generatorVcpus,
+                          String generatorRamGb, String samplesPerVcpu, boolean scriptHeavy) {
         public Context {
             samplerClasses = samplerClasses == null ? List.of() : List.copyOf(samplerClasses);
             jdbcPools = jdbcPools == null ? List.of() : List.copyOf(jdbcPools);
         }
 
+        public Context(String generatorHosts, String maxThreadsPerGenerator, String messagesPerSample,
+                       List<Class<?>> samplerClasses, List<JdbcPool> jdbcPools) {
+            this(generatorHosts, maxThreadsPerGenerator, messagesPerSample, samplerClasses, jdbcPools,
+                    "", "", "", false);
+        }
+
         public static Context empty() {
-            return new Context("", "1000", "1", List.of(), List.of());
+            return new Context("", "", "1", List.of(), List.of(), "", "", "", false);
         }
     }
 

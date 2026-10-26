@@ -6,6 +6,7 @@ import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.protocol.jdbc.config.DataSourceElement;
 import org.apache.jmeter.protocol.jdbc.sampler.FakeJDBCSampler;
+import org.apache.jmeter.modifiers.JSR223PreProcessor;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.Test;
 
@@ -75,5 +76,53 @@ class LoadCommandHandlerTest {
 
         assertEquals(java.util.List.of(FakeJDBCSampler.class),
                 LoadCommandHandler.enabledSamplerClasses(groupNode));
+    }
+
+    @Test
+    void prepopulatesValidatedRemoteHostsFromInjectedPropertyLookup() throws Exception {
+        JMeterTreeModel model = modelWithSampler();
+        LoadCommandHandler.Preparation preparation = LoadCommandHandler.prepare(
+                "@load 200 rps across 4 agents", null, model,
+                key -> key.equals("remote_hosts") ? " load-a,load-b,load-c,load-d " : "");
+
+        assertEquals(java.util.List.of("load-a", "load-b", "load-c", "load-d"),
+                preparation.generatorHosts());
+        assertEquals(true, preparation.hostsFromProperties());
+    }
+
+    @Test
+    void ignoresLocalhostOnlyRemoteHostPropertiesIncludingPorts() {
+        assertEquals(java.util.List.of(), LoadCommandHandler.remoteHosts("localhost:1099, 127.0.0.1", null));
+        assertEquals(java.util.List.of(), LoadCommandHandler.remoteHosts("127.0.0.1:1099, localhost:2", null));
+    }
+
+    @Test
+    void ignoresInvalidOrAgentCountMismatchedRemoteHosts() {
+        assertEquals(java.util.List.of(), LoadCommandHandler.remoteHosts("load-a, bad host", null));
+        assertEquals(java.util.List.of(), LoadCommandHandler.remoteHosts("load-a,load-b", 3));
+    }
+
+    @Test
+    void detectsEnabledJsr223PreProcessorsAsScriptHeavy() throws Exception {
+        JMeterTreeModel model = new JMeterTreeModel();
+        ThreadGroup group = new ThreadGroup();
+        group.setSamplerController(new LoopController());
+        JMeterTreeNode groupNode = model.addComponent(group,
+                (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0));
+        JMeterTreeNode scriptNode = model.addComponent(new JSR223PreProcessor(), groupNode);
+
+        assertEquals(true, LoadCommandHandler.scriptHeavy(groupNode));
+        scriptNode.setEnabled(false);
+        assertEquals(false, LoadCommandHandler.scriptHeavy(groupNode));
+    }
+
+    private static JMeterTreeModel modelWithSampler() throws Exception {
+        JMeterTreeModel model = new JMeterTreeModel();
+        ThreadGroup group = new ThreadGroup();
+        group.setSamplerController(new LoopController());
+        JMeterTreeNode groupNode = model.addComponent(group,
+                (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0));
+        model.addComponent(new HTTPSamplerProxy(), groupNode);
+        return model;
     }
 }
