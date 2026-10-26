@@ -274,10 +274,14 @@ class WorkloadCalculatorTest {
         assertTrue(plan.command(CommandShell.BASH).startsWith("export HEAP=\"-Xms1g -Xmx1g\"\n"));
         assertTrue(plan.command(CommandShell.CMD).startsWith(
                 "set HEAP=-Xms1g -Xmx1g\njmeter.bat -n -t plan.jmx "));
-        assertTrue(plan.command(CommandShell.CMD).contains("-Jload.threads=8"));
+        assertTrue(plan.command(CommandShell.CMD).contains("\"-Jload.threads=8\""));
+        assertTrue(plan.command(CommandShell.CMD).contains("\"-Jload.rampup=60\""));
+        assertTrue(plan.command(CommandShell.CMD).contains("\"-Jload.duration=660\""));
         assertTrue(plan.command(CommandShell.POWERSHELL).startsWith(
                 "$env:HEAP = \"-Xms1g -Xmx1g\"\njmeter.bat -n -t 'plan.jmx' "));
-        assertTrue(plan.command(CommandShell.POWERSHELL).contains("-Jload.threads=8"));
+        assertTrue(plan.command(CommandShell.POWERSHELL).contains("\"-Jload.threads=8\""));
+        assertTrue(plan.command(CommandShell.POWERSHELL).contains("\"-Jload.rampup=60\""));
+        assertTrue(plan.command(CommandShell.POWERSHELL).contains("\"-Jload.duration=660\""));
     }
 
     @Test
@@ -287,9 +291,11 @@ class WorkloadCalculatorTest {
                 60L, 600L, 1, 1, "load", "plan.jmx", 1.0, 1000,
                 List.of("load-a", "load-b"), List.of(), List.of()));
 
-        for (CommandShell shell : CommandShell.values()) {
-            assertTrue(plan.command(shell).contains("-R load-a,load-b"));
-            assertTrue(plan.command(shell).contains("-Gload.threads=4"));
+        assertTrue(plan.command(CommandShell.BASH).contains("-R load-a,load-b"));
+        assertTrue(plan.command(CommandShell.BASH).contains("-Gload.threads=4"));
+        for (CommandShell shell : List.of(CommandShell.CMD, CommandShell.POWERSHELL)) {
+            assertTrue(plan.command(shell).contains("-R \"load-a,load-b\""));
+            assertTrue(plan.command(shell).contains("\"-Gload.threads=4\""));
             assertFalse(plan.command(shell).contains("-Jload.threads="));
         }
         assertTrue(plan.command(CommandShell.CMD).contains("jmeter.bat -n -t plan.jmx"));

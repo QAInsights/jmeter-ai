@@ -276,28 +276,33 @@ public final class WorkloadCalculator {
                     names.add("agent" + index);
                 }
             }
-            command.append(" -R ").append(String.join(",", names));
-            command.append(" -G").append(prefix).append(".threads=").append(perAgentThreads);
-            command.append(" -G").append(prefix).append(".rampup=").append(ramp);
-            command.append(" -G").append(prefix).append(".duration=").append(duration);
+            command.append(" -R ").append(shellArgument(String.join(",", names), shell));
+            command.append(' ').append(shellArgument("-G" + prefix + ".threads=" + perAgentThreads, shell));
+            command.append(' ').append(shellArgument("-G" + prefix + ".rampup=" + ramp, shell));
+            command.append(' ').append(shellArgument("-G" + prefix + ".duration=" + duration, shell));
             if (perAgentRpm != null) {
-                command.append(" -G").append(prefix).append(".rpm=").append(format(perAgentRpm));
+                command.append(' ').append(shellArgument("-G" + prefix + ".rpm=" + format(perAgentRpm), shell));
             }
             if (think > 0) {
-                command.append(" -G").append(prefix).append(".think_ms=").append(think);
+                command.append(' ').append(shellArgument("-G" + prefix + ".think_ms=" + think, shell));
             }
         } else {
-            command.append(" -J").append(prefix).append(".threads=").append(threads);
-            command.append(" -J").append(prefix).append(".rampup=").append(ramp);
-            command.append(" -J").append(prefix).append(".duration=").append(duration);
+            command.append(' ').append(shellArgument("-J" + prefix + ".threads=" + threads, shell));
+            command.append(' ').append(shellArgument("-J" + prefix + ".rampup=" + ramp, shell));
+            command.append(' ').append(shellArgument("-J" + prefix + ".duration=" + duration, shell));
             if (rpm != null) {
-                command.append(" -J").append(prefix).append(".rpm=").append(format(rpm));
+                command.append(' ').append(shellArgument("-J" + prefix + ".rpm=" + format(rpm), shell));
             }
             if (think > 0) {
-                command.append(" -J").append(prefix).append(".think_ms=").append(think);
+                command.append(' ').append(shellArgument("-J" + prefix + ".think_ms=" + think, shell));
             }
         }
         return command.append(" -l results.jtl -e -o report").toString();
+    }
+
+    private static String shellArgument(String argument, CommandShell shell) {
+        // Windows command and native-process parsing split unquoted assignments at dots and equals signs.
+        return shell == CommandShell.BASH ? argument : "\"" + argument + "\"";
     }
 
     private static String planPath(String plan, CommandShell shell) {
