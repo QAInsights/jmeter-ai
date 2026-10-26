@@ -403,9 +403,16 @@ public final class FixLoop {
             concurrencyBefore = summary;
         }
         concurrencyAfter = summary;
-        concurrencyReason = summary.getFailureCount() == 0 && !passes(summary)
-                ? concurrencyTimeoutReason(request.timeoutSeconds()) : "";
+        concurrencyReason = concurrencyReason(summary, request.timeoutSeconds());
         return summary;
+    }
+
+    private static String concurrencyReason(TestRunSummary summary, long timeoutSeconds) {
+        if (summary.getFailureCount() != 0 || passes(summary)) {
+            return "";
+        }
+        return summary.isTimedOut() ? concurrencyTimeoutReason(timeoutSeconds)
+                : "The multi-user check sent no requests. The single-user result is shown.";
     }
 
     private static String concurrencyTimeoutReason(long timeoutSeconds) {

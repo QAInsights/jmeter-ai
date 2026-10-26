@@ -334,7 +334,8 @@ class FixLoopTest {
         assertEquals(FixResult.Status.ALREADY_PASSING, result.status());
         assertEquals(0, rounds.get());
         assertEquals(2, result.afterTotal());
-        assertTrue(result.concurrencyReason().contains("did not finish"));
+        assertTrue(result.concurrencyReason().contains("did not finish within 120 s"));
+        assertFalse(result.concurrencyReason().contains("sent no requests"));
     }
 
     @Test
@@ -348,7 +349,8 @@ class FixLoopTest {
         assertEquals(FixResult.Status.ALREADY_PASSING, result.status());
         assertEquals(0, rounds.get());
         assertEquals(2, result.afterTotal());
-        assertTrue(result.concurrencyReason().contains("did not finish"));
+        assertEquals("The multi-user check sent no requests. The single-user result is shown.",
+                result.concurrencyReason());
     }
 
     @Test

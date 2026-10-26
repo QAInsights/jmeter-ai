@@ -46,6 +46,27 @@ class FixReportDialogTest {
     }
 
     @Test
+    void reportTextRemainsSelectableWithInvisibleCaret() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Path report = tempDir.resolve("selectable.md");
+        Files.writeString(report, "# Sample report\n\nA short summary.");
+
+        FixReportDialog dialog = showDialog(report);
+        try {
+            AtomicReference<String> selectedText = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> {
+                JTextPane pane = findTextPane(dialog);
+                assertEquals(pane.getBackground(), pane.getCaretColor());
+                pane.select(0, "Sample".length());
+                selectedText.set(pane.getSelectedText());
+            });
+            assertEquals("Sample", selectedText.get());
+        } finally {
+            dispose(dialog);
+        }
+    }
+
+    @Test
     void missingReportShowsReadErrorAndPath() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         Path report = tempDir.resolve("missing.md");

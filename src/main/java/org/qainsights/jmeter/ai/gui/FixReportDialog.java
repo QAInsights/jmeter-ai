@@ -76,6 +76,7 @@ final class FixReportDialog extends JDialog {
         reportPane.setEditable(false);
         reportPane.setBackground(ThemeColors.canvas());
         reportPane.setForeground(ThemeColors.foreground());
+        reportPane.setCaretColor(reportPane.getBackground());
         java.awt.Font textFont = UIManager.getFont("TextPane.font");
         if (textFont != null) {
             reportPane.setFont(textFont);
