@@ -184,7 +184,12 @@ final class FixCommandRunner {
                     Thread.currentThread().interrupt();
                     log.warn("Make it pass was interrupted", e);
                 } catch (ExecutionException e) {
-                    cb.appendErrorMessageToChat("Make it pass failed", asException(e.getCause()));
+                    if (isCancellationFailure(cancelled.get(), e.getCause())) {
+                        log.debug("Make it pass was cancelled", e);
+                        finishWithMessage("Make it pass was cancelled.");
+                    } else {
+                        cb.appendErrorMessageToChat("Make it pass failed", asException(e.getCause()));
+                    }
                 } catch (CancellationException e) {
                     cb.appendErrorMessageToChat("Make it pass was cancelled", e);
                 }
@@ -288,6 +293,21 @@ final class FixCommandRunner {
                 ? "You changed the plan after Make it pass finished. Undo all also discards those changes."
                 : "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
                         + "Continue?";
+    }
+
+    static boolean isCancellationFailure(boolean cancelled, Throwable error) {
+        if (cancelled) {
+            return true;
+        }
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof InterruptedException) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
     }
 
     private static String currentPlanTreeHash() {

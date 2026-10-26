@@ -466,6 +466,40 @@ class FixLoopTest {
         assertEquals(1, discards.get());
     }
 
+    @Test
+    void checkedInterruptionDuringCancelledRoundRestoresBackup() {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        AtomicReference<File> restored = new AtomicReference<>();
+        File roundBackup = new File("round-backup.jmx");
+        FixLoop fixLoop = new FixLoop(timeout -> summary(1, 1), trackingBackups(roundBackup, restored),
+                stableCensus(), ignored -> {
+                    cancelled.set(true);
+                    sneakyThrow(new InterruptedException("sleep interrupted"));
+                    return null;
+                }, cancelled::get, new FixPrompt(), assertionInstaller(ignored -> List.of()));
+
+        FixResult result = assertDoesNotThrow(() -> fixLoop.run(new FixRequest(1, 120), null));
+
+        assertEquals(FixResult.Status.CANCELLED, result.status());
+        assertEquals(roundBackup, restored.get());
+    }
+
+    @Test
+    void checkedInterruptionWithoutCancellationReturnsCancelledAndRestoresBackup() {
+        AtomicReference<File> restored = new AtomicReference<>();
+        File roundBackup = new File("round-backup.jmx");
+        FixLoop fixLoop = new FixLoop(timeout -> summary(1, 1), trackingBackups(roundBackup, restored),
+                stableCensus(), ignored -> {
+                    sneakyThrow(new InterruptedException("sleep interrupted"));
+                    return null;
+                }, () -> false, new FixPrompt(), assertionInstaller(ignored -> List.of()));
+
+        FixResult result = assertDoesNotThrow(() -> fixLoop.run(new FixRequest(1, 120), null));
+
+        assertEquals(FixResult.Status.CANCELLED, result.status());
+        assertEquals(roundBackup, restored.get());
+    }
+
     private static FixLoop loop(List<TestRunSummary> runs, AtomicInteger rounds,
                                 java.util.function.Supplier<PlanCensus> census, java.util.function.BooleanSupplier cancel) {
         Deque<TestRunSummary> pending = new ArrayDeque<>(runs);
@@ -496,6 +530,21 @@ class FixLoopTest {
             @Override public void restore(File file) { }
             @Override public void discard(File file) { }
         };
+    }
+
+    private static FixLoop.BackupStore trackingBackups(File roundBackup, AtomicReference<File> restored) {
+        return new FixLoop.BackupStore() {
+            private int count;
+            @Override public File backup() { return new File("backup-" + (++count) + ".jmx"); }
+            @Override public File roundBackup() { return roundBackup; }
+            @Override public void restore(File file) { restored.set(file); }
+            @Override public void discard(File file) { }
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <E extends Throwable> void sneakyThrow(Throwable throwable) throws E {
+        throw (E) throwable;
     }
 
     private static FixLoop multiUserLoop(List<TestRunSummary> singles, List<TestRunSummary> multis,

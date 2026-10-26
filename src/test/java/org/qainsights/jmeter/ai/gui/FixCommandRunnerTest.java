@@ -18,4 +18,20 @@ class FixCommandRunnerTest {
     void skipsUndoConfirmationWhenPlanAndTreeAreUnchanged() {
         assertFalse(FixCommandRunner.needsUndoConfirmation(true, "same-tree", "same-tree"));
     }
+
+    @Test
+    void treatsInterruptedExecutionFailureAsCancellation() {
+        assertTrue(FixCommandRunner.isCancellationFailure(false,
+                new IllegalStateException("provider failed", new InterruptedException("sleep interrupted"))));
+    }
+
+    @Test
+    void treatsCancelledExecutionFailureAsCancellation() {
+        assertTrue(FixCommandRunner.isCancellationFailure(true, new IllegalStateException("provider failed")));
+    }
+
+    @Test
+    void leavesOtherExecutionFailuresAsErrors() {
+        assertFalse(FixCommandRunner.isCancellationFailure(false, new IllegalStateException("provider failed")));
+    }
 }

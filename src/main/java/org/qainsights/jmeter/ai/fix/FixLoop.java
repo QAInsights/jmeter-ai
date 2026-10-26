@@ -129,15 +129,16 @@ public final class FixLoop {
         GateResult initial;
         try {
             initial = gate(request);
-        } catch (RuntimeException e) {
-            if (isCancelled() || causedByInterruption(e)) {
-                if (causedByInterruption(e)) {
+        } catch (Exception e) {
+            RuntimeException failure = asRuntimeException(e);
+            if (isCancelled() || causedByInterruption(failure)) {
+                if (causedByInterruption(failure)) {
                     Thread.currentThread().interrupt();
                 }
                 return result(FixResult.Status.CANCELLED, null, null, 0, 0, overall, List.of(), "Cancelled.");
             }
             return result(FixResult.Status.NOTHING_RAN, null, null, 0, 0, overall, List.of(),
-                    checkFailureReason(e));
+                    checkFailureReason(failure));
         }
         TestRunSummary first = initial.singleUser();
         if (first.isTimedOut()) {
@@ -154,13 +155,14 @@ public final class FixLoop {
         try {
             FixListeners.ensurePresent();
             verified = addVerifiedAssertions(initial.decisive().getObservations(), request);
-        } catch (RuntimeException e) {
-            if (isCancelled() || causedByInterruption(e)) {
+        } catch (Exception e) {
+            RuntimeException failure = asRuntimeException(e);
+            if (isCancelled() || causedByInterruption(failure)) {
                 Thread.currentThread().interrupt();
                 return result(FixResult.Status.CANCELLED, before, before, 0, 0, overall, List.of(), "Cancelled.");
             }
             return result(FixResult.Status.NOT_FIXED, before, before, 0, 0, overall, List.of(),
-                    checkFailureReason(e));
+                    checkFailureReason(failure));
         }
         if (isCancelled()) {
             return result(FixResult.Status.CANCELLED, before, before, 0, 0, overall, List.of(), "Cancelled.");
@@ -286,10 +288,10 @@ public final class FixLoop {
                 if (stagnantRounds >= 2) {
                     break;
                 }
-            } catch (RuntimeException e) {
+            } catch (Exception e) {
                 used = round;
-                return roundFailure(e, providerFailure, roundBackup, before, current, round, guardRollbacks,
-                        overall, summaries);
+                return roundFailure(asRuntimeException(e), providerFailure, roundBackup, before, current, round,
+                        guardRollbacks, overall, summaries);
             } finally {
                 roundSummaries.add("Round " + round + " targeted " + targetFailures + " of " + targetTotal
                         + " failures; " + current.getFailureCount() + " of " + current.getTotalSamples()
@@ -357,11 +359,11 @@ public final class FixLoop {
                 }
             }
             return verified;
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             if (!stillInstalled.isEmpty()) {
                 assertionInstaller.removeAdded(stillInstalled);
             }
-            throw e;
+            throw asRuntimeException(e);
         }
     }
 
@@ -427,6 +429,13 @@ public final class FixLoop {
     private static String checkFailureReason(RuntimeException error) {
         String detail = error.getMessage();
         return "JMeter check failed" + (detail == null || detail.isBlank() ? "." : ": " + detail);
+    }
+
+    private static RuntimeException asRuntimeException(Exception error) {
+        if (error instanceof RuntimeException runtimeException) {
+            return runtimeException;
+        }
+        return new IllegalStateException(error.getMessage(), error);
     }
 
     private boolean isCancelled() {
