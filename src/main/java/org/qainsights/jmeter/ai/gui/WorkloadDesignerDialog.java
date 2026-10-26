@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.prefs.BackingStoreException;
+import java.util.prefs.Preferences;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -71,14 +73,20 @@ import org.qainsights.jmeter.ai.load.WorkloadSpec;
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
 import org.qainsights.jmeter.ai.utils.ProviderErrors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Modal, deterministic workload editor with a live load-shape preview. */
 public final class WorkloadDesignerDialog extends JDialog {
     private static final int MAX_CUSTOM_ROWS = 10;
     private static final String OPEN_MODEL_ASK_AI_TOOLTIP = "Ask AI fills Load and Endurance workloads.";
+    private static final Logger log = LoggerFactory.getLogger(WorkloadDesignerDialog.class);
+    private static final String WIDTH_PREFERENCE = "workloadDesigner.width";
+    private static final String HEIGHT_PREFERENCE = "workloadDesigner.height";
 
     private final LoadCommandHandler.Preparation preparation;
     private final Consumer<Completion> onFinish;
+    private final Preferences preferences;
     private final FormPanel form = new FormPanel();
     private final List<FormRow> formRows = new ArrayList<>();
     private final FormRow capRow;
@@ -180,10 +188,17 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     public WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
                                   Consumer<Completion> onFinish, Function<String, String> aiCall) {
+        this(preparation, onFinish, aiCall, userPreferences());
+    }
+
+    WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
+                           Consumer<Completion> onFinish, Function<String, String> aiCall,
+                           Preferences preferences) {
         super(mainFrame(), "Workload Designer", ModalityType.APPLICATION_MODAL);
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
         this.aiCall = aiCall;
+        this.preferences = preferences;
         shellCombo.setSelectedItem(CommandShell.forOsName(System.getProperty("os.name")));
         maxThreadsPerGenerator.setToolTipText(
                 "From a calibration run on one generator at under 80% CPU");
@@ -231,8 +246,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         });
         setPreferredSize(new Dimension(1140, 840));
         GraphicsConfiguration configuration = getGraphicsConfiguration();
-        setSize(sizeWithinScreen(getPreferredSize(), configuration.getBounds(),
-                Toolkit.getDefaultToolkit().getScreenInsets(configuration)));
+        Rectangle bounds = configuration.getBounds();
+        Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(configuration);
+        Dimension minimumSize = minimumSizeWithinScreen(bounds, insets);
+        setMinimumSize(minimumSize);
+        setSize(initialSize(readSavedSize(preferences), getPreferredSize(), minimumSize, bounds, insets));
         setLocationRelativeTo(getOwner());
         updateColumnsLayout();
         for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
@@ -320,10 +338,76 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     static Dimension sizeWithinScreen(Dimension preferred, Rectangle bounds, Insets insets) {
+        Dimension usable = usableScreenSize(bounds, insets);
+        return new Dimension(Math.min(preferred.width, (int) (usable.width * 0.9)),
+                Math.min(preferred.height, (int) (usable.height * 0.9)));
+    }
+
+    static Dimension initialSize(Dimension saved, Dimension fallback, Dimension minimum,
+                                 Rectangle bounds, Insets insets) {
+        Dimension usable = usableScreenSize(bounds, insets);
+        Dimension screenClamped = sizeWithinScreen(saved == null ? fallback : saved, bounds, insets);
+        int minimumWidth = Math.min(Math.max(1, minimum.width), usable.width);
+        int minimumHeight = Math.min(Math.max(1, minimum.height), usable.height);
+        return new Dimension(Math.max(minimumWidth, screenClamped.width),
+                Math.max(minimumHeight, screenClamped.height));
+    }
+
+    static Dimension minimumSizeWithinScreen(Rectangle bounds, Insets insets) {
+        Dimension usable = usableScreenSize(bounds, insets);
+        return new Dimension(Math.min(640, usable.width), Math.min(480, usable.height));
+    }
+
+    private static Dimension usableScreenSize(Rectangle bounds, Insets insets) {
         int usableWidth = Math.max(1, bounds.width - insets.left - insets.right);
         int usableHeight = Math.max(1, bounds.height - insets.top - insets.bottom);
-        return new Dimension(Math.min(preferred.width, (int) (usableWidth * 0.9)),
-                Math.min(preferred.height, (int) (usableHeight * 0.9)));
+        return new Dimension(usableWidth, usableHeight);
+    }
+
+    private static Preferences userPreferences() {
+        try {
+            return Preferences.userNodeForPackage(WorkloadDesignerDialog.class);
+        } catch (SecurityException e) {
+            log.debug("Could not access Workload Designer size preferences.", e);
+            return null;
+        }
+    }
+
+    static Dimension readSavedSize(Preferences preferences) {
+        if (preferences == null) {
+            return null;
+        }
+        try {
+            preferences.sync();
+            int width = preferences.getInt(WIDTH_PREFERENCE, 0);
+            int height = preferences.getInt(HEIGHT_PREFERENCE, 0);
+            if (width <= 0 || height <= 0) {
+                return null;
+            }
+            return new Dimension(width, height);
+        } catch (BackingStoreException | SecurityException e) {
+            log.debug("Could not read Workload Designer size preferences.", e);
+            return null;
+        }
+    }
+
+    static void saveWindowSize(Preferences preferences, Dimension size) {
+        if (preferences == null || size == null || size.width <= 0 || size.height <= 0) {
+            return;
+        }
+        try {
+            preferences.putInt(WIDTH_PREFERENCE, size.width);
+            preferences.putInt(HEIGHT_PREFERENCE, size.height);
+            preferences.flush();
+        } catch (BackingStoreException | SecurityException e) {
+            log.debug("Could not save Workload Designer size preferences.", e);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        saveWindowSize(preferences, getSize());
+        super.dispose();
     }
 
     private void updateColumnsLayout() {
