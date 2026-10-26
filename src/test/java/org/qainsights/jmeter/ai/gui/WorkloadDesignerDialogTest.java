@@ -13,9 +13,15 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentListener;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.load.CommandShell;
+import org.qainsights.jmeter.ai.load.WorkloadApplier;
+import org.qainsights.jmeter.ai.load.WorkloadCalculator;
+import org.qainsights.jmeter.ai.load.WorkloadInputs;
+import org.qainsights.jmeter.ai.load.WorkloadPlan;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkloadDesignerDialogTest {
 
@@ -56,6 +62,23 @@ class WorkloadDesignerDialogTest {
         assertEquals(new Dimension(1140, 840),
                 WorkloadDesignerDialog.sizeWithinScreen(new Dimension(1140, 840),
                         new Rectangle(0, 0, 1920, 1080), new Insets(40, 0, 40, 0)));
+    }
+
+    @Test
+    void loadReplyUsesSelectedShellCommandAndFenceLanguage() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx"));
+        WorkloadApplier.ApplyResult result =
+                new WorkloadApplier.ApplyResult("Thread Group", java.util.List.of(), java.util.List.of());
+
+        for (CommandShell shell : CommandShell.values()) {
+            String reply = CommandDispatcher.loadReply(plan, result, shell);
+            assertTrue(reply.contains("```" + shell.languageTag() + "\n"
+                    + plan.command(shell) + "\n```"));
+        }
+        assertTrue(CommandDispatcher.loadReply(plan, result, CommandShell.CMD)
+                .contains("set HEAP=-Xms1g -Xmx1g\njmeter.bat"));
     }
 
     @Test

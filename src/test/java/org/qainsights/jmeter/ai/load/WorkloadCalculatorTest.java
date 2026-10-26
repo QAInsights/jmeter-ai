@@ -265,6 +265,75 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void generatesCommandsForEachShellWithOneGenerator() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx"));
+
+        assertEquals(plan.cliCommand(), plan.command());
+        assertTrue(plan.command(CommandShell.BASH).startsWith("export HEAP=\"-Xms1g -Xmx1g\"\n"));
+        assertTrue(plan.command(CommandShell.CMD).startsWith(
+                "set HEAP=-Xms1g -Xmx1g\njmeter.bat -n -t plan.jmx "));
+        assertTrue(plan.command(CommandShell.CMD).contains("-Jload.threads=8"));
+        assertTrue(plan.command(CommandShell.POWERSHELL).startsWith(
+                "$env:HEAP = \"-Xms1g -Xmx1g\"\njmeter.bat -n -t 'plan.jmx' "));
+        assertTrue(plan.command(CommandShell.POWERSHELL).contains("-Jload.threads=8"));
+    }
+
+    @Test
+    void generatesDistributedCommandsForEachShell() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                60L, 600L, 1, 1, "load", "plan.jmx", 1.0, 1000,
+                List.of("load-a", "load-b"), List.of(), List.of()));
+
+        for (CommandShell shell : CommandShell.values()) {
+            assertTrue(plan.command(shell).contains("-R load-a,load-b"));
+            assertTrue(plan.command(shell).contains("-Gload.threads=4"));
+            assertFalse(plan.command(shell).contains("-Jload.threads="));
+        }
+        assertTrue(plan.command(CommandShell.CMD).contains("jmeter.bat -n -t plan.jmx"));
+        assertTrue(plan.command(CommandShell.POWERSHELL).contains("jmeter.bat -n -t 'plan.jmx'"));
+    }
+
+    @Test
+    void quotesPathsWithSpacesInEveryShellAndDoublesPowerShellApostrophes() {
+        WorkloadPlan spaced = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                60L, 600L, 1, 1, "load", "My Plan.jmx"));
+
+        assertTrue(spaced.command(CommandShell.BASH).contains("-t 'My Plan.jmx'"));
+        assertTrue(spaced.command(CommandShell.CMD).contains("-t \"My Plan.jmx\""));
+        assertTrue(spaced.command(CommandShell.POWERSHELL).contains("-t 'My Plan.jmx'"));
+
+        WorkloadPlan apostrophe = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                60L, 600L, 1, 1, "load", "O'Brien plan.jmx"));
+        assertTrue(apostrophe.command(CommandShell.POWERSHELL).contains("-t 'O''Brien plan.jmx'"));
+    }
+
+    @Test
+    void fallsBackForPlanNamesThatCannotBeSafelyQuotedInCmd() {
+        for (String unsafe : List.of("plan\".jmx", "plan%.jmx", "plan^.jmx", "plan&.jmx",
+                "plan|.jmx", "plan<.jmx", "plan>.jmx")) {
+            WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                    WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, null,
+                    60L, 600L, 1, 1, "load", unsafe));
+
+            assertTrue(plan.command(CommandShell.CMD).contains("-t plan.jmx"));
+            assertTrue(plan.notes().stream().anyMatch(note -> note.contains("Windows cmd command uses plan.jmx")));
+        }
+    }
+
+    @Test
+    void selectsDefaultShellFromOperatingSystemName() {
+        assertEquals(CommandShell.CMD, CommandShell.forOsName("Windows 11"));
+        assertEquals(CommandShell.BASH, CommandShell.forOsName("Mac OS X"));
+        assertEquals(CommandShell.BASH, CommandShell.forOsName("Linux"));
+        assertEquals(CommandShell.BASH, CommandShell.forOsName(null));
+    }
+
+    @Test
     void rejectsInvalidOrUnrepresentableInputs() {
         assertThrows(IllegalArgumentException.class, () -> WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.REQUEST_RATE, 0, null, null, null, null, null, null,

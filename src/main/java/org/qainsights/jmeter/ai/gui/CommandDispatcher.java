@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
+import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
@@ -462,7 +463,7 @@ public class CommandDispatcher {
                         if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()) {
                             Telemetry.record(TelemetryFeature.LOAD_WARNED);
                         }
-                        cb.onWorkerSuccess(loadReply(plan, result));
+                        cb.onWorkerSuccess(loadReply(plan, result, completion.commandShell()));
                     }
                     cb.setInputEnabled(true);
                 }, aiCall).setVisible(true);
@@ -483,12 +484,13 @@ public class CommandDispatcher {
         return service == null ? null : prompt -> service.generateResponse(List.of(prompt));
     }
 
-    private static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result) {
+    static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result, CommandShell shell) {
         StringBuilder reply = new StringBuilder("Applied the workload under **")
                 .append(result.threadGroupName()).append("**:\n");
         reply.append("- Sampler mix: ").append(plan.samplerMix().display()).append("\n");
         result.changes().forEach(change -> reply.append("- ").append(change).append("\n"));
-        reply.append("\n```sh\n").append(plan.cliCommand()).append("\n```\n");
+        reply.append("\n```").append(shell.languageTag()).append("\n")
+                .append(plan.command(shell)).append("\n```\n");
         if (!plan.warnings().isEmpty() || !plan.assumptions().isEmpty()
                 || !plan.notes().isEmpty() || !result.warnings().isEmpty()) {
             reply.append("\n**Notes**\n");

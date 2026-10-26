@@ -17,6 +17,7 @@ public final class WorkloadCalculator {
     private static final String RESPONSE_ASSUMPTION =
             "Assumed 500 ms average response time. Measure it with a 1-user run (for example `@fix`) and update it.";
     private static final Pattern SAFE_PLAN_PATH = Pattern.compile("[A-Za-z0-9._/-]+");
+    private static final String UNSAFE_CMD_PLAN_CHARACTERS = "\"%^&|<>";
     private static final Pattern VALID_HOST = Pattern.compile("[A-Za-z0-9._:-]+");
     private static final Pattern VALID_PREFIX = Pattern.compile("[A-Za-z0-9._-]+");
 
@@ -163,14 +164,26 @@ public final class WorkloadCalculator {
                 notes.add("Replace agent1..N with your generator hostnames, or set remote_hosts in jmeter.properties and use -r.");
             }
         }
+        boolean cmdPlanFallback = containsUnsafeCmdPlanCharacter(planFile);
+        if (cmdPlanFallback) {
+            notes.add("The Windows cmd command uses plan.jmx because the plan name contains characters that cannot be safely quoted.");
+        }
         String command = cliCommand(planFile, prefix, threads, rampSeconds, durationSeconds, rpm,
-                thinkMillis, agents, perAgentThreads, perAgentRpm, hosts, heapPerGeneratorMb);
+                thinkMillis, agents, perAgentThreads, perAgentRpm, hosts, heapPerGeneratorMb,
+                CommandShell.BASH);
+        String cmdCommand = cliCommand(cmdPlanFallback ? "plan.jmx" : planFile, prefix, threads,
+                rampSeconds, durationSeconds, rpm, thinkMillis, agents, perAgentThreads,
+                perAgentRpm, hosts, heapPerGeneratorMb, CommandShell.CMD);
+        String powershellCommand = cliCommand(planFile, prefix, threads, rampSeconds,
+                durationSeconds, rpm, thinkMillis, agents, perAgentThreads, perAgentRpm,
+                hosts, heapPerGeneratorMb, CommandShell.POWERSHELL);
         return new WorkloadPlan(inputs.targetType(), inputs.targetValue(), threads,
                 inputs.samplersPerIteration(), targetRps, expectedRps, rpm, rampSeconds, holdSeconds,
                 durationSeconds, agents, perAgentThreads, perAgentRpm, responseMillis, thinkMillis,
                 prefix, assumptions, warnings, command, samplerMix, notes, hosts, maxThreads,
                 generatorsNeeded, heapPerGeneratorMb, capacityBasis, cpuSamplesPerSecond,
-                inputs.generatorVcpus(), inputs.generatorRamGb(), inputs.maxThreadsPerGenerator() != null);
+                inputs.generatorVcpus(), inputs.generatorRamGb(), inputs.maxThreadsPerGenerator() != null,
+                cmdCommand, powershellCommand);
     }
 
     private static void validate(WorkloadInputs inputs) {
@@ -245,11 +258,16 @@ public final class WorkloadCalculator {
 
     private static String cliCommand(String plan, String prefix, int threads, long ramp, long duration,
                                     Double rpm, long think, int agents, Integer perAgentThreads,
-                                    Double perAgentRpm, List<String> hosts, long heapPerGeneratorMb) {
+                                    Double perAgentRpm, List<String> hosts, long heapPerGeneratorMb,
+                                    CommandShell shell) {
         String heap = heapSize(heapPerGeneratorMb);
-        StringBuilder command = new StringBuilder("export HEAP=\"-Xms").append(heap)
-                .append(" -Xmx").append(heap).append("\"\n");
-        command.append("jmeter -n -t ").append(shellQuote(plan));
+        StringBuilder command = new StringBuilder(switch (shell) {
+            case BASH -> "export HEAP=\"-Xms" + heap + " -Xmx" + heap + "\"\n";
+            case CMD -> "set HEAP=-Xms" + heap + " -Xmx" + heap + "\n";
+            case POWERSHELL -> "$env:HEAP = \"-Xms" + heap + " -Xmx" + heap + "\"\n";
+        });
+        String executable = shell == CommandShell.BASH ? "jmeter" : "jmeter.bat";
+        command.append(executable).append(" -n -t ").append(planPath(plan, shell));
         if (agents > 1 || !hosts.isEmpty()) {
             List<String> names = hosts;
             if (names.isEmpty()) {
@@ -280,6 +298,18 @@ public final class WorkloadCalculator {
             }
         }
         return command.append(" -l results.jtl -e -o report").toString();
+    }
+
+    private static String planPath(String plan, CommandShell shell) {
+        return switch (shell) {
+            case BASH -> shellQuote(plan);
+            case CMD -> SAFE_PLAN_PATH.matcher(plan).matches() ? plan : "\"" + plan + "\"";
+            case POWERSHELL -> "'" + plan.replace("'", "''") + "'";
+        };
+    }
+
+    private static boolean containsUnsafeCmdPlanCharacter(String plan) {
+        return plan.chars().anyMatch(character -> UNSAFE_CMD_PLAN_CHARACTERS.indexOf(character) >= 0);
     }
 
     private static String shellQuote(String value) {

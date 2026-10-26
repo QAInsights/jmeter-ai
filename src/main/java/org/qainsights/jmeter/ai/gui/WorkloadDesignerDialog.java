@@ -50,6 +50,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
+import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.LoadShapeChart;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
@@ -104,6 +105,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final JButton applyButton = new JButton("Apply to Thread Group");
     private final JButton copyButton = new JButton("Copy");
+    private final JComboBox<CommandShell> shellCombo = new JComboBox<>(CommandShell.values());
     private final JButton askAiButton = new JButton("Ask AI");
     private final JButton copySuggestionButton = new JButton("Copy");
     private final JLabel hostsSourceLabel = createHostsSourceLabel();
@@ -138,6 +140,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
         this.aiCall = aiCall;
+        shellCombo.setSelectedItem(CommandShell.forOsName(System.getProperty("os.name")));
         maxThreadsPerGenerator.setToolTipText(
                 "From a calibration run on one generator at under 80% CPU");
         samplesPerVcpu.setPlaceholder("Default: 250 samples/s per vCPU");
@@ -675,6 +678,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         JPanel cliPanel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         cliPanel.setOpaque(false);
         cliPanel.setBorder(BorderFactory.createTitledBorder("Command line"));
+        JPanel shellRow = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
+        shellRow.setOpaque(false);
+        shellRow.add(new JLabel("Shell"));
+        shellRow.add(shellCombo);
+        cliPanel.add(shellRow, BorderLayout.NORTH);
         cliPanel.add(new JScrollPane(cliArea), BorderLayout.CENTER);
         copyButton.addActionListener(event -> copyCommand());
         cliPanel.add(copyButton, BorderLayout.EAST);
@@ -821,6 +829,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             }
             updatePreview();
         });
+        shellCombo.addActionListener(event -> updatePreview());
     }
 
     private void updatePreview() {
@@ -890,7 +899,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             String heapSize = plan.heapPerGeneratorMb() % 1024 == 0
                     ? plan.heapPerGeneratorMb() / 1024 + "g" : plan.heapPerGeneratorMb() + "m";
             resultValues[9].setText("HEAP=\"-Xms" + heapSize + " -Xmx" + heapSize + "\"");
-            cliArea.setText(plan.cliCommand());
+            cliArea.setText(plan.command(selectedShell()));
             setNotesText(warningsArea, String.join("\n", plan.warnings()));
             setNotesText(assumptionsArea, String.join("\n", plan.assumptions()));
             setNotesText(infoArea, String.join("\n", plan.notes()));
@@ -967,13 +976,14 @@ public final class WorkloadDesignerDialog extends JDialog {
                     preparation.model(), node, evaluation.plan());
             cancelAiWorker();
             completed = true;
-            onFinish.accept(new Completion(evaluation.plan(), result, "", false));
+            onFinish.accept(new Completion(evaluation.plan(), result, "", false, selectedShell()));
             dispose();
         } catch (Exception e) {
             cancelAiWorker();
             completed = true;
             onFinish.accept(new Completion(null, null,
-                    e.getMessage() == null ? "Could not apply the workload." : e.getMessage(), false));
+                    e.getMessage() == null ? "Could not apply the workload." : e.getMessage(),
+                    false, selectedShell()));
             dispose();
         }
     }
@@ -982,7 +992,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (!completed) {
             cancelAiWorker();
             completed = true;
-            onFinish.accept(new Completion(null, null, "", true));
+            onFinish.accept(new Completion(null, null, "", true, selectedShell()));
         }
         dispose();
     }
@@ -1006,6 +1016,10 @@ public final class WorkloadDesignerDialog extends JDialog {
         } catch (Exception ignored) {
             // Clipboard access is not available in every desktop environment.
         }
+    }
+
+    private CommandShell selectedShell() {
+        return (CommandShell) shellCombo.getSelectedItem();
     }
 
     private static String parsedNotes(WorkloadSpec spec) {
@@ -1106,7 +1120,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    public record Completion(WorkloadPlan plan, WorkloadApplier.ApplyResult result, String error, boolean cancelled) {
+    public record Completion(WorkloadPlan plan, WorkloadApplier.ApplyResult result, String error,
+                             boolean cancelled, CommandShell commandShell) {
+        public Completion {
+            commandShell = commandShell == null
+                    ? CommandShell.forOsName(System.getProperty("os.name")) : commandShell;
+        }
+
+        public Completion(WorkloadPlan plan, WorkloadApplier.ApplyResult result,
+                          String error, boolean cancelled) {
+            this(plan, result, error, cancelled, CommandShell.forOsName(System.getProperty("os.name")));
+        }
     }
 
     private record FormRow(JComponent label, JComponent field) {
