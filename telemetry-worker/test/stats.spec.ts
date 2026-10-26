@@ -190,6 +190,8 @@ describe("extended stats", () => {
 			 ('a', ?1, 'fix_fixed', 2), ('b', ?1, 'fix_guard_rollback', 1),
 			 ('a', ?1, 'fix_soft_failure', 1), ('a', ?1, 'fix_assertions_added', 1),
 			 ('a', ?1, 'fix_concurrency_fixed', 2), ('b', ?1, 'fix_concurrency_warn', 1),
+			 ('a', ?1, 'load_applied', 2), ('b', ?1, 'load_target_users', 1),
+			 ('a', ?1, 'load_distributed', 1),
 			 ('a', ?1, 'chat_message', 1)`
 		).bind(day(0)).run();
 
@@ -199,6 +201,7 @@ describe("extended stats", () => {
 			"Chat messages by provider (30d)", "Agent runs by provider (30d)", "Agent run size (30d)",
 			"Provider setup funnel (30d)", "Decisions calls (30d)", "Model picker (30d)",
 			"Make it pass (30d)",
+			"Workload Designer (30d)",
 			"JSR223 Refactor provider setting (30d)",
 		]) {
 			expect(html).toContain(heading);
@@ -216,6 +219,9 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>assertions_added</td><td>1</td><td>1</td><td>1.0</td>");
 		expect(html).toContain("<td>concurrency_fixed</td><td>2</td><td>1</td><td>2.0</td>");
 		expect(html).toContain("<td>concurrency_warn</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>applied</td><td>2</td><td>1</td><td>2.0</td>");
+		expect(html).toContain("<td>target_users</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>distributed</td><td>1</td><td>1</td><td>1.0</td>");
 
 		const usageStart = html.indexOf("<h2>Feature usage (30d)</h2>");
 		const usageEnd = html.indexOf("<h2>Chat messages by provider (30d)</h2>");
@@ -227,6 +233,7 @@ describe("extended stats", () => {
 			"decide_ok_openai", "decide_fail_openrouter_timeout", "decide_slow_typesafe",
 			"picker_open", "picker_search",
 			"fix_fixed", "fix_guard_rollback",
+			"load_applied", "load_target_users", "load_distributed",
 		]) {
 			expect(genericUsage).not.toContain(`<td>${key}</td>`);
 		}

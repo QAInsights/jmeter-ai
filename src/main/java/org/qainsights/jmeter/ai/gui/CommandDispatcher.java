@@ -2,6 +2,10 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
+import org.qainsights.jmeter.ai.load.LoadCommandHandler;
+import org.qainsights.jmeter.ai.load.WorkloadApplier;
+import org.qainsights.jmeter.ai.load.WorkloadInputs;
+import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.sla.SlaCommandHandler;
@@ -116,6 +120,10 @@ public class CommandDispatcher {
             case "@sla":
                 Telemetry.record(TelemetryFeature.CMD_SLA);
                 handleSlaCommand(message);
+                return;
+            case "@load":
+                Telemetry.record(TelemetryFeature.CMD_LOAD);
+                handleLoadCommand(message);
                 return;
             case "@testplan":
                 Telemetry.record(TelemetryFeature.CMD_TESTPLAN);
@@ -393,6 +401,65 @@ public class CommandDispatcher {
                         ProviderErrors.describe(e, "processing the @sla command", false));
             }
         });
+    }
+
+    private void handleLoadCommand(String message) {
+        cb.setLastCommandType("LOAD");
+        cb.setInputEnabled(false);
+        org.apache.jmeter.gui.tree.JMeterTreeNode selected = LoadCommandHandler.selectedNode();
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        org.apache.jmeter.gui.tree.JMeterTreeModel model = gui == null ? null : gui.getTreeModel();
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            try {
+                LoadCommandHandler.Preparation preparation = LoadCommandHandler.prepare(message, selected, model);
+                if (preparation.error() != null) {
+                    cb.onWorkerSuccess(preparation.error());
+                    cb.setInputEnabled(true);
+                    return;
+                }
+                new WorkloadDesignerDialog(preparation, completion -> {
+                    if (completion.cancelled()) {
+                        Telemetry.record(TelemetryFeature.LOAD_CANCELLED);
+                        cb.onWorkerSuccess("Workload Designer closed. No changes made.");
+                    } else if (!completion.error().isBlank()) {
+                        cb.onWorkerError("Error applying @load",
+                                new IllegalStateException(completion.error()), completion.error());
+                    } else {
+                        WorkloadPlan plan = completion.plan();
+                        WorkloadApplier.ApplyResult result = completion.result();
+                        Telemetry.record(TelemetryFeature.LOAD_APPLIED);
+                        Telemetry.record(plan.targetType() == WorkloadInputs.TargetType.USERS
+                                ? TelemetryFeature.LOAD_TARGET_USERS : TelemetryFeature.LOAD_TARGET_RATE);
+                        if (plan.agents() > 1) {
+                            Telemetry.record(TelemetryFeature.LOAD_DISTRIBUTED);
+                        }
+                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()) {
+                            Telemetry.record(TelemetryFeature.LOAD_WARNED);
+                        }
+                        cb.onWorkerSuccess(loadReply(plan, result));
+                    }
+                    cb.setInputEnabled(true);
+                }).setVisible(true);
+            } catch (RuntimeException e) {
+                cb.onWorkerError("Error processing @load command", e,
+                        ProviderErrors.describe(e, "processing the @load command", false));
+                cb.setInputEnabled(true);
+            }
+        });
+    }
+
+    private static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result) {
+        StringBuilder reply = new StringBuilder("Applied the workload under **")
+                .append(result.threadGroupName()).append("**:\n");
+        result.changes().forEach(change -> reply.append("- ").append(change).append("\n"));
+        reply.append("\n```sh\n").append(plan.cliCommand()).append("\n```\n");
+        if (!plan.warnings().isEmpty() || !plan.assumptions().isEmpty() || !result.warnings().isEmpty()) {
+            reply.append("\n**Notes**\n");
+            plan.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
+            plan.assumptions().forEach(note -> reply.append("- ").append(note).append("\n"));
+            result.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
+        }
+        return reply.append("\nPress Ctrl+Z in the chat to undo.").toString();
     }
 
     private void handleUsageCommand() {

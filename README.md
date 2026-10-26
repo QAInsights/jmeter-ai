@@ -69,7 +69,8 @@
 | 🖥️ **AI CLI Terminal** | Run **Claude Code**, **OpenAI Codex**, **OpenCode**, **Antigravity**, or **Grok CLI** directly in JMeter. This interactive terminal is separate from CLI-backed chat providers. |
 | 🎯 **Extract this** | Highlight a value in a View Results Tree response, right-click and pick **Extract this (Feather Wand)**. Feather Wand builds JSON, CSS selector, regex and boundary extractors, runs each one through JMeter's own extractor code against the real response, and offers only the ones that return exactly that value. Pick one, name the variable and it lands under the sampler that produced the response, optionally replacing later hard-coded copies with `${var}`. Works without an API key. |
 | 🧹 **Smart Refactoring** | Right-click in the JSR223 editor to refactor, format, or inject functions with AI. |
-| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@fix`, `@code`, `@usage`, each tailored to your test plan. |
+| 🔍 **Context-Aware Commands** | `@this`, `@testplan`, `@optimize`, `@lint`, `@wrap`, `@load`, `@fix`, `@code`, `@usage`, each tailored to your test plan. |
+| 📈 **Workload Designer** | Describe a target rate or user count in plain English. Preview a closed-model load shape, apply JMeter properties and copy a ready CLI command without an AI call. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
 | 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex, Claude Code, and OpenCode CLI providers. |
@@ -651,6 +652,7 @@ Type any of these directly in the chat box. All commands are context-aware and w
 | `@code` | Extract the last AI code block into the JSR223 editor. | `@code` |
 | `@usage` | Show token-usage stats and recent conversation history. | `@usage` |
 | `@sla` | Add SLA assertions (Duration Assertion and response-code Response Assertion) under the selected element. No AI call. | `@sla p95 under 800 ms and no 5xx` |
+| `@load` | Design threads, ramp-up, duration and throughput from a target. No AI call. | `@load 200 rps, 10 min ramp-up, 1 hour soak` |
 | `@fix` | Run the plan with 1 user and fix failures until it passes. | `@fix` |
 | `@prompts` | Browse and insert prompts from the prompt library. | `@prompts analyze` |
 
@@ -675,6 +677,15 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 - **Response time:** "under 800 ms", "below 1.5 s", "max 300ms" add a **Duration Assertion**. If you name a percentile or average (`p95`, `p99`, `avg`), the reply explains that JMeter assertions check each sample, so any single sample over the limit fails. That is stricter than a p95 target; read the percentile itself from the HTML dashboard or Aggregate Report.
 - **Response codes:** "no 5xx", "no 4xx or 5xx", "no errors", "only 2xx" or "status 200" add a **Response Assertion** on the response code with a clear failure message.
 - **Not supported:** run-level targets such as error rate or throughput are listed as "Not added", because a per-sample assertion can't check them. Anything else the parser doesn't recognise is listed back to you, never guessed.
+
+### `@load` Details
+`@load` opens a local workload designer. It parses the request without an AI call or server connection, previews the thread ramp and steady hold, and applies the reviewed values to an enabled Thread Group.
+
+- **Inputs:** requests per second (`rps`, `tps`, `qps`, requests per minute/hour), iterations or journeys per second/minute/hour, concurrent users or threads, response time, think time, ramp-up, hold duration and load generators. Thousands separators and `k`/`m` suffixes are supported.
+- **Sizing:** for a rate target, `threads ≈ requests/s × (response time + think time)` with 1.5 headroom because the Constant Throughput Timer caps the rate. Iteration rates are multiplied by enabled samplers per iteration. User targets keep the requested thread count and can optionally be capped at a request rate.
+- **Applied properties:** the Thread Group receives `ThreadGroup.num_threads`, `ThreadGroup.ramp_time`, `ThreadGroup.scheduler=true`, `ThreadGroup.duration` and infinite Loop Controller loops. Rate targets add or update a Constant Throughput Timer; positive think time adds or updates a Constant Timer. Values use `${__P(load.*)}` properties by default, with the prefix editable in the dialog. Ctrl+Z in chat restores the prior values and removes timers added by the command.
+- **CLI:** the dialog generates a non-GUI JMeter command with `-J` properties for one generator or `-R` and `-G` properties for distributed generators.
+- **Limits:** only a closed-model ramp-up and steady hold are configured. Spike, step and ramp-down shapes require an Open Model Thread Group or another plugin. Existing timers are not included in the sizing estimate.
 
 ### `@wrap` Details
 `@wrap` uses pattern matching (not AI) to group related HTTP samplers under Transaction Controllers, preserving child elements and hierarchy. Great for imported or recorded plans.
