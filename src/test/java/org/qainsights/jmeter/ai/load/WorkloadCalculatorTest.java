@@ -166,9 +166,10 @@ class WorkloadCalculatorTest {
                 List.of(new JdbcPool("payments", 10)));
         WorkloadPlan plan = WorkloadCalculator.calculate(inputs);
 
-        assertTrue(plan.notes().contains("JDBC pool \"payments\" allows 10 connections but 225 threads share it; "
+        assertTrue(plan.warnings().contains("JDBC pool \"payments\" allows 10 connections but 225 threads share it; "
                 + "threads will queue and the target may not be reached. Set Max Number of Connections to 0 "
                 + "(one connection per thread) or at least 225."));
+        assertFalse(plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \"")));
     }
 
     private static final class KafkaProducerSampler {

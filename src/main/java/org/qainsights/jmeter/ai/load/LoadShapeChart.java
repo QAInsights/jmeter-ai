@@ -95,9 +95,6 @@ public final class LoadShapeChart extends JComponent {
         g.setFont(getFont());
         FontMetrics metrics = g.getFontMetrics();
         g.setColor(ThemeColors.secondaryText());
-        g.drawString("Threads", left, top - 7);
-        String rateAxis = "Samples/s";
-        g.drawString(rateAxis, right - metrics.stringWidth(rateAxis), top - 7);
         double maxRps = plan == null ? 0 : WorkloadChartModel.requestRateAxisMaximum(plan);
         for (int tick = 0; tick <= 4; tick++) {
             int y = bottom - (bottom - top) * tick / 4;

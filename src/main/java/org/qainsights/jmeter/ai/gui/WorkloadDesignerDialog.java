@@ -2,11 +2,16 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.WindowAdapter;
@@ -16,7 +21,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -27,7 +31,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JViewport;
 import javax.swing.KeyStroke;
+import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
@@ -49,9 +55,10 @@ import org.qainsights.jmeter.ai.load.WorkloadSpec;
 public final class WorkloadDesignerDialog extends JDialog {
     private final LoadCommandHandler.Preparation preparation;
     private final Consumer<Completion> onFinish;
-    private final JPanel form = new JPanel();
-    private final JPanel capRow;
-    private final JPanel messagesPerSampleRow;
+    private final FormPanel form = new FormPanel();
+    private final List<FormRow> formRows = new ArrayList<>();
+    private final FormRow capRow;
+    private final FormRow messagesPerSampleRow;
     private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
@@ -73,12 +80,15 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JLabel[] resultValues = new JLabel[9];
     private final JTextArea warningsArea = notesArea(2, ThemeColors.warning());
     private final JTextArea assumptionsArea = notesArea(2, ThemeColors.info());
+    private final JTextArea infoArea = notesArea(2, ThemeColors.info());
     private final JTextArea parsedArea = notesArea(2, ThemeColors.secondaryText());
     private JPanel notes;
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final JButton applyButton = new JButton("Apply to Thread Group");
     private final JButton copyButton = new JButton("Copy");
     private boolean prefixEdited;
+    private boolean capRowVisible;
+    private boolean messagesPerSampleRowVisible;
     private boolean completed;
     private WorkloadFormState.Evaluation evaluation;
 
@@ -87,8 +97,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         super(mainFrame(), "Workload Designer", ModalityType.APPLICATION_MODAL);
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
-        capRow = formRow(new JLabel("<html>Cap at samples<br>per second</html>"), cap);
-        messagesPerSampleRow = formRow(new JLabel("Messages per sample"), messagesPerSample);
+        capRow = new FormRow(new JLabel("<html>Cap at samples<br>per second</html>"), cap);
+        messagesPerSampleRow = new FormRow(new JLabel("Messages per sample"), messagesPerSample);
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -105,7 +115,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 cancel();
             }
         });
-        setSize(1080, 840);
+        setSize(1140, 840);
         setLocationRelativeTo(getOwner());
         prefill(preparation.spec());
         installListeners();
@@ -132,6 +142,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         columns.setOpaque(false);
         JScrollPane formScroll = new JScrollPane(buildForm());
         formScroll.setBorder(null);
+        formScroll.setOpaque(false);
         formScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         formScroll.getViewport().setOpaque(false);
         columns.add(formScroll);
@@ -154,8 +165,6 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private JPanel buildForm() {
-        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setOpaque(false);
         groupCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(value == null ? "" : value.getName()));
         for (JMeterTreeNode node : preparation.threadGroups()) {
@@ -165,6 +174,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow("Thread Group", groupCombo);
         addFormRow("Target type", targetCombo);
         addFormRow("Target value", target);
+        formRows.add(messagesPerSampleRow);
+        formRows.add(capRow);
         addFormRow("<html>Average response time<br>(ms, default 500)</html>", response);
         addFormRow("<html>Think time per sample<br>(ms, default 0)</html>", think);
         addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
@@ -175,22 +186,51 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
+        rebuildFormRows();
         return form;
     }
 
     private void addFormRow(String label, JComponent field) {
-        form.add(formRow(new JLabel(label), field));
-        form.add(Box.createVerticalStrut(UiTokens.SPACE_1));
+        formRows.add(new FormRow(new JLabel(label), field));
     }
 
-    private static JPanel formRow(JComponent label, JComponent field) {
-        JPanel row = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
-        row.setOpaque(false);
-        row.add(label, BorderLayout.WEST);
-        row.add(field, BorderLayout.CENTER);
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
-        return row;
+    private void rebuildFormRows() {
+        form.removeAll();
+        int gridy = 0;
+        for (FormRow row : formRows) {
+            if ((row == capRow && !capRowVisible)
+                    || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)) {
+                continue;
+            }
+            GridBagConstraints labelConstraints = new GridBagConstraints();
+            labelConstraints.gridx = 0;
+            labelConstraints.gridy = gridy;
+            labelConstraints.anchor = GridBagConstraints.LINE_START;
+            labelConstraints.fill = GridBagConstraints.HORIZONTAL;
+            labelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, UiTokens.SPACE_2);
+            form.add(row.label(), labelConstraints);
+
+            GridBagConstraints fieldConstraints = new GridBagConstraints();
+            fieldConstraints.gridx = 1;
+            fieldConstraints.gridy = gridy++;
+            fieldConstraints.weightx = 1;
+            fieldConstraints.anchor = GridBagConstraints.LINE_START;
+            fieldConstraints.fill = GridBagConstraints.HORIZONTAL;
+            fieldConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
+            form.add(row.field(), fieldConstraints);
+        }
+        GridBagConstraints filler = new GridBagConstraints();
+        filler.gridx = 0;
+        filler.gridy = gridy;
+        filler.gridwidth = 2;
+        filler.weightx = 1;
+        filler.weighty = 1;
+        filler.fill = GridBagConstraints.VERTICAL;
+        JPanel fillerPanel = new JPanel();
+        fillerPanel.setOpaque(false);
+        form.add(fillerPanel, filler);
+        form.revalidate();
+        form.repaint();
     }
 
     private JPanel buildPreview() {
@@ -235,6 +275,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private static JPanel withUnit(JTextField field, JComboBox<String> unit) {
+        unit.setPrototypeDisplayValue("min");
         JPanel panel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         panel.setOpaque(false);
         panel.add(field, BorderLayout.CENTER);
@@ -386,9 +427,8 @@ public final class WorkloadDesignerDialog extends JDialog {
             resultValues[8].setText("HEAP=\"-Xms" + heapSize + " -Xmx" + heapSize + "\"");
             cliArea.setText(plan.cliCommand());
             setNotesText(warningsArea, String.join("\n", plan.warnings()));
-            List<String> notesAndAssumptions = new ArrayList<>(plan.assumptions());
-            notesAndAssumptions.addAll(plan.notes());
-            setNotesText(assumptionsArea, String.join("\n", notesAndAssumptions));
+            setNotesText(assumptionsArea, String.join("\n", plan.assumptions()));
+            setNotesText(infoArea, String.join("\n", plan.notes()));
         } else {
             for (JLabel value : resultValues) {
                 value.setText("-");
@@ -396,13 +436,15 @@ public final class WorkloadDesignerDialog extends JDialog {
             cliArea.setText("");
             setNotesText(warningsArea, "");
             setNotesText(assumptionsArea, "");
+            setNotesText(infoArea, "");
         }
         warningsArea.setVisible(!warningsArea.getText().isBlank());
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
+        infoArea.setVisible(!infoArea.getText().isBlank());
         setNotesText(parsedArea, parsedNotes(preparation.spec()));
         parsedArea.setVisible(!parsedArea.getText().isBlank());
         notes.removeAll();
-        for (JTextArea area : List.of(warningsArea, assumptionsArea, parsedArea)) {
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
             if (area.isVisible()) {
                 area.setAlignmentX(Component.LEFT_ALIGNMENT);
                 notes.add(area);
@@ -415,23 +457,11 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void updateTargetRows() {
         boolean users = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.USERS;
         boolean messages = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.MESSAGE_RATE;
-        setOptionalRow(messagesPerSampleRow, messages);
-        setOptionalRow(capRow, users);
-    }
-
-    private void setOptionalRow(JPanel row, boolean visible) {
-        int index = form.getComponentZOrder(row);
-        if (visible && index < 0) {
-            form.add(row, 6);
-            form.add(Box.createVerticalStrut(UiTokens.SPACE_1), 7);
-        } else if (!visible && index >= 0) {
-            form.remove(index);
-            if (form.getComponentCount() > index) {
-                form.remove(index);
-            }
+        if (capRowVisible != users || messagesPerSampleRowVisible != messages) {
+            capRowVisible = users;
+            messagesPerSampleRowVisible = messages;
+            rebuildFormRows();
         }
-        form.revalidate();
-        form.repaint();
     }
 
     private void apply() {
@@ -534,6 +564,42 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     public record Completion(WorkloadPlan plan, WorkloadApplier.ApplyResult result, String error, boolean cancelled) {
+    }
+
+    private record FormRow(JComponent label, JComponent field) {
+    }
+
+    private static final class FormPanel extends JPanel implements Scrollable {
+        private FormPanel() {
+            super(new GridBagLayout());
+            setOpaque(false);
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return UiTokens.CONTROL_HEIGHT;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return Math.max(UiTokens.CONTROL_HEIGHT, visibleRect.height - UiTokens.CONTROL_HEIGHT);
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            Container parent = getParent();
+            return parent instanceof JViewport viewport && getPreferredSize().height < viewport.getHeight();
+        }
     }
 
     private static final class WorkloadCalculatorFormat {

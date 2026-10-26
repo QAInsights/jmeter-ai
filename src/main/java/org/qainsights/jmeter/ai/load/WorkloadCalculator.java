@@ -102,7 +102,8 @@ public final class WorkloadCalculator {
         long threadsPerGenerator = perAgentThreads == null ? threads : perAgentThreads;
         long heapPerGeneratorMb = ceilTo512(Math.max(1024, 512 + 2 * threadsPerGenerator));
         SamplerMix samplerMix = SamplerMix.classify(inputs.samplerClasses());
-        List<String> notes = protocolNotes(inputs.jdbcPools(), samplerMix, (int) threadsPerGenerator);
+        warnings.addAll(protocolWarnings(inputs.jdbcPools(), samplerMix, (int) threadsPerGenerator));
+        List<String> notes = protocolNotes(samplerMix);
         if (inputs.targetType() == ITERATION_RATE) {
             notes.add("Samples per iteration counts each enabled sampler once; If, Loop, Throughput and Transaction (parent sample) controllers change the real number.");
         }
@@ -226,18 +227,24 @@ public final class WorkloadCalculator {
         return megabytes % 1024 == 0 ? megabytes / 1024 + "g" : megabytes + "m";
     }
 
-    private static List<String> protocolNotes(List<JdbcPool> pools, SamplerMix mix, int threadsPerGenerator) {
-        List<String> notes = new ArrayList<>();
+    private static List<String> protocolWarnings(List<JdbcPool> pools, SamplerMix mix,
+                                                 int threadsPerGenerator) {
+        List<String> warnings = new ArrayList<>();
         if (mix.has(SamplerMix.Kind.JDBC)) {
             for (JdbcPool pool : pools) {
                 if (pool.poolMax() > 0 && pool.poolMax() < threadsPerGenerator) {
-                    notes.add("JDBC pool \"" + pool.variableName() + "\" allows " + pool.poolMax()
+                    warnings.add("JDBC pool \"" + pool.variableName() + "\" allows " + pool.poolMax()
                             + " connections but " + threadsPerGenerator + " threads share it; threads will queue and the target may not be reached. "
                             + "Set Max Number of Connections to 0 (one connection per thread) or at least "
                             + threadsPerGenerator + ".");
                 }
             }
         }
+        return warnings;
+    }
+
+    private static List<String> protocolNotes(SamplerMix mix) {
+        List<String> notes = new ArrayList<>();
         if (mix.has(SamplerMix.Kind.KAFKA)) {
             notes.add("Kafka samples may carry multiple messages. Use Messages per second; producers usually expect an open-model fixed rate, which the Constant Throughput Timer only approximates.");
         }

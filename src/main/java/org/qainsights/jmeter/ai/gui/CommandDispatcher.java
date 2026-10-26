@@ -441,14 +441,13 @@ public class CommandDispatcher {
                         if (!plan.generatorHosts().isEmpty()) {
                             Telemetry.record(TelemetryFeature.LOAD_HOSTS_SET);
                         }
-                        if (plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
+                        if (plan.warnings().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
                             Telemetry.record(TelemetryFeature.LOAD_JDBC_WARNED);
                         }
                         if (plan.agents() < plan.generatorsNeeded()) {
                             Telemetry.record(TelemetryFeature.LOAD_GENERATORS_SHORT);
                         }
-                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()
-                                || plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
+                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()) {
                             Telemetry.record(TelemetryFeature.LOAD_WARNED);
                         }
                         cb.onWorkerSuccess(loadReply(plan, result));
@@ -473,9 +472,9 @@ public class CommandDispatcher {
                 || !plan.notes().isEmpty() || !result.warnings().isEmpty()) {
             reply.append("\n**Notes**\n");
             plan.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
+            result.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
             plan.assumptions().forEach(note -> reply.append("- ").append(note).append("\n"));
             plan.notes().forEach(note -> reply.append("- ").append(note).append("\n"));
-            result.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
         }
         return reply.append("\nPress Ctrl+Z in the chat to undo.").toString();
     }
