@@ -44,6 +44,8 @@ public final class WorkloadApplier {
     static final int CALC_MODE_THREAD_GROUP_SHARED = 4;
     private static final Logger log = LoggerFactory.getLogger(WorkloadApplier.class);
     private static final Pattern NON_SLUG = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern DESIGNER_MANAGED_SCHEDULE =
+            Pattern.compile("^rate\\(\\$\\{__P\\(([A-Za-z0-9_.]+)\\.s1\\.rate,");
     private static LastApplied lastApplied;
 
     private WorkloadApplier() {
@@ -63,9 +65,10 @@ public final class WorkloadApplier {
         JMeterTreeNode openModelNode = selectedNode;
         try {
             if (selectedNode.getTestElement() instanceof ThreadGroup) {
-                String convertedName = enabledManagedOpenModelSiblingName(selectedNode);
-                if (convertedName != null) {
-                    throw new IllegalArgumentException("This Thread Group was converted to \"" + convertedName
+                JMeterTreeNode convertedSibling = enabledManagedOpenModelSibling(selectedNode);
+                if (convertedSibling != null) {
+                    throw new IllegalArgumentException("This Thread Group was converted to \""
+                            + convertedSibling.getName()
                             + "\". Select it to change the shape.");
                 }
                 JMeterTreeNode parent = (JMeterTreeNode) selectedNode.getParent();
@@ -92,7 +95,8 @@ public final class WorkloadApplier {
                 }
                 setEnabled(model, selectedNode, false, enabledStates, properties);
                 changes.add("Added " + openModelNode.getName());
-            } else if (!selectedNode.getTestElement().getPropertyAsBoolean(OPEN_MODEL_MANAGED)) {
+            } else if (!(selectedNode.getTestElement() instanceof OpenModelThreadGroup openModel)
+                    || !isDesignerManagedOpenModel(openModel)) {
                 throw new IllegalArgumentException(
                         "Only Open Model Thread Groups created by Workload Designer can be updated.");
             }
@@ -128,8 +132,9 @@ public final class WorkloadApplier {
         }
     }
 
-    private static String enabledManagedOpenModelSiblingName(JMeterTreeNode source) {
-        if (source.isEnabled() || source.getParent() == null) {
+    static JMeterTreeNode enabledManagedOpenModelSibling(JMeterTreeNode source) {
+        if (source == null || source.isEnabled() || source.getParent() == null
+                || !(source.getTestElement() instanceof ThreadGroup)) {
             return null;
         }
         JMeterTreeNode parent = (JMeterTreeNode) source.getParent();
@@ -137,13 +142,28 @@ public final class WorkloadApplier {
             JMeterTreeNode sibling = (JMeterTreeNode) parent.getChildAt(index);
             if (sibling == source || !sibling.isEnabled()
                     || !(sibling.getTestElement() instanceof OpenModelThreadGroup group)
-                    || !group.getPropertyAsBoolean(OPEN_MODEL_MANAGED)
-                    || !source.getName().equals(group.getPropertyAsString(OPEN_MODEL_SOURCE))) {
+                    || !isDesignerManagedOpenModel(group)
+                    || !hasShapeSiblingName(source.getName(), sibling.getName())) {
                 continue;
             }
-            return sibling.getName();
+            return sibling;
         }
         return null;
+    }
+
+    private static boolean hasShapeSiblingName(String sourceName, String openModelName) {
+        for (WorkloadShape shape : WorkloadShape.values()) {
+            if (shape.usesOpenModelThreadGroup()
+                    && openModelName.equals(sourceName + " (" + shape + ")")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isDesignerManagedOpenModel(OpenModelThreadGroup group) {
+        String schedule = group.getPropertyAsString(OPEN_MODEL_SCHEDULE);
+        return schedule != null && DESIGNER_MANAGED_SCHEDULE.matcher(schedule).lookingAt();
     }
 
     private static void applyThinkTimer(JMeterTreeModel model, JMeterTreeNode group, WorkloadPlan plan,

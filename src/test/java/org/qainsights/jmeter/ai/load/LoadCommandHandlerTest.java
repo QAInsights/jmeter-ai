@@ -8,6 +8,7 @@ import org.apache.jmeter.protocol.jdbc.config.DataSourceElement;
 import org.apache.jmeter.protocol.jdbc.sampler.FakeJDBCSampler;
 import org.apache.jmeter.modifiers.JSR223PreProcessor;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.threads.openmodel.OpenModelThreadGroup;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,6 +54,28 @@ class LoadCommandHandlerTest {
         assertNull(preparation.error());
         assertTrue(preparation.spec().isEmpty());
         assertNotNull(preparation.selectedGroup());
+    }
+
+    @Test
+    void redirectsFromConvertedOriginalAndProvidesInfoNote() throws Exception {
+        JMeterTreeModel model = modelWithSampler();
+        JMeterTreeNode original = LoadCommandHandler.eligibleThreadGroups(model).get(0);
+        ((ThreadGroup) original.getTestElement()).setName("Checkout");
+        original.setEnabled(false);
+        OpenModelThreadGroup converted = new OpenModelThreadGroup();
+        converted.setName("Checkout (Step)");
+        converted.setProperty(WorkloadApplier.OPEN_MODEL_SCHEDULE,
+                "rate(${__P(load.s1.rate,1)}/sec)");
+        JMeterTreeNode convertedNode = model.addComponent(converted, (JMeterTreeNode) original.getParent());
+        model.addComponent(new HTTPSamplerProxy(), convertedNode);
+
+        LoadCommandHandler.Preparation preparation = LoadCommandHandler.prepare(
+                "@load step 100 to 500 rps by 100 every 5 min", original, model, key -> "");
+
+        assertNull(preparation.error());
+        assertEquals(convertedNode, preparation.selectedGroup());
+        assertEquals("\"Checkout\" was converted to \"Checkout (Step)\". "
+                + "Editing \"Checkout (Step)\".", preparation.redirectNote());
     }
 
     @Test

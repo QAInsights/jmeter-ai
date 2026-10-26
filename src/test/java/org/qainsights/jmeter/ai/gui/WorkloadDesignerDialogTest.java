@@ -206,6 +206,16 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void displaysConvertedOriginalRedirectAlongsidePlanNotes() {
+        String redirectNote = "\"Checkout\" was converted to \"Checkout (Step)\". "
+                + "Editing \"Checkout (Step)\".";
+
+        assertEquals(redirectNote + "\nSoak guidance.",
+                WorkloadDesignerDialog.infoNotes(java.util.List.of("Soak guidance."), redirectNote));
+        assertEquals(redirectNote, WorkloadDesignerDialog.infoNotes(java.util.List.of(), redirectNote));
+    }
+
+    @Test
     void customStageHeaderUsesTheCurrentTargetUnit() {
         assertEquals("Target (samples/s)",
                 WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.REQUEST_RATE));

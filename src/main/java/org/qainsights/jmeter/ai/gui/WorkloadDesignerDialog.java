@@ -1183,7 +1183,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             cliArea.setText(plan.command(selectedShell()));
             setNotesText(warningsArea, String.join("\n", plan.warnings()));
             setNotesText(assumptionsArea, String.join("\n", plan.assumptions()));
-            setNotesText(infoArea, String.join("\n", plan.notes()));
+            setNotesText(infoArea, infoNotes(plan.notes(), preparation.redirectNote()));
         } else {
             for (JLabel value : resultValues) {
                 value.setText("-");
@@ -1191,7 +1191,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             cliArea.setText("");
             setNotesText(warningsArea, "");
             setNotesText(assumptionsArea, "");
-            setNotesText(infoArea, "");
+            setNotesText(infoArea, infoNotes(List.of(), preparation.redirectNote()));
         }
         warningsArea.setVisible(!warningsArea.getText().isBlank());
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
@@ -1720,5 +1720,16 @@ public final class WorkloadDesignerDialog extends JDialog {
             return "Not used (Open Model arrivals)";
         }
         return plan.rpm() == null ? "No timer" : WorkloadCalculatorFormat.format(plan.rpm());
+    }
+
+    static String infoNotes(List<String> planNotes, String redirectNote) {
+        List<String> notes = new java.util.ArrayList<>();
+        if (redirectNote != null && !redirectNote.isBlank()) {
+            notes.add(redirectNote);
+        }
+        if (planNotes != null) {
+            notes.addAll(planNotes);
+        }
+        return String.join("\n", notes);
     }
 }

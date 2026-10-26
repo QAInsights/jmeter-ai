@@ -417,6 +417,10 @@ class WorkloadApplierTest {
         WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
         JMeterTreeNode parent = (JMeterTreeNode) fixture.groupNode.getParent();
         JMeterTreeNode openModelNode = (JMeterTreeNode) parent.getChildAt(parent.getIndex(fixture.groupNode) + 1);
+        OpenModelThreadGroup openModel = assertInstanceOf(OpenModelThreadGroup.class,
+                openModelNode.getTestElement());
+        openModel.removeProperty(WorkloadApplier.OPEN_MODEL_MANAGED);
+        openModel.removeProperty(WorkloadApplier.OPEN_MODEL_SOURCE);
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan()));
@@ -464,6 +468,10 @@ class WorkloadApplierTest {
         WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
         JMeterTreeNode openModelNode = (JMeterTreeNode) ((JMeterTreeNode) fixture.groupNode.getParent())
                 .getChildAt(((JMeterTreeNode) fixture.groupNode.getParent()).getIndex(fixture.groupNode) + 1);
+        OpenModelThreadGroup openModel = assertInstanceOf(OpenModelThreadGroup.class,
+                openModelNode.getTestElement());
+        openModel.removeProperty(WorkloadApplier.OPEN_MODEL_MANAGED);
+        openModel.removeProperty(WorkloadApplier.OPEN_MODEL_SOURCE);
         WorkloadPlan updated = WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 500L, 0L,
                 10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
@@ -485,6 +493,23 @@ class WorkloadApplierTest {
                 () -> WorkloadApplier.apply(fixture.model, openModelNode, endurance));
         assertEquals("Load and Endurance need a standard Thread Group. Select the original group, "
                 + "or pick Step, Spike, Stress or Custom.", enduranceError.getMessage());
+    }
+
+    @Test
+    void refusesHandMadeOpenModelWithLiteralSchedule() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        OpenModelThreadGroup handMade = new OpenModelThreadGroup();
+        handMade.setName("Manual arrivals");
+        handMade.setProperty(TestElement.TEST_CLASS, OpenModelThreadGroup.class.getName());
+        handMade.setProperty(TestElement.GUI_CLASS, WorkloadApplier.OPEN_MODEL_GUI);
+        handMade.setProperty(WorkloadApplier.OPEN_MODEL_SCHEDULE, "rate(10/sec)");
+        JMeterTreeNode handMadeNode = fixture.model.addComponent(handMade, planNode(fixture.model));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> WorkloadApplier.apply(fixture.model, handMadeNode, openModelPlan()));
+
+        assertEquals("Only Open Model Thread Groups created by Workload Designer can be updated.",
+                error.getMessage());
     }
 
     private static Fixture fixture(String name, boolean withSampler) throws Exception {

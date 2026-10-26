@@ -49,17 +49,25 @@ public final class LoadCommandHandler {
             return Preparation.error(NO_THREAD_GROUP);
         }
         JMeterTreeNode selectedGroup = containingGroup(selected, groups);
+        JMeterTreeNode redirectedGroup = WorkloadApplier.enabledManagedOpenModelSibling(selected);
         JMeterTreeNode defaultGroup = selectedGroup != null
                 && WorkloadApplier.countEnabledSamplers(selectedGroup) > 0
-                ? selectedGroup : groups.stream()
+                ? selectedGroup : redirectedGroup != null
+                && WorkloadApplier.countEnabledSamplers(redirectedGroup) > 0
+                ? redirectedGroup : groups.stream()
                 .filter(group -> WorkloadApplier.countEnabledSamplers(group) > 0)
                 .findFirst().orElse(null);
         if (defaultGroup == null) {
             return Preparation.error(NO_REQUESTS);
         }
+        String redirectNote = defaultGroup == redirectedGroup
+                ? "\"" + selected.getName() + "\" was converted to \"" + redirectedGroup.getName()
+                + "\". Editing \"" + redirectedGroup.getName() + "\"."
+                : null;
         List<String> hostsFromProperties = remoteHosts(propertyLookup.apply("remote_hosts"), spec.agents());
         return new Preparation(null, spec, groups, defaultGroup,
-                groups.size(), model, testPlanFileName(), hostsFromProperties, !hostsFromProperties.isEmpty());
+                groups.size(), model, testPlanFileName(), hostsFromProperties,
+                !hostsFromProperties.isEmpty(), redirectNote);
     }
 
     public static List<JMeterTreeNode> eligibleThreadGroups(JMeterTreeModel model) {
@@ -256,7 +264,7 @@ public final class LoadCommandHandler {
     public record Preparation(String error, WorkloadSpec spec, List<JMeterTreeNode> threadGroups,
                               JMeterTreeNode selectedGroup, int eligibleCount, JMeterTreeModel model,
                               String planFileName, List<String> generatorHosts,
-                              boolean hostsFromProperties) {
+                              boolean hostsFromProperties, String redirectNote) {
         public Preparation {
             threadGroups = threadGroups == null ? List.of() : List.copyOf(threadGroups);
             generatorHosts = generatorHosts == null ? List.of() : List.copyOf(generatorHosts);
@@ -265,11 +273,12 @@ public final class LoadCommandHandler {
         public Preparation(String error, WorkloadSpec spec, List<JMeterTreeNode> threadGroups,
                            JMeterTreeNode selectedGroup, int eligibleCount, JMeterTreeModel model,
                            String planFileName) {
-            this(error, spec, threadGroups, selectedGroup, eligibleCount, model, planFileName, List.of(), false);
+            this(error, spec, threadGroups, selectedGroup, eligibleCount, model, planFileName,
+                    List.of(), false, null);
         }
 
         private static Preparation error(String message) {
-            return new Preparation(message, null, List.of(), null, 0, null, "plan.jmx", List.of(), false);
+            return new Preparation(message, null, List.of(), null, 0, null, "plan.jmx", List.of(), false, null);
         }
     }
 }
