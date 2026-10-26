@@ -107,6 +107,16 @@ class JMeterProxyRecorderTest {
     }
 
     @Test
+    void should_setGuiClassOnTemporaryProxyControl() {
+        ProxyControl proxy = new ProxyControl();
+        JMeterProxyRecorder.configureProxy(proxy, model, scaffold.addBusinessStep("Test"),
+                JMeterProxyRecorder.findFreePort());
+
+        assertEquals("org.apache.jmeter.protocol.http.proxy.gui.ProxyControlGui",
+                proxy.getPropertyAsString(org.apache.jmeter.testelement.TestElement.GUI_CLASS));
+    }
+
+    @Test
     void should_failPrerequisites_when_jmeterBinDirectoryIsMissing() {
         String original = JMeterUtils.getJMeterHome();
         try {

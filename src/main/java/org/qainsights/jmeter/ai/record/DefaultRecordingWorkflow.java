@@ -52,6 +52,9 @@ public final class DefaultRecordingWorkflow implements RecordingWorkflowRunnable
                     service.record(config, artifactDir, line -> cb.processAiResponse(line));
 
             cb.processAiResponse(report(outcome));
+            if (outcome.sampleCount() > 0) {
+                cb.offerMakeItPass();
+            }
         } catch (RecordingException e) {
             log.warn("Recording failed", e);
             cb.processAiResponse("Recording failed: " + e.getMessage());

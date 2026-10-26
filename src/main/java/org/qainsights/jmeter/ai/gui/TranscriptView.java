@@ -6,6 +6,8 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -215,6 +217,47 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         triageCards.add(card);
         insertBeforeGlue(card);
         relayout(card);
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs) {
+        addFixResult(result, undo, saveAs, () -> { });
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, Runnable undo, Runnable saveAs, Runnable keep) {
+        addFixResult(result, () -> {
+            undo.run();
+            return true;
+        }, saveAs, keep);
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
+                      Runnable saveAs, Runnable keep) {
+        addFixResult(result, undo, saveAs, keep, ignored -> { });
+    }
+
+    void addFixResult(org.qainsights.jmeter.ai.fix.FixResult result, BooleanSupplier undo,
+                      Runnable saveAs, Runnable keep, Consumer<String> reportFallback) {
+        dismissWelcome();
+        finishActivityIfRunning();
+        FixResultCard card = new FixResultCard(result, undo, saveAs, keep, reportFallback);
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        insertBeforeGlue(card);
+        relayout(card);
+    }
+
+    void addMakeItPassOffer(Runnable onClick) {
+        dismissWelcome();
+        JPanel offer = new JPanel();
+        offer.setOpaque(false);
+        offer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        javax.swing.JButton button = new javax.swing.JButton("Make it pass");
+        button.addActionListener(event -> {
+            offer.setVisible(false);
+            onClick.run();
+        });
+        offer.add(button);
+        insertBeforeGlue(offer);
+        relayout(offer);
     }
 
     private void finishActivityIfRunning() {

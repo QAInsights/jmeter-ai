@@ -15,6 +15,7 @@ import org.apache.jmeter.testelement.TestStateListener;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
+import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +95,7 @@ public class CorrelationEngine {
         HashTree testPlanTree = guiPackage.getTreeModel().getTestPlan();
         ListedHashTree clonedTree = (ListedHashTree) testPlanTree.clone();
         HashTree execTree = JMeter.convertSubTree(clonedTree, true);
+        TestPlanRunner.forceSingleIteration(execTree);
         CountDownLatch done = new CountDownLatch(1);
         Collector.prepare();
         Ender.prepare(done);
@@ -102,18 +104,6 @@ public class CorrelationEngine {
             if (sub == null) continue;
             sub.add(new Collector());
             sub.add(new Ender());
-            for (Object subKey : sub.list()) {
-                if (subKey instanceof ThreadGroup) {
-                    ThreadGroup tg = (ThreadGroup) subKey;
-                    tg.setNumThreads(1);
-                    if (tg.getSamplerController() instanceof LoopController) {
-                        LoopController lc = (LoopController) tg.getSamplerController();
-                        lc.setLoops(1);
-                        lc.setContinueForever(false);
-                    }
-                }
-            }
-            break;
         }
         StandardJMeterEngine engine = new StandardJMeterEngine();
         engine.configure(execTree);

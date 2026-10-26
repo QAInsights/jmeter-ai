@@ -39,6 +39,13 @@ public interface ElementLoader {
     boolean load(File file) throws IOException, IllegalUserActionException;
 
     /**
+     * Checks that the file can be configured by JMeter before a caller replaces
+     * the live plan. Test loaders may keep the default no-op implementation.
+     */
+    default void validate(File file) throws IOException, IllegalUserActionException {
+    }
+
+    /**
      * Live loader: reads the file via {@link SaveService#loadTree}, then
      * hands it to JMeter's own {@link Load#insertLoadedTree} (public, used
      * directly - not through the GUI action's file-chooser layer) to clear
@@ -48,39 +55,48 @@ public interface ElementLoader {
      */
     static ElementLoader live() {
         EdtExecutor edt = EdtExecutor.swing();
-        return file -> {
-            GuiPackage gui = GuiPackage.getInstance();
-            if (gui == null) {
-                return false;
+        return new ElementLoader() {
+            @Override
+            public void validate(File file) throws IOException, IllegalUserActionException {
+                HttpDefaultsSupport.validateTree(SaveService.loadTree(file));
             }
-            AtomicReference<IOException> ioError = new AtomicReference<>();
-            AtomicReference<IllegalUserActionException> actionError = new AtomicReference<>();
-            AtomicBoolean loaded = new AtomicBoolean(false);
-            edt.run(() -> {
-                try {
-                    FileServer.getFileServer().setBaseForScript(file);
-                    HashTree tree = SaveService.loadTree(file);
-                    boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
-                    if (isTestPlan) {
-                        gui.setTestPlanFile(file.getAbsolutePath());
-                    }
-                    gui.setDirty(false);
-                    loaded.set(true);
-                } catch (IOException e) {
-                    ioError.set(e);
-                } catch (IllegalUserActionException e) {
-                    actionError.set(e);
+
+            @Override
+            public boolean load(File file) throws IOException, IllegalUserActionException {
+                GuiPackage gui = GuiPackage.getInstance();
+                if (gui == null) {
+                    return false;
                 }
-            });
-            IOException ioFailure = ioError.get();
-            if (ioFailure != null) {
-                throw ioFailure;
+                AtomicReference<IOException> ioError = new AtomicReference<>();
+                AtomicReference<IllegalUserActionException> actionError = new AtomicReference<>();
+                AtomicBoolean loaded = new AtomicBoolean(false);
+                edt.run(() -> {
+                    try {
+                        HashTree tree = SaveService.loadTree(file);
+                        HttpDefaultsSupport.validateTree(tree);
+                        FileServer.getFileServer().setBaseForScript(file);
+                        boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                        if (isTestPlan) {
+                            gui.setTestPlanFile(file.getAbsolutePath());
+                        }
+                        gui.setDirty(false);
+                        loaded.set(true);
+                    } catch (IOException e) {
+                        ioError.set(e);
+                    } catch (IllegalUserActionException e) {
+                        actionError.set(e);
+                    }
+                });
+                IOException ioFailure = ioError.get();
+                if (ioFailure != null) {
+                    throw ioFailure;
+                }
+                IllegalUserActionException actionFailure = actionError.get();
+                if (actionFailure != null) {
+                    throw actionFailure;
+                }
+                return loaded.get();
             }
-            IllegalUserActionException actionFailure = actionError.get();
-            if (actionFailure != null) {
-                throw actionFailure;
-            }
-            return loaded.get();
         };
     }
 }

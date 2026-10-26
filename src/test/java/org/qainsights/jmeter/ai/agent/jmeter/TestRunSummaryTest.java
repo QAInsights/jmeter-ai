@@ -2,7 +2,9 @@ package org.qainsights.jmeter.ai.agent.jmeter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.net.URL;
 
+import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.samplers.SampleResult;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +75,19 @@ class TestRunSummaryTest {
     }
 
     @Test
+    void of_usesFullRunCountsWithDetailsFromRetainedResults() {
+        List<SampleResult> retained = List.of(failure("Latest failure", "500", "err"));
+
+        TestRunSummary summary = TestRunSummary.of(retained, 5000, 4997, 3, false, 0);
+
+        assertEquals(5000, summary.getTotalSamples());
+        assertEquals(4997, summary.getSuccessCount());
+        assertEquals(3, summary.getFailureCount());
+        assertEquals(1, summary.getFailures().size());
+        assertTrue(summary.hasMoreFailuresThanShown());
+    }
+
+    @Test
     void of_timedOutFlag_isPreserved() {
         TestRunSummary summary = TestRunSummary.of(new ArrayList<>(), true, 5000L);
         assertTrue(summary.isTimedOut());
@@ -91,5 +106,27 @@ class TestRunSummaryTest {
         TestRunSummary.Failure failure = summary.getFailures().get(0);
         assertEquals("", failure.getResponseCode());
         assertEquals("", failure.getMessage());
+    }
+
+    @Test
+    void of_httpFailureCapturesRedactedCappedDiagnostics() throws Exception {
+        HTTPSampleResult result = new HTTPSampleResult();
+        result.setSampleLabel("Login");
+        result.setSuccessful(false);
+        result.setResponseCode("401");
+        result.setResponseMessage("Rejected");
+        result.setHTTPMethod("POST");
+        result.setURL(new URL("https://user:password@example.test/login?token=raw-query-token"));
+        result.setResponseData("{\"password\":\"raw-password\",\"authorization\":\"Bearer raw-auth\"}"
+                + "x".repeat(3000), "UTF-8");
+
+        TestRunSummary.Failure failure = TestRunSummary.of(List.of(result), false, 0).getFailures().get(0);
+
+        assertEquals("POST", failure.getMethod());
+        assertFalse(failure.getUrl().contains("raw-query-token"));
+        assertFalse(failure.getUrl().contains("password"));
+        assertFalse(failure.getResponseExcerpt().contains("raw-password"));
+        assertFalse(failure.getResponseExcerpt().contains("raw-auth"));
+        assertTrue(failure.getResponseExcerpt().length() <= 2048);
     }
 }

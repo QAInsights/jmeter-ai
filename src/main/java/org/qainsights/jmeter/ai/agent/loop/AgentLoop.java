@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
@@ -59,11 +60,17 @@ public final class AgentLoop {
     private final ChatModel model;
     private final ToolExecutor executor;
     private final int maxIterations;
+    private final BooleanSupplier stopRequested;
 
     public AgentLoop(ChatModel model, ToolExecutor executor, int maxIterations) {
+        this(model, executor, maxIterations, null);
+    }
+
+    public AgentLoop(ChatModel model, ToolExecutor executor, int maxIterations, BooleanSupplier stopRequested) {
         this.model = model;
         this.executor = executor;
         this.maxIterations = maxIterations < 1 ? 1 : maxIterations;
+        this.stopRequested = stopRequested == null ? () -> false : stopRequested;
     }
 
     /**
@@ -115,7 +122,7 @@ public final class AgentLoop {
             if (!turn.hasToolCalls()) {
                 return AgentResult.completed(turn.getText(), iterations);
             }
-            if (Thread.currentThread().isInterrupted()) {
+            if (stopped()) {
                 log.info("Agent loop stopped by the user after {} turn(s)", iterations);
                 return AgentResult.exhausted(turn.getText(), iterations);
             }
@@ -126,22 +133,32 @@ public final class AgentLoop {
 
             List<ToolOutcome> outcomes = new ArrayList<>();
             for (AssistantTurn.ToolCall call : turn.getToolCalls()) {
-                if (Thread.currentThread().isInterrupted()) {
+                if (stopped()) {
                     return AgentResult.exhausted(turn.getText(), iterations);
                 }
                 toolSink.accept(call);
                 sink.accept("\u2192 " + call.getName() + " " + call.getArguments());
                 ToolResult result = executor.execute(call.getName(), call.getArguments());
+                if (stopped()) {
+                    return AgentResult.exhausted(turn.getText(), iterations);
+                }
                 ToolOutcome outcome = ToolOutcome.from(call, result);
                 outcomes.add(outcome);
                 sink.accept("\u2190 " + (outcome.isError() ? outcome.getContent()
                         : truncate(outcome.getContent())));
             }
 
+            if (stopped()) {
+                return AgentResult.exhausted(turn.getText(), iterations);
+            }
             turn = model.next(outcomes);
             forwardReasoning(reasoningSink);
             iterations++;
         }
+    }
+
+    private boolean stopped() {
+        return Thread.currentThread().isInterrupted() || stopRequested.getAsBoolean();
     }
 
     /** Drains the model's reasoning from the last turn into the sink (no-op when none). */

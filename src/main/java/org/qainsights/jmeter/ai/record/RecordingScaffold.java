@@ -22,6 +22,7 @@ import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jmeter.threads.gui.ThreadGroupGui;
+import org.qainsights.jmeter.ai.agent.jmeter.HttpDefaultsSupport;
 
 /**
  * Builds the test-plan skeleton a recording is captured into, and creates the
@@ -234,6 +235,7 @@ public final class RecordingScaffold {
         }
         defaults.setProperty(TestElement.TEST_CLASS, ConfigTestElement.class.getName());
         defaults.setProperty(TestElement.GUI_CLASS, HttpDefaultsGui.class.getName());
+        HttpDefaultsSupport.ensureArguments(defaults);
         return defaults;
     }
 }

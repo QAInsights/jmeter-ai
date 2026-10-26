@@ -121,6 +121,10 @@ public class CommandDispatcher {
                 Telemetry.record(TelemetryFeature.CMD_TESTPLAN);
                 handleTestPlanCommand(message);
                 return;
+            case "@fix":
+                Telemetry.record(TelemetryFeature.CMD_FIX);
+                new FixCommandRunner(cb, agentFactory).run();
+                return;
             default:
                 break;
         }

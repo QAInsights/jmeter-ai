@@ -7,6 +7,8 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
@@ -24,10 +26,13 @@ class AgentLoopTest {
     private static final class ScriptedModel implements ChatModel {
         final Deque<AssistantTurn> turns = new ArrayDeque<>();
         final List<List<ToolOutcome>> received = new ArrayList<>();
+        Runnable afterStart = () -> { };
 
         @Override
         public AssistantTurn start(String userMessage) {
-            return turns.removeFirst();
+            AssistantTurn turn = turns.removeFirst();
+            afterStart.run();
+            return turn;
         }
 
         @Override
@@ -150,6 +155,53 @@ class AgentLoopTest {
         } finally {
             Thread.interrupted();
         }
+
+        assertFalse(result.isCompleted());
+        assertTrue(echoCalls.isEmpty());
+        assertTrue(model.received.isEmpty());
+    }
+
+    @Test
+    void run_stopRequestedByFirstToolStopsBeforeSecondToolAndModelNext() {
+        AtomicBoolean stopRequested = new AtomicBoolean();
+        AtomicInteger toolExecutions = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder("flip").description("flip").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                toolExecutions.incrementAndGet();
+                stopRequested.set(true);
+                return ToolResult.ok("done");
+            }
+        });
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn("Working", Arrays.asList(
+                new AssistantTurn.ToolCall("tc_1", "flip", Collections.emptyMap()),
+                new AssistantTurn.ToolCall("tc_2", "flip", Collections.emptyMap()))));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, new ToolExecutor(registry), 5, stopRequested::get)
+                .run("go", null);
+
+        assertFalse(result.isCompleted());
+        assertEquals("Working", result.getFinalText());
+        assertEquals(1, toolExecutions.get());
+        assertTrue(model.received.isEmpty());
+    }
+
+    @Test
+    void run_stopRequestedAfterStartStopsBeforeRunningTools() {
+        AtomicBoolean stopRequested = new AtomicBoolean();
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("tc_1"));
+        model.afterStart = () -> stopRequested.set(true);
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5, stopRequested::get)
+                .run("go", null);
 
         assertFalse(result.isCompleted());
         assertTrue(echoCalls.isEmpty());

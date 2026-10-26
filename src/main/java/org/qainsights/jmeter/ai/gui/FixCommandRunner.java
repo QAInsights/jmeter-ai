@@ -1,0 +1,336 @@
+package org.qainsights.jmeter.ai.gui;
+
+import java.awt.event.ActionEvent;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+
+import javax.swing.SwingWorker;
+
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.action.ActionRouter;
+import org.qainsights.jmeter.ai.agent.AgentRunListeners;
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
+import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.jmeter.TestRunController;
+import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
+import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
+import org.qainsights.jmeter.ai.agent.jmeter.TestPlanRunner;
+import org.qainsights.jmeter.ai.agent.jmeter.TestResultsRunner;
+import org.qainsights.jmeter.ai.fix.FixLoop;
+import org.qainsights.jmeter.ai.fix.FixListeners;
+import org.qainsights.jmeter.ai.fix.FixRequest;
+import org.qainsights.jmeter.ai.fix.FixResult;
+import org.qainsights.jmeter.ai.fix.FixTools;
+import org.qainsights.jmeter.ai.fix.HostConfirmation;
+import org.qainsights.jmeter.ai.fix.PlanBackup;
+import org.qainsights.jmeter.ai.fix.PlanCensus;
+import org.qainsights.jmeter.ai.fix.PlanHosts;
+import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.telemetry.TelemetryFeature;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/** SwingWorker-backed command runner for the guarded Make it pass workflow. */
+final class FixCommandRunner {
+    private static final Logger log = LoggerFactory.getLogger(FixCommandRunner.class);
+    private static final AtomicReference<Object> ACTIVE_RUN_TOKEN = new AtomicReference<>();
+    private final CommandCallback cb;
+    private final Function<AiService, JMeterAgent> agentFactory;
+    private final TestRunController testRunController;
+
+    FixCommandRunner(CommandCallback cb, Function<AiService, JMeterAgent> agentFactory) {
+        this(cb, agentFactory, TestRunController.live());
+    }
+
+    FixCommandRunner(CommandCallback cb, Function<AiService, JMeterAgent> agentFactory,
+                     TestRunController testRunController) {
+        this.cb = cb;
+        this.agentFactory = agentFactory;
+        this.testRunController = testRunController;
+    }
+
+    void run() {
+        cb.setLastCommandType("NONE");
+        cb.setInputEnabled(false);
+        cb.removeLoadingIndicator();
+        if (testRunController.isRunning()) {
+            finishWithMessage("A test is already running. Stop it before using @fix.");
+            return;
+        }
+        if (!hasPlan()) {
+            finishWithMessage("Open a JMeter test plan before using @fix.");
+            return;
+        }
+        String planPrerequisite = planPrerequisite(true, PlanCensus.live().enabledSamplerCount());
+        if (planPrerequisite != null) {
+            finishWithMessage(planPrerequisite);
+            return;
+        }
+        if (!JMeterAgent.isEnabled()) {
+            finishWithMessage("Make it pass requires Agent Mode. Enable it in JMeter settings, then retry.");
+            return;
+        }
+        AiService service = cb.resolveAiService(cb.getSelectedModel());
+        JMeterAgent agent = agentFactory.apply(service);
+        if (agent == null) {
+            finishWithMessage("Make it pass requires an Agent Mode provider. Select a supported provider such as Claude, "
+                    + "OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, Codex, Claude Code, or OpenCode.");
+            return;
+        }
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        java.awt.Component parent = gui == null ? null : gui.getMainFrame();
+        if (!HostConfirmation.confirm(parent, PlanHosts.live())) {
+            Telemetry.record(TelemetryFeature.FIX_DECLINED);
+            finishWithMessage("Make it pass was cancelled. No requests were sent.");
+            return;
+        }
+
+        PlanBackup backups = new PlanBackup();
+        ToolRegistry registry = AgentToolRegistry.createDefault().subset(FixTools.NAMES);
+        FixRequest request = FixRequest.fromConfig();
+        AtomicBoolean cancelled = new AtomicBoolean();
+        AtomicReference<Thread> workerThread = new AtomicReference<>();
+        Object runToken = new Object();
+        ACTIVE_RUN_TOKEN.set(runToken);
+        SwingWorker<FixResult, String> worker = new SwingWorker<>() {
+            @Override
+            protected FixResult doInBackground() {
+                workerThread.set(Thread.currentThread());
+                TestResultsRunner runner = TestResultsRunner.live();
+                FixLoop.SingleIterationRunner testRunner = new FixLoop.SingleIterationRunner() {
+                    @Override
+                    public org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary run(long timeoutSeconds) {
+                        return runner.runSingleIteration(timeoutSeconds);
+                    }
+
+                    @Override
+                    public org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary runIterations(
+                            long timeoutSeconds, int threads, int loops) {
+                        return runner.runIterations(timeoutSeconds, threads, loops);
+                    }
+                };
+                FixLoop loop = new FixLoop(testRunner, backups,
+                        PlanCensus::live,
+                        message -> agent.runRestricted(message, registry, "",
+                                new AgentRunListeners(this::publish, null, null, null, null), cancelled::get),
+                        cancelled::get);
+                try {
+                    return loop.run(request, this::publish);
+                } finally {
+                    workerThread.set(null);
+                }
+            }
+
+            @Override
+            protected void process(java.util.List<String> lines) {
+                lines.forEach(cb::appendToolActivity);
+            }
+
+            @Override
+            protected void done() {
+                boolean activeRun = ACTIVE_RUN_TOKEN.compareAndSet(runToken, null);
+                if (activeRun) {
+                    cb.hideStopButton();
+                    cb.setCancelHandle(null);
+                    cb.setInputEnabled(true);
+                }
+                try {
+                    FixResult result = get();
+                    FixListeners.deliverLastResults();
+                    recordResult(result);
+                    try {
+                        result.setReportFile(new org.qainsights.jmeter.ai.fix.FixReport().write(result));
+                    } catch (java.io.IOException e) {
+                        cb.appendErrorMessageToChat("Could not write the Make it pass report", e);
+                    }
+                    if (!result.hasUndoableChanges()) {
+                        backups.unpin(result.backupFile());
+                    }
+                    String completedTreeHash = result.hasUndoableChanges() ? currentPlanTreeHash() : null;
+                    cb.appendFixResult(result,
+                            () -> runUndoAction("Could not undo Make it pass", () -> {
+                                java.io.File backup = result.backupFile();
+                                if (backup == null || !backup.isFile()) {
+                                    cb.appendMessageToChat(
+                                            "The Make it pass backup is missing. Undo all is unavailable.");
+                                    return false;
+                                }
+                                String currentTreeHash = currentPlanTreeHash();
+                                boolean treeChanged = treeChanged(completedTreeHash, currentTreeHash);
+                                boolean currentPlanMatches = backups.currentPlanMatches(backup);
+                                if (needsUndoConfirmation(currentPlanMatches,
+                                        completedTreeHash, currentTreeHash)
+                                        && !confirmUndoPlanChange(currentPlanMatches, treeChanged)) {
+                                    return false;
+                                }
+                                boolean savedFileChanged = backups.restoreAndCheckSavedFileChanged(backup);
+                                Telemetry.record(TelemetryFeature.FIX_UNDO);
+                                backups.unpin(backup);
+                                if (savedFileChanged) {
+                                    cb.appendMessageToChat("Your saved file still has the Make it pass changes. "
+                                            + "Save the plan to keep the undo.");
+                                }
+                                return true;
+                            }),
+                            () -> runCardAction("Could not save the test plan", () ->
+                                    ActionRouter.getInstance().doActionNow(
+                                            new ActionEvent(this, ActionEvent.ACTION_PERFORMED,
+                                                    ActionNames.SAVE_ALL_AS))),
+                            () -> runCardAction("Could not release Make it pass backup",
+                                    () -> backups.unpin(result.backupFile())));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Make it pass was interrupted", e);
+                } catch (ExecutionException e) {
+                    if (isCancellationFailure(cancelled.get(), e.getCause())) {
+                        if (activeRun) {
+                            log.debug("Make it pass was cancelled", e);
+                            finishWithMessage("Make it pass was cancelled.");
+                        } else {
+                            log.debug("Ignoring cancellation from inactive Make it pass run", e);
+                        }
+                    } else {
+                        cb.appendErrorMessageToChat("Make it pass failed", asException(e.getCause()));
+                    }
+                } catch (CancellationException e) {
+                    cb.appendErrorMessageToChat("Make it pass was cancelled", e);
+                }
+            }
+        };
+        cb.setCancelHandle(() -> {
+            if (ACTIVE_RUN_TOKEN.get() != runToken) {
+                return;
+            }
+            cancelled.set(true);
+            TestPlanRunner.stopActive(true);
+            Thread thread = workerThread.get();
+            if (thread != null) {
+                thread.interrupt();
+            }
+        });
+        cb.showStopButton();
+        worker.execute();
+    }
+
+    private boolean hasPlan() {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        return gui != null && gui.getTreeModel() != null && gui.getTreeModel().getTestPlan() != null
+                && gui.getTreeModel().getTestPlan().size() > 0;
+    }
+
+    static String planPrerequisite(boolean hasPlan, int enabledSamplers) {
+        if (!hasPlan) {
+            return "Open a JMeter test plan before using @fix.";
+        }
+        if (enabledSamplers <= 0) {
+            return "This plan has no requests yet. Record a session or add an HTTP Request first.";
+        }
+        return null;
+    }
+
+    private void finishWithMessage(String message) {
+        cb.appendRedMessage(message);
+        cb.setInputEnabled(true);
+    }
+
+    private static void recordResult(FixResult result) {
+        Telemetry.record(switch (result.status()) {
+            case ALREADY_PASSING -> TelemetryFeature.FIX_ALREADY_PASSING;
+            case FIXED -> TelemetryFeature.FIX_FIXED;
+            case PARTLY_FIXED -> TelemetryFeature.FIX_PARTLY_FIXED;
+            case NOT_FIXED -> TelemetryFeature.FIX_NOT_FIXED;
+            case CANCELLED -> TelemetryFeature.FIX_CANCELLED;
+            case NOTHING_RAN -> TelemetryFeature.FIX_NOTHING_RAN;
+        });
+        if (result.roundsUsed() == 1) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_1);
+        } else if (result.roundsUsed() <= 3 && result.roundsUsed() > 1) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_2_3);
+        } else if (result.roundsUsed() >= 4) {
+            Telemetry.record(TelemetryFeature.FIX_ROUNDS_4P);
+        }
+        if (result.concurrencyChecked()) {
+            Telemetry.record(result.concurrencyAfterFailed() == 0 && result.concurrencyAfterTotal() > 0
+                    ? TelemetryFeature.FIX_CONCURRENCY_FIXED : TelemetryFeature.FIX_CONCURRENCY_WARN);
+        }
+    }
+
+    private void runCardAction(String failureMessage, Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException e) {
+            cb.appendErrorMessageToChat(failureMessage, e);
+        }
+    }
+
+    private boolean runUndoAction(String failureMessage, java.util.function.BooleanSupplier action) {
+        try {
+            return action.getAsBoolean();
+        } catch (RuntimeException e) {
+            cb.appendErrorMessageToChat(failureMessage, e);
+            return false;
+        }
+    }
+
+    private boolean confirmUndoPlanChange(boolean currentPlanMatches, boolean treeChanged) {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        int choice = javax.swing.JOptionPane.showConfirmDialog(
+                gui == null ? null : gui.getMainFrame(),
+                undoConfirmationMessage(currentPlanMatches, treeChanged),
+                "Undo all", javax.swing.JOptionPane.YES_NO_OPTION, javax.swing.JOptionPane.WARNING_MESSAGE);
+        return choice == javax.swing.JOptionPane.YES_OPTION;
+    }
+
+    static boolean treeChanged(String completedTreeHash, String currentTreeHash) {
+        return completedTreeHash == null || !java.util.Objects.equals(completedTreeHash, currentTreeHash);
+    }
+
+    static boolean needsUndoConfirmation(boolean currentPlanMatches, String completedTreeHash,
+                                         String currentTreeHash) {
+        return !currentPlanMatches || treeChanged(completedTreeHash, currentTreeHash);
+    }
+
+    static String undoConfirmationMessage(boolean currentPlanMatches, boolean treeChanged) {
+        return currentPlanMatches && treeChanged
+                ? "You changed the plan after Make it pass finished. Undo all also discards those changes."
+                : "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
+                        + "Continue?";
+    }
+
+    static boolean isCancellationFailure(boolean cancelled, Throwable error) {
+        if (cancelled) {
+            return true;
+        }
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof InterruptedException) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    private static String currentPlanTreeHash() {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        if (gui == null || gui.getTreeModel() == null) {
+            return null;
+        }
+        try {
+            gui.updateCurrentNode();
+            return PlanBackup.treeHash(gui.getTreeModel().getTestPlan());
+        } catch (RuntimeException e) {
+            log.warn("Could not capture the plan hash; Undo all will require confirmation.");
+            return null;
+        }
+    }
+
+    private static Exception asException(Throwable error) {
+        return error instanceof Exception ? (Exception) error : new RuntimeException(error);
+    }
+}

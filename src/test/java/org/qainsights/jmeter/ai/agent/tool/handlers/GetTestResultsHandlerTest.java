@@ -256,6 +256,19 @@ class GetTestResultsHandlerTest {
     }
 
     @Test
+    void run_reportsCompletedSummaryToOptionalSink() {
+        runner.toReturn = TestRunSummary.of(List.of(failedSample()), false, 10L);
+        AtomicReference<TestRunSummary> delivered = new AtomicReference<>();
+        Tool withSink = new GetTestResultsHandler(() -> root, controller, runner,
+                null, null, delivered::set).tool();
+
+        ToolResult result = withSink.execute(args(null));
+
+        assertTrue(result.isSuccess());
+        assertSame(runner.toReturn, delivered.get());
+    }
+
+    @Test
     void run_withDefaultConstructor_hasNoTriage() {
         runner.toReturn = TestRunSummary.of(List.of(failedSample()), false, 10L);
 

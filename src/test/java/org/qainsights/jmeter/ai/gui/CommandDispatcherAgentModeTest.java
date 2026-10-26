@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.gui;
 import com.openai.core.http.Headers;
 import com.openai.errors.RateLimitException;
 import com.openai.models.ErrorObject;
+import org.apache.jmeter.samplers.SampleResult;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.agent.AgentRunListeners;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
+import org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.service.AiService;
@@ -96,6 +98,7 @@ class CommandDispatcherAgentModeTest {
         when(cb.resolveAiService("openai:gpt-4o")).thenReturn(service);
     }
 
+
     private static RateLimitException openAi429(String message) {
         return RateLimitException.builder()
                 .headers(Headers.builder().build())
@@ -120,6 +123,13 @@ class CommandDispatcherAgentModeTest {
         when(result.isCompleted()).thenReturn(completed);
         when(result.getFinalText()).thenReturn(finalText);
         return result;
+    }
+
+    private static TestRunSummary summary(boolean failed) {
+        SampleResult sample = new SampleResult();
+        sample.setSuccessful(!failed);
+        sample.setResponseCode(failed ? "500" : "200");
+        return TestRunSummary.of(List.of(sample), false, 0);
     }
 
     private String awaitWorkerSuccess() {
@@ -165,6 +175,23 @@ class CommandDispatcherAgentModeTest {
         commandDispatcher.dispatch(MESSAGE);
 
         assertEquals("Done.", awaitWorkerSuccess());
+    }
+
+    @Test
+    void laterPassingSummaryClearsTheMakeItPassOffer() {
+        agentResolvesTo(agent);
+        when(agent.run(eq(MESSAGE), eq(MESSAGE), anyList(), any(AgentRunListeners.class)))
+                .thenAnswer(invocation -> {
+                    AgentRunListeners listeners = invocation.getArgument(3);
+                    listeners.testResults().accept(summary(true));
+                    listeners.testResults().accept(summary(false));
+                    return result(true, "Recovered.");
+                });
+
+        commandDispatcher.dispatch(MESSAGE);
+        awaitWorkerSuccess();
+
+        verify(cb, never()).offerMakeItPass();
     }
 
     // ==================== Unsupported service ====================

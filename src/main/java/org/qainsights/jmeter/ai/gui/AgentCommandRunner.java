@@ -109,6 +109,7 @@ final class AgentCommandRunner {
 
         boolean streamFinalText = AiConfig.isStreamingEnabled();
         String selectedModel = cb.getSelectedModel();
+        java.util.concurrent.atomic.AtomicBoolean offeredFix = new java.util.concurrent.atomic.AtomicBoolean();
 
         SwingWorker<String, AgentChunk> worker = new SwingWorker<>() {
             @Override
@@ -130,7 +131,8 @@ final class AgentCommandRunner {
                                         call -> glowController.onToolCallStarted(elementIdOf(call)),
                                         reasoning -> cb.appendReasoningToken(reasoning),
                                         notice -> cb.appendJevRoute(notice, selectedModel),
-                                        triage -> cb.appendJevTriage(triage, selectedModel)));
+                                        triage -> cb.appendJevTriage(triage, selectedModel),
+                                        summary -> offeredFix.set(summary.getFailureCount() > 0)));
                     } finally {
                         glowController.onRunFinished();
                     }
@@ -222,6 +224,9 @@ final class AgentCommandRunner {
                         cb.onWorkerSuccess(response);
                     }
                     cb.addToConversationHistory(response);
+                    if (offeredFix.get()) {
+                        cb.offerMakeItPass();
+                    }
                 } catch (InterruptedException | ExecutionException e) {
                     Telemetry.record(TelemetryFeature.OUTCOME_ERROR);
                     cb.onWorkerError("Error running the agent", e,

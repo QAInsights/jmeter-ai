@@ -7,16 +7,25 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.jmeter.JMeter;
+import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.engine.JMeterEngineException;
 import org.apache.jmeter.engine.StandardJMeterEngine;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.reporters.AbstractListenerElement;
 import org.apache.jmeter.samplers.SampleEvent;
 import org.apache.jmeter.samplers.SampleListener;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestStateListener;
+import org.apache.jmeter.threads.AbstractThreadGroup;
+import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.visualizers.Visualizer;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
+import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Runs the current test plan through a private {@link StandardJMeterEngine} - the same
@@ -32,7 +41,11 @@ import org.apache.jorphan.collections.ListedHashTree;
  */
 public final class TestPlanRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(TestPlanRunner.class);
     private static volatile StandardJMeterEngine active;
+    private static volatile CountDownLatch activeDone;
+    private static volatile boolean runInProgress;
+    private static volatile List<SampleResult> lastSampleResults = Collections.emptyList();
     /** Pending stop for the active run: TRUE stops at once, FALSE gracefully, null means keep running. */
     private static volatile Boolean stopRequest;
 
@@ -41,15 +54,41 @@ public final class TestPlanRunner {
      * button and {@code ActionRouter} cannot reach. Returns false when no such run is active.
      */
     public static boolean stopActive(boolean now) {
-        if (active == null) {
-            return false;
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active == null) {
+                return false;
+            }
+            stopRequest = now;
+            return true;
         }
-        stopRequest = now;
-        return true;
+    }
+
+    public static List<SampleResult> lastSampleResults() {
+        return Collections.unmodifiableList(new ArrayList<>(lastSampleResults));
+    }
+
+    public static synchronized List<SampleResult> takeLastSampleResults() {
+        List<SampleResult> results = lastSampleResults;
+        lastSampleResults = Collections.emptyList();
+        return Collections.unmodifiableList(new ArrayList<>(results));
     }
 
     /** Live entry point: pulls the current plan from the live {@link GuiPackage} tree model. */
     public TestRunSummary run(long timeoutSeconds) {
+        return run(timeoutSeconds, 0, 0);
+    }
+
+    /** Runs the current plan once with one thread per Thread Group. */
+    public TestRunSummary runSingleIteration(long timeoutSeconds) {
+        return run(timeoutSeconds, 1, 1);
+    }
+
+    public TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+        return run(timeoutSeconds, threads, loops);
+    }
+
+    private TestRunSummary run(long timeoutSeconds, int threads, int loops) {
         GuiPackage gui = GuiPackage.getInstance();
         if (gui == null) {
             throw new TestExecutionException("No live JMeter GUI available.");
@@ -58,7 +97,7 @@ public final class TestPlanRunner {
         if (testPlanTree == null || testPlanTree.size() == 0) {
             throw new TestExecutionException("No test plan is currently open.");
         }
-        return runTree(testPlanTree, timeoutSeconds);
+        return runTree(testPlanTree, timeoutSeconds, threads, loops);
     }
 
     /**
@@ -69,38 +108,60 @@ public final class TestPlanRunner {
      * returned by {@code SaveService.loadTree}) - {@link JMeter#convertSubTree} handles both.
      */
     synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds) {
-        ListedHashTree clonedTree;
-        try {
-            clonedTree = (ListedHashTree) testPlanTree.clone();
-        } catch (RuntimeException e) {
-            throw new TestExecutionException("Could not clone the test plan: " + e.getMessage());
-        }
-        HashTree execTree = JMeter.convertSubTree(clonedTree, true);
+        return runTree(testPlanTree, timeoutSeconds, 0, 0);
+    }
 
-        // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements
-        // via their no-arg constructor (see AbstractTestElement.clone()) - any instance field set
-        // here would not survive that clone. Collector/Ender therefore coordinate via static state,
-        // reset per call by prepare(), mirroring CorrelationEngine.Collector/Ender's proven pattern.
-        SampleCollector.prepare();
-        CountDownLatch done = new CountDownLatch(1);
-        RunEndedListener.prepare(done);
-        for (Object key : execTree.list()) {
-            HashTree sub = execTree.getTree(key);
-            if (sub != null) {
-                sub.add(new SampleCollector());
-                sub.add(new RunEndedListener());
+    synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, boolean singleIteration) {
+        return runTree(testPlanTree, timeoutSeconds, singleIteration ? 1 : 0, singleIteration ? 1 : 0);
+    }
+
+    synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, int threads, int loops) {
+        ensureNoActiveRun();
+        HashTree execTree;
+        CountDownLatch done;
+        StandardJMeterEngine engine;
+        long start;
+        try {
+            execTree = prepareExecutionTree(testPlanTree, threads, loops);
+
+            // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements
+            // via their no-arg constructor (see AbstractTestElement.clone()) - any instance field set
+            // here would not survive that clone. Collector/Ender therefore coordinate via static state,
+            // reset per call by prepare(), mirroring CorrelationEngine.Collector/Ender's proven pattern.
+            SampleCollector.prepare();
+            lastSampleResults = Collections.emptyList();
+            done = new CountDownLatch(1);
+            RunEndedListener.prepare(done);
+            for (Object key : execTree.list()) {
+                HashTree sub = execTree.getTree(key);
+                if (sub != null) {
+                    sub.add(new SampleCollector());
+                    sub.add(new RunEndedListener());
+                }
             }
+            engine = new StandardJMeterEngine();
+            start = System.currentTimeMillis();
+        } catch (RuntimeException e) {
+            releaseStartingRun();
+            throw e;
         }
-
-        StandardJMeterEngine engine = new StandardJMeterEngine();
-        long start = System.currentTimeMillis();
         try {
-            stopRequest = null;
             engine.configure(execTree);
-            active = engine;
+            registerActive(engine, done);
             engine.runTest();
         } catch (JMeterEngineException | RuntimeException e) {
-            active = null;
+            if (isActive(engine, done)) {
+                engine.stopTest(true);
+                if (!awaitStopped(engine, done, false)) {
+                    log.warn("JMeter engine did not stop after a run error; keeping it registered as active.");
+                }
+                finishRun(engine, done);
+            } else {
+                releaseStartingRun();
+            }
+            if (e instanceof TestExecutionException) {
+                throw (TestExecutionException) e;
+            }
             throw new TestExecutionException("Failed to run the test plan: " + e.getMessage());
         }
 
@@ -114,7 +175,9 @@ public final class TestPlanRunner {
                 if (now >= deadline) {
                     timedOut = true;
                     engine.stopTest(true);
-                    done.await(10, TimeUnit.SECONDS);
+                    if (!awaitStopped(engine, done, false)) {
+                        log.warn("Timed out waiting for the JMeter engine to stop; keeping it registered as active.");
+                    }
                     break;
                 }
                 Boolean stop = stopRequest;
@@ -124,15 +187,180 @@ public final class TestPlanRunner {
                 }
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             timedOut = true;
             engine.stopTest(true);
+            if (!awaitStopped(engine, done, true)) {
+                log.warn("Interrupted while waiting for the JMeter engine to stop; keeping it registered as active.");
+            }
         } finally {
-            active = null;
-            stopRequest = null;
+            finishRun(engine, done);
         }
         long elapsed = System.currentTimeMillis() - start;
-        return TestRunSummary.of(SampleCollector.collected(), timedOut, elapsed);
+        CollectedSamples collected = SampleCollector.collected();
+        List<SampleResult> results = collected.results();
+        lastSampleResults = Collections.unmodifiableList(new ArrayList<>(
+                results.subList(0, Math.min(results.size(), 1000))));
+        return TestRunSummary.of(results, collected.totalSamples(), collected.successCount(),
+                collected.failureCount(), timedOut, elapsed);
+    }
+
+    private static void ensureNoActiveRun() {
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active != null || runInProgress) {
+                throw new TestExecutionException("The previous check run is still stopping. Try again in a moment.");
+            }
+            runInProgress = true;
+        }
+    }
+
+    private static void registerActive(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active != null) {
+                throw new TestExecutionException("The previous check run is still stopping. Try again in a moment.");
+            }
+            stopRequest = null;
+            active = engine;
+            activeDone = done;
+            runInProgress = true;
+        }
+    }
+
+    private static void releaseStartingRun() {
+        synchronized (TestPlanRunner.class) {
+            if (active == null) {
+                runInProgress = false;
+            }
+        }
+    }
+
+    private static boolean awaitStopped(StandardJMeterEngine engine, CountDownLatch done, boolean restoreInterrupt) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        boolean interrupted = Thread.interrupted() || restoreInterrupt;
+        while (done.getCount() != 0) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                break;
+            }
+            try {
+                done.await(remaining, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                interrupted = true;
+                engine.stopTest(true);
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        return done.getCount() == 0;
+    }
+
+    private static boolean isActive(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            return active == engine && activeDone == done;
+        }
+    }
+
+    private static void finishRun(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            if (active == engine && activeDone == done) {
+                runInProgress = false;
+                stopRequest = null;
+                if (done.getCount() == 0) {
+                    active = null;
+                    activeDone = null;
+                }
+            }
+        }
+    }
+
+    private static void clearFinishedActive() {
+        if (active != null && activeDone != null && activeDone.getCount() == 0 && !runInProgress) {
+            active = null;
+            activeDone = null;
+            stopRequest = null;
+        }
+    }
+
+    static HashTree prepareExecutionTree(HashTree testPlanTree, int threads, int loops) {
+        ListedHashTree clonedTree;
+        try {
+            clonedTree = (ListedHashTree) testPlanTree.clone();
+        } catch (RuntimeException e) {
+            throw new TestExecutionException("Could not clone the test plan: " + e.getMessage());
+        }
+        HashTree execTree = JMeter.convertSubTree(clonedTree, true);
+        if (threads > 0 && loops > 0) {
+            forceIterations(execTree, threads, loops);
+        }
+        stripPlanListeners(execTree);
+        return execTree;
+    }
+
+    private static void stripPlanListeners(HashTree tree) {
+        if (tree == null) {
+            return;
+        }
+        for (Object key : new ArrayList<>(tree.list())) {
+            TestElement element = key instanceof TestElement ? (TestElement) key : null;
+            if (element != null && (element instanceof AbstractListenerElement || isVisualizerBacked(element))) {
+                tree.remove(key);
+            } else {
+                stripPlanListeners(tree.getTree(key));
+            }
+        }
+    }
+
+    private static boolean isVisualizerBacked(TestElement element) {
+        String guiClass = element.getPropertyAsString(TestElement.GUI_CLASS);
+        if (guiClass == null || guiClass.isBlank()) {
+            return false;
+        }
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        try {
+            Class<?> type = Class.forName(guiClass, false,
+                    loader == null ? TestPlanRunner.class.getClassLoader() : loader);
+            return Visualizer.class.isAssignableFrom(type);
+        } catch (ClassNotFoundException | LinkageError | SecurityException e) {
+            return false;
+        }
+    }
+
+    /** Applies the one-user, one-loop override to an execution tree, never the live plan. */
+    public static void forceSingleIteration(HashTree execTree) {
+        forceIterations(execTree, 1, 1);
+    }
+
+    public static void forceIterations(HashTree execTree, int threads, int loops) {
+        if (execTree == null) {
+            return;
+        }
+        if (threads < 1 || loops < 1) {
+            throw new IllegalArgumentException("threads and loops must be positive");
+        }
+        for (Object key : execTree.list()) {
+            if (key instanceof AbstractThreadGroup && !(key instanceof ThreadGroup)) {
+                throw new TestExecutionException(key.getClass().getName()
+                        + ": Make it pass only supports standard Thread Groups");
+            }
+            if (key instanceof ThreadGroup threadGroup) {
+                threadGroup.setNumThreads(threads);
+                threadGroup.setRampUp(0);
+                threadGroup.setDelay(0);
+                threadGroup.setScheduler(false);
+                threadGroup.setDuration(0);
+                if (threadGroup.getSamplerController() instanceof LoopController) {
+                    LoopController loopController = (LoopController) threadGroup.getSamplerController();
+                    loopController.setLoops(loops);
+                    loopController.setContinueForever(false);
+                }
+            }
+            HashTree children = execTree.getTree(key);
+            if (children != null) {
+                forceIterations(children, threads, loops);
+            }
+        }
     }
 
     /**
@@ -143,30 +371,31 @@ public final class TestPlanRunner {
      * against a non-public nested class.
      */
     public static final class SampleCollector extends AbstractTestElement implements SampleListener {
-        private static volatile List<SampleResult> shared;
+        private static final int MAX_RESULTS_KEPT = 1000;
+        private static volatile SampleCollection shared;
 
         /** Resets the shared results list; call once before each run. */
         static void prepare() {
-            shared = Collections.synchronizedList(new ArrayList<>());
+            shared = new SampleCollection();
         }
 
-        /** A snapshot of every top-level sample result collected since the last {@link #prepare()}. */
-        static List<SampleResult> collected() {
-            List<SampleResult> current = shared;
-            if (current == null) {
-                return Collections.emptyList();
-            }
-            synchronized (current) {
-                return new ArrayList<>(current);
+        static CollectedSamples collected() {
+            SampleCollection current = shared;
+            return current == null ? new CollectedSamples(List.of(), 0, 0, 0) : current.snapshot();
+        }
+
+        static void recordSample(SampleResult result) {
+            SampleCollection current = shared;
+            if (current != null && result != null) {
+                current.record(result);
             }
         }
 
         @Override
         public void sampleOccurred(SampleEvent event) {
-            List<SampleResult> current = shared;
             SampleResult result = event.getResult();
-            if (current != null && result != null && result.getParent() == null) {
-                current.add(result);
+            if (result != null && result.getParent() == null) {
+                recordSample(result);
             }
         }
 
@@ -178,6 +407,47 @@ public final class TestPlanRunner {
         @Override
         public void sampleStopped(SampleEvent event) {
             // no-op: only completed samples are summarized
+        }
+    }
+
+    static record CollectedSamples(List<SampleResult> results, int totalSamples, int successCount,
+                                   int failureCount) {
+    }
+
+    private static final class SampleCollection {
+        private final List<SampleResult> results = new ArrayList<>();
+        private final List<Boolean> failures = new ArrayList<>();
+        private int totalSamples;
+        private int successCount;
+        private int failureCount;
+
+        synchronized void record(SampleResult result) {
+            String softFailure = SoftFailureDetector.reason(result);
+            boolean failed = !result.isSuccessful() || softFailure != null;
+            totalSamples++;
+            if (failed) {
+                failureCount++;
+            } else {
+                successCount++;
+            }
+            if (results.size() < SampleCollector.MAX_RESULTS_KEPT) {
+                results.add(result);
+                failures.add(failed);
+            } else if (failed) {
+                for (int index = 0; index < failures.size(); index++) {
+                    if (!failures.get(index)) {
+                        results.remove(index);
+                        failures.remove(index);
+                        results.add(result);
+                        failures.add(true);
+                        break;
+                    }
+                }
+            }
+        }
+
+        synchronized CollectedSamples snapshot() {
+            return new CollectedSamples(List.copyOf(results), totalSamples, successCount, failureCount);
         }
     }
 

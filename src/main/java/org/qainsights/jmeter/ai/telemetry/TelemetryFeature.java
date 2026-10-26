@@ -65,7 +65,24 @@ public enum TelemetryFeature {
     CLI_GROK("cli_grok"),
     CLI_OTHER("cli_other"),
     MCP_SETUP_COPY("mcp_setup_copy"),
-    DONATE_CLICK("donate_click");
+    DONATE_CLICK("donate_click"),
+    CMD_FIX("cmd_fix"),
+    FIX_ALREADY_PASSING("fix_already_passing"),
+    FIX_FIXED("fix_fixed"),
+    FIX_PARTLY_FIXED("fix_partly_fixed"),
+    FIX_NOT_FIXED("fix_not_fixed"),
+    FIX_CANCELLED("fix_cancelled"),
+    FIX_NOTHING_RAN("fix_nothing_ran"),
+    FIX_GUARD_ROLLBACK("fix_guard_rollback"),
+    FIX_UNDO("fix_undo"),
+    FIX_DECLINED("fix_declined"),
+    FIX_ROUNDS_1("fix_rounds_1"),
+    FIX_ROUNDS_2_3("fix_rounds_2_3"),
+    FIX_ROUNDS_4P("fix_rounds_4p"),
+    FIX_ASSERTIONS_ADDED("fix_assertions_added"),
+    FIX_SOFT_FAILURE("fix_soft_failure"),
+    FIX_CONCURRENCY_FIXED("fix_concurrency_fixed"),
+    FIX_CONCURRENCY_WARN("fix_concurrency_warn");
 
     private final String wireName;
 

@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.apache.jmeter.gui.UndoHistory;
@@ -393,7 +394,7 @@ public final class JMeterAgent {
     public AgentLoop.AgentResult run(String userMessage, String routingMessage,
                                       List<String> priorConversationTurns, AgentRunListeners listeners) {
         AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
-        ToolRegistry fullRegistry = AgentToolRegistry.createDefault(sinks.triageNotice());
+        ToolRegistry fullRegistry = AgentToolRegistry.createDefault(sinks.triageNotice(), sinks.testResults());
         AgentRequestRouter.Decision decision = route(routingMessage);
         ToolRegistry registry = AgentToolPacks.select(fullRegistry, decision);
         AgentToolExpander expander = AgentToolExpander.registerIfEnabled(requestRouter, routingMessage,
@@ -405,14 +406,46 @@ public final class JMeterAgent {
             sinks.routingNotice().accept(new AgentRequestRouter.Notice(decision, toolNames, fullRegistry.size()));
         }
         maybeWarnAboutUndoHistory(sinks.progress());
-        ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
+        return runShared(userMessage, priorConversationTurns, sinks, registry, expander, "", null);
+    }
+
+    /** Runs one agent loop using only the supplied tools and no Jev routing. */
+    public AgentLoop.AgentResult runRestricted(String message, ToolRegistry registry, String extraInstructions,
+                                                AgentRunListeners listeners) {
+        return runRestricted(message, registry, extraInstructions, listeners, null);
+    }
+
+    /** Runs a restricted agent loop that stops when the supplied cancellation signal is set. */
+    public AgentLoop.AgentResult runRestricted(String message, ToolRegistry registry, String extraInstructions,
+                                                AgentRunListeners listeners, BooleanSupplier stopRequested) {
+        if (registry == null) {
+            throw new IllegalArgumentException("registry must not be null");
+        }
+        AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
+        maybeWarnAboutUndoHistory(sinks.progress());
+        return runShared(message, Collections.emptyList(), sinks, registry, null, extraInstructions, stopRequested);
+    }
+
+    private AgentLoop.AgentResult runShared(String userMessage, List<String> priorConversationTurns,
+                                            AgentRunListeners sinks, ToolRegistry registry,
+                                            AgentToolExpander expander, String extraInstructions,
+                                            BooleanSupplier stopRequested) {
+        ToolConfirmationGate gate = confirmationGate;
+        if (stopRequested != null && gate != null) {
+            gate = (name, args) -> !stopRequested.getAsBoolean() && confirmationGate.confirm(name, args);
+        }
+        ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, gate);
+        List<ToolSpec> specs = registry.getSpecs();
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
+        if (extraInstructions != null && !extraInstructions.isBlank()) {
+            systemPrompt += "\n\n" + extraInstructions.trim();
+        }
         List<String> seedTurns = ConversationSeed.normalize(priorConversationTurns, MAX_HISTORY_TURN_PAIRS);
         ChatModel chat = chatModelFactory.create(specs, systemPrompt, seedTurns);
         if (expander != null) {
             expander.bindSpecSink(chat::updateToolSpecs);
         }
-        return new AgentLoop(chat, executor, maxIterations)
+        return new AgentLoop(chat, executor, maxIterations, stopRequested)
                 .run(userMessage, sinks.progress(), sinks.toolCallStarted(), sinks.reasoning());
     }
 
@@ -448,7 +481,7 @@ public final class JMeterAgent {
                 String.valueOf(DEFAULT_MAX_ITERATIONS)), DEFAULT_MAX_ITERATIONS);
     }
 
-    static long parseLong(String value, long fallback) {
+    public static long parseLong(String value, long fallback) {
         try {
             return Long.parseLong(value.trim());
         } catch (RuntimeException e) {

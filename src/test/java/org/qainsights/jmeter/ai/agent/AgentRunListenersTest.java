@@ -20,6 +20,7 @@ class AgentRunListenersTest {
         assertNull(empty.reasoning());
         assertNull(empty.routingNotice());
         assertNull(empty.triageNotice());
+        assertNull(empty.testResults());
         assertNotNull(AgentRunListeners.orEmpty(null));
 
         AgentRunListeners listeners = new AgentRunListeners(

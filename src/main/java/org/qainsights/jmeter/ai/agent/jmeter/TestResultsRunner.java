@@ -21,9 +21,33 @@ public interface TestResultsRunner {
      */
     TestRunSummary run(long timeoutSeconds);
 
+    /** Runs the current plan once with one thread per Thread Group when supported. */
+    default TestRunSummary runSingleIteration(long timeoutSeconds) {
+        return run(timeoutSeconds);
+    }
+
+    default TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+        return runSingleIteration(timeoutSeconds);
+    }
+
     /** Live runner, backed by {@link TestPlanRunner#run}. */
     static TestResultsRunner live() {
         TestPlanRunner runner = new TestPlanRunner();
-        return runner::run;
+        return new TestResultsRunner() {
+            @Override
+            public TestRunSummary run(long timeoutSeconds) {
+                return runner.run(timeoutSeconds);
+            }
+
+            @Override
+            public TestRunSummary runSingleIteration(long timeoutSeconds) {
+                return runner.runSingleIteration(timeoutSeconds);
+            }
+
+            @Override
+            public TestRunSummary runIterations(long timeoutSeconds, int threads, int loops) {
+                return runner.runIterations(timeoutSeconds, threads, loops);
+            }
+        };
     }
 }
