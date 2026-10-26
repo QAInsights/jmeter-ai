@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.Sampler;
@@ -46,88 +47,113 @@ public final class WorkloadApplier {
                 || !(threadGroupNode.getTestElement() instanceof ThreadGroup)) {
             throw new IllegalArgumentException("The selected Thread Group is no longer in the test plan.");
         }
+        if (plan == null || plan.threads() < 1 || plan.rampSeconds() < 0 || plan.durationSeconds() < 1
+                || plan.thinkMillis() < 0 || plan.propertyPrefix() == null || plan.propertyPrefix().isBlank()) {
+            throw new IllegalArgumentException("The workload plan is invalid.");
+        }
+        ThreadGroup group = (ThreadGroup) threadGroupNode.getTestElement();
+        if (!(group.getSamplerController() instanceof LoopController loop)) {
+            throw new IllegalStateException("The Thread Group has no main Loop Controller.");
+        }
+        GuiPackage gui = GuiPackage.getInstance();
+        boolean currentGroup = gui != null && gui.getCurrentNode() == threadGroupNode;
+        if (currentGroup) {
+            gui.updateCurrentNode();
+        }
         List<PropertySnapshot> properties = new ArrayList<>();
+        List<EnabledSnapshot> enabledStates = new ArrayList<>();
         List<JMeterTreeNode> added = new ArrayList<>();
         List<String> changes = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        ThreadGroup group = (ThreadGroup) threadGroupNode.getTestElement();
         String prefix = plan.propertyPrefix();
-        setProperty(properties, group, ThreadGroup.NUM_THREADS,
-                new StringProperty(ThreadGroup.NUM_THREADS, property(prefix, "threads", plan.threads())),
-                changes);
-        setProperty(properties, group, ThreadGroup.RAMP_TIME,
-                new StringProperty(ThreadGroup.RAMP_TIME, property(prefix, "rampup", plan.rampSeconds())),
-                changes);
-        setProperty(properties, group, ThreadGroup.SCHEDULER,
-                new BooleanProperty(ThreadGroup.SCHEDULER, true), changes);
-        setProperty(properties, group, ThreadGroup.DURATION,
-                new StringProperty(ThreadGroup.DURATION, property(prefix, "duration", plan.durationSeconds())),
-                changes);
+        try {
+            setProperty(properties, group, ThreadGroup.NUM_THREADS,
+                    new StringProperty(ThreadGroup.NUM_THREADS, property(prefix, "threads", plan.threads())),
+                    changes);
+            setProperty(properties, group, ThreadGroup.RAMP_TIME,
+                    new StringProperty(ThreadGroup.RAMP_TIME, property(prefix, "rampup", plan.rampSeconds())),
+                    changes);
+            setProperty(properties, group, ThreadGroup.SCHEDULER,
+                    new BooleanProperty(ThreadGroup.SCHEDULER, true), changes);
+            setProperty(properties, group, ThreadGroup.DURATION,
+                    new StringProperty(ThreadGroup.DURATION, property(prefix, "duration", plan.durationSeconds())),
+                    changes);
+            setProperty(properties, loop, LoopController.LOOPS,
+                    new IntegerProperty(LoopController.LOOPS, LoopController.INFINITE_LOOP_COUNT), changes);
 
-        JMeterTreeNode loopNode = findLoopController(threadGroupNode);
-        if (loopNode == null) {
-            throw new IllegalStateException("The Thread Group has no Loop Controller.");
-        }
-        setProperty(properties, loopNode.getTestElement(), LoopController.LOOPS,
-                new IntegerProperty(LoopController.LOOPS, LoopController.INFINITE_LOOP_COUNT), changes);
-        loopNode.setName(loopNode.getTestElement().getName());
-        model.nodeChanged(loopNode);
-
-        if (plan.rpm() != null) {
-            if (containsShapingTimer(threadGroupNode)) {
-                warnings.add("A Precise Throughput Timer or Throughput Shaping Timer already controls rate; "
-                        + "no Constant Throughput Timer was changed.");
-            } else {
-                ConstantThroughputTimer timer = directChild(threadGroupNode, ConstantThroughputTimer.class);
-                if (timer == null) {
-                    timer = new ConstantThroughputTimer();
-                    timer.setName(CTT_NAME);
-                    timer.setProperty(TestElement.TEST_CLASS, ConstantThroughputTimer.class.getName());
-                    timer.setProperty(TestElement.GUI_CLASS, CTT_GUI);
-                    JMeterTreeNode timerNode = model.addComponent(timer, threadGroupNode);
-                    added.add(timerNode);
-                    changes.add("Added " + CTT_NAME);
-                }
-                setProperty(properties, timer, ConstantThroughputTimer.THROUGHPUT,
-                new StringProperty(ConstantThroughputTimer.THROUGHPUT,
-                                property(prefix, "rpm", WorkloadCalculator.format(plan.rpm()))), changes);
-                setProperty(properties, timer, ConstantThroughputTimer.CALC_MODE,
-                        new IntegerProperty(ConstantThroughputTimer.CALC_MODE, CALC_MODE_THREAD_GROUP_SHARED), changes);
-                JMeterTreeNode timerNode = model.getNodeOf(timer);
-                if (timerNode != null) {
+            if (plan.rpm() != null) {
+                if (containsShapingTimer(threadGroupNode)) {
+                    warnings.add("A Precise Throughput Timer or Throughput Shaping Timer already controls rate; "
+                            + "no Constant Throughput Timer was changed.");
+                } else {
+                    JMeterTreeNode timerNode = enabledDirectChild(threadGroupNode, ConstantThroughputTimer.class);
+                    if (timerNode == null) {
+                        timerNode = managedTimer(threadGroupNode, ConstantThroughputTimer.class, CTT_NAME);
+                    }
+                    if (timerNode == null) {
+                        ConstantThroughputTimer timer = new ConstantThroughputTimer();
+                        timer.setName(CTT_NAME);
+                        timer.setProperty(TestElement.TEST_CLASS, ConstantThroughputTimer.class.getName());
+                        timer.setProperty(TestElement.GUI_CLASS, CTT_GUI);
+                        timerNode = model.addComponent(timer, threadGroupNode);
+                        added.add(timerNode);
+                        changes.add("Added " + CTT_NAME);
+                    } else if (!timerNode.isEnabled()) {
+                        setEnabled(model, timerNode, true, enabledStates, properties);
+                    }
+                    ConstantThroughputTimer timer = (ConstantThroughputTimer) timerNode.getTestElement();
+                    setProperty(properties, timer, ConstantThroughputTimer.THROUGHPUT,
+                            new StringProperty(ConstantThroughputTimer.THROUGHPUT,
+                                    property(prefix, "rpm", WorkloadCalculator.format(plan.rpm()))), changes);
+                    setProperty(properties, timer, ConstantThroughputTimer.CALC_MODE,
+                            new IntegerProperty(ConstantThroughputTimer.CALC_MODE,
+                                    CALC_MODE_THREAD_GROUP_SHARED), changes);
                     model.nodeChanged(timerNode);
                 }
+            } else {
+                JMeterTreeNode managed = managedTimer(threadGroupNode, ConstantThroughputTimer.class, CTT_NAME);
+                if (managed != null && managed.isEnabled()) {
+                    setEnabled(model, managed, false, enabledStates, properties);
+                }
+                if (hasEnabledUserThroughputTimer(threadGroupNode)) {
+                    warnings.add("A user-managed Constant Throughput Timer still caps the sample rate; it was left unchanged.");
+                }
             }
-        }
 
-        if (plan.thinkMillis() > 0) {
-            ConstantTimer timer = directThinkTimer(threadGroupNode);
-            if (timer == null) {
-                timer = new ConstantTimer();
-                timer.setName(THINK_NAME);
-                timer.setProperty(TestElement.TEST_CLASS, ConstantTimer.class.getName());
-                timer.setProperty(TestElement.GUI_CLASS, TIMER_GUI);
-                JMeterTreeNode timerNode = model.addComponent(timer, threadGroupNode);
-                added.add(timerNode);
-                changes.add("Added " + THINK_NAME);
+            JMeterTreeNode thinkNode = managedTimer(threadGroupNode, ConstantTimer.class, THINK_NAME);
+            if (plan.thinkMillis() > 0) {
+                if (thinkNode == null) {
+                    ConstantTimer timer = new ConstantTimer();
+                    timer.setName(THINK_NAME);
+                    timer.setProperty(TestElement.TEST_CLASS, ConstantTimer.class.getName());
+                    timer.setProperty(TestElement.GUI_CLASS, TIMER_GUI);
+                    thinkNode = model.addComponent(timer, threadGroupNode);
+                    added.add(thinkNode);
+                    changes.add("Added " + THINK_NAME);
+                } else if (!thinkNode.isEnabled()) {
+                    setEnabled(model, thinkNode, true, enabledStates, properties);
+                }
+                ConstantTimer timer = (ConstantTimer) thinkNode.getTestElement();
+                setProperty(properties, timer, ConstantTimer.DELAY,
+                        new StringProperty(ConstantTimer.DELAY,
+                                property(prefix, "think_ms", plan.thinkMillis())), changes);
+                model.nodeChanged(thinkNode);
+            } else if (thinkNode != null && thinkNode.isEnabled()) {
+                setEnabled(model, thinkNode, false, enabledStates, properties);
             }
-            setProperty(properties, timer, ConstantTimer.DELAY,
-                    new StringProperty(ConstantTimer.DELAY, property(prefix, "think_ms", plan.thinkMillis())),
-                    changes);
-            JMeterTreeNode timerNode = model.getNodeOf(timer);
-            if (timerNode != null) {
-                model.nodeChanged(timerNode);
+            int existingTimers = otherTimerCount(threadGroupNode);
+            if (existingTimers > 0) {
+                warnings.add("Your plan already has " + existingTimers
+                        + " timers. The estimate does not count them.");
             }
+            model.nodeStructureChanged(threadGroupNode);
+            refreshCurrentGui(gui, threadGroupNode, currentGroup);
+            lastApplied = new LastApplied(threadGroupNode, properties, enabledStates, added);
+            return new ApplyResult(threadGroupNode.getName(), changes, warnings);
+        } catch (Exception error) {
+            restore(model, threadGroupNode, properties, enabledStates, added, gui, currentGroup, error);
+            throw error;
         }
-        int existingTimers = otherTimerCount(threadGroupNode);
-        if (existingTimers > 0) {
-            warnings.add("Your plan already has " + existingTimers
-                    + " timers. The estimate does not count them.");
-        }
-        model.nodeStructureChanged(threadGroupNode);
-        refreshCurrentGui(threadGroupNode);
-        lastApplied = new LastApplied(threadGroupNode, properties, added);
-        return new ApplyResult(threadGroupNode.getName(), changes, warnings);
     }
 
     public static synchronized String undoLast() {
@@ -140,25 +166,16 @@ public final class WorkloadApplier {
             lastApplied = null;
             return NOTHING_TO_UNDO;
         }
-        for (int index = lastApplied.addedNodes.size() - 1; index >= 0; index--) {
-            JMeterTreeNode node = lastApplied.addedNodes.get(index);
-            if (node.getParent() != null) {
-                model.removeNodeFromParent(node);
-            }
+        GuiPackage gui = GuiPackage.getInstance();
+        JMeterTreeNode group = lastApplied.threadGroup;
+        boolean currentGroup = gui != null && gui.getCurrentNode() == group;
+        if (currentGroup) {
+            gui.updateCurrentNode();
         }
-        for (int index = lastApplied.properties.size() - 1; index >= 0; index--) {
-            PropertySnapshot snapshot = lastApplied.properties.get(index);
-            if (snapshot.previous == null) {
-                snapshot.element.removeProperty(snapshot.name);
-            } else {
-                snapshot.element.setProperty(snapshot.previous.clone());
-            }
-        }
+        restore(model, group, lastApplied.properties, lastApplied.enabledStates,
+                lastApplied.addedNodes, gui, currentGroup, null);
         org.qainsights.jmeter.ai.telemetry.Telemetry.record(
                 org.qainsights.jmeter.ai.telemetry.TelemetryFeature.LOAD_UNDO);
-        JMeterTreeNode group = lastApplied.threadGroup;
-        model.nodeStructureChanged(group);
-        refreshCurrentGui(group);
         lastApplied = null;
         return "Restored the Thread Group settings and removed the timers added by the last `@load`.";
     }
@@ -188,43 +205,87 @@ public final class WorkloadApplier {
         changes.add(name + " = `" + replacement.getStringValue() + "`");
     }
 
+    private static void setEnabled(JMeterTreeModel model, JMeterTreeNode node, boolean enabled,
+                                   List<EnabledSnapshot> enabledStates, List<PropertySnapshot> properties) {
+        enabledStates.add(new EnabledSnapshot(node, node.isEnabled()));
+        JMeterProperty current = node.getTestElement().getProperty(TestElement.ENABLED);
+        boolean exists = current != null && !(current instanceof NullProperty);
+        properties.add(new PropertySnapshot(node.getTestElement(), TestElement.ENABLED,
+                exists ? current.clone() : null));
+        node.getTestElement().setProperty(new BooleanProperty(TestElement.ENABLED, enabled));
+        node.setEnabled(enabled);
+        model.nodeChanged(node);
+    }
+
+    private static void restore(JMeterTreeModel model, JMeterTreeNode group, List<PropertySnapshot> properties,
+                                List<EnabledSnapshot> enabledStates, List<JMeterTreeNode> added,
+                                GuiPackage gui, boolean currentGroup, Exception original) {
+        try {
+            for (int index = added.size() - 1; index >= 0; index--) {
+                JMeterTreeNode node = added.get(index);
+                if (node.getParent() != null) {
+                    model.removeNodeFromParent(node);
+                }
+            }
+            for (int index = enabledStates.size() - 1; index >= 0; index--) {
+                EnabledSnapshot snapshot = enabledStates.get(index);
+                snapshot.node.setEnabled(snapshot.enabled);
+            }
+            for (int index = properties.size() - 1; index >= 0; index--) {
+                PropertySnapshot snapshot = properties.get(index);
+                if (snapshot.previous == null) {
+                    snapshot.element.removeProperty(snapshot.name);
+                } else {
+                    snapshot.element.setProperty(snapshot.previous.clone());
+                }
+            }
+            for (EnabledSnapshot snapshot : enabledStates) {
+                model.nodeChanged(snapshot.node);
+            }
+            model.nodeStructureChanged(group);
+            refreshCurrentGui(gui, group, currentGroup);
+        } catch (Exception restoreError) {
+            if (original != null) {
+                original.addSuppressed(restoreError);
+            } else {
+                log.warn("Could not completely restore the Thread Group after @load", restoreError);
+            }
+        }
+    }
+
     private static String property(String prefix, String suffix, Object value) {
         return "${__P(" + prefix + "." + suffix + "," + value + ")}";
     }
 
-    private static JMeterTreeNode findLoopController(JMeterTreeNode parent) {
+    private static JMeterTreeNode enabledDirectChild(JMeterTreeNode parent, Class<?> type) {
         for (int index = 0; index < parent.getChildCount(); index++) {
             JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
-            if (child.getTestElement() instanceof LoopController) {
+            if (type.isInstance(child.getTestElement()) && child.isEnabled()) {
                 return child;
             }
-            JMeterTreeNode nested = findLoopController(child);
-            if (nested != null) {
-                return nested;
-            }
         }
         return null;
     }
 
-    private static <T> T directChild(JMeterTreeNode parent, Class<T> type) {
-        for (int index = 0; index < parent.getChildCount(); index++) {
-            Object element = ((JMeterTreeNode) parent.getChildAt(index)).getTestElement();
-            if (type.isInstance(element)) {
-                return type.cast(element);
-            }
-        }
-        return null;
-    }
-
-    private static ConstantTimer directThinkTimer(JMeterTreeNode parent) {
+    private static JMeterTreeNode managedTimer(JMeterTreeNode parent, Class<?> type, String name) {
         for (int index = 0; index < parent.getChildCount(); index++) {
             JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
-            if (child.getTestElement() instanceof ConstantTimer
-                    && THINK_NAME.equals(child.getTestElement().getName())) {
-                return (ConstantTimer) child.getTestElement();
+            if (type.isInstance(child.getTestElement()) && name.equals(child.getTestElement().getName())) {
+                return child;
             }
         }
         return null;
+    }
+
+    private static boolean hasEnabledUserThroughputTimer(JMeterTreeNode parent) {
+        for (int index = 0; index < parent.getChildCount(); index++) {
+            JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
+            if (child.getTestElement() instanceof ConstantThroughputTimer
+                    && child.isEnabled() && !CTT_NAME.equals(child.getTestElement().getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean containsShapingTimer(JMeterTreeNode node) {
@@ -269,13 +330,19 @@ public final class WorkloadApplier {
         return count;
     }
 
-    private static void refreshCurrentGui(JMeterTreeNode node) {
-        GuiPackage gui = GuiPackage.getInstance();
-        if (gui == null || gui.getCurrentNode() != node || gui.getCurrentGui() == null) {
+    private static void refreshCurrentGui(GuiPackage gui, JMeterTreeNode node, boolean currentGroup) {
+        if (gui == null || !currentGroup) {
             return;
         }
         try {
-            gui.getCurrentGui().configure(node.getTestElement());
+            JMeterGUIComponent component = gui.getGui(node.getTestElement());
+            if (component != null) {
+                component.clearGui();
+                component.configure(node.getTestElement());
+            }
+            if (gui.getMainFrame() != null) {
+                gui.getMainFrame().repaint();
+            }
         } catch (RuntimeException e) {
             log.debug("Could not refresh the Thread Group form after @load", e);
         }
@@ -291,7 +358,11 @@ public final class WorkloadApplier {
     private record PropertySnapshot(TestElement element, String name, JMeterProperty previous) {
     }
 
+    private record EnabledSnapshot(JMeterTreeNode node, boolean enabled) {
+    }
+
     private record LastApplied(JMeterTreeNode threadGroup, List<PropertySnapshot> properties,
+                               List<EnabledSnapshot> enabledStates,
                                List<JMeterTreeNode> addedNodes) {
     }
 }

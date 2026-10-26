@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class WorkloadApplierTest {
 
@@ -51,6 +52,55 @@ class WorkloadApplierTest {
     }
 
     @Test
+    void usesTheMainLoopControllerAndUndoRestoresItsLoops() throws Exception {
+        Fixture fixture = fixture("Main loop", true);
+        fixture.loop.setLoops(8);
+        LoopController nested = new LoopController();
+        nested.setLoops(3);
+        fixture.model.addComponent(nested, fixture.groupNode);
+
+        WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 40, 60, 660, 2400.0, 0));
+
+        assertEquals(-1, fixture.loop.getLoops());
+        assertEquals(3, nested.getLoops());
+        WorkloadApplier.undoLast(fixture.model);
+        assertEquals(8, fixture.loop.getLoops());
+        assertEquals(3, nested.getLoops());
+    }
+
+    @Test
+    void rollsBackAllChangesWhenTreeMutationFails() throws Exception {
+        JMeterTreeModel model = new JMeterTreeModel() {
+            @Override
+            public void nodeChanged(javax.swing.tree.TreeNode node) {
+                if (node instanceof JMeterTreeNode jmeterNode
+                        && jmeterNode.getTestElement() instanceof ConstantThroughputTimer) {
+                    throw new IllegalStateException("forced tree failure");
+                }
+                super.nodeChanged(node);
+            }
+        };
+        ThreadGroup group = new ThreadGroup();
+        group.setName("Rollback");
+        LoopController loop = new LoopController();
+        group.setSamplerController(loop);
+        loop.setLoops(7);
+        JMeterTreeNode groupNode = model.addComponent(group, planNode(model));
+
+        assertThrows(IllegalStateException.class, () -> WorkloadApplier.apply(model, groupNode,
+                plan("load", 40, 60, 660, 2400.0, 0)));
+        assertTrue(group.getProperty(ThreadGroup.NUM_THREADS)
+                instanceof org.apache.jmeter.testelement.property.NullProperty);
+        assertTrue(group.getProperty(ThreadGroup.RAMP_TIME)
+                instanceof org.apache.jmeter.testelement.property.NullProperty);
+        assertTrue(group.getProperty(ThreadGroup.DURATION)
+                instanceof org.apache.jmeter.testelement.property.NullProperty);
+        assertEquals(7, loop.getLoops());
+        assertEquals(0, countChildren(groupNode, ConstantThroughputTimer.class));
+    }
+
+    @Test
     void updatesAnExistingConstantThroughputTimerWithoutDuplicatingIt() throws Exception {
         Fixture fixture = fixture("Existing", true);
         ConstantThroughputTimer existing = new ConstantThroughputTimer();
@@ -64,6 +114,49 @@ class WorkloadApplierTest {
         assertEquals(1, countChildren(fixture.groupNode, ConstantThroughputTimer.class));
         assertEquals("${__P(load.rpm,600)}", existing.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
         assertTrue(timerNode.getParent() == fixture.groupNode);
+    }
+
+    @Test
+    void reEnablesOnlyTheManagedDisabledThroughputTimerAndUndoRestoresItsEnabledFlag() throws Exception {
+        Fixture fixture = fixture("Managed timer", true);
+        ConstantThroughputTimer managed = new ConstantThroughputTimer();
+        managed.setName(WorkloadApplier.CTT_NAME);
+        JMeterTreeNode managedNode = fixture.model.addComponent(managed, fixture.groupNode);
+        managedNode.setEnabled(false);
+
+        WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 20, 60, 660, 600.0, 0));
+
+        assertTrue(managedNode.isEnabled());
+        assertEquals("${__P(load.rpm,600)}", managed.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
+        WorkloadApplier.undoLast(fixture.model);
+        assertFalse(managedNode.isEnabled());
+    }
+
+    @Test
+    void disablesManagedTimersWhenRateAndThinkTimeAreClearedAndLeavesUserTimerAlone() throws Exception {
+        Fixture fixture = fixture("Cleared timers", true);
+        ConstantThroughputTimer managedRate = new ConstantThroughputTimer();
+        managedRate.setName(WorkloadApplier.CTT_NAME);
+        JMeterTreeNode managedRateNode = fixture.model.addComponent(managedRate, fixture.groupNode);
+        ConstantThroughputTimer userRate = new ConstantThroughputTimer();
+        userRate.setName("User rate");
+        JMeterTreeNode userRateNode = fixture.model.addComponent(userRate, fixture.groupNode);
+        ConstantTimer managedThink = new ConstantTimer();
+        managedThink.setName(WorkloadApplier.THINK_NAME);
+        JMeterTreeNode managedThinkNode = fixture.model.addComponent(managedThink, fixture.groupNode);
+
+        WorkloadApplier.ApplyResult result = WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 20, 60, 660, null, 0));
+
+        assertFalse(managedRateNode.isEnabled());
+        assertFalse(managedThinkNode.isEnabled());
+        assertTrue(userRateNode.isEnabled());
+        assertTrue(result.warnings().stream().anyMatch(text -> text.contains("still caps the sample rate")));
+        WorkloadApplier.undoLast(fixture.model);
+        assertTrue(managedRateNode.isEnabled());
+        assertTrue(managedThinkNode.isEnabled());
+        assertTrue(userRateNode.isEnabled());
     }
 
     @Test
@@ -166,13 +259,13 @@ class WorkloadApplierTest {
         JMeterTreeNode planNode = planNode(model);
         ThreadGroup first = new ThreadGroup();
         first.setName("First");
+        first.setSamplerController(new LoopController());
         JMeterTreeNode firstNode = model.addComponent(first, planNode);
-        model.addComponent(new LoopController(), firstNode);
         model.addComponent(new HTTPSamplerProxy(), firstNode);
         ThreadGroup second = new ThreadGroup();
         second.setName("Second");
+        second.setSamplerController(new LoopController());
         JMeterTreeNode secondNode = model.addComponent(second, planNode);
-        model.addComponent(new LoopController(), secondNode);
         model.addComponent(new HTTPSamplerProxy(), secondNode);
         ThreadGroup disabledGroup = new ThreadGroup();
         JMeterTreeNode disabledNode = model.addComponent(disabledGroup, planNode);
@@ -182,7 +275,7 @@ class WorkloadApplierTest {
 
         assertEquals(List.of(firstNode, secondNode), LoadCommandHandler.eligibleThreadGroups(model));
         LoadCommandHandler.Preparation preparation = LoadCommandHandler.prepare("@load 100 rps",
-                (JMeterTreeNode) secondNode.getChildAt(1), model);
+                (JMeterTreeNode) secondNode.getChildAt(0), model);
         assertNull(preparation.error());
         assertEquals(secondNode, preparation.selectedGroup());
         assertEquals(2, preparation.eligibleCount());
@@ -203,14 +296,13 @@ class WorkloadApplierTest {
         JMeterTreeModel model = new JMeterTreeModel();
         ThreadGroup group = new ThreadGroup();
         group.setName(name);
-        JMeterTreeNode groupNode = model.addComponent(group, planNode(model));
         LoopController loop = new LoopController();
-        loop.setName("Loop Controller");
-        JMeterTreeNode loopNode = model.addComponent(loop, groupNode);
+        group.setSamplerController(loop);
+        JMeterTreeNode groupNode = model.addComponent(group, planNode(model));
         if (withSampler) {
             model.addComponent(new HTTPSamplerProxy(), groupNode);
         }
-        return new Fixture(model, group, groupNode, loop, loopNode);
+        return new Fixture(model, group, groupNode, loop);
     }
 
     private static JMeterTreeNode addGroup(JMeterTreeModel model, ThreadGroup group) {
@@ -264,6 +356,6 @@ class WorkloadApplierTest {
     }
 
     private record Fixture(JMeterTreeModel model, ThreadGroup group, JMeterTreeNode groupNode,
-                           LoopController loop, JMeterTreeNode loopNode) {
+                           LoopController loop) {
     }
 }

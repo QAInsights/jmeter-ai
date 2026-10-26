@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.load;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,7 +26,8 @@ class WorkloadCalculatorTest {
         assertEquals(4200, plan.durationSeconds());
         assertEquals(1, plan.assumptions().size());
         assertTrue(plan.assumptions().get(0).contains("Assumed 500 ms average response time"));
-        assertEquals("jmeter -n -t checkout.jmx -Jload.threads=150 -Jload.rampup=600 "
+        assertEquals("export HEAP=\"-Xms1g -Xmx1g\"\n"
+                + "jmeter -n -t checkout.jmx -Jload.threads=150 -Jload.rampup=600 "
                 + "-Jload.duration=4200 -Jload.rpm=12000 -l results.jtl -e -o report", plan.cliCommand());
     }
 
@@ -56,7 +59,7 @@ class WorkloadCalculatorTest {
         assertEquals(100.0, plan.expectedRequestsPerSecond());
         assertEquals(12_000.0, plan.rpm());
         assertEquals(1, plan.warnings().size());
-        assertTrue(plan.warnings().get(0).contains("at most 100 requests/s"));
+        assertTrue(plan.warnings().get(0).contains("at most 100 samples/s"));
         assertTrue(plan.warnings().get(0).contains("Use at least 150 users."));
     }
 
@@ -86,6 +89,8 @@ class WorkloadCalculatorTest {
         assertEquals(45, plan.threads());
         assertEquals(60.0, plan.targetRequestsPerSecond());
         assertEquals(3600.0, plan.rpm());
+        assertTrue(plan.notes().contains("Samples per iteration counts each enabled sampler once; "
+                + "If, Loop, Throughput and Transaction (parent sample) controllers change the real number."));
     }
 
     @Test
@@ -94,8 +99,79 @@ class WorkloadCalculatorTest {
                 WorkloadInputs.TargetType.REQUEST_RATE, 2000, null, 500L,
                 null, 10L, 600L, null, 1, "load", "plan.jmx"));
 
-        assertTrue(plan.warnings().stream().anyMatch(value -> value.contains("Above 1,000 threads")));
+        assertTrue(plan.warnings().stream().anyMatch(value ->
+                value.equals("1500 threads need at least 2 generators at 1000 threads each.")));
         assertTrue(plan.warnings().stream().anyMatch(value -> value.contains("Steep ramp-up")));
+    }
+
+    @Test
+    void convertsMessageRateToSamplesPerSecondAndSizesTheGeneratorHeap() {
+        WorkloadInputs inputs = new WorkloadInputs(
+                WorkloadInputs.TargetType.MESSAGE_RATE, 2000, null, null, null, null, null,
+                null, 4, "load", "plan.jmx", 10.0, 1000, List.of(),
+                List.of(org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy.class,
+                        KafkaProducerSampler.class), List.of());
+        WorkloadPlan calculated = WorkloadCalculator.calculate(inputs);
+
+        assertEquals(150, calculated.threads());
+        assertEquals(200.0, calculated.targetRequestsPerSecond());
+        assertEquals(12_000.0, calculated.rpm());
+        assertEquals(1024, calculated.heapPerGeneratorMb());
+        assertTrue(calculated.notes().stream().anyMatch(note -> note.contains("Kafka samples may carry multiple messages")));
+    }
+
+    @Test
+    void usesProvidedHostsAndQuotesUnsafePlanNamesInTheRemoteCommand() {
+        WorkloadInputs inputs = new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 200, null, 500L, null, 600L, 3600L,
+                null, 1, "load", "Checkout's plan.jmx", 1.0, 1000,
+                List.of("load-a", "10.0.0.2", "host.example:1099", "node_b"),
+                List.of(), List.of());
+        WorkloadPlan plan = WorkloadCalculator.calculate(inputs);
+
+        assertEquals(4, plan.agents());
+        assertEquals(38, plan.perAgentThreads());
+        assertTrue(plan.cliCommand().contains("-t 'Checkout'\\''s plan.jmx' -R load-a,10.0.0.2,host.example:1099,node_b"));
+        assertTrue(plan.cliCommand().contains("-Gload.threads=38"));
+        assertTrue(plan.notes().contains("-G properties go to all generators; values are per generator."));
+    }
+
+    @Test
+    void warnsWhenTheSelectedGeneratorsCannotFitTheThreadCount() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 2000, null, 500L,
+                null, 60L, 600L, 1, 1, "load", "plan.jmx",
+                1.0, 500, List.of(), List.of(), List.of()));
+
+        assertEquals(3, plan.generatorsNeeded());
+        assertTrue(plan.warnings().contains("1500 threads need at least 3 generators at 500 threads each."));
+    }
+
+    @Test
+    void formatsTwoGigabytesAsGigabytesInTheHeapEnvironment() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 1024, null, 500L,
+                null, 60L, 600L, 1, 1, "load", "plan.jmx"));
+
+        assertEquals(2048, plan.heapPerGeneratorMb());
+        assertTrue(plan.cliCommand().startsWith("export HEAP=\"-Xms2g -Xmx2g\"\n"));
+    }
+
+    @Test
+    void warnsWhenJdbcPoolCapacityIsBelowThreadsPerGenerator() {
+        WorkloadInputs inputs = new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 300, null, 500L, null, 60L, 600L,
+                null, 1, "load", "plan.jmx", 1.0, 1000, List.of(),
+                List.of(org.apache.jmeter.protocol.jdbc.sampler.FakeJDBCSampler.class),
+                List.of(new JdbcPool("payments", 10)));
+        WorkloadPlan plan = WorkloadCalculator.calculate(inputs);
+
+        assertTrue(plan.notes().contains("JDBC pool \"payments\" allows 10 connections but 225 threads share it; "
+                + "threads will queue and the target may not be reached. Set Max Number of Connections to 0 "
+                + "(one connection per thread) or at least 225."));
+    }
+
+    private static final class KafkaProducerSampler {
     }
 
     @Test

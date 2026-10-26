@@ -51,7 +51,7 @@ public class CommandIntellisenseProviderTest {
         assertTrue(suggestions.contains("@testplan"));
         assertTrue(suggestions.contains("@fix"));
         assertTrue(suggestions.contains("@load"));
-        assertEquals("Design the load: threads, ramp-up and throughput from a target, e.g. @load 200 rps for 1 hour",
+        assertEquals("Design samples, messages, threads and generator setup, e.g. @load 200 rps for 1 hour",
                 CommandIntellisenseProvider.getDescription("@load"));
         assertEquals("Run the plan with 1 user and fix failures until it passes",
                 CommandIntellisenseProvider.getDescription("@fix"));

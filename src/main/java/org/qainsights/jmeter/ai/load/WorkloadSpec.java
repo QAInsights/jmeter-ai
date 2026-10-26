@@ -5,6 +5,7 @@ import java.util.List;
 /** Parsed values from a deterministic {@code @load} request. */
 public record WorkloadSpec(
         Double requestsPerSecond,
+        Double messagesPerSecond,
         Double iterationsPerSecond,
         Integer users,
         Long rampSeconds,
@@ -22,8 +23,16 @@ public record WorkloadSpec(
         duplicates = List.copyOf(duplicates);
     }
 
+    public WorkloadSpec(Double requestsPerSecond, Double iterationsPerSecond, Integer users,
+                        Long rampSeconds, Long holdSeconds, Long thinkMillis, Long responseMillis,
+                        Integer agents, List<String> unsupported, List<String> unrecognized,
+                        List<String> duplicates) {
+        this(requestsPerSecond, null, iterationsPerSecond, users, rampSeconds, holdSeconds,
+                thinkMillis, responseMillis, agents, unsupported, unrecognized, duplicates);
+    }
+
     public boolean isEmpty() {
-        return requestsPerSecond == null && iterationsPerSecond == null && users == null
+        return requestsPerSecond == null && messagesPerSecond == null && iterationsPerSecond == null && users == null
                 && rampSeconds == null && holdSeconds == null && thinkMillis == null
                 && responseMillis == null && agents == null;
     }

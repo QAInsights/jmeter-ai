@@ -13,12 +13,30 @@ class WorkloadParserTest {
         assertEquals(200.0, WorkloadParser.parse("@load 12,000 requests per minute").requestsPerSecond(), 0.0001);
         assertEquals(10_000.0 / 60, WorkloadParser.parse("10k rpm").requestsPerSecond(), 0.0001);
         for (String unit : new String[]{"rps", "tps", "qps", "hits/s", "req/s", "requests/s",
-                "requests per second", "req/min", "transactions per minute", "hits per hour"}) {
+                "requests per second", "queries per second", "transactions per second",
+                "req/min", "transactions per minute", "hits per hour"}) {
             WorkloadSpec spec = WorkloadParser.parse("12 " + unit);
             assertTrue(spec.requestsPerSecond() != null, unit);
             assertTrue(spec.unrecognized().isEmpty(), unit + ": " + spec.unrecognized());
         }
         assertEquals(1.0, WorkloadParser.parse("3,600 transactions per hour").requestsPerSecond(), 0.0001);
+    }
+
+    @Test
+    void normalizesSlashHourRateUnits() {
+        for (String unit : new String[]{"requests/h", "req/h", "hits/h", "transactions/h"}) {
+            assertEquals(100.0 / 3600, WorkloadParser.parse("100 " + unit).requestsPerSecond(), 0.0001, unit);
+        }
+    }
+
+    @Test
+    void parsesMessageRateAliasesSeparatelyFromSampleRate() {
+        WorkloadSpec shortAlias = WorkloadParser.parse("@load 2000 msg/s");
+        WorkloadSpec longAlias = WorkloadParser.parse("2k messages per second");
+
+        assertEquals(2000, shortAlias.messagesPerSecond());
+        assertNull(shortAlias.requestsPerSecond());
+        assertEquals(2000, longAlias.messagesPerSecond());
     }
 
     @Test

@@ -6,6 +6,8 @@ import java.util.List;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.threads.PostThreadGroup;
 import org.apache.jmeter.threads.SetupThreadGroup;
 import org.apache.jmeter.threads.ThreadGroup;
@@ -13,8 +15,8 @@ import org.apache.jmeter.threads.ThreadGroup;
 /** Resolves the Thread Group and sampler count for an {@code @load} dialog. */
 public final class LoadCommandHandler {
     public static final String NO_GUI = "The JMeter GUI is not available, so I can't design a workload.";
-    public static final String NO_THREAD_GROUP = "Add a Thread Group with requests first, then run `@load` again.";
-    public static final String NO_REQUESTS = "Add requests to the Thread Group first.";
+    public static final String NO_THREAD_GROUP = "Add a Thread Group with samples first, then run `@load` again.";
+    public static final String NO_REQUESTS = "Add samples to the Thread Group first.";
 
     private LoadCommandHandler() {
     }
@@ -33,9 +35,12 @@ public final class LoadCommandHandler {
             return Preparation.error(NO_THREAD_GROUP);
         }
         JMeterTreeNode selectedGroup = containingGroup(selected, groups);
-        JMeterTreeNode defaultGroup = selectedGroup == null ? groups.get(0) : selectedGroup;
-        int count = WorkloadApplier.countEnabledSamplers(defaultGroup);
-        if (count == 0) {
+        JMeterTreeNode defaultGroup = selectedGroup != null
+                && WorkloadApplier.countEnabledSamplers(selectedGroup) > 0
+                ? selectedGroup : groups.stream()
+                .filter(group -> WorkloadApplier.countEnabledSamplers(group) > 0)
+                .findFirst().orElse(null);
+        if (defaultGroup == null) {
             return Preparation.error(NO_REQUESTS);
         }
         return new Preparation(null, WorkloadParser.parse(message), groups, defaultGroup,
@@ -52,6 +57,47 @@ public final class LoadCommandHandler {
 
     public static String prefixFor(JMeterTreeNode node, int eligibleCount) {
         return WorkloadApplier.defaultPrefix(node, eligibleCount);
+    }
+
+    public static List<Class<?>> enabledSamplerClasses(JMeterTreeNode group) {
+        List<Class<?>> classes = new ArrayList<>();
+        collectSamplerClasses(group, true, classes);
+        return List.copyOf(classes);
+    }
+
+    public static List<JdbcPool> jdbcPools(JMeterTreeNode group) {
+        List<JdbcPool> pools = new ArrayList<>();
+        collectJdbcPools(group, true, pools);
+        return List.copyOf(pools);
+    }
+
+    private static void collectSamplerClasses(JMeterTreeNode node, boolean ancestorsEnabled,
+                                              List<Class<?>> classes) {
+        if (node == null || !ancestorsEnabled || !node.isEnabled()) {
+            return;
+        }
+        if (node.getTestElement() instanceof Sampler sampler) {
+            classes.add(sampler.getClass());
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            collectSamplerClasses((JMeterTreeNode) node.getChildAt(index), true, classes);
+        }
+    }
+
+    private static void collectJdbcPools(JMeterTreeNode node, boolean ancestorsEnabled,
+                                         List<JdbcPool> pools) {
+        if (node == null || !ancestorsEnabled || !node.isEnabled()) {
+            return;
+        }
+        TestElement element = node.getTestElement();
+        if ("org.apache.jmeter.protocol.jdbc.config.DataSourceElement".equals(element.getClass().getName())) {
+            String variable = element.getPropertyAsString("dataSource");
+            int poolMax = element.getPropertyAsInt("poolMax");
+            pools.add(new JdbcPool(variable == null || variable.isBlank() ? "(unnamed)" : variable, poolMax));
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            collectJdbcPools((JMeterTreeNode) node.getChildAt(index), true, pools);
+        }
     }
 
     private static void collectGroups(JMeterTreeNode node, List<JMeterTreeNode> groups) {

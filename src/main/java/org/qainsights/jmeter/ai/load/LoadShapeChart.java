@@ -13,7 +13,7 @@ import javax.swing.JComponent;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
-/** Antialiased closed-model thread and request-rate chart. */
+/** Antialiased closed-model thread and sample-rate chart. */
 public final class LoadShapeChart extends JComponent {
     private WorkloadPlan plan;
 
@@ -21,7 +21,7 @@ public final class LoadShapeChart extends JComponent {
         setOpaque(true);
         setBackground(ThemeColors.canvas());
         setPreferredSize(new java.awt.Dimension(420, 230));
-        getAccessibleContext().setAccessibleName("Workload thread ramp and request-rate chart");
+        getAccessibleContext().setAccessibleName("Workload thread ramp and sample-rate chart");
     }
 
     @Override
@@ -74,7 +74,7 @@ public final class LoadShapeChart extends JComponent {
         int baseline = 17;
         g.setColor(ThemeColors.secondaryText());
         drawLegendItem(g, left, baseline, ThemeColors.accent(), false, "Threads");
-        String rateLabel = "Requests/s";
+        String rateLabel = "Samples/s";
         int rateX = right - metrics.stringWidth(rateLabel) - 22;
         drawLegendItem(g, rateX, baseline, ThemeColors.info(), true, rateLabel);
     }
@@ -94,6 +94,10 @@ public final class LoadShapeChart extends JComponent {
     private void drawAxes(Graphics2D g, int left, int right, int top, int bottom) {
         g.setFont(getFont());
         FontMetrics metrics = g.getFontMetrics();
+        g.setColor(ThemeColors.secondaryText());
+        g.drawString("Threads", left, top - 7);
+        String rateAxis = "Samples/s";
+        g.drawString(rateAxis, right - metrics.stringWidth(rateAxis), top - 7);
         double maxRps = plan == null ? 0 : WorkloadChartModel.requestRateAxisMaximum(plan);
         for (int tick = 0; tick <= 4; tick++) {
             int y = bottom - (bottom - top) * tick / 4;
@@ -105,8 +109,8 @@ public final class LoadShapeChart extends JComponent {
                 g.drawString(threads, left - metrics.stringWidth(threads) - 7,
                         y + metrics.getAscent() / 2);
                 double requestTick = Math.round(maxRps * tick / 4 * 100) / 100.0;
-                String requests = WorkloadCalculator.format(requestTick);
-                g.drawString(requests, right + 7, y + metrics.getAscent() / 2);
+                String samples = WorkloadCalculator.format(requestTick);
+                g.drawString(samples, right + 7, y + metrics.getAscent() / 2);
             }
         }
         g.setColor(ThemeColors.border());

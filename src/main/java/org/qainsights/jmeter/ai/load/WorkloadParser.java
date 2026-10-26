@@ -23,7 +23,12 @@ public final class WorkloadParser {
                     + "|requests?\\s+per\\s+(?:second|minute|hour)"
                     + "|req\\s+per\\s+(?:second|minute|hour)"
                     + "|hits\\s+per\\s+(?:second|minute|hour)"
+                    + "|queries?\\s*/\\s*(?:s|sec|secs|second|seconds)"
+                    + "|queries?\\s+per\\s+(?:second|minute|hour)"
                     + "|transactions?\\s+per\\s+(?:second|minute|hour))\\b");
+    private static final Pattern MESSAGE_RATE = Pattern.compile(
+            "(?i)(?<![\\w.])" + NUMBER
+                    + "\\s*(?:msg\\s*/\\s*(?:s|sec|second)|messages?\\s*(?:/\\s*(?:s|sec|second)|per\\s+second))\\b");
     private static final Pattern ITERATION_RATE = Pattern.compile(
             "(?i)(?<![\\w.])" + NUMBER
                     + "\\s*(iterations?|journeys?|sessions?|arrivals?|users?)\\s+per\\s+"
@@ -77,6 +82,7 @@ public final class WorkloadParser {
             }
 
             String remaining = fragment;
+            remaining = consumeMessageRate(remaining, values);
             remaining = consumeRate(remaining, values);
             remaining = consumeIterationRate(remaining, values);
             remaining = consumeUsers(remaining, values);
@@ -90,7 +96,8 @@ public final class WorkloadParser {
                 unrecognized.add(leftover);
             }
         }
-        return new WorkloadSpec(values.requestsPerSecond, values.iterationsPerSecond, values.users,
+        return new WorkloadSpec(values.requestsPerSecond, values.messagesPerSecond,
+                values.iterationsPerSecond, values.users,
                 values.rampSeconds, values.holdSeconds, values.thinkMillis, values.responseMillis,
                 values.agents, unsupported, unrecognized, values.duplicates);
     }
@@ -119,11 +126,26 @@ public final class WorkloadParser {
                     || unit.endsWith("mins") || unit.equals("rpm")) {
                 rate /= 60.0;
             } else if (unit.endsWith("hour") || unit.endsWith("hours") || unit.endsWith("hr")
-                    || unit.endsWith("hrs") || unit.equals("rph")) {
+                    || unit.endsWith("hrs") || unit.endsWith("/h") || unit.equals("rph")) {
                 rate /= 3600.0;
             }
             double parsedRate = rate;
             values.set("requests per second", parsedRate, () -> values.requestsPerSecond = parsedRate);
+        }
+        rest.append(text.substring(cursor));
+        return rest.toString();
+    }
+
+    private static String consumeMessageRate(String text, Values values) {
+        Matcher matcher = MESSAGE_RATE.matcher(text);
+        StringBuilder rest = new StringBuilder();
+        int cursor = 0;
+        while (matcher.find()) {
+            rest.append(text, cursor, matcher.start());
+            rest.append(" ".repeat(matcher.end() - matcher.start()));
+            cursor = matcher.end();
+            double rate = number(matcher.group(1));
+            values.set("messages per second", rate, () -> values.messagesPerSecond = rate);
         }
         rest.append(text.substring(cursor));
         return rest.toString();
@@ -253,6 +275,7 @@ public final class WorkloadParser {
 
     private static final class Values {
         private Double requestsPerSecond;
+        private Double messagesPerSecond;
         private Double iterationsPerSecond;
         private Integer users;
         private Long rampSeconds;
@@ -265,6 +288,7 @@ public final class WorkloadParser {
         private void set(String field, Object value, Assignment assignment) {
             Object previous = switch (field) {
                 case "requests per second" -> requestsPerSecond;
+                case "messages per second" -> messagesPerSecond;
                 case "iterations per second" -> iterationsPerSecond;
                 case "users" -> users;
                 case "ramp-up" -> rampSeconds;

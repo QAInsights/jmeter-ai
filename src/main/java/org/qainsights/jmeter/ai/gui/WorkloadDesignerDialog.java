@@ -51,6 +51,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final Consumer<Completion> onFinish;
     private final JPanel form = new JPanel();
     private final JPanel capRow;
+    private final JPanel messagesPerSampleRow;
     private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
@@ -59,14 +60,17 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JTextField response = new JTextField();
     private final JTextField think = new JTextField();
     private final JTextField ramp = new JTextField();
-    private final JComboBox<String> rampUnit = new JComboBox<>(new String[]{"s", "min"});
+    private final JComboBox<String> rampUnit = new JComboBox<>(new String[]{"s", "min", "h"});
     private final JTextField hold = new JTextField();
     private final JComboBox<String> holdUnit = new JComboBox<>(new String[]{"s", "min", "h"});
     private final JTextField agents = new JTextField();
+    private final JTextField generatorHosts = new JTextField();
+    private final JTextField maxThreadsPerGenerator = new JTextField("1000");
+    private final JTextField messagesPerSample = new JTextField("1");
     private final JTextField prefix = new JTextField();
     private final LoadShapeChart chart = new LoadShapeChart();
     private final JLabel errorLabel = new JLabel(" ");
-    private final JLabel[] resultValues = new JLabel[6];
+    private final JLabel[] resultValues = new JLabel[9];
     private final JTextArea warningsArea = notesArea(2, ThemeColors.warning());
     private final JTextArea assumptionsArea = notesArea(2, ThemeColors.info());
     private final JTextArea parsedArea = notesArea(2, ThemeColors.secondaryText());
@@ -83,7 +87,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         super(mainFrame(), "Workload Designer", ModalityType.APPLICATION_MODAL);
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
-        capRow = formRow(new JLabel("<html>Cap at requests<br>per second</html>"), cap);
+        capRow = formRow(new JLabel("<html>Cap at samples<br>per second</html>"), cap);
+        messagesPerSampleRow = formRow(new JLabel("Messages per sample"), messagesPerSample);
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -100,7 +105,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 cancel();
             }
         });
-        setSize(920, 700);
+        setSize(1080, 840);
         setLocationRelativeTo(getOwner());
         prefill(preparation.spec());
         installListeners();
@@ -116,7 +121,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         header.setOpaque(false);
         JLabel title = new JLabel("Workload Designer");
         title.setFont(UiTokens.title(title.getFont()));
-        JLabel caption = new JLabel("<html>Little's Law: threads ≈ requests per second × (response time + think time), "
+        JLabel caption = new JLabel("<html>Little's Law: threads ≈ samples per second × (response time + think time), "
                 + "sized with 1.5× headroom.<br>Values are written as ${__P()} properties so CI can override them.</html>");
         caption.setFont(UiTokens.caption(caption.getFont()));
         caption.setForeground(ThemeColors.secondaryText());
@@ -125,7 +130,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         root.add(header, BorderLayout.NORTH);
         JPanel columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
         columns.setOpaque(false);
-        columns.add(buildForm());
+        JScrollPane formScroll = new JScrollPane(buildForm());
+        formScroll.setBorder(null);
+        formScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        formScroll.getViewport().setOpaque(false);
+        columns.add(formScroll);
         columns.add(buildPreview());
         root.add(columns, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
@@ -157,10 +166,12 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow("Target type", targetCombo);
         addFormRow("Target value", target);
         addFormRow("<html>Average response time<br>(ms, default 500)</html>", response);
-        addFormRow("<html>Think time per request<br>(ms, default 0)</html>", think);
+        addFormRow("<html>Think time per sample<br>(ms, default 0)</html>", think);
         addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
         addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
+        addFormRow("Generator hosts", generatorHosts);
         addFormRow("Load generators (default 1)", agents);
+        addFormRow("Max threads per generator", maxThreadsPerGenerator);
         addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
@@ -173,10 +184,10 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private static JPanel formRow(JComponent label, JComponent field) {
-        JPanel row = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_2, 0));
+        JPanel row = new JPanel(new BorderLayout(UiTokens.SPACE_2, 0));
         row.setOpaque(false);
-        row.add(label);
-        row.add(field);
+        row.add(label, BorderLayout.WEST);
+        row.add(field, BorderLayout.CENTER);
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
         return row;
@@ -188,10 +199,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         preview.add(chart, BorderLayout.NORTH);
         JPanel lower = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         lower.setOpaque(false);
-        JPanel grid = new JPanel(new GridLayout(6, 2, UiTokens.SPACE_1, UiTokens.SPACE_1));
+        JPanel grid = new JPanel(new GridLayout(9, 2, UiTokens.SPACE_1, UiTokens.SPACE_1));
         grid.setOpaque(false);
-        String[] labels = {"Threads", "Requests / iteration", "Requests / second",
-                "Throughput samples / min", "Total duration", "Per agent"};
+        String[] labels = {"Threads", "Samples / iteration", "Samples / second",
+                "Throughput samples / min", "Total duration", "Per agent",
+                "Sampler mix", "Generators needed", "Heap per generator"};
         for (int index = 0; index < labels.length; index++) {
             grid.add(new JLabel(labels[index]));
             resultValues[index] = new JLabel("-");
@@ -201,6 +213,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         notes = new JPanel();
         notes.setLayout(new BoxLayout(notes, BoxLayout.Y_AXIS));
         notes.setOpaque(false);
+        notes.setAlignmentY(Component.TOP_ALIGNMENT);
         JScrollPane notesScroll = new JScrollPane(notes);
         notesScroll.setBorder(BorderFactory.createTitledBorder("Notes"));
         lower.add(notesScroll, BorderLayout.CENTER);
@@ -239,8 +252,19 @@ public final class WorkloadDesignerDialog extends JDialog {
         area.setBackground(ThemeColors.canvas());
         area.setOpaque(false);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
+        area.setAlignmentY(Component.TOP_ALIGNMENT);
         area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
         return area;
+    }
+
+    private static void setNotesText(JTextArea area, String text) {
+        area.setText(text);
+        int rows = 0;
+        for (String line : text.split("\n", -1)) {
+            rows += Math.max(1, (line.length() + 71) / 72);
+        }
+        area.setRows(Math.min(18, Math.max(2, rows)));
+        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
     }
 
     private void prefill(WorkloadSpec spec) {
@@ -257,6 +281,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         } else if (spec.iterationsPerSecond() != null) {
             type = WorkloadInputs.TargetType.ITERATION_RATE;
             amount = WorkloadCalculatorFormat.format(spec.iterationsPerSecond());
+        } else if (spec.messagesPerSecond() != null) {
+            type = WorkloadInputs.TargetType.MESSAGE_RATE;
+            amount = WorkloadCalculatorFormat.format(spec.messagesPerSecond());
         }
         targetCombo.setSelectedItem(type);
         target.setText(amount);
@@ -294,10 +321,14 @@ public final class WorkloadDesignerDialog extends JDialog {
                 updatePreview();
             }
         };
-        for (JTextField field : List.of(target, cap, response, think, ramp, hold, agents, prefix)) {
+        for (JTextField field : List.of(target, cap, response, think, ramp, hold, agents,
+                generatorHosts, maxThreadsPerGenerator, messagesPerSample, prefix)) {
             field.getDocument().addDocumentListener(listener);
         }
-        targetCombo.addActionListener(event -> updatePreview());
+        targetCombo.addActionListener(event -> {
+            updateTargetRows();
+            updatePreview();
+        });
         rampUnit.addActionListener(event -> updatePreview());
         holdUnit.addActionListener(event -> updatePreview());
         groupCombo.addActionListener(event -> {
@@ -310,13 +341,28 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void updatePreview() {
-        updateCapVisibility();
+        updateTargetRows();
         JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
         int samplers = WorkloadApplier.countEnabledSamplers(node);
-        evaluation = WorkloadFormState.evaluate((WorkloadInputs.TargetType) targetCombo.getSelectedItem(),
-                target.getText(), cap.getText(), response.getText(), think.getText(), ramp.getText(),
+        String hostText = generatorHosts.getText().trim();
+        boolean hostsSet = !hostText.isEmpty();
+        agents.setEnabled(!hostsSet);
+        if (hostsSet) {
+            int hostCount = hostText.split(",", -1).length;
+            String countText = Integer.toString(hostCount);
+            if (!agents.getText().equals(countText)) {
+                agents.setText(countText);
+            }
+        }
+        WorkloadFormState.Context context = new WorkloadFormState.Context(hostText,
+                maxThreadsPerGenerator.getText(), messagesPerSample.getText(),
+                LoadCommandHandler.enabledSamplerClasses(node), LoadCommandHandler.jdbcPools(node));
+        WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
+        String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
+        evaluation = WorkloadFormState.evaluate(targetType,
+                target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
                 (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
-                agents.getText(), samplers, prefix.getText(), preparation.planFileName());
+                agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context);
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
         errorLabel.setText(error == null || error.isBlank() ? " " : error);
         applyButton.setEnabled(samplers > 0 && evaluation.valid());
@@ -325,26 +371,35 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (plan != null) {
             resultValues[0].setText(Integer.toString(plan.threads()));
             resultValues[1].setText(Integer.toString(plan.samplersPerIteration()));
-            resultValues[2].setText(requestsPerSecondText(plan));
+            resultValues[2].setText(samplesPerSecondText(plan));
             resultValues[3].setText(plan.rpm() == null ? "No timer" : WorkloadCalculatorFormat.format(plan.rpm()));
             resultValues[4].setText(duration(plan.durationSeconds()));
-            resultValues[5].setText(plan.agents() > 1
-                    ? plan.perAgentThreads() + " threads, " + WorkloadCalculatorFormat.format(plan.perAgentRpm()) + " rpm"
-                    : "Single agent");
+            resultValues[5].setText(plan.agents() > 1 || !plan.generatorHosts().isEmpty()
+                    ? plan.perAgentThreads() + " threads"
+                    + (plan.perAgentRpm() == null ? "" : ", "
+                    + WorkloadCalculatorFormat.format(plan.perAgentRpm()) + " samples/min")
+                    : "Single generator");
+            resultValues[6].setText(plan.samplerMix().display());
+            resultValues[7].setText(Integer.toString(plan.generatorsNeeded()));
+            String heapSize = plan.heapPerGeneratorMb() % 1024 == 0
+                    ? plan.heapPerGeneratorMb() / 1024 + "g" : plan.heapPerGeneratorMb() + "m";
+            resultValues[8].setText("HEAP=\"-Xms" + heapSize + " -Xmx" + heapSize + "\"");
             cliArea.setText(plan.cliCommand());
-            warningsArea.setText(String.join("\n", plan.warnings()));
-            assumptionsArea.setText(String.join("\n", plan.assumptions()));
+            setNotesText(warningsArea, String.join("\n", plan.warnings()));
+            List<String> notesAndAssumptions = new ArrayList<>(plan.assumptions());
+            notesAndAssumptions.addAll(plan.notes());
+            setNotesText(assumptionsArea, String.join("\n", notesAndAssumptions));
         } else {
             for (JLabel value : resultValues) {
                 value.setText("-");
             }
             cliArea.setText("");
-            warningsArea.setText("");
-            assumptionsArea.setText("");
+            setNotesText(warningsArea, "");
+            setNotesText(assumptionsArea, "");
         }
         warningsArea.setVisible(!warningsArea.getText().isBlank());
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
-        parsedArea.setText(parsedNotes(preparation.spec()));
+        setNotesText(parsedArea, parsedNotes(preparation.spec()));
         parsedArea.setVisible(!parsedArea.getText().isBlank());
         notes.removeAll();
         for (JTextArea area : List.of(warningsArea, assumptionsArea, parsedArea)) {
@@ -357,19 +412,22 @@ public final class WorkloadDesignerDialog extends JDialog {
         notes.repaint();
     }
 
-    private void updateCapVisibility() {
-        boolean visible = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.USERS;
-        boolean currentlyVisible = capRow.getParent() == form;
-        if (visible == currentlyVisible) {
-            return;
-        }
-        if (visible) {
-            form.add(capRow, 6);
+    private void updateTargetRows() {
+        boolean users = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.USERS;
+        boolean messages = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.MESSAGE_RATE;
+        setOptionalRow(messagesPerSampleRow, messages);
+        setOptionalRow(capRow, users);
+    }
+
+    private void setOptionalRow(JPanel row, boolean visible) {
+        int index = form.getComponentZOrder(row);
+        if (visible && index < 0) {
+            form.add(row, 6);
             form.add(Box.createVerticalStrut(UiTokens.SPACE_1), 7);
-        } else {
-            form.remove(capRow);
-            if (form.getComponentCount() > 7) {
-                form.remove(6);
+        } else if (!visible && index >= 0) {
+            form.remove(index);
+            if (form.getComponentCount() > index) {
+                form.remove(index);
             }
         }
         form.revalidate();
@@ -426,8 +484,9 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static String targetName(WorkloadInputs.TargetType type) {
         return switch (type) {
-            case REQUEST_RATE -> "Requests per second";
+            case REQUEST_RATE -> "Samples per second (requests, queries, messages)";
             case ITERATION_RATE -> "Iterations per second";
+            case MESSAGE_RATE -> "Messages per second";
             case USERS -> "Concurrent users";
         };
     }
@@ -444,11 +503,18 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private static void setDuration(JTextField field, JComboBox<String> unit, Long seconds) {
+    static void setDuration(JTextField field, JComboBox<String> unit, Long seconds) {
         if (seconds == null) {
             return;
         }
+        List<String> available = new ArrayList<>();
+        for (int index = 0; index < unit.getItemCount(); index++) {
+            available.add(unit.getItemAt(index));
+        }
         for (String candidate : List.of("h", "min", "s")) {
+            if (!available.contains(candidate)) {
+                continue;
+            }
             long multiplier = switch (candidate) {
                 case "h" -> 3600;
                 case "min" -> 60;
@@ -477,7 +543,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private static String requestsPerSecondText(WorkloadPlan plan) {
+    private static String samplesPerSecondText(WorkloadPlan plan) {
         Double target = plan.targetRequestsPerSecond();
         Double expected = plan.expectedRequestsPerSecond();
         if (target == null) {

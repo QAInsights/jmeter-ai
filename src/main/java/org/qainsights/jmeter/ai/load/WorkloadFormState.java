@@ -1,5 +1,8 @@
 package org.qainsights.jmeter.ai.load;
 
+import java.util.Arrays;
+import java.util.List;
+
 /** Pure form parsing and validation used by the dialog and its headless tests. */
 public final class WorkloadFormState {
     private WorkloadFormState() {
@@ -9,17 +12,34 @@ public final class WorkloadFormState {
                                       String rateCap, String response, String think,
                                       String ramp, String rampUnit, String hold, String holdUnit,
                                       String agents, int samplerCount, String prefix, String planFile) {
+        return evaluate(targetType, target, rateCap, response, think, ramp, rampUnit, hold, holdUnit,
+                agents, samplerCount, prefix, planFile, Context.empty());
+    }
+
+    public static Evaluation evaluate(WorkloadInputs.TargetType targetType, String target,
+                                      String rateCap, String response, String think,
+                                      String ramp, String rampUnit, String hold, String holdUnit,
+                                      String agents, int samplerCount, String prefix, String planFile,
+                                      Context context) {
         try {
             double targetValue = requiredNumber(target, "Enter a positive target value.");
-            Double cap = optionalNumber(rateCap);
+            Double cap = optionalNumber(rateCap, "Enter a positive samples-per-second cap.");
             Long responseMs = optionalLong(response, "Average response time must be a whole number of milliseconds.");
             Long thinkMs = optionalLong(think, "Think time must be a whole number of milliseconds.");
             Long rampSeconds = optionalDuration(ramp, rampUnit);
             Long holdSeconds = optionalDuration(hold, holdUnit);
             Integer agentCount = optionalInteger(agents);
+            Double messagesPerSample = optionalNumber(context.messagesPerSample(),
+                    "Messages per sample must be greater than zero.");
+            Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator());
+            List<String> hosts = context.generatorHosts() == null || context.generatorHosts().isBlank()
+                    ? List.of() : Arrays.stream(context.generatorHosts().split(",", -1))
+                    .map(String::trim).toList();
             WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(targetType, targetValue,
                     cap, responseMs, thinkMs, rampSeconds, holdSeconds, agentCount, samplerCount,
-                    prefix, planFile));
+                    prefix, planFile, messagesPerSample == null ? 1.0 : messagesPerSample,
+                    maxThreads == null ? 1000 : maxThreads, hosts,
+                    context.samplerClasses(), context.jdbcPools()));
             return new Evaluation(plan, "");
         } catch (IllegalArgumentException | ArithmeticException e) {
             return new Evaluation(null, e.getMessage() == null ? "Check the workload values." : e.getMessage());
@@ -41,8 +61,8 @@ public final class WorkloadFormState {
         }
     }
 
-    private static Double optionalNumber(String value) {
-        return value == null || value.isBlank() ? null : requiredNumber(value, "Enter a positive requests-per-second cap.");
+    private static Double optionalNumber(String value, String error) {
+        return value == null || value.isBlank() ? null : requiredNumber(value, error);
     }
 
     private static Long optionalLong(String value, String error) {
@@ -84,6 +104,19 @@ public final class WorkloadFormState {
             return (long) Math.ceil(amount * multiplier);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Enter a valid duration.");
+        }
+    }
+
+    public record Context(String generatorHosts, String maxThreadsPerGenerator,
+                          String messagesPerSample, List<Class<?>> samplerClasses,
+                          List<JdbcPool> jdbcPools) {
+        public Context {
+            samplerClasses = samplerClasses == null ? List.of() : List.copyOf(samplerClasses);
+            jdbcPools = jdbcPools == null ? List.of() : List.copyOf(jdbcPools);
+        }
+
+        public static Context empty() {
+            return new Context("", "1000", "1", List.of(), List.of());
         }
     }
 

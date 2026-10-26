@@ -428,12 +428,27 @@ public class CommandDispatcher {
                         WorkloadPlan plan = completion.plan();
                         WorkloadApplier.ApplyResult result = completion.result();
                         Telemetry.record(TelemetryFeature.LOAD_APPLIED);
-                        Telemetry.record(plan.targetType() == WorkloadInputs.TargetType.USERS
-                                ? TelemetryFeature.LOAD_TARGET_USERS : TelemetryFeature.LOAD_TARGET_RATE);
+                        if (plan.targetType() == WorkloadInputs.TargetType.USERS) {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_USERS);
+                        } else if (plan.targetType() == WorkloadInputs.TargetType.MESSAGE_RATE) {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_MESSAGES);
+                        } else {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_RATE);
+                        }
                         if (plan.agents() > 1) {
                             Telemetry.record(TelemetryFeature.LOAD_DISTRIBUTED);
                         }
-                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()) {
+                        if (!plan.generatorHosts().isEmpty()) {
+                            Telemetry.record(TelemetryFeature.LOAD_HOSTS_SET);
+                        }
+                        if (plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
+                            Telemetry.record(TelemetryFeature.LOAD_JDBC_WARNED);
+                        }
+                        if (plan.agents() < plan.generatorsNeeded()) {
+                            Telemetry.record(TelemetryFeature.LOAD_GENERATORS_SHORT);
+                        }
+                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()
+                                || plan.notes().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
                             Telemetry.record(TelemetryFeature.LOAD_WARNED);
                         }
                         cb.onWorkerSuccess(loadReply(plan, result));
@@ -451,12 +466,15 @@ public class CommandDispatcher {
     private static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result) {
         StringBuilder reply = new StringBuilder("Applied the workload under **")
                 .append(result.threadGroupName()).append("**:\n");
+        reply.append("- Sampler mix: ").append(plan.samplerMix().display()).append("\n");
         result.changes().forEach(change -> reply.append("- ").append(change).append("\n"));
         reply.append("\n```sh\n").append(plan.cliCommand()).append("\n```\n");
-        if (!plan.warnings().isEmpty() || !plan.assumptions().isEmpty() || !result.warnings().isEmpty()) {
+        if (!plan.warnings().isEmpty() || !plan.assumptions().isEmpty()
+                || !plan.notes().isEmpty() || !result.warnings().isEmpty()) {
             reply.append("\n**Notes**\n");
             plan.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
             plan.assumptions().forEach(note -> reply.append("- ").append(note).append("\n"));
+            plan.notes().forEach(note -> reply.append("- ").append(note).append("\n"));
             result.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
         }
         return reply.append("\nPress Ctrl+Z in the chat to undo.").toString();

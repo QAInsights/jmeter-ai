@@ -22,7 +22,7 @@ public class CommandIntellisenseProvider {
         DESCRIPTIONS.put("@this", "Inspect the currently selected element");
         DESCRIPTIONS.put("@testplan", "Ask questions about the whole test plan");
         DESCRIPTIONS.put("@sla", "Add SLA assertions, e.g. @sla under 800 ms and no 5xx");
-        DESCRIPTIONS.put("@load", "Design the load: threads, ramp-up and throughput from a target, e.g. @load 200 rps for 1 hour");
+        DESCRIPTIONS.put("@load", "Design samples, messages, threads and generator setup, e.g. @load 200 rps for 1 hour");
         DESCRIPTIONS.put("@fix", "Run the plan with 1 user and fix failures until it passes");
         DESCRIPTIONS.put("@prompts", "Browse and insert saved prompts");
     }
