@@ -18,6 +18,8 @@ public final class WorkloadCalculator {
             "Assumed 500 ms average response time. Measure it with a 1-user run (for example `@fix`) and update it.";
     private static final Pattern SAFE_PLAN_PATH = Pattern.compile("[A-Za-z0-9._/-]+");
     private static final String UNSAFE_CMD_PLAN_CHARACTERS = "\"%^&|<>";
+    private static final String ZERO_RAMP_NOTE =
+            "Ramps of 0 s are applied as 1 s so the hold before stays flat.";
     private static final Pattern VALID_HOST = Pattern.compile("[A-Za-z0-9._:-]+");
     private static final Pattern VALID_PREFIX = Pattern.compile("[A-Za-z0-9._-]+");
 
@@ -28,10 +30,11 @@ public final class WorkloadCalculator {
         validate(inputs);
         List<String> assumptions = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        List<String> stageNotes = new ArrayList<>();
         WorkloadShapeConfig shapeConfig = inputs.shapeConfig();
         WorkloadShape shape = shapeConfig.shape();
         boolean openModel = shape.usesOpenModelThreadGroup();
-        List<WorkloadStage> stages = openModel ? buildStages(inputs) : List.of();
+        List<WorkloadStage> stages = openModel ? buildStages(inputs, stageNotes) : List.of();
         long responseMillis = inputs.responseMillis() == null ? 500 : inputs.responseMillis();
         long thinkMillis = inputs.thinkMillis() == null ? 0 : inputs.thinkMillis();
         long defaultHold = shape == WorkloadShape.ENDURANCE ? 14_400 : 600;
@@ -175,6 +178,7 @@ public final class WorkloadCalculator {
         SamplerMix samplerMix = SamplerMix.classify(inputs.samplerClasses());
         warnings.addAll(protocolWarnings(inputs.jdbcPools(), samplerMix, (int) threadsPerGenerator));
         List<String> notes = protocolNotes(samplerMix);
+        notes.addAll(stageNotes);
         if (shape == WorkloadShape.ENDURANCE) {
             notes.add("Soak preparation: disable View Results Tree and other heavy listeners, check CSV recycle/EOF behavior, leave heap headroom, and estimate results-file disk space.");
         }
@@ -305,6 +309,10 @@ public final class WorkloadCalculator {
     }
 
     static List<WorkloadStage> buildStages(WorkloadInputs inputs) {
+        return buildStages(inputs, new ArrayList<>());
+    }
+
+    private static List<WorkloadStage> buildStages(WorkloadInputs inputs, List<String> notes) {
         WorkloadShapeConfig config = inputs.shapeConfig();
         WorkloadShape shape = config.shape();
         long responseMillis = inputs.responseMillis() == null ? 500 : inputs.responseMillis();
@@ -321,9 +329,7 @@ public final class WorkloadCalculator {
                 if (end < start || increment <= 0) {
                     throw new IllegalArgumentException("Step end must be at or above its start, with a positive step size.");
                 }
-                if (ramp > 0) {
-                    addStage(stages, 0, start, ramp);
-                }
+                addRampStage(stages, 0, start, ramp, notes);
                 addStage(stages, start, start, hold);
                 double current = start;
                 for (int count = 0; current < end - 1e-9; count++) {
@@ -331,9 +337,7 @@ public final class WorkloadCalculator {
                         throw new IllegalArgumentException("A step shape can contain at most 1000 levels.");
                     }
                     double next = Math.min(end, current + increment);
-                    if (ramp > 0) {
-                        addStage(stages, current, next, ramp);
-                    }
+                    addRampStage(stages, current, next, ramp, notes);
                     addStage(stages, next, next, hold);
                     current = next;
                 }
@@ -381,7 +385,9 @@ public final class WorkloadCalculator {
                 if (config.customStages().isEmpty() || config.customStages().size() > maxExpandedStages) {
                     throw new IllegalArgumentException("Custom shapes require between 1 and 10 stages.");
                 }
-                stages.addAll(config.customStages());
+                for (WorkloadStage stage : config.customStages()) {
+                    addRampStage(stages, stage.fromRate(), stage.toRate(), stage.seconds(), notes);
+                }
             }
             default -> throw new IllegalArgumentException("Select a shaped workload.");
         }
@@ -448,6 +454,20 @@ public final class WorkloadCalculator {
 
     private static void addStage(List<WorkloadStage> stages, double from, double to, long seconds) {
         stages.add(new WorkloadStage(from, to, seconds));
+    }
+
+    private static void addRampStage(List<WorkloadStage> stages, double from, double to, long seconds,
+                                     List<String> notes) {
+        if (seconds == 0 && Double.compare(from, to) == 0) {
+            return;
+        }
+        if (seconds == 0) {
+            seconds = 1;
+            if (!notes.contains(ZERO_RAMP_NOTE)) {
+                notes.add(ZERO_RAMP_NOTE);
+            }
+        }
+        addStage(stages, from, to, seconds);
     }
 
     static String openModelSchedule(List<WorkloadStage> stages, String prefix,

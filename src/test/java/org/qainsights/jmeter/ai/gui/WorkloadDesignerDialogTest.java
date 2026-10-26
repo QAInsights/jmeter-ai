@@ -107,6 +107,31 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void customMessageRateRejectsZeroMessagesPerSample() {
+        String error = WorkloadDesignerDialog.customConversionInputError(
+                WorkloadInputs.TargetType.MESSAGE_RATE, "0", "500", "0");
+
+        assertEquals("Messages per sample must be greater than zero.", error);
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, error)));
+    }
+
+    @Test
+    void customUsersRejectZeroResponseAndThinkTime() {
+        String error = WorkloadDesignerDialog.customConversionInputError(
+                WorkloadInputs.TargetType.USERS, "1", "0", "0");
+
+        assertEquals("Response time and think time must total more than zero.", error);
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, error)));
+    }
+
+    @Test
+    void disabledRampDownDoesNotValidateItsText() {
+        assertEquals(null, WorkloadDesignerDialog.rampDownFieldError(false, "not a duration"));
+        assertEquals("Ramp down must be a whole number.",
+                WorkloadDesignerDialog.rampDownFieldError(true, "not a duration"));
+    }
+
+    @Test
     void applyCommitsAnActiveCustomCellBeforeRecomputing() {
         DefaultTableModel model = new DefaultTableModel(new Object[][]{{"100"}}, new Object[]{"Target"});
         JTable table = new JTable(model);

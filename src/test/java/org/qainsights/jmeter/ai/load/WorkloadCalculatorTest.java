@@ -296,6 +296,38 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void clampsZeroStepRampsToOneSecondAndExplainsTheChange() {
+        WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
+                1.0, 2.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.EVEN));
+
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) even_arrivals(${__P(load.s1.secs,1)} sec) "
+                + "rate(${__P(load.s2.rate,1)}/sec) even_arrivals(${__P(load.s2.secs,10)} sec) "
+                + "rate(${__P(load.s3.rate,1)}/sec) even_arrivals(${__P(load.s3.secs,1)} sec) "
+                + "rate(${__P(load.s4.rate,2)}/sec) even_arrivals(${__P(load.s4.secs,10)} sec) "
+                + "rate(${__P(load.s5.rate,2)}/sec)", plan.openModelSchedule());
+        assertTrue(plan.notes().contains(
+                "Ramps of 0 s are applied as 1 s so the hold before stays flat."));
+    }
+
+    @Test
+    void clampsZeroCustomRampsToOneSecondAndExplainsTheChange() {
+        WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 1, 0), new WorkloadStage(1, 1, 10),
+                        new WorkloadStage(1, 2, 0), new WorkloadStage(2, 2, 10)),
+                null, ArrivalMode.EVEN));
+
+        assertEquals("rate(${__P(load.s1.rate,0)}/sec) even_arrivals(${__P(load.s1.secs,1)} sec) "
+                + "rate(${__P(load.s2.rate,1)}/sec) even_arrivals(${__P(load.s2.secs,10)} sec) "
+                + "rate(${__P(load.s3.rate,1)}/sec) even_arrivals(${__P(load.s3.secs,1)} sec) "
+                + "rate(${__P(load.s4.rate,2)}/sec) even_arrivals(${__P(load.s4.secs,10)} sec) "
+                + "rate(${__P(load.s5.rate,2)}/sec)", plan.openModelSchedule());
+        assertTrue(plan.notes().contains(
+                "Ramps of 0 s are applied as 1 s so the hold before stays flat."));
+    }
+
+    @Test
     void openModelShapesSkipSteepRampWarningAndExplainPerGeneratorRates() {
         WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
                 1.0, 3000.0, 3000.0, 10L, 1L, null, null, null, null, null,

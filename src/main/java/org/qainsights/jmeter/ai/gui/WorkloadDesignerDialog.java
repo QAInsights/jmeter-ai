@@ -1136,12 +1136,23 @@ public final class WorkloadDesignerDialog extends JDialog {
         WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
         String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
         String shapeError = shapeInputError();
+        if (shapeError == null && shapeCombo.getSelectedItem() == WorkloadShape.CUSTOM) {
+            shapeError = customConversionInputError(targetType, messagesPerSample.getText(),
+                    response.getText(), think.getText());
+        }
+        WorkloadShapeConfig shapeConfig = null;
+        if (shapeError == null) {
+            try {
+                shapeConfig = shapeConfigForForm(targetType, samplers);
+            } catch (IllegalArgumentException | ArithmeticException e) {
+                shapeError = customConversionFailureField(targetType);
+            }
+        }
         if (shapeError == null) {
             evaluation = WorkloadFormState.evaluate(targetType,
                     target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
                     (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
-                    agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context,
-                    shapeConfigForForm(targetType, samplers));
+                    agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context, shapeConfig);
         } else {
             evaluation = new WorkloadFormState.Evaluation(null, shapeError);
         }
@@ -1240,7 +1251,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
         List<String> errors = new ArrayList<>();
         if (shape.usesOpenModelThreadGroup()) {
-            addShapeFieldError(errors, rampDown.getText(), "Ramp down", true);
+            errors.add(rampDownFieldError(rampDownEnabled.isSelected(), rampDown.getText()));
         }
         switch (shape) {
             case STEP -> {
@@ -1316,6 +1327,51 @@ public final class WorkloadDesignerDialog extends JDialog {
         return parsed < 0 ? label + " cannot be negative." : null;
     }
 
+    static String rampDownFieldError(boolean enabled, String value) {
+        return enabled ? shapeFieldError(value, "Ramp down", true) : null;
+    }
+
+    static String customConversionInputError(WorkloadInputs.TargetType targetType, String messagesPerSampleText,
+                                             String responseText, String thinkText) {
+        if (targetType == WorkloadInputs.TargetType.MESSAGE_RATE && !messagesPerSampleText.isBlank()) {
+            Double messagesPerSample = parseDouble(messagesPerSampleText);
+            if (messagesPerSample == null) {
+                return "Messages per sample must be a number.";
+            }
+            if (messagesPerSample <= 0) {
+                return "Messages per sample must be greater than zero.";
+            }
+        }
+        if (targetType == WorkloadInputs.TargetType.USERS) {
+            Long response = optionalLong(responseText, 500L);
+            Long thinkTime = optionalLong(thinkText, 0L);
+            if (response == null) {
+                return "Response time must be a whole number.";
+            }
+            if (thinkTime == null) {
+                return "Think time must be a whole number.";
+            }
+            if (response + thinkTime <= 0) {
+                return "Response time and think time must total more than zero.";
+            }
+        }
+        return null;
+    }
+
+    private static Long optionalLong(String text, long fallback) {
+        return text == null || text.isBlank() ? fallback : parseLong(text);
+    }
+
+    private String customConversionFailureField(WorkloadInputs.TargetType targetType) {
+        if (targetType == WorkloadInputs.TargetType.MESSAGE_RATE) {
+            return "Messages per sample must be greater than zero.";
+        }
+        if (targetType == WorkloadInputs.TargetType.USERS) {
+            return "Response time and think time must total more than zero.";
+        }
+        return "Custom stage target could not be converted.";
+    }
+
     static boolean canApply(int samplerCount, WorkloadFormState.Evaluation evaluation) {
         return samplerCount > 0 && evaluation != null && evaluation.valid();
     }
@@ -1345,7 +1401,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 }
                 double rate = WorkloadCalculator.toIterationsPerSecond(targetValue, targetType,
                         Math.max(1, samplers), messagesPerSampleValue, responseMillis, thinkMillis);
-                if (rowRamp > 0) {
+                if (rowRamp > 0 || Double.compare(previous, rate) != 0) {
                     customStages.add(new WorkloadStage(previous, rate, rowRamp));
                 }
                 customStages.add(new WorkloadStage(rate, rate, rowHold));
