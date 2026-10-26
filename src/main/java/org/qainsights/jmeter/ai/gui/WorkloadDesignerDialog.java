@@ -325,9 +325,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (plan != null) {
             resultValues[0].setText(Integer.toString(plan.threads()));
             resultValues[1].setText(Integer.toString(plan.samplersPerIteration()));
-            resultValues[2].setText(plan.targetRequestsPerSecond() == null
-                    ? "Expected " + WorkloadCalculatorFormat.format(plan.expectedRequestsPerSecond())
-                    : WorkloadCalculatorFormat.format(plan.targetRequestsPerSecond()));
+            resultValues[2].setText(requestsPerSecondText(plan));
             resultValues[3].setText(plan.rpm() == null ? "No timer" : WorkloadCalculatorFormat.format(plan.rpm()));
             resultValues[4].setText(duration(plan.durationSeconds()));
             resultValues[5].setText(plan.agents() > 1
@@ -477,5 +475,18 @@ public final class WorkloadDesignerDialog extends JDialog {
             return value == null ? "-" : java.math.BigDecimal.valueOf(value)
                     .stripTrailingZeros().toPlainString();
         }
+    }
+
+    private static String requestsPerSecondText(WorkloadPlan plan) {
+        Double target = plan.targetRequestsPerSecond();
+        Double expected = plan.expectedRequestsPerSecond();
+        if (target == null) {
+            return "Expected " + WorkloadCalculatorFormat.format(expected);
+        }
+        if (expected != null && expected < target) {
+            return WorkloadCalculatorFormat.format(target) + " target, "
+                    + WorkloadCalculatorFormat.format(expected) + " reachable";
+        }
+        return WorkloadCalculatorFormat.format(target);
     }
 }
