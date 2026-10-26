@@ -45,7 +45,7 @@ public final class WorkloadApplier {
     private static final Logger log = LoggerFactory.getLogger(WorkloadApplier.class);
     private static final Pattern NON_SLUG = Pattern.compile("[^a-z0-9]+");
     private static final Pattern DESIGNER_MANAGED_SCHEDULE =
-            Pattern.compile("^rate\\(\\$\\{__P\\(([A-Za-z0-9_.]+)\\.s1\\.rate,");
+            Pattern.compile("^rate\\(\\$\\{__P\\(([A-Za-z0-9_.-]+)\\.s1\\.rate,");
     private static LastApplied lastApplied;
 
     private WorkloadApplier() {

@@ -65,7 +65,7 @@ class LoadCommandHandlerTest {
         OpenModelThreadGroup converted = new OpenModelThreadGroup();
         converted.setName("Checkout (Step)");
         converted.setProperty(WorkloadApplier.OPEN_MODEL_SCHEDULE,
-                "rate(${__P(load.s1.rate,1)}/sec)");
+                "rate(${__P(my-load.s1.rate,1)}/sec)");
         JMeterTreeNode convertedNode = model.addComponent(converted, (JMeterTreeNode) original.getParent());
         model.addComponent(new HTTPSamplerProxy(), convertedNode);
 

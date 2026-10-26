@@ -414,7 +414,7 @@ class WorkloadApplierTest {
     @Test
     void rejectsReapplyingToTheDisabledSourceAfterConversion() throws Exception {
         Fixture fixture = fixture("Checkout", true);
-        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
+        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan("my-load"));
         JMeterTreeNode parent = (JMeterTreeNode) fixture.groupNode.getParent();
         JMeterTreeNode openModelNode = (JMeterTreeNode) parent.getChildAt(parent.getIndex(fixture.groupNode) + 1);
         OpenModelThreadGroup openModel = assertInstanceOf(OpenModelThreadGroup.class,
@@ -423,7 +423,7 @@ class WorkloadApplierTest {
         openModel.removeProperty(WorkloadApplier.OPEN_MODEL_SOURCE);
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan()));
+                () -> WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan("my-load")));
 
         assertEquals("This Thread Group was converted to \"Checkout (Spike)\". Select it to change the shape.",
                 error.getMessage());
@@ -465,7 +465,7 @@ class WorkloadApplierTest {
     @Test
     void updatesManagedOpenModelScheduleAndRejectsLoadOnOpenModel() throws Exception {
         Fixture fixture = fixture("Checkout", true);
-        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
+        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan("my-load"));
         JMeterTreeNode openModelNode = (JMeterTreeNode) ((JMeterTreeNode) fixture.groupNode.getParent())
                 .getChildAt(((JMeterTreeNode) fixture.groupNode.getParent()).getIndex(fixture.groupNode) + 1);
         OpenModelThreadGroup openModel = assertInstanceOf(OpenModelThreadGroup.class,
@@ -474,7 +474,7 @@ class WorkloadApplierTest {
         openModel.removeProperty(WorkloadApplier.OPEN_MODEL_SOURCE);
         WorkloadPlan updated = WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 500L, 0L,
-                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                10L, 20L, 1, 1, "my-load", "plan.jmx", 1.0, null,
                 List.of(), List.of(), List.of(), null, null, null, false,
                 new WorkloadShapeConfig(WorkloadShape.STEP, 1.0, 2.0, 1.0,
                         10L, 5L, null, null, null, null, null, List.of(), null, ArrivalMode.EVEN)));
@@ -545,9 +545,13 @@ class WorkloadApplierTest {
     }
 
     private static WorkloadPlan openModelPlan() {
+        return openModelPlan("load");
+    }
+
+    private static WorkloadPlan openModelPlan(String prefix) {
         return WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.ITERATION_RATE, 2, null, 500L, 0L,
-                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                10L, 20L, 1, 1, prefix, "plan.jmx", 1.0, null,
                 List.of(), List.of(), List.of(), null, null, null, false,
                 new WorkloadShapeConfig(WorkloadShape.SPIKE, null, null, null,
                         null, null, 1.0, 2.0, 10L, 20L, 10L, List.of(), null, ArrivalMode.RANDOM)));

@@ -382,8 +382,14 @@ public final class WorkloadCalculator {
             }
             case CUSTOM -> {
                 int maxExpandedStages = config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 20 : 21;
-                if (config.customStages().isEmpty() || config.customStages().size() > maxExpandedStages) {
-                    throw new IllegalArgumentException("Custom shapes require between 1 and 10 stages.");
+                if (config.customStages().isEmpty()) {
+                    throw new IllegalArgumentException("Custom shapes need at least 1 stage.");
+                }
+                if (config.customStages().size() > maxExpandedStages) {
+                    int maxTotalStages = maxExpandedStages
+                            + (config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 1 : 0);
+                    throw new IllegalArgumentException("Custom shapes allow at most 10 rows (up to "
+                            + maxTotalStages + " stages including ramps).");
                 }
                 for (WorkloadStage stage : config.customStages()) {
                     addRampStage(stages, stage.fromRate(), stage.toRate(), stage.seconds(), notes);

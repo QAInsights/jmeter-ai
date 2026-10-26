@@ -396,7 +396,20 @@ class WorkloadCalculatorTest {
                 null, null, null, null, null, null, null, null, null, null,
                 stages, null, ArrivalMode.RANDOM);
 
-        assertThrows(IllegalArgumentException.class, () -> shaped(config));
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> shaped(config));
+        assertEquals("Custom shapes allow at most 10 rows (up to 21 stages including ramps).",
+                error.getMessage());
+    }
+
+    @Test
+    void customShapeRequiresAtLeastOneStage() {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> shaped(config));
+
+        assertEquals("Custom shapes need at least 1 stage.", error.getMessage());
     }
 
     private static WorkloadPlan shaped(WorkloadShapeConfig config) {
