@@ -3,11 +3,13 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.prefs.Preferences;
 
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
@@ -32,6 +34,7 @@ import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkloadDesignerDialogTest {
@@ -166,13 +169,99 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
-    void sizesDialogWithinNinetyPercentOfUsableScreenBounds() {
+    void initialSizeUsesDefaultWithinNinetyPercentOfUsableScreenBounds() {
+        Rectangle bounds = new Rectangle(0, 0, 800, 600);
+        Insets insets = new Insets(40, 0, 20, 0);
+        Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
         assertEquals(new Dimension(720, 486),
-                WorkloadDesignerDialog.sizeWithinScreen(new Dimension(1140, 840),
-                        new Rectangle(0, 0, 800, 600), new Insets(40, 0, 20, 0)));
-        assertEquals(new Dimension(1140, 840),
-                WorkloadDesignerDialog.sizeWithinScreen(new Dimension(1140, 840),
-                        new Rectangle(0, 0, 1920, 1080), new Insets(40, 0, 40, 0)));
+                WorkloadDesignerDialog.initialSize(null, new Dimension(1140, 840), minimum, bounds, insets));
+    }
+
+    @Test
+    void initialSizeRestoresSavedDimensions() {
+        Rectangle bounds = new Rectangle(0, 0, 1920, 1080);
+        Insets insets = new Insets(40, 0, 40, 0);
+        Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
+        assertEquals(new Dimension(900, 700),
+                WorkloadDesignerDialog.initialSize(new Dimension(900, 700), new Dimension(1140, 840),
+                        minimum, bounds, insets));
+    }
+
+    @Test
+    void initialSizeClampsSavedDimensionsToNinetyPercentOfTheScreen() {
+        Rectangle bounds = new Rectangle(0, 0, 1920, 1080);
+        Insets insets = new Insets(40, 0, 40, 0);
+        Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
+        assertEquals(new Dimension(1728, 900),
+                WorkloadDesignerDialog.initialSize(new Dimension(3000, 2000), new Dimension(1140, 840),
+                        minimum, bounds, insets));
+    }
+
+    @Test
+    void initialSizeRaisesSavedDimensionsToTheMinimum() {
+        Rectangle bounds = new Rectangle(0, 0, 1920, 1080);
+        Insets insets = new Insets(40, 0, 40, 0);
+        Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
+        assertEquals(new Dimension(640, 480),
+                WorkloadDesignerDialog.initialSize(new Dimension(400, 300), new Dimension(1140, 840),
+                        minimum, bounds, insets));
+    }
+
+    @Test
+    void minimumSizeIsCappedByTheUsableScreenDimensions() {
+        Rectangle bounds = new Rectangle(0, 0, 500, 400);
+        Insets insets = new Insets(10, 20, 30, 40);
+        Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
+        assertEquals(new Dimension(440, 360), minimum);
+        assertEquals(minimum, WorkloadDesignerDialog.initialSize(new Dimension(200, 100),
+                new Dimension(1140, 840), minimum, bounds, insets));
+    }
+
+    @Test
+    void rememberedSizeIsRestoredForTheNextOpen() throws Exception {
+        Preferences preferences = Preferences.userRoot().node("featherwand-test-" + UUID.randomUUID());
+        Preferences parent = preferences.parent();
+        try {
+            Dimension closedSize = new Dimension(1000, 700);
+            WorkloadDesignerDialog.saveWindowSize(preferences, closedSize);
+            Rectangle bounds = new Rectangle(0, 0, 1920, 1080);
+            Insets insets = new Insets(0, 0, 0, 0);
+            Dimension minimum = WorkloadDesignerDialog.minimumSizeWithinScreen(bounds, insets);
+
+            Dimension saved = WorkloadDesignerDialog.readSavedSize(preferences);
+
+            assertEquals(closedSize, saved);
+            assertEquals(closedSize,
+                    WorkloadDesignerDialog.initialSize(saved, new Dimension(1140, 840),
+                            minimum, bounds, insets));
+        } finally {
+            preferences.removeNode();
+            parent.flush();
+        }
+    }
+
+    @Test
+    void invalidAndNonPositiveSavedDimensionsAreIgnored() throws Exception {
+        Preferences preferences = Preferences.userRoot().node("featherwand-test-" + UUID.randomUUID());
+        Preferences parent = preferences.parent();
+        try {
+            preferences.put("workloadDesigner.width", "invalid");
+            preferences.putInt("workloadDesigner.height", 700);
+            preferences.flush();
+            assertNull(WorkloadDesignerDialog.readSavedSize(preferences));
+
+            preferences.putInt("workloadDesigner.width", 0);
+            preferences.flush();
+            assertNull(WorkloadDesignerDialog.readSavedSize(preferences));
+        } finally {
+            preferences.removeNode();
+            parent.flush();
+        }
     }
 
     @Test
