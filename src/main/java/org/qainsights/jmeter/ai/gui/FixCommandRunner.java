@@ -149,6 +149,7 @@ final class FixCommandRunner {
                     if (!result.hasUndoableChanges()) {
                         backups.unpin(result.backupFile());
                     }
+                    String completedTreeHash = result.hasUndoableChanges() ? currentPlanTreeHash() : null;
                     cb.appendFixResult(result,
                             () -> runUndoAction("Could not undo Make it pass", () -> {
                                 java.io.File backup = result.backupFile();
@@ -157,7 +158,11 @@ final class FixCommandRunner {
                                             "The Make it pass backup is missing. Undo all is unavailable.");
                                     return false;
                                 }
-                                if (!backups.currentPlanMatches(backup) && !confirmUndoPlanChange()) {
+                                String currentTreeHash = currentPlanTreeHash();
+                                boolean treeChanged = treeChanged(completedTreeHash, currentTreeHash);
+                                if (needsUndoConfirmation(backups.currentPlanMatches(backup),
+                                        completedTreeHash, currentTreeHash)
+                                        && !confirmUndoPlanChange(treeChanged)) {
                                     return false;
                                 }
                                 boolean savedFileChanged = backups.restoreAndCheckSavedFileChanged(backup);
@@ -260,14 +265,43 @@ final class FixCommandRunner {
         }
     }
 
-    private boolean confirmUndoPlanChange() {
+    private boolean confirmUndoPlanChange(boolean treeChanged) {
         org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
         int choice = javax.swing.JOptionPane.showConfirmDialog(
                 gui == null ? null : gui.getMainFrame(),
-                "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
-                        + "Continue?",
+                undoConfirmationMessage(treeChanged),
                 "Undo all", javax.swing.JOptionPane.YES_NO_OPTION, javax.swing.JOptionPane.WARNING_MESSAGE);
         return choice == javax.swing.JOptionPane.YES_OPTION;
+    }
+
+    static boolean treeChanged(String completedTreeHash, String currentTreeHash) {
+        return completedTreeHash == null || !java.util.Objects.equals(completedTreeHash, currentTreeHash);
+    }
+
+    static boolean needsUndoConfirmation(boolean currentPlanMatches, String completedTreeHash,
+                                         String currentTreeHash) {
+        return !currentPlanMatches || treeChanged(completedTreeHash, currentTreeHash);
+    }
+
+    static String undoConfirmationMessage(boolean treeChanged) {
+        return treeChanged
+                ? "You changed the plan after Make it pass finished. Undo all also discards those changes."
+                : "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
+                        + "Continue?";
+    }
+
+    private static String currentPlanTreeHash() {
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        if (gui == null || gui.getTreeModel() == null) {
+            return null;
+        }
+        try {
+            gui.updateCurrentNode();
+            return PlanBackup.treeHash(gui.getTreeModel().getTestPlan());
+        } catch (RuntimeException e) {
+            log.warn("Could not capture the plan hash; Undo all will require confirmation.");
+            return null;
+        }
     }
 
     private static Exception asException(Throwable error) {

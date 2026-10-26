@@ -22,7 +22,8 @@ public final class FixPrompt {
                 .append("Header Manager or Cookie Manager entries, extractors, and correcting an incorrect path, ")
                 .append("host, method, or request body.\n")
                 .append("Never delete, disable, or move requests. Never remove or loosen assertions. ")
-                .append("Never change thread counts.\n")
+                .append("Never add or change scripts (JSR223, BeanShell, or __groovy-style functions) or non-HTTP samplers. ")
+                .append("Never change Thread Group settings or variables used in hosts.\n")
                 .append("If a failure needs information only the user has, such as rejected credentials, a 401 on login, ")
                 .append("or missing test data, do not guess. State one line beginning with NEEDS USER:.\n")
                 .append("After the tool calls, end with a short list of changes.\n\n");

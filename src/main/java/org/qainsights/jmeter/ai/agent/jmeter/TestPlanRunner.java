@@ -24,6 +24,8 @@ import org.apache.jmeter.visualizers.Visualizer;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Runs the current test plan through a private {@link StandardJMeterEngine} - the same
@@ -39,7 +41,10 @@ import org.qainsights.jmeter.ai.fix.SoftFailureDetector;
  */
 public final class TestPlanRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(TestPlanRunner.class);
     private static volatile StandardJMeterEngine active;
+    private static volatile CountDownLatch activeDone;
+    private static volatile boolean runInProgress;
     private static volatile List<SampleResult> lastSampleResults = Collections.emptyList();
     /** Pending stop for the active run: TRUE stops at once, FALSE gracefully, null means keep running. */
     private static volatile Boolean stopRequest;
@@ -49,11 +54,14 @@ public final class TestPlanRunner {
      * button and {@code ActionRouter} cannot reach. Returns false when no such run is active.
      */
     public static boolean stopActive(boolean now) {
-        if (active == null) {
-            return false;
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active == null) {
+                return false;
+            }
+            stopRequest = now;
+            return true;
         }
-        stopRequest = now;
-        return true;
     }
 
     public static List<SampleResult> lastSampleResults() {
@@ -108,33 +116,52 @@ public final class TestPlanRunner {
     }
 
     synchronized TestRunSummary runTree(HashTree testPlanTree, long timeoutSeconds, int threads, int loops) {
-        HashTree execTree = prepareExecutionTree(testPlanTree, threads, loops);
-
-        // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements
-        // via their no-arg constructor (see AbstractTestElement.clone()) - any instance field set
-        // here would not survive that clone. Collector/Ender therefore coordinate via static state,
-        // reset per call by prepare(), mirroring CorrelationEngine.Collector/Ender's proven pattern.
-        SampleCollector.prepare();
-        lastSampleResults = Collections.emptyList();
-        CountDownLatch done = new CountDownLatch(1);
-        RunEndedListener.prepare(done);
-        for (Object key : execTree.list()) {
-            HashTree sub = execTree.getTree(key);
-            if (sub != null) {
-                sub.add(new SampleCollector());
-                sub.add(new RunEndedListener());
-            }
-        }
-
-        StandardJMeterEngine engine = new StandardJMeterEngine();
-        long start = System.currentTimeMillis();
+        ensureNoActiveRun();
+        HashTree execTree;
+        CountDownLatch done;
+        StandardJMeterEngine engine;
+        long start;
         try {
-            stopRequest = null;
+            execTree = prepareExecutionTree(testPlanTree, threads, loops);
+
+            // JMeter reflectively clones per-thread SampleListener/TestStateListener test elements
+            // via their no-arg constructor (see AbstractTestElement.clone()) - any instance field set
+            // here would not survive that clone. Collector/Ender therefore coordinate via static state,
+            // reset per call by prepare(), mirroring CorrelationEngine.Collector/Ender's proven pattern.
+            SampleCollector.prepare();
+            lastSampleResults = Collections.emptyList();
+            done = new CountDownLatch(1);
+            RunEndedListener.prepare(done);
+            for (Object key : execTree.list()) {
+                HashTree sub = execTree.getTree(key);
+                if (sub != null) {
+                    sub.add(new SampleCollector());
+                    sub.add(new RunEndedListener());
+                }
+            }
+            engine = new StandardJMeterEngine();
+            start = System.currentTimeMillis();
+        } catch (RuntimeException e) {
+            releaseStartingRun();
+            throw e;
+        }
+        try {
             engine.configure(execTree);
-            active = engine;
+            registerActive(engine, done);
             engine.runTest();
         } catch (JMeterEngineException | RuntimeException e) {
-            active = null;
+            if (isActive(engine, done)) {
+                engine.stopTest(true);
+                if (!awaitStopped(engine, done, false)) {
+                    log.warn("JMeter engine did not stop after a run error; keeping it registered as active.");
+                }
+                finishRun(engine, done);
+            } else {
+                releaseStartingRun();
+            }
+            if (e instanceof TestExecutionException) {
+                throw (TestExecutionException) e;
+            }
             throw new TestExecutionException("Failed to run the test plan: " + e.getMessage());
         }
 
@@ -148,7 +175,9 @@ public final class TestPlanRunner {
                 if (now >= deadline) {
                     timedOut = true;
                     engine.stopTest(true);
-                    done.await(10, TimeUnit.SECONDS);
+                    if (!awaitStopped(engine, done, false)) {
+                        log.warn("Timed out waiting for the JMeter engine to stop; keeping it registered as active.");
+                    }
                     break;
                 }
                 Boolean stop = stopRequest;
@@ -158,12 +187,13 @@ public final class TestPlanRunner {
                 }
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             timedOut = true;
             engine.stopTest(true);
+            if (!awaitStopped(engine, done, true)) {
+                log.warn("Interrupted while waiting for the JMeter engine to stop; keeping it registered as active.");
+            }
         } finally {
-            active = null;
-            stopRequest = null;
+            finishRun(engine, done);
         }
         long elapsed = System.currentTimeMillis() - start;
         CollectedSamples collected = SampleCollector.collected();
@@ -172,6 +202,85 @@ public final class TestPlanRunner {
                 results.subList(0, Math.min(results.size(), 1000))));
         return TestRunSummary.of(results, collected.totalSamples(), collected.successCount(),
                 collected.failureCount(), timedOut, elapsed);
+    }
+
+    private static void ensureNoActiveRun() {
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active != null || runInProgress) {
+                throw new TestExecutionException("The previous check run is still stopping. Try again in a moment.");
+            }
+            runInProgress = true;
+        }
+    }
+
+    private static void registerActive(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            clearFinishedActive();
+            if (active != null) {
+                throw new TestExecutionException("The previous check run is still stopping. Try again in a moment.");
+            }
+            stopRequest = null;
+            active = engine;
+            activeDone = done;
+            runInProgress = true;
+        }
+    }
+
+    private static void releaseStartingRun() {
+        synchronized (TestPlanRunner.class) {
+            if (active == null) {
+                runInProgress = false;
+            }
+        }
+    }
+
+    private static boolean awaitStopped(StandardJMeterEngine engine, CountDownLatch done, boolean restoreInterrupt) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        boolean interrupted = Thread.interrupted() || restoreInterrupt;
+        while (done.getCount() != 0) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                break;
+            }
+            try {
+                done.await(remaining, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                interrupted = true;
+                engine.stopTest(true);
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        return done.getCount() == 0;
+    }
+
+    private static boolean isActive(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            return active == engine && activeDone == done;
+        }
+    }
+
+    private static void finishRun(StandardJMeterEngine engine, CountDownLatch done) {
+        synchronized (TestPlanRunner.class) {
+            if (active == engine && activeDone == done) {
+                runInProgress = false;
+                stopRequest = null;
+                if (done.getCount() == 0) {
+                    active = null;
+                    activeDone = null;
+                }
+            }
+        }
+    }
+
+    private static void clearFinishedActive() {
+        if (active != null && activeDone != null && activeDone.getCount() == 0 && !runInProgress) {
+            active = null;
+            activeDone = null;
+            stopRequest = null;
+        }
     }
 
     static HashTree prepareExecutionTree(HashTree testPlanTree, int threads, int loops) {

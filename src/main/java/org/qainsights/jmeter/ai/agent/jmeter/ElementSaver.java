@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -81,12 +82,26 @@ public interface ElementSaver {
 
     /** Writes a cloned tree after unwrapping any live Swing tree nodes. */
     public static void writeTree(HashTree testPlanTree, File file) throws IOException {
-        HashTree serializableTree = (HashTree) testPlanTree.clone();
-        unwrapTreeNodes(serializableTree);
-        HttpDefaultsSupport.normalizeSerializedTree(serializableTree);
+        HashTree serializableTree = serializableTree(testPlanTree);
         try (OutputStream out = new FileOutputStream(file)) {
             SaveService.saveTree(serializableTree, out);
         }
+    }
+
+    /** Serializes a cloned tree using JMeter's own .jmx format. */
+    public static byte[] serializeTree(HashTree testPlanTree) throws IOException {
+        HashTree serializableTree = serializableTree(testPlanTree);
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            SaveService.saveTree(serializableTree, out);
+            return out.toByteArray();
+        }
+    }
+
+    private static HashTree serializableTree(HashTree testPlanTree) {
+        HashTree serializableTree = (HashTree) testPlanTree.clone();
+        unwrapTreeNodes(serializableTree);
+        HttpDefaultsSupport.normalizeSerializedTree(serializableTree);
+        return serializableTree;
     }
 
     /**

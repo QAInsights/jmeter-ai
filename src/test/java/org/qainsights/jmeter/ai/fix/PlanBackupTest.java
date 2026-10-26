@@ -7,13 +7,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.jmeter.sampler.DebugSampler;
+import org.apache.jmeter.save.SaveService;
 import org.apache.jmeter.services.FileServer;
 import org.apache.jmeter.testelement.TestPlan;
+import org.apache.jmeter.util.JMeterUtils;
 import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementLoader;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,6 +28,14 @@ class PlanBackupTest {
 
     private String originalBaseDirectory;
     private String priorBaseDirectory;
+
+    @BeforeAll
+    static void initSaveService() throws Exception {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        SaveService.loadProperties();
+    }
 
     @AfterEach
     void restoreFileServerBaseDirectory() {
@@ -144,6 +155,20 @@ class PlanBackupTest {
 
         assertTrue(PlanBackup.savedFileChanged(savedPlan.toString(), originalHash));
         assertEquals("saved Make it pass changes", Files.readString(savedPlan));
+    }
+
+    @Test
+    void treeHashIsStableAndChangesWithPlanProperties() {
+        HashTree tree = plan();
+        String originalHash = PlanBackup.treeHash(tree);
+
+        assertEquals(originalHash, PlanBackup.treeHash(tree));
+
+        Object plan = tree.list().iterator().next();
+        DebugSampler sampler = (DebugSampler) tree.getTree(plan).list().iterator().next();
+        sampler.setName("Changed sampler");
+
+        assertNotEquals(originalHash, PlanBackup.treeHash(tree));
     }
 
     @Test

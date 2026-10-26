@@ -26,6 +26,9 @@ class FixPromptTest {
         assertTrue(prompt.contains("Make every request"));
         assertTrue(prompt.contains("find_correlation_candidates"));
         assertTrue(prompt.contains("Never delete, disable, or move requests"));
+        assertTrue(prompt.contains("Never add or change scripts"));
+        assertTrue(prompt.contains("or non-HTTP samplers"));
+        assertTrue(prompt.contains("Thread Group settings or variables used in hosts"));
         assertTrue(prompt.contains("NEEDS USER:"));
         assertTrue(prompt.contains("<failure_data>"));
         assertTrue(prompt.contains("</failure_data>"));
@@ -59,6 +62,6 @@ class FixPromptTest {
         assertTrue(prompt.contains("${__time()}"));
         assertTrue(prompt.contains("${__threadNum}"));
         assertTrue(prompt.contains("separate accounts"));
-        assertTrue(prompt.contains("Never change thread counts."));
+        assertTrue(prompt.contains("Never change Thread Group settings"));
     }
 }

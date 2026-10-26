@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.fix;
 
 import java.util.Set;
 
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jorphan.collections.HashTree;
@@ -18,6 +19,36 @@ class PlanHostsTest {
         sampler.setPath("https://target.example.test/api");
 
         assertEquals(Set.of("target.example.test"), PlanHosts.collect(tree(sampler)));
+    }
+
+    @Test
+    void resolvesDomainFromUserDefinedVariablesElement() {
+        Arguments variables = new Arguments();
+        variables.addArgument("HOST", "target.example.test");
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("${HOST}");
+
+        HashTree root = new ListedHashTree();
+        HashTree plan = root.add(new TestPlan("Test Plan"));
+        plan.add(variables);
+        plan.add(sampler);
+
+        assertEquals(Set.of("target.example.test"), PlanHosts.collect(root));
+    }
+
+    @Test
+    void resolvesDomainFromTestPlanVariables() {
+        Arguments variables = new Arguments();
+        variables.addArgument("HOST", "target.example.test");
+        TestPlan testPlan = new TestPlan("Test Plan");
+        testPlan.setUserDefinedVariables(variables);
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("${HOST}");
+
+        HashTree root = new ListedHashTree();
+        root.add(testPlan).add(sampler);
+
+        assertEquals(Set.of("target.example.test"), PlanHosts.collect(root));
     }
 
     @Test

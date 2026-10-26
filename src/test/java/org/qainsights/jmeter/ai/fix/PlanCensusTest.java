@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.fix;
 
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.extractor.JSR223PostProcessor;
@@ -47,13 +48,29 @@ class PlanCensusTest {
     }
 
     @Test
-    void flagsNewScriptThatForcesSuccessButAllowsExtractorScript() {
-        JSR223PostProcessor forced = script("prev.setSuccessful(true);");
-        assertTrue(plan(1, 1, true, null, false).violations(withChild(forced))
-                .contains("A new element forces requests to pass."));
+    void flagsAddedOrChangedScriptsButAllowsUnchangedScripts() {
+        String violation = "A script was added or changed. Make it pass can't verify scripts, so it doesn't change them.";
+        assertTrue(withChild(script("vars.put('id', '1');"))
+                .violations(withChild(script("prev.successful = true;"))).contains(violation));
+        assertTrue(withChild(script("vars.put('id', '1');"))
+                .violations(withChild(script("vars.put('id', '2');"))).contains(violation));
+        assertTrue(withChild(script("vars.put('id', '1');"))
+                .violations(withChild(script("vars.put('id', '1');"))).isEmpty());
+    }
 
-        JSR223PostProcessor extractor = script("vars.put('id', prev.getResponseDataAsString());");
-        assertTrue(plan(1, 1, true, null, false).violations(withChild(extractor)).isEmpty());
+    @Test
+    void flagsJMeterFunctionsInAnyElementProperty() {
+        Arguments arguments = new Arguments();
+        arguments.addArgument("payload", "${__groovy(prev.setSuccessful(true))}");
+
+        assertTrue(plan(1, 1, true, null, false).violations(withChild(arguments))
+                .contains("A script was added or changed. Make it pass can't verify scripts, so it doesn't change them."));
+    }
+
+    @Test
+    void flagsAddedNonHttpSamplers() {
+        assertTrue(withHttpSampler(false).violations(withHttpSampler(true))
+                .contains("A non-HTTP request was added or changed."));
     }
 
     @Test
@@ -67,6 +84,20 @@ class PlanCensusTest {
         assertTrue(withAbsolutePath("https://confirmed.example.test/path")
                 .violations(withAbsolutePath("https://new.example.test/path"))
                 .contains("A request now targets a host you did not confirm: new.example.test."));
+    }
+
+    @Test
+    void flagsUserDefinedHostVariableChanges() {
+        assertTrue(withHostVariable("first.example.test").violations(withHostVariable("second.example.test"))
+                .contains("A request now targets a host you did not confirm: second.example.test."));
+    }
+
+    @Test
+    void flagsRampTimeAndDelayChanges() {
+        assertTrue(withLoadSettings(1, 0).violations(withLoadSettings(2, 0))
+                .contains("Thread Group load settings were changed."));
+        assertTrue(withLoadSettings(1, 0).violations(withLoadSettings(1, 2))
+                .contains("Thread Group load settings were changed."));
     }
 
     private static PlanCensus withChild(org.apache.jmeter.testelement.TestElement child) {
@@ -112,6 +143,46 @@ class PlanCensusTest {
         sampler.setDomain("");
         sampler.setPath(path);
         root.add(new TestPlan("Test Plan")).add(sampler);
+        return PlanCensus.capture(root);
+    }
+
+    private static PlanCensus withHttpSampler(boolean addNonHttpSampler) {
+        HashTree root = new ListedHashTree();
+        HashTree planTree = root.add(new TestPlan("Test Plan"));
+        HTTPSamplerProxy httpSampler = new HTTPSamplerProxy();
+        planTree.add(httpSampler);
+        if (addNonHttpSampler) {
+            planTree.add(new DebugSampler());
+        }
+        return PlanCensus.capture(root);
+    }
+
+    private static PlanCensus withHostVariable(String value) {
+        TestPlan testPlan = new TestPlan("Test Plan");
+        Arguments arguments = new Arguments();
+        arguments.addArgument("HOST", value);
+        HashTree root = new ListedHashTree();
+        HashTree planTree = root.add(testPlan);
+        planTree.add(arguments);
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("${HOST}");
+        planTree.add(sampler);
+        return PlanCensus.capture(root);
+    }
+
+    private static PlanCensus withLoadSettings(int rampTime, int delay) {
+        TestPlan testPlan = new TestPlan("Test Plan");
+        ThreadGroup group = new ThreadGroup();
+        group.setNumThreads(1);
+        group.setRampUp(rampTime);
+        group.setDelay(delay);
+        LoopController controller = new LoopController();
+        controller.setLoops(1);
+        controller.setFirst(true);
+        controller.initialize();
+        group.setSamplerController(controller);
+        HashTree root = new ListedHashTree();
+        root.add(testPlan).add(group);
         return PlanCensus.capture(root);
     }
 

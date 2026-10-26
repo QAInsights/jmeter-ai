@@ -4,6 +4,9 @@ import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSampleResult;
 import org.apache.jmeter.reporters.ResultCollector;
 import org.apache.jmeter.sampler.DebugSampler;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.Sampler;
 import org.apache.jmeter.samplers.SampleResult;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
@@ -61,6 +64,23 @@ class TestPlanRunnerTest {
         HashTree planTree = tree.add(testPlan);
         HashTree threadGroupTree = planTree.add(threadGroup);
         threadGroupTree.add(sampler);
+        return tree;
+    }
+
+    private static HashTree planWithSampler(Sampler sampler) {
+        TestPlan testPlan = new TestPlan("Test Plan");
+        LoopController loopController = new LoopController();
+        loopController.setLoops(1);
+        loopController.setFirst(true);
+        loopController.initialize();
+        ThreadGroup threadGroup = new ThreadGroup();
+        threadGroup.setName("Thread Group");
+        threadGroup.setNumThreads(1);
+        threadGroup.setRampUp(0);
+        threadGroup.setSamplerController(loopController);
+
+        HashTree tree = new ListedHashTree();
+        tree.add(testPlan).add(threadGroup).add(sampler);
         return tree;
     }
 
@@ -256,5 +276,62 @@ class TestPlanRunnerTest {
         TestRunSummary summary = new TestPlanRunner().runTree(planWithLoops(50_000_000), 1);
         assertTrue(summary.isTimedOut());
         assertTrue(System.currentTimeMillis() - before < 15_000);
+    }
+
+    @Test
+    @Timeout(35)
+    void timeoutKeepsUnstoppedEngineRegisteredAndRejectsAnotherRun() throws Exception {
+        java.util.concurrent.CountDownLatch samplerStarted = new java.util.concurrent.CountDownLatch(1);
+        InterruptIgnoringSampler.started = samplerStarted;
+        java.util.concurrent.CompletableFuture<TestRunSummary> run =
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> new TestPlanRunner().runTree(planWithSampler(new InterruptIgnoringSampler()), 1));
+
+        assertTrue(samplerStarted.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        TestRunSummary summary = run.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertTrue(summary.isTimedOut());
+
+        TestPlanRunner.TestExecutionException error = assertThrows(
+                TestPlanRunner.TestExecutionException.class,
+                () -> new TestPlanRunner().runTree(planWithLoops(1), 5));
+        assertTrue(error.getMessage().contains("The previous check run is still stopping"));
+
+        long deadline = System.currentTimeMillis() + 10_000;
+        boolean nextRunCompleted = false;
+        while (!nextRunCompleted && System.currentTimeMillis() < deadline) {
+            try {
+                TestRunSummary next = new TestPlanRunner().runTree(planWithLoops(1), 5);
+                assertEquals(1, next.getTotalSamples());
+                nextRunCompleted = true;
+            } catch (TestPlanRunner.TestExecutionException ignored) {
+                Thread.sleep(50);
+            }
+        }
+        assertTrue(nextRunCompleted, "a new run is accepted after the previous engine ends");
+    }
+
+    public static final class InterruptIgnoringSampler extends AbstractSampler {
+        private static final long RUN_MILLIS = 15_000;
+        private static volatile java.util.concurrent.CountDownLatch started;
+
+        @Override
+        public SampleResult sample(Entry entry) {
+            java.util.concurrent.CountDownLatch current = started;
+            if (current != null) {
+                current.countDown();
+            }
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(RUN_MILLIS);
+            while (System.nanoTime() < deadline) {
+                long remaining = deadline - System.nanoTime();
+                try {
+                    java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
+                } catch (InterruptedException ignored) {
+                    // Simulate a sampler that cannot be stopped by interruption.
+                }
+            }
+            SampleResult result = SampleResult.createTestSample(1);
+            result.setSampleLabel("Interrupt-ignoring sampler");
+            return result;
+        }
     }
 }

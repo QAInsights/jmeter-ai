@@ -301,6 +301,18 @@ public class PlanBackup implements FixLoop.BackupStore {
                 && !Objects.equals(expectedHash, sha256(filePath));
     }
 
+    public static String treeHash(HashTree tree) {
+        if (tree == null) {
+            return null;
+        }
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(ElementSaver.serializeTree(tree)));
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Could not hash the test plan.", e);
+        }
+    }
+
     static String sha256(String filePath) {
         if (filePath == null || filePath.isBlank()) {
             return null;
