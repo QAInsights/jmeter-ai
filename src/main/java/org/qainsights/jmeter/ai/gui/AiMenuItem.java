@@ -28,6 +28,7 @@ import java.util.Objects;
 public class AiMenuItem extends JMenuItem implements ActionListener {
     private static final Logger log = LoggerFactory.getLogger(AiMenuItem.class);
     private static final Action ai = new AI();
+    private static volatile AiMenuItem liveInstance;
     private AiChatPanel currentChatPanel;
     private JSplitPane splitPane;
     private final JComponent parent;
@@ -35,6 +36,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
 
     public AiMenuItem(JComponent parent) {
         super(ai);
+        liveInstance = this;
         this.parent = parent;
         addActionListener(this);
         addToolbarIcon();
@@ -209,32 +211,51 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         }
     }
 
+    public static void runInChat(String command) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> runInChat(command));
+            return;
+        }
+        AiMenuItem item = liveInstance;
+        if (item != null && item.ensureAiChatPanelOpen()) {
+            item.currentChatPanel.runCommand(command);
+        }
+    }
+
     private void openAiChatPanel() {
         GuiPackage guiPackage = GuiPackage.getInstance();
-        if (guiPackage != null) {
-            MainFrame mainFrame = guiPackage.getMainFrame();
-
-            if (currentChatPanel != null && splitPane != null && splitPane.isShowing()) {
-                SidePanelDock.undock(splitPane);
-
-                splitPane = null;
-                log.info("AI Chat Panel hidden");
-            } else {
-                if (currentChatPanel == null) {
-                    currentChatPanel = new AiChatPanel();
-                    log.info("Created new AI Chat Panel");
-                }
-
-                Container contentPane = mainFrame.getContentPane();
-                splitPane = SidePanelDock.dock(contentPane, currentChatPanel, 0.7, mainFrame.getWidth());
-                if (splitPane != null) {
-                    log.info("AI Chat Panel displayed");
-                }
-            }
-
-            mainFrame.revalidate();
-            mainFrame.repaint();
+        if (guiPackage == null || guiPackage.getMainFrame() == null) {
+            return;
         }
+        MainFrame mainFrame = guiPackage.getMainFrame();
+        if (currentChatPanel != null && splitPane != null && splitPane.isShowing()) {
+            SidePanelDock.undock(splitPane);
+            splitPane = null;
+            log.info("AI Chat Panel hidden");
+        } else {
+            ensureAiChatPanelOpen();
+        }
+        mainFrame.revalidate();
+        mainFrame.repaint();
+    }
+
+    private boolean ensureAiChatPanelOpen() {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        if (guiPackage == null || guiPackage.getMainFrame() == null) {
+            return false;
+        }
+        MainFrame mainFrame = guiPackage.getMainFrame();
+        if (currentChatPanel == null) {
+            currentChatPanel = new AiChatPanel();
+            log.info("Created new AI Chat Panel");
+        }
+        if (splitPane == null) {
+            splitPane = SidePanelDock.dock(mainFrame.getContentPane(), currentChatPanel,
+                    0.7, mainFrame.getWidth());
+        }
+        mainFrame.revalidate();
+        mainFrame.repaint();
+        return splitPane != null;
     }
 
     /**

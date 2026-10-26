@@ -174,6 +174,7 @@ public class AiChatPanel
         LINT,
         WRAP,
         SLA,
+        LOAD,
     }
 
     private LastCommandType lastCommandType = LastCommandType.NONE;
@@ -459,6 +460,9 @@ public class AiChatPanel
                         case SLA:
                             undoRedoDispatcher.undoLastSla();
                             break;
+                        case LOAD:
+                            undoRedoDispatcher.undoLastLoad();
+                            break;
                         case LINT:
                             undoLastRename();
                             break;
@@ -496,6 +500,9 @@ public class AiChatPanel
                             break;
                         case SLA:
                             appendMessageToChat("Redo isn't available for `@sla`. Run the command again instead.");
+                            break;
+                        case LOAD:
+                            appendMessageToChat("Redo isn't available for `@load`. Run the command again instead.");
                             break;
                         case LINT:
                             redoLastUndo();
@@ -1401,6 +1408,13 @@ public class AiChatPanel
         messageField.setText("");
     }
 
+    public void runCommand(String command) {
+        if (command == null || command.isBlank()) {
+            return;
+        }
+        runOnEdt(() -> commandDispatcher.dispatch(command.trim()));
+    }
+
     @Override
     public void appendUserMessage(String message) {
         runOnEdt(() -> {
@@ -1466,6 +1480,9 @@ public class AiChatPanel
                 break;
             case "SLA":
                 lastCommandType = LastCommandType.SLA;
+                break;
+            case "LOAD":
+                lastCommandType = LastCommandType.LOAD;
                 break;
             default:
                 lastCommandType = LastCommandType.NONE;

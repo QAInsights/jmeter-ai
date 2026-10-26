@@ -2,6 +2,11 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.lint.LintCommandHandler;
+import org.qainsights.jmeter.ai.load.CommandShell;
+import org.qainsights.jmeter.ai.load.LoadCommandHandler;
+import org.qainsights.jmeter.ai.load.WorkloadApplier;
+import org.qainsights.jmeter.ai.load.WorkloadInputs;
+import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.optimizer.OptimizeRequestHandler;
 import org.qainsights.jmeter.ai.service.AiService;
 import org.qainsights.jmeter.ai.sla.SlaCommandHandler;
@@ -116,6 +121,10 @@ public class CommandDispatcher {
             case "@sla":
                 Telemetry.record(TelemetryFeature.CMD_SLA);
                 handleSlaCommand(message);
+                return;
+            case "@load":
+                Telemetry.record(TelemetryFeature.CMD_LOAD);
+                handleLoadCommand(message);
                 return;
             case "@testplan":
                 Telemetry.record(TelemetryFeature.CMD_TESTPLAN);
@@ -393,6 +402,104 @@ public class CommandDispatcher {
                         ProviderErrors.describe(e, "processing the @sla command", false));
             }
         });
+    }
+
+    private void handleLoadCommand(String message) {
+        cb.setLastCommandType("LOAD");
+        cb.setInputEnabled(false);
+        org.apache.jmeter.gui.tree.JMeterTreeNode selected = LoadCommandHandler.selectedNode();
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        org.apache.jmeter.gui.tree.JMeterTreeModel model = gui == null ? null : gui.getTreeModel();
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            try {
+                LoadCommandHandler.Preparation preparation = LoadCommandHandler.prepare(message, selected, model);
+                if (preparation.error() != null) {
+                    cb.onWorkerSuccess(preparation.error());
+                    cb.setInputEnabled(true);
+                    return;
+                }
+                String selectedModel = cb.getSelectedModel();
+                Function<String, String> aiCall = workloadAiCall(selectedModel, cb::resolveAiService);
+                new WorkloadDesignerDialog(preparation, completion -> {
+                    if (completion.cancelled()) {
+                        Telemetry.record(TelemetryFeature.LOAD_CANCELLED);
+                        cb.onWorkerSuccess("Workload Designer closed. No changes made.");
+                    } else if (!completion.error().isBlank()) {
+                        cb.onWorkerError("Error applying @load",
+                                new IllegalStateException(completion.error()), completion.error());
+                    } else {
+                        WorkloadPlan plan = completion.plan();
+                        WorkloadApplier.ApplyResult result = completion.result();
+                        Telemetry.record(TelemetryFeature.LOAD_APPLIED);
+                        if (plan.targetType() == WorkloadInputs.TargetType.USERS) {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_USERS);
+                        } else if (plan.targetType() == WorkloadInputs.TargetType.MESSAGE_RATE) {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_MESSAGES);
+                        } else {
+                            Telemetry.record(TelemetryFeature.LOAD_TARGET_RATE);
+                        }
+                        if (plan.agents() > 1) {
+                            Telemetry.record(TelemetryFeature.LOAD_DISTRIBUTED);
+                        }
+                        if (!plan.generatorHosts().isEmpty()) {
+                            Telemetry.record(TelemetryFeature.LOAD_HOSTS_SET);
+                        }
+                        if (plan.generatorVcpus() != null || plan.generatorRamGb() != null) {
+                            Telemetry.record(TelemetryFeature.LOAD_SPEC_SET);
+                        }
+                        if (plan.measuredCapacitySet()) {
+                            Telemetry.record(TelemetryFeature.LOAD_MEASURED_SET);
+                        }
+                        if (preparation.hostsFromProperties()
+                                && plan.generatorHosts().equals(preparation.generatorHosts())) {
+                            Telemetry.record(TelemetryFeature.LOAD_HOSTS_FROM_PROPS);
+                        }
+                        if (plan.warnings().stream().anyMatch(note -> note.startsWith("JDBC pool \""))) {
+                            Telemetry.record(TelemetryFeature.LOAD_JDBC_WARNED);
+                        }
+                        if (plan.agents() < plan.generatorsNeeded()) {
+                            Telemetry.record(TelemetryFeature.LOAD_GENERATORS_SHORT);
+                        }
+                        if (!plan.warnings().isEmpty() || !result.warnings().isEmpty()) {
+                            Telemetry.record(TelemetryFeature.LOAD_WARNED);
+                        }
+                        cb.onWorkerSuccess(loadReply(plan, result, completion.commandShell()));
+                    }
+                    cb.setInputEnabled(true);
+                }, aiCall).setVisible(true);
+            } catch (RuntimeException e) {
+                cb.onWorkerError("Error processing @load command", e,
+                        ProviderErrors.describe(e, "processing the @load command", false));
+                cb.setInputEnabled(true);
+            }
+        });
+    }
+
+    static Function<String, String> workloadAiCall(String selectedModel,
+                                                    Function<String, AiService> serviceResolver) {
+        if (selectedModel == null) {
+            return null;
+        }
+        AiService service = serviceResolver.apply(selectedModel);
+        return service == null ? null : prompt -> service.generateResponse(List.of(prompt));
+    }
+
+    static String loadReply(WorkloadPlan plan, WorkloadApplier.ApplyResult result, CommandShell shell) {
+        StringBuilder reply = new StringBuilder("Applied the workload under **")
+                .append(result.threadGroupName()).append("**:\n");
+        reply.append("- Sampler mix: ").append(plan.samplerMix().display()).append("\n");
+        result.changes().forEach(change -> reply.append("- ").append(change).append("\n"));
+        reply.append("\n```").append(shell.languageTag()).append("\n")
+                .append(plan.command(shell)).append("\n```\n");
+        if (!plan.warnings().isEmpty() || !plan.assumptions().isEmpty()
+                || !plan.notes().isEmpty() || !result.warnings().isEmpty()) {
+            reply.append("\n**Notes**\n");
+            plan.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
+            result.warnings().forEach(note -> reply.append("- ").append(note).append("\n"));
+            plan.assumptions().forEach(note -> reply.append("- ").append(note).append("\n"));
+            plan.notes().forEach(note -> reply.append("- ").append(note).append("\n"));
+        }
+        return reply.append("\nPress Ctrl+Z in the chat to undo.").toString();
     }
 
     private void handleUsageCommand() {

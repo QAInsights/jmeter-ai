@@ -99,4 +99,10 @@ public class UndoRedoDispatcher {
         javax.swing.SwingUtilities.invokeLater(() ->
                 cb.appendMessageToChat(org.qainsights.jmeter.ai.sla.SlaCommandHandler.undoLast()));
     }
+
+    /** Tree edits must stay on the EDT, so this runs there rather than in a worker. */
+    public void undoLastLoad() {
+        javax.swing.SwingUtilities.invokeLater(() ->
+                cb.appendMessageToChat(org.qainsights.jmeter.ai.load.WorkloadApplier.undoLast()));
+    }
 }
