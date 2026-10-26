@@ -117,12 +117,58 @@ class WorkloadParserTest {
     }
 
     @Test
-    void unsupportedShapesAreListedAndNeverParsedAsTargets() {
-        for (String shape : new String[]{"spike", "step", "stair", "ramp-down", "wave"}) {
-            WorkloadSpec spec = WorkloadParser.parse("200 rps " + shape);
-            assertNull(spec.requestsPerSecond(), shape);
-            assertEquals(1, spec.unsupported().size(), shape);
-        }
+    void parsesCoreWorkloadShapePhrases() {
+        WorkloadSpec step = WorkloadParser.parse("@load step 100 to 500 rps by 100 every 5 min ramp down 2 min");
+        assertEquals(WorkloadShape.STEP, step.shapeConfig().shape());
+        assertEquals(100.0, step.shapeConfig().startTarget());
+        assertEquals(500.0, step.shapeConfig().endTarget());
+        assertEquals(100.0, step.shapeConfig().stepTarget());
+        assertEquals(300, step.shapeConfig().stepDurationSeconds());
+        assertEquals(120, step.shapeConfig().rampDownSeconds());
+
+        WorkloadSpec userStep = WorkloadParser.parse("step 50 to 250 users by 50 every 5 min");
+        assertEquals(WorkloadShape.STEP, userStep.shapeConfig().shape());
+        assertEquals(250, userStep.users());
+        assertEquals(50.0, userStep.shapeConfig().startTarget());
+
+        WorkloadSpec spike = WorkloadParser.parse("spike from 100 to 500 rps for 2 min");
+        assertEquals(WorkloadShape.SPIKE, spike.shapeConfig().shape());
+        assertEquals(100.0, spike.shapeConfig().baselineTarget());
+        assertEquals(500.0, spike.shapeConfig().peakTarget());
+        assertEquals(120, spike.shapeConfig().spikeSeconds());
+
+        WorkloadSpec stress = WorkloadParser.parse("stress up to 1000 rps step 100 every 2 min");
+        assertEquals(WorkloadShape.STRESS, stress.shapeConfig().shape());
+        assertEquals(100.0, stress.shapeConfig().startTarget());
+        assertEquals(1000.0, stress.shapeConfig().endTarget());
+        assertEquals(120, stress.shapeConfig().stepDurationSeconds());
+
+        WorkloadSpec endurance = WorkloadParser.parse("endurance 200 rps for 8 h");
+        assertEquals(WorkloadShape.ENDURANCE, endurance.shapeConfig().shape());
+        assertEquals(200.0, endurance.requestsPerSecond());
+        assertEquals(28_800, endurance.holdSeconds());
+        assertEquals(WorkloadShape.ENDURANCE, WorkloadParser.parse("soak 200 rps for 8 h")
+                .shapeConfig().shape());
+    }
+
+    @Test
+    void reportsRampDownAsUnsupportedForLoadAndEndurance() {
+        String message = "Ramp-down needs an Open Model shape (Step, Spike, Stress or Custom).";
+
+        WorkloadSpec load = WorkloadParser.parse("@load 200 rps ramp down 2 min");
+        WorkloadSpec endurance = WorkloadParser.parse("@load endurance 200 rps for 8 h, ramp down 2 min");
+
+        assertTrue(load.unsupported().contains(message));
+        assertTrue(endurance.unsupported().contains(message));
+    }
+
+    @Test
+    void unknownShapeWordsFallBackToLoad() {
+        WorkloadSpec spec = WorkloadParser.parse("200 rps wave");
+
+        assertEquals(WorkloadShape.LOAD, spec.shapeConfig().shape());
+        assertEquals(200.0, spec.requestsPerSecond());
+        assertTrue(spec.unsupported().isEmpty());
     }
 
     @Test
@@ -138,6 +184,6 @@ class WorkloadParserTest {
     void emptyAndUnsupportedOnlyInputHaveNoRecognizedValues() {
         assertTrue(WorkloadParser.parse("@load").isEmpty());
         assertTrue(WorkloadParser.parse(null).isEmpty());
-        assertTrue(WorkloadParser.parse("spike to 100 rps").isEmpty());
+        assertTrue(WorkloadParser.parse("do a more realistic test").isEmpty());
     }
 }

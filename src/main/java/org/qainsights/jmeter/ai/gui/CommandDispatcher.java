@@ -431,6 +431,17 @@ public class CommandDispatcher {
                         WorkloadPlan plan = completion.plan();
                         WorkloadApplier.ApplyResult result = completion.result();
                         Telemetry.record(TelemetryFeature.LOAD_APPLIED);
+                        switch (plan.shapeConfig().shape()) {
+                            case ENDURANCE -> Telemetry.record(TelemetryFeature.LOAD_SHAPE_ENDURANCE);
+                            case STEP -> Telemetry.record(TelemetryFeature.LOAD_SHAPE_STEP);
+                            case SPIKE -> Telemetry.record(TelemetryFeature.LOAD_SHAPE_SPIKE);
+                            case STRESS -> Telemetry.record(TelemetryFeature.LOAD_SHAPE_STRESS);
+                            case CUSTOM -> Telemetry.record(TelemetryFeature.LOAD_SHAPE_CUSTOM);
+                            case LOAD -> { }
+                        }
+                        if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
+                            Telemetry.record(TelemetryFeature.LOAD_OPEN_MODEL_APPLIED);
+                        }
                         if (plan.targetType() == WorkloadInputs.TargetType.USERS) {
                             Telemetry.record(TelemetryFeature.LOAD_TARGET_USERS);
                         } else if (plan.targetType() == WorkloadInputs.TargetType.MESSAGE_RATE) {

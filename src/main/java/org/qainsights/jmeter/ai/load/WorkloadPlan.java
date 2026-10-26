@@ -35,7 +35,10 @@ public record WorkloadPlan(
         Double generatorRamGb,
         boolean measuredCapacitySet,
         String cmdCommand,
-        String powershellCommand) {
+        String powershellCommand,
+        WorkloadShapeConfig shapeConfig,
+        List<WorkloadStage> stages,
+        String openModelSchedule) {
 
     public WorkloadPlan {
         assumptions = List.copyOf(assumptions);
@@ -46,6 +49,29 @@ public record WorkloadPlan(
         threadCapacityBasis = threadCapacityBasis == null ? "default" : threadCapacityBasis;
         cmdCommand = cmdCommand == null ? cliCommand : cmdCommand;
         powershellCommand = powershellCommand == null ? cliCommand : powershellCommand;
+        shapeConfig = shapeConfig == null ? WorkloadShapeConfig.load() : shapeConfig;
+        stages = stages == null ? List.of() : List.copyOf(stages);
+        openModelSchedule = openModelSchedule == null ? "" : openModelSchedule;
+    }
+
+    public WorkloadPlan(WorkloadInputs.TargetType targetType, double targetValue, int threads,
+                        int samplersPerIteration, Double targetRequestsPerSecond,
+                        Double expectedRequestsPerSecond, Double rpm, long rampSeconds,
+                        long holdSeconds, long durationSeconds, int agents, Integer perAgentThreads,
+                        Double perAgentRpm, long responseMillis, long thinkMillis, String propertyPrefix,
+                        List<String> assumptions, List<String> warnings, String cliCommand,
+                        SamplerMix samplerMix, List<String> notes, List<String> generatorHosts,
+                        int maxThreadsPerGenerator, int generatorsNeeded, long heapPerGeneratorMb,
+                        String threadCapacityBasis, Double cpuSamplesPerSecond, Integer generatorVcpus,
+                        Double generatorRamGb, boolean measuredCapacitySet, String cmdCommand,
+                        String powershellCommand) {
+        this(targetType, targetValue, threads, samplersPerIteration, targetRequestsPerSecond,
+                expectedRequestsPerSecond, rpm, rampSeconds, holdSeconds, durationSeconds, agents,
+                perAgentThreads, perAgentRpm, responseMillis, thinkMillis, propertyPrefix,
+                assumptions, warnings, cliCommand, samplerMix, notes, generatorHosts,
+                maxThreadsPerGenerator, generatorsNeeded, heapPerGeneratorMb, threadCapacityBasis,
+                cpuSamplesPerSecond, generatorVcpus, generatorRamGb, measuredCapacitySet,
+                cmdCommand, powershellCommand, WorkloadShapeConfig.load(), List.of(), "");
     }
 
     public WorkloadPlan(WorkloadInputs.TargetType targetType, double targetValue, int threads,

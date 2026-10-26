@@ -24,6 +24,8 @@ import org.apache.jmeter.timers.ConstantThroughputTimer;
 import org.apache.jmeter.timers.ConstantTimer;
 import org.apache.jmeter.timers.Timer;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.threads.AbstractThreadGroup;
+import org.apache.jmeter.threads.openmodel.OpenModelThreadGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,13 +36,161 @@ public final class WorkloadApplier {
     static final String THINK_NAME = "Think time (Feather Wand)";
     static final String CTT_GUI = "org.apache.jmeter.testbeans.gui.TestBeanGUI";
     static final String TIMER_GUI = "org.apache.jmeter.timers.gui.ConstantTimerGui";
+    static final String OPEN_MODEL_GUI = "org.apache.jmeter.threads.openmodel.gui.OpenModelThreadGroupGui";
+    static final String OPEN_MODEL_SCHEDULE = "OpenModelThreadGroup.schedule";
+    static final String OPEN_MODEL_MANAGED = "FeatherWand.openModelManaged";
+    static final String OPEN_MODEL_SOURCE = "FeatherWand.openModelSource";
     // The zero-based mode index for all active threads in this Thread Group (shared).
     static final int CALC_MODE_THREAD_GROUP_SHARED = 4;
     private static final Logger log = LoggerFactory.getLogger(WorkloadApplier.class);
     private static final Pattern NON_SLUG = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern DESIGNER_MANAGED_SCHEDULE =
+            Pattern.compile("^rate\\(\\$\\{__P\\(([A-Za-z0-9_.-]+)\\.s1\\.rate,");
     private static LastApplied lastApplied;
 
     private WorkloadApplier() {
+    }
+
+    private static ApplyResult applyOpenModel(JMeterTreeModel model, JMeterTreeNode selectedNode,
+                                              WorkloadPlan plan, Runnable flushCurrentNode,
+                                              GuiPackage gui, boolean currentGroup)
+            throws IllegalUserActionException {
+        List<PropertySnapshot> properties = new ArrayList<>();
+        List<EnabledSnapshot> enabledStates = new ArrayList<>();
+        List<JMeterTreeNode> added = new ArrayList<>();
+        List<TreeMigration> migrations = new ArrayList<>();
+        List<String> changes = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        String prefix = plan.propertyPrefix();
+        JMeterTreeNode openModelNode = selectedNode;
+        try {
+            if (selectedNode.getTestElement() instanceof ThreadGroup) {
+                JMeterTreeNode convertedSibling = enabledManagedOpenModelSibling(selectedNode);
+                if (convertedSibling != null) {
+                    throw new IllegalArgumentException("This Thread Group was converted to \""
+                            + convertedSibling.getName()
+                            + "\". Select it to change the shape.");
+                }
+                JMeterTreeNode parent = (JMeterTreeNode) selectedNode.getParent();
+                OpenModelThreadGroup openModel = new OpenModelThreadGroup();
+                openModel.setName(selectedNode.getName() + " (" + plan.shapeConfig().shape() + ")");
+                openModel.setProperty(TestElement.TEST_CLASS, OpenModelThreadGroup.class.getName());
+                openModel.setProperty(TestElement.GUI_CLASS, OPEN_MODEL_GUI);
+                openModel.setProperty(OPEN_MODEL_MANAGED, true);
+                openModel.setProperty(OPEN_MODEL_SOURCE, selectedNode.getName());
+                int childCount = selectedNode.getChildCount();
+                List<JMeterTreeNode> children = new ArrayList<>(childCount);
+                for (int index = 0; index < childCount; index++) {
+                    children.add((JMeterTreeNode) selectedNode.getChildAt(index));
+                }
+                openModelNode = new JMeterTreeNode(openModel, model);
+                model.insertNodeInto(openModelNode, parent, parent.getIndex(selectedNode) + 1);
+                added.add(openModelNode);
+                TreeMigration migration = new TreeMigration(selectedNode, openModelNode);
+                migrations.add(migration);
+                for (int index = 0; index < children.size(); index++) {
+                    JMeterTreeNode child = children.get(index);
+                    model.removeNodeFromParent(child);
+                    model.insertNodeInto(child, openModelNode, index);
+                }
+                setEnabled(model, selectedNode, false, enabledStates, properties);
+                changes.add("Added " + openModelNode.getName());
+            } else if (!(selectedNode.getTestElement() instanceof OpenModelThreadGroup openModel)
+                    || !isDesignerManagedOpenModel(openModel)) {
+                throw new IllegalArgumentException(
+                        "Only Open Model Thread Groups created by Workload Designer can be updated.");
+            }
+
+            TestElement group = openModelNode.getTestElement();
+            setProperty(properties, group, OPEN_MODEL_SCHEDULE,
+                    new StringProperty(OPEN_MODEL_SCHEDULE, plan.openModelSchedule()), changes);
+            JMeterTreeNode managedCtt = managedTimer(openModelNode, ConstantThroughputTimer.class, CTT_NAME);
+            if (managedCtt != null && managedCtt.isEnabled()) {
+                setEnabled(model, managedCtt, false, enabledStates, properties);
+                changes.add("Disabled " + CTT_NAME);
+            }
+            if (hasUserOwnedThroughputTimerInScope(openModelNode, true)
+                    || hasEnabledShapingTimer(openModelNode, true)) {
+                warnings.add("A user-owned Constant Throughput Timer, Precise Throughput Timer or "
+                        + "Throughput Shaping Timer can throttle arrivals; it was left unchanged.");
+            }
+            applyThinkTimer(model, openModelNode, plan, properties, enabledStates, added, changes);
+            int existingTimers = otherTimerCount(openModelNode);
+            if (existingTimers > 0) {
+                warnings.add("Your plan already has " + existingTimers
+                        + " timers. The estimate does not count them.");
+            }
+            model.nodeStructureChanged(openModelNode);
+            model.nodeStructureChanged(selectedNode);
+            refreshCurrentGui(gui, openModelNode, currentGroup);
+            lastApplied = new LastApplied(selectedNode, properties, enabledStates, added, migrations);
+            return new ApplyResult(openModelNode.getName(), changes, warnings);
+        } catch (Exception error) {
+            restore(model, selectedNode, properties, enabledStates, added, migrations,
+                    gui, currentGroup, error);
+            throw error;
+        }
+    }
+
+    static JMeterTreeNode enabledManagedOpenModelSibling(JMeterTreeNode source) {
+        if (source == null || source.isEnabled() || source.getParent() == null
+                || !(source.getTestElement() instanceof ThreadGroup)) {
+            return null;
+        }
+        JMeterTreeNode parent = (JMeterTreeNode) source.getParent();
+        for (int index = 0; index < parent.getChildCount(); index++) {
+            JMeterTreeNode sibling = (JMeterTreeNode) parent.getChildAt(index);
+            if (sibling == source || !sibling.isEnabled()
+                    || !(sibling.getTestElement() instanceof OpenModelThreadGroup group)
+                    || !isDesignerManagedOpenModel(group)
+                    || !hasShapeSiblingName(source.getName(), sibling.getName())) {
+                continue;
+            }
+            return sibling;
+        }
+        return null;
+    }
+
+    private static boolean hasShapeSiblingName(String sourceName, String openModelName) {
+        for (WorkloadShape shape : WorkloadShape.values()) {
+            if (shape.usesOpenModelThreadGroup()
+                    && openModelName.equals(sourceName + " (" + shape + ")")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isDesignerManagedOpenModel(OpenModelThreadGroup group) {
+        String schedule = group.getPropertyAsString(OPEN_MODEL_SCHEDULE);
+        return schedule != null && DESIGNER_MANAGED_SCHEDULE.matcher(schedule).lookingAt();
+    }
+
+    private static void applyThinkTimer(JMeterTreeModel model, JMeterTreeNode group, WorkloadPlan plan,
+                                        List<PropertySnapshot> properties, List<EnabledSnapshot> enabledStates,
+                                        List<JMeterTreeNode> added, List<String> changes)
+            throws IllegalUserActionException {
+        JMeterTreeNode thinkNode = managedTimer(group, ConstantTimer.class, THINK_NAME);
+        if (plan.thinkMillis() > 0) {
+            if (thinkNode == null) {
+                ConstantTimer timer = new ConstantTimer();
+                timer.setName(THINK_NAME);
+                timer.setProperty(TestElement.TEST_CLASS, ConstantTimer.class.getName());
+                timer.setProperty(TestElement.GUI_CLASS, TIMER_GUI);
+                thinkNode = model.addComponent(timer, group);
+                added.add(thinkNode);
+                changes.add("Added " + THINK_NAME);
+            } else if (!thinkNode.isEnabled()) {
+                setEnabled(model, thinkNode, true, enabledStates, properties);
+            }
+            ConstantTimer timer = (ConstantTimer) thinkNode.getTestElement();
+            setProperty(properties, timer, ConstantTimer.DELAY,
+                    new StringProperty(ConstantTimer.DELAY,
+                            property(plan.propertyPrefix(), "think_ms", plan.thinkMillis())), changes);
+            model.nodeChanged(thinkNode);
+        } else if (thinkNode != null && thinkNode.isEnabled()) {
+            setEnabled(model, thinkNode, false, enabledStates, properties);
+        }
     }
 
     public static synchronized ApplyResult apply(JMeterTreeModel model, JMeterTreeNode threadGroupNode,
@@ -65,7 +215,8 @@ public final class WorkloadApplier {
                                      WorkloadPlan plan, Runnable flushCurrentNode,
                                      GuiPackage gui, boolean currentGroup) throws IllegalUserActionException {
         if (model == null || threadGroupNode == null || threadGroupNode.getRoot() != model.getRoot()
-                || !(threadGroupNode.getTestElement() instanceof ThreadGroup)) {
+                || !(threadGroupNode.getTestElement() instanceof ThreadGroup)
+                && !(threadGroupNode.getTestElement() instanceof OpenModelThreadGroup)) {
             throw new IllegalArgumentException("The selected Thread Group is no longer in the test plan.");
         }
         if (plan == null || plan.threads() < 1 || plan.rampSeconds() < 0 || plan.durationSeconds() < 1
@@ -73,6 +224,13 @@ public final class WorkloadApplier {
             throw new IllegalArgumentException("The workload plan is invalid.");
         }
         flushCurrentNode.run();
+        if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
+            return applyOpenModel(model, threadGroupNode, plan, flushCurrentNode, gui, currentGroup);
+        }
+        if (!(threadGroupNode.getTestElement() instanceof ThreadGroup)) {
+            throw new IllegalArgumentException("Load and Endurance need a standard Thread Group. "
+                    + "Select the original group, or pick Step, Spike, Stress or Custom.");
+        }
         ThreadGroup group = (ThreadGroup) threadGroupNode.getTestElement();
         if (!(group.getSamplerController() instanceof LoopController)) {
             throw new IllegalStateException("The Thread Group has no main Loop Controller.");
@@ -173,7 +331,8 @@ public final class WorkloadApplier {
             lastApplied = new LastApplied(threadGroupNode, properties, enabledStates, added);
             return new ApplyResult(threadGroupNode.getName(), changes, warnings);
         } catch (Exception error) {
-            restore(model, threadGroupNode, properties, enabledStates, added, gui, currentGroup, error);
+            restore(model, threadGroupNode, properties, enabledStates, added, List.of(),
+                    gui, currentGroup, error);
             throw error;
         }
     }
@@ -207,7 +366,7 @@ public final class WorkloadApplier {
         JMeterTreeNode group = lastApplied.threadGroup;
         flushCurrentNode.run();
         restore(model, group, lastApplied.properties, lastApplied.enabledStates,
-                lastApplied.addedNodes, gui, currentGroup, null);
+                lastApplied.addedNodes, lastApplied.migrations, gui, currentGroup, null);
         org.qainsights.jmeter.ai.telemetry.Telemetry.record(
                 org.qainsights.jmeter.ai.telemetry.TelemetryFeature.LOAD_UNDO);
         lastApplied = null;
@@ -260,10 +419,29 @@ public final class WorkloadApplier {
 
     private static void restore(JMeterTreeModel model, JMeterTreeNode group, List<PropertySnapshot> properties,
                                 List<EnabledSnapshot> enabledStates, List<JMeterTreeNode> added,
+                                List<TreeMigration> migrations,
                                 GuiPackage gui, boolean currentGroup, Exception original) {
         try {
             for (int index = added.size() - 1; index >= 0; index--) {
                 JMeterTreeNode node = added.get(index);
+                if (migrations.stream().anyMatch(migration -> migration.openModelNode() == node)) {
+                    continue;
+                }
+                if (node.getParent() != null) {
+                    model.removeNodeFromParent(node);
+                }
+            }
+            for (int index = migrations.size() - 1; index >= 0; index--) {
+                TreeMigration migration = migrations.get(index);
+                while (migration.openModelNode().getChildCount() > 0) {
+                    JMeterTreeNode child = (JMeterTreeNode) migration.openModelNode().getChildAt(0);
+                    model.removeNodeFromParent(child);
+                    model.insertNodeInto(child, migration.originalNode(),
+                            migration.originalNode().getChildCount());
+                }
+            }
+            for (TreeMigration migration : migrations) {
+                JMeterTreeNode node = migration.openModelNode();
                 if (node.getParent() != null) {
                     model.removeNodeFromParent(node);
                 }
@@ -285,6 +463,9 @@ public final class WorkloadApplier {
                 model.nodeChanged(snapshot.node);
             }
             model.nodeStructureChanged(group);
+            for (TreeMigration migration : migrations) {
+                model.nodeStructureChanged(migration.originalNode());
+            }
             refreshCurrentGui(gui, group, currentGroup);
         } catch (Exception restoreError) {
             if (original != null) {
@@ -324,6 +505,38 @@ public final class WorkloadApplier {
             JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
             if (child.getTestElement() instanceof ConstantThroughputTimer
                     && child.isEnabled() && !CTT_NAME.equals(child.getTestElement().getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasUserOwnedThroughputTimerInScope(JMeterTreeNode node, boolean ancestorsEnabled) {
+        if (!ancestorsEnabled || !node.isEnabled()) {
+            return false;
+        }
+        if (node.getTestElement() instanceof ConstantThroughputTimer
+                && !CTT_NAME.equals(node.getTestElement().getName())) {
+            return true;
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            if (hasUserOwnedThroughputTimerInScope((JMeterTreeNode) node.getChildAt(index), true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasEnabledShapingTimer(JMeterTreeNode node, boolean ancestorsEnabled) {
+        if (!ancestorsEnabled || !node.isEnabled()) {
+            return false;
+        }
+        String className = node.getTestElement().getClass().getName();
+        if (className.endsWith(".PreciseThroughputTimer") || className.contains("ThroughputShapingTimer")) {
+            return true;
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            if (hasEnabledShapingTimer((JMeterTreeNode) node.getChildAt(index), true)) {
                 return true;
             }
         }
@@ -430,8 +643,15 @@ public final class WorkloadApplier {
     private record EnabledSnapshot(JMeterTreeNode node, boolean enabled) {
     }
 
+    private record TreeMigration(JMeterTreeNode originalNode, JMeterTreeNode openModelNode) {
+    }
+
     private record LastApplied(JMeterTreeNode threadGroup, List<PropertySnapshot> properties,
-                               List<EnabledSnapshot> enabledStates,
-                               List<JMeterTreeNode> addedNodes) {
+                               List<EnabledSnapshot> enabledStates, List<JMeterTreeNode> addedNodes,
+                               List<TreeMigration> migrations) {
+        private LastApplied(JMeterTreeNode threadGroup, List<PropertySnapshot> properties,
+                            List<EnabledSnapshot> enabledStates, List<JMeterTreeNode> addedNodes) {
+            this(threadGroup, properties, enabledStates, addedNodes, List.of());
+        }
     }
 }

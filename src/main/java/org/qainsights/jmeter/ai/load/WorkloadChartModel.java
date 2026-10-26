@@ -18,6 +18,24 @@ public final class WorkloadChartModel {
 
     public static Series at(WorkloadPlan plan, double elapsedSeconds) {
         double elapsed = Math.max(0, Math.min(plan.durationSeconds(), elapsedSeconds));
+        if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
+            double stageStart = 0;
+            double rate = plan.stages().isEmpty() ? 0 : plan.stages().get(0).fromRate();
+            for (WorkloadStage stage : plan.stages()) {
+                double stageEnd = stageStart + stage.seconds();
+                if (elapsed <= stageEnd) {
+                    double fraction = (elapsed - stageStart) / stage.seconds();
+                    rate = stage.fromRate() + (stage.toRate() - stage.fromRate()) * fraction;
+                    break;
+                }
+                stageStart = stageEnd;
+                rate = stage.toRate();
+            }
+            double iterationSeconds = plan.samplersPerIteration()
+                    * (plan.responseMillis() + plan.thinkMillis()) / 1000.0;
+            return new Series(elapsed, rate * iterationSeconds * 1.5,
+                    rate * plan.samplersPerIteration());
+        }
         double ramp = plan.rampSeconds();
         double threadFraction = ramp <= 0 ? 1 : Math.min(1, elapsed / ramp);
         double threads = plan.threads() * threadFraction;
@@ -41,6 +59,10 @@ public final class WorkloadChartModel {
     }
 
     public static double maximumRequestsPerSecond(WorkloadPlan plan) {
+        if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
+            return plan.stages().stream().mapToDouble(WorkloadStage::toRate).max().orElse(0)
+                    * plan.samplersPerIteration();
+        }
         return at(plan, plan.durationSeconds()).requestsPerSecond();
     }
 

@@ -197,6 +197,9 @@ describe("extended stats", () => {
 			 ('b', ?1, 'load_ai_failed', 1), ('a', ?1, 'load_spec_set', 1),
 			 ('b', ?1, 'load_measured_set', 1), ('a', ?1, 'load_hosts_from_props', 1),
 			 ('a', ?1, 'load_toolbar_open', 3),
+			 ('a', ?1, 'load_shape_endurance', 1), ('a', ?1, 'load_shape_step', 2),
+			 ('a', ?1, 'load_shape_spike', 1), ('a', ?1, 'load_shape_stress', 1),
+			 ('a', ?1, 'load_shape_custom', 1), ('a', ?1, 'load_open_model_applied', 5),
 			 ('a', ?1, 'chat_message', 1)`
 		).bind(day(0)).run();
 
@@ -237,6 +240,12 @@ describe("extended stats", () => {
 		expect(html).toContain("<td>measured_set</td><td>1</td><td>1</td><td>1.0</td>");
 		expect(html).toContain("<td>hosts_from_props</td><td>1</td><td>1</td><td>1.0</td>");
 		expect(html).toContain("<td>toolbar_open</td><td>3</td><td>1</td><td>3.0</td>");
+		expect(html).toContain("<td>shape_endurance</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>shape_step</td><td>2</td><td>1</td><td>2.0</td>");
+		expect(html).toContain("<td>shape_spike</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>shape_stress</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>shape_custom</td><td>1</td><td>1</td><td>1.0</td>");
+		expect(html).toContain("<td>open_model_applied</td><td>5</td><td>1</td><td>5.0</td>");
 
 		const usageStart = html.indexOf("<h2>Feature usage (30d)</h2>");
 		const usageEnd = html.indexOf("<h2>Chat messages by provider (30d)</h2>");
@@ -251,7 +260,8 @@ describe("extended stats", () => {
 			"load_applied", "load_target_users", "load_distributed", "load_target_messages",
 			"load_hosts_set", "load_jdbc_warned", "load_generators_short",
 			"load_ai_used", "load_ai_failed", "load_spec_set", "load_measured_set",
-			"load_hosts_from_props", "load_toolbar_open",
+			"load_hosts_from_props", "load_toolbar_open", "load_shape_endurance", "load_shape_step",
+			"load_shape_spike", "load_shape_stress", "load_shape_custom", "load_open_model_applied",
 		]) {
 			expect(genericUsage).not.toContain(`<td>${key}</td>`);
 		}

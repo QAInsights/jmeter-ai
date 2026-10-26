@@ -9,19 +9,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
+import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadShape;
+import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,6 +66,106 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void selectsCoreOpenModelForShapedWorkloadsAndStandardGroupsForLoadAndEndurance() {
+        assertFalse(WorkloadShape.LOAD.usesOpenModelThreadGroup());
+        assertFalse(WorkloadShape.ENDURANCE.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.STEP.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.SPIKE.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.STRESS.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.CUSTOM.usesOpenModelThreadGroup());
+        assertTrue(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.STEP));
+        assertFalse(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.SPIKE));
+    }
+
+    @Test
+    void askAiIsLimitedToLoadAndEnduranceShapes() {
+        assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.LOAD));
+        assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.ENDURANCE));
+        assertFalse(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.STEP));
+        assertEquals("Ask AI fills Load and Endurance workloads.",
+                WorkloadDesignerDialog.askAiTooltipForShape(WorkloadShape.CUSTOM));
+    }
+
+    @Test
+    void customShapeRowLimitIsCheckedBeforeStageExpansion() {
+        assertTrue(WorkloadDesignerDialog.customRowCountWithinLimit(10));
+        assertFalse(WorkloadDesignerDialog.customRowCountWithinLimit(11));
+    }
+
+    @Test
+    void invalidShapeFieldTextNamesTheFieldAndDisablesApply() {
+        String rateError = WorkloadDesignerDialog.shapeFieldError("oops", "Step start target", false);
+        assertEquals("Step start target must be a number.", rateError);
+        assertEquals("Spike duration must be a whole number.",
+                WorkloadDesignerDialog.shapeFieldError("2.5", "Spike duration", true));
+        assertEquals("Ramp down must be a whole number.",
+                WorkloadDesignerDialog.shapeFieldError("bad", "Ramp down", true));
+        assertEquals("Custom stage 2 target must be a number.",
+                WorkloadDesignerDialog.shapeFieldError("oops", "Custom stage 2 target", false));
+        assertEquals(null, WorkloadDesignerDialog.shapeFieldError("", "Step size", false));
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, rateError)));
+    }
+
+    @Test
+    void customMessageRateRejectsZeroMessagesPerSample() {
+        String error = WorkloadDesignerDialog.customConversionInputError(
+                WorkloadInputs.TargetType.MESSAGE_RATE, "0", "500", "0");
+
+        assertEquals("Messages per sample must be greater than zero.", error);
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, error)));
+    }
+
+    @Test
+    void customUsersRejectZeroResponseAndThinkTime() {
+        String error = WorkloadDesignerDialog.customConversionInputError(
+                WorkloadInputs.TargetType.USERS, "1", "0", "0");
+
+        assertEquals("Response time and think time must total more than zero.", error);
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, error)));
+    }
+
+    @Test
+    void disabledRampDownDoesNotValidateItsText() {
+        assertEquals(null, WorkloadDesignerDialog.rampDownFieldError(false, "not a duration"));
+        assertEquals("Ramp down must be a whole number.",
+                WorkloadDesignerDialog.rampDownFieldError(true, "not a duration"));
+    }
+
+    @Test
+    void applyCommitsAnActiveCustomCellBeforeRecomputing() {
+        DefaultTableModel model = new DefaultTableModel(new Object[][]{{"100"}}, new Object[]{"Target"});
+        JTable table = new JTable(model);
+        table.setDefaultEditor(Object.class, new DefaultCellEditor(new JTextField()));
+        assertTrue(table.editCellAt(0, 0));
+        ((JTextField) table.getEditorComponent()).setText("300");
+        AtomicInteger recomputes = new AtomicInteger();
+
+        assertTrue(WorkloadDesignerDialog.stopEditingAndRecompute(table, recomputes::incrementAndGet));
+
+        assertEquals("300", model.getValueAt(0, 0));
+        assertEquals(1, recomputes.get());
+    }
+
+    @Test
+    void applyDoesNotRecomputeWhenCustomCellCommitFails() {
+        DefaultTableModel model = new DefaultTableModel(new Object[][]{{"100"}}, new Object[]{"Target"});
+        JTable table = new JTable(model);
+        table.setDefaultEditor(Object.class, new DefaultCellEditor(new JTextField()) {
+            @Override
+            public boolean stopCellEditing() {
+                return false;
+            }
+        });
+        assertTrue(table.editCellAt(0, 0));
+        AtomicInteger recomputes = new AtomicInteger();
+
+        assertFalse(WorkloadDesignerDialog.stopEditingAndRecompute(table, recomputes::incrementAndGet));
+
+        assertEquals(0, recomputes.get());
+        assertTrue(table.isEditing());
+    }
+
+    @Test
     void sizesDialogWithinNinetyPercentOfUsableScreenBounds() {
         assertEquals(new Dimension(720, 486),
                 WorkloadDesignerDialog.sizeWithinScreen(new Dimension(1140, 840),
@@ -83,6 +190,41 @@ class WorkloadDesignerDialogTest {
         }
         assertTrue(CommandDispatcher.loadReply(plan, result, CommandShell.CMD)
                 .contains("set HEAP=-Xms1g -Xmx1g\njmeter.bat"));
+    }
+
+    @Test
+    void showsOpenModelArrivalsInsteadOfTimerThroughput() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 500L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.STEP, 1.0, 2.0, 1.0,
+                        10L, 5L, null, null, null, null, null, java.util.List.of(), null, ArrivalMode.EVEN)));
+
+        assertEquals("Not used (Open Model arrivals)",
+                WorkloadDesignerDialog.throughputSamplesPerMinute(plan));
+    }
+
+    @Test
+    void displaysConvertedOriginalRedirectAlongsidePlanNotes() {
+        String redirectNote = "\"Checkout\" was converted to \"Checkout (Step)\". "
+                + "Editing \"Checkout (Step)\".";
+
+        assertEquals(redirectNote + "\nSoak guidance.",
+                WorkloadDesignerDialog.infoNotes(java.util.List.of("Soak guidance."), redirectNote));
+        assertEquals(redirectNote, WorkloadDesignerDialog.infoNotes(java.util.List.of(), redirectNote));
+    }
+
+    @Test
+    void customStageHeaderUsesTheCurrentTargetUnit() {
+        assertEquals("Target (samples/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals("Target (messages/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.MESSAGE_RATE));
+        assertEquals("Target (iterations/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.ITERATION_RATE));
+        assertEquals("Target (users)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.USERS));
     }
 
     @Test

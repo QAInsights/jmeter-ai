@@ -8,12 +8,23 @@ import java.util.regex.Pattern;
 
 /** Pure parser for the load targets and timing values supported by {@code @load}. */
 public final class WorkloadParser {
+    private static final String UNSUPPORTED_RAMP_DOWN =
+            "Ramp-down needs an Open Model shape (Step, Spike, Stress or Custom).";
     private static final String NUMBER = "(\\d+(?:\\.\\d+)?(?:k|m(?!s\\b))?)";
     private static final String UNIT = "(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)";
     private static final String DURATION = NUMBER + "\\s*-?\\s*" + UNIT + "\\b";
     private static final Pattern THOUSANDS = Pattern.compile("(\\d),(\\d{3})");
     private static final Pattern FRAGMENT_SPLIT = Pattern.compile("\\s*(?:,|;|\\band\\b|\\bwith\\b)\\s*");
-    private static final Pattern UNSUPPORTED_SHAPE = Pattern.compile("\\b(spike|steps?|stair|ramp\\s*[- ]?\\s*down|waves?)\\b");
+    private static final Pattern STEP_SHAPE = Pattern.compile(
+            "(?i)\\bstep\\s+" + NUMBER + "\\s+to\\s+" + NUMBER + "\\s+(rps|users?)"
+                    + "\\s+by\\s+" + NUMBER + "\\s+every\\s+" + DURATION);
+    private static final Pattern SPIKE_SHAPE = Pattern.compile(
+            "(?i)\\bspike\\s+from\\s+" + NUMBER + "\\s+to\\s+" + NUMBER + "\\s+(rps|users?)"
+                    + "\\s+for\\s+" + DURATION);
+    private static final Pattern STRESS_SHAPE = Pattern.compile(
+            "(?i)\\bstress\\s+up\\s+to\\s+" + NUMBER + "\\s+(rps|users?)\\s+step\\s+"
+                    + NUMBER + "\\s+every\\s+" + DURATION);
+    private static final Pattern RAMP_DOWN = Pattern.compile("(?i)\\bramp\\s*[- ]?\\s*down\\s+(" + DURATION + ")");
     private static final Pattern REQUEST_RATE = Pattern.compile(
             "(?i)(?<![\\w.])" + NUMBER
                     + "\\s*(rps|tps|qps|rpm|rph|requests?\\s*/\\s*(?:s|sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|hours)"
@@ -73,18 +84,18 @@ public final class WorkloadParser {
         body = normalizeThousands(body).toLowerCase(Locale.ROOT);
 
         Values values = new Values();
+        ShapeParse shapeParse = parseShape(body, values);
+        body = shapeParse.remaining();
         List<String> unsupported = new ArrayList<>();
+        if (shapeParse.unsupportedRampDown()) {
+            unsupported.add(UNSUPPORTED_RAMP_DOWN);
+        }
         List<String> unrecognized = new ArrayList<>();
         for (String raw : FRAGMENT_SPLIT.split(body)) {
             String fragment = raw.trim();
             if (fragment.isEmpty()) {
                 continue;
             }
-            if (UNSUPPORTED_SHAPE.matcher(fragment).find()) {
-                unsupported.add(fragment);
-                continue;
-            }
-
             String remaining = fragment;
             remaining = consumeMessageRate(remaining, values);
             remaining = consumeRate(remaining, values);
@@ -106,7 +117,96 @@ public final class WorkloadParser {
                 values.iterationsPerSecond, values.users,
                 values.rampSeconds, values.holdSeconds, values.thinkMillis, values.responseMillis,
                 values.agents, values.generatorVcpus, values.generatorRamGb,
-                unsupported, unrecognized, values.duplicates);
+                unsupported, unrecognized, values.duplicates, shapeParse.config());
+    }
+
+    private static ShapeParse parseShape(String body, Values values) {
+        WorkloadShape shape = WorkloadShape.LOAD;
+        WorkloadShapeConfig config = WorkloadShapeConfig.load();
+        String remaining = body;
+        Matcher rampDown = RAMP_DOWN.matcher(remaining);
+        Long rampDownSeconds = null;
+        if (rampDown.find()) {
+            rampDownSeconds = (long) Math.ceil(durationMillis(rampDown.group(2), rampDown.group(3)) / 1000.0);
+            remaining = removeMatch(remaining, rampDown.start(), rampDown.end());
+        }
+        Matcher match = STEP_SHAPE.matcher(remaining);
+        if (match.find()) {
+            shape = WorkloadShape.STEP;
+            double start = number(match.group(1));
+            double end = number(match.group(2));
+            double step = number(match.group(4));
+            long duration = (long) Math.ceil(durationMillis(match.group(5), match.group(6)) / 1000.0);
+            config = shapeConfig(shape, match.group(3), start, end, step, duration,
+                    null, null, null, null, null, rampDownSeconds);
+            setParsedShapeTarget(values, match.group(3), end);
+            remaining = removeMatch(remaining, match.start(), match.end());
+        } else {
+            match = SPIKE_SHAPE.matcher(remaining);
+            if (match.find()) {
+                shape = WorkloadShape.SPIKE;
+                double baseline = number(match.group(1));
+                double peak = number(match.group(2));
+                long duration = (long) Math.ceil(durationMillis(match.group(4), match.group(5)) / 1000.0);
+                config = shapeConfig(shape, match.group(3), null, null, null, null,
+                        baseline, peak, 60L, duration, 60L, rampDownSeconds);
+                setParsedShapeTarget(values, match.group(3), peak);
+                remaining = removeMatch(remaining, match.start(), match.end());
+            } else {
+                match = STRESS_SHAPE.matcher(remaining);
+                if (match.find()) {
+                    shape = WorkloadShape.STRESS;
+                    double ceiling = number(match.group(1));
+                    double step = number(match.group(3));
+                    long duration = (long) Math.ceil(durationMillis(match.group(4), match.group(5)) / 1000.0);
+                    config = shapeConfig(shape, match.group(2), 100.0, ceiling, step, duration,
+                            null, null, null, null, null, rampDownSeconds);
+                    setParsedShapeTarget(values, match.group(2), ceiling);
+                    remaining = removeMatch(remaining, match.start(), match.end());
+                } else if (remaining.matches("(?is)^\\s*(?:endurance|soak)\\b.*")) {
+                    shape = WorkloadShape.ENDURANCE;
+                    remaining = remaining.replaceFirst("(?is)^\\s*(?:endurance|soak)\\b", " ");
+                    config = new WorkloadShapeConfig(shape, null, null, null, null, null,
+                            null, null, null, null, null, List.of(), rampDownSeconds, ArrivalMode.RANDOM);
+                }
+            }
+        }
+        if (shape == WorkloadShape.LOAD && rampDownSeconds != null) {
+            config = new WorkloadShapeConfig(shape, null, null, null, null, null,
+                    null, null, null, null, null, List.of(), rampDownSeconds, ArrivalMode.RANDOM);
+        } else if (rampDownSeconds != null && config.rampDownSeconds() == null) {
+            config = new WorkloadShapeConfig(shape, config.startTarget(), config.endTarget(),
+                    config.stepTarget(), config.stepDurationSeconds(), config.rampSeconds(),
+                    config.baselineTarget(), config.peakTarget(), config.warmupSeconds(),
+                    config.spikeSeconds(), config.recoverySeconds(), config.customStages(),
+                    rampDownSeconds, config.arrivalMode());
+        }
+        return new ShapeParse(remaining, config, rampDownSeconds != null
+                && (shape == WorkloadShape.LOAD || shape == WorkloadShape.ENDURANCE));
+    }
+
+    private static WorkloadShapeConfig shapeConfig(WorkloadShape shape, String unit,
+                                                   Double start, Double end, Double step, Long stepDuration,
+                                                   Double baseline, Double peak, Long warmup,
+                                                   Long spike, Long recovery, Long rampDown) {
+        return new WorkloadShapeConfig(shape, start, end, step, stepDuration, null,
+                baseline, peak, warmup, spike, recovery, List.of(), rampDown, ArrivalMode.RANDOM);
+    }
+
+    private static void setParsedShapeTarget(Values values, String unit, double target) {
+        if (unit.startsWith("user")) {
+            values.set("users", (int) Math.ceil(target), () -> values.users = (int) Math.ceil(target));
+        } else {
+            values.set("requests per second", target,
+                    () -> values.requestsPerSecond = target);
+        }
+    }
+
+    private static String removeMatch(String text, int start, int end) {
+        return text.substring(0, start) + " ".repeat(end - start) + text.substring(end);
+    }
+
+    private record ShapeParse(String remaining, WorkloadShapeConfig config, boolean unsupportedRampDown) {
     }
 
     private static String normalizeThousands(String text) {

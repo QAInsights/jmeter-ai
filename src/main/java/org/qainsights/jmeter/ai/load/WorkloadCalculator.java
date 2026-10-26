@@ -18,6 +18,8 @@ public final class WorkloadCalculator {
             "Assumed 500 ms average response time. Measure it with a 1-user run (for example `@fix`) and update it.";
     private static final Pattern SAFE_PLAN_PATH = Pattern.compile("[A-Za-z0-9._/-]+");
     private static final String UNSAFE_CMD_PLAN_CHARACTERS = "\"%^&|<>";
+    private static final String ZERO_RAMP_NOTE =
+            "Ramps of 0 s are applied as 1 s so the hold before stays flat.";
     private static final Pattern VALID_HOST = Pattern.compile("[A-Za-z0-9._:-]+");
     private static final Pattern VALID_PREFIX = Pattern.compile("[A-Za-z0-9._-]+");
 
@@ -28,19 +30,27 @@ public final class WorkloadCalculator {
         validate(inputs);
         List<String> assumptions = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        List<String> stageNotes = new ArrayList<>();
+        WorkloadShapeConfig shapeConfig = inputs.shapeConfig();
+        WorkloadShape shape = shapeConfig.shape();
+        boolean openModel = shape.usesOpenModelThreadGroup();
+        List<WorkloadStage> stages = openModel ? buildStages(inputs, stageNotes) : List.of();
         long responseMillis = inputs.responseMillis() == null ? 500 : inputs.responseMillis();
         long thinkMillis = inputs.thinkMillis() == null ? 0 : inputs.thinkMillis();
-        long holdSeconds = inputs.holdSeconds() == null ? 600 : inputs.holdSeconds();
+        long defaultHold = shape == WorkloadShape.ENDURANCE ? 14_400 : 600;
+        long holdSeconds = inputs.holdSeconds() == null ? defaultHold : inputs.holdSeconds();
         if (inputs.responseMillis() == null) {
             assumptions.add(RESPONSE_ASSUMPTION);
         }
-        if (inputs.holdSeconds() == null) {
-            assumptions.add("Assumed a 600-second (10-minute) hold.");
+        if (inputs.holdSeconds() == null && !openModel) {
+            assumptions.add(shape == WorkloadShape.ENDURANCE
+                    ? "Assumed a 4-hour endurance hold."
+                    : "Assumed a 600-second (10-minute) hold.");
         }
         long rampSeconds = inputs.rampSeconds() == null
                 ? clamp(Math.round(holdSeconds * 0.1), 60, 900)
                 : inputs.rampSeconds();
-        if (inputs.rampSeconds() == null) {
+        if (inputs.rampSeconds() == null && !openModel) {
             assumptions.add("Assumed a " + rampSeconds
                     + "-second ramp-up (10% of the hold, clamped from 60 to 900 seconds).");
         }
@@ -76,13 +86,27 @@ public final class WorkloadCalculator {
             case MESSAGE_RATE -> inputs.targetValue() / inputs.messagesPerSample();
             case USERS -> inputs.targetValue() / secondsPerRequest;
         };
+        double peakIterationRate = openModel
+                ? stages.stream().mapToDouble(WorkloadStage::toRate).max().orElseThrow() : 0;
+        if (openModel) {
+            rps = peakIterationRate * inputs.samplersPerIteration();
+        }
         Double targetRps = inputs.targetType() == USERS
                 ? inputs.rateCapRps() : Double.valueOf(rps);
         Double rpm = null;
         Double expectedRps = null;
         int threads;
 
-        if (inputs.targetType() == USERS) {
+        if (openModel) {
+            targetRps = rps;
+            expectedRps = rps;
+            double iterationSeconds = inputs.samplersPerIteration() * secondsPerRequest;
+            double sizedThreads = Math.ceil(peakIterationRate * iterationSeconds * 1.5);
+            if (!Double.isFinite(sizedThreads) || sizedThreads > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("The calculated thread count is too large.");
+            }
+            threads = Math.max(1, (int) sizedThreads);
+        } else if (inputs.targetType() == USERS) {
             threads = (int) Math.ceil(inputs.targetValue());
             expectedRps = round2(rps);
             if (inputs.rateCapRps() != null) {
@@ -107,16 +131,22 @@ public final class WorkloadCalculator {
             threads = Math.max(1, (int) sizedThreads);
             rpm = round2(rps * 60);
         }
-        long durationSeconds = Math.addExact(rampSeconds, holdSeconds);
+        if (openModel) {
+            rampSeconds = stages.get(0).seconds();
+            holdSeconds = 0;
+        }
+        long durationSeconds = openModel
+                ? stages.stream().map(WorkloadStage::seconds).reduce(0L, Math::addExact)
+                : Math.addExact(rampSeconds, holdSeconds);
         boolean distributed = agents > 1 || !hosts.isEmpty();
         Integer perAgentThreads = distributed ? (int) Math.ceil(threads / (double) agents) : null;
         Double perAgentRpm = distributed && rpm != null ? round2(rpm / agents) : null;
         int rampThreads = perAgentThreads == null ? threads : perAgentThreads;
-        if (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50) {
+        if (!openModel && (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50)) {
             warnings.add("Steep ramp-up: more than 50 threads start per second, which can overload the generator and skew early results.");
         }
         int threadGeneratorsNeeded = ceilCount(threads, maxThreads);
-        double capacityTargetRps = inputs.targetType() == USERS ? expectedRps : rps;
+        double capacityTargetRps = openModel || inputs.targetType() == USERS ? expectedRps : rps;
         int cpuGeneratorsNeeded = cpuSamplesPerSecond == null
                 ? 0 : ceilCount(capacityTargetRps, cpuSamplesPerSecond);
         int generatorsNeeded = Math.max(1, Math.max(threadGeneratorsNeeded, cpuGeneratorsNeeded));
@@ -148,6 +178,20 @@ public final class WorkloadCalculator {
         SamplerMix samplerMix = SamplerMix.classify(inputs.samplerClasses());
         warnings.addAll(protocolWarnings(inputs.jdbcPools(), samplerMix, (int) threadsPerGenerator));
         List<String> notes = protocolNotes(samplerMix);
+        notes.addAll(stageNotes);
+        if (shape == WorkloadShape.ENDURANCE) {
+            notes.add("Soak preparation: disable View Results Tree and other heavy listeners, check CSV recycle/EOF behavior, leave heap headroom, and estimate results-file disk space.");
+        }
+        if (openModel) {
+            notes.add("Each OMTG arrival creates a new thread that runs one iteration. Cookies, logins and Once Only Controllers run for every arrival.");
+            notes.add(prefix + ".sN.rate values are iterations per second per generator; one arrival runs one iteration ("
+                    + inputs.samplersPerIteration() + " samples).");
+            notes.add("JMeter 5.5 or newer is required on every load generator.");
+            notes.add("Open Model Thread Group does not cap concurrency. A slow server can cause thread growth.");
+        }
+        if (shape == WorkloadShape.STRESS) {
+            notes.add("The stress plan does not stop by itself. Stop when errors or latency break your SLA.");
+        }
         if (inputs.targetType() == ITERATION_RATE) {
             notes.add("Samples per iteration counts each enabled sampler once; If, Loop, Throughput and Transaction (parent sample) controllers change the real number.");
         }
@@ -168,13 +212,24 @@ public final class WorkloadCalculator {
         if (cmdPlanFallback) {
             notes.add("The Windows cmd command uses plan.jmx because the plan name contains characters that cannot be safely quoted.");
         }
-        String command = cliCommand(planFile, prefix, threads, rampSeconds, durationSeconds, rpm,
+        String schedule = openModel ? openModelSchedule(stages, prefix, shapeConfig.arrivalMode(),
+                distributed ? agents : 1) : "";
+        String command = openModel
+                ? openModelCliCommand(planFile, prefix, stages, shapeConfig.arrivalMode(),
+                agents, hosts, heapPerGeneratorMb, CommandShell.BASH)
+                : cliCommand(planFile, prefix, threads, rampSeconds, durationSeconds, rpm,
                 thinkMillis, agents, perAgentThreads, perAgentRpm, hosts, heapPerGeneratorMb,
                 CommandShell.BASH);
-        String cmdCommand = cliCommand(cmdPlanFallback ? "plan.jmx" : planFile, prefix, threads,
+        String cmdCommand = openModel
+                ? openModelCliCommand(cmdPlanFallback ? "plan.jmx" : planFile, prefix, stages,
+                shapeConfig.arrivalMode(), agents, hosts, heapPerGeneratorMb, CommandShell.CMD)
+                : cliCommand(cmdPlanFallback ? "plan.jmx" : planFile, prefix, threads,
                 rampSeconds, durationSeconds, rpm, thinkMillis, agents, perAgentThreads,
                 perAgentRpm, hosts, heapPerGeneratorMb, CommandShell.CMD);
-        String powershellCommand = cliCommand(planFile, prefix, threads, rampSeconds,
+        String powershellCommand = openModel
+                ? openModelCliCommand(planFile, prefix, stages, shapeConfig.arrivalMode(),
+                agents, hosts, heapPerGeneratorMb, CommandShell.POWERSHELL)
+                : cliCommand(planFile, prefix, threads, rampSeconds,
                 durationSeconds, rpm, thinkMillis, agents, perAgentThreads, perAgentRpm,
                 hosts, heapPerGeneratorMb, CommandShell.POWERSHELL);
         return new WorkloadPlan(inputs.targetType(), inputs.targetValue(), threads,
@@ -183,12 +238,13 @@ public final class WorkloadCalculator {
                 prefix, assumptions, warnings, command, samplerMix, notes, hosts, maxThreads,
                 generatorsNeeded, heapPerGeneratorMb, capacityBasis, cpuSamplesPerSecond,
                 inputs.generatorVcpus(), inputs.generatorRamGb(), inputs.maxThreadsPerGenerator() != null,
-                cmdCommand, powershellCommand);
+                cmdCommand, powershellCommand, shapeConfig, stages, schedule);
     }
 
     private static void validate(WorkloadInputs inputs) {
-        if (inputs == null || inputs.targetType() == null || !Double.isFinite(inputs.targetValue())
-                || inputs.targetValue() <= 0) {
+        boolean openModel = inputs != null && inputs.shapeConfig().shape().usesOpenModelThreadGroup();
+        if (inputs == null || inputs.targetType() == null
+                || !openModel && (!Double.isFinite(inputs.targetValue()) || inputs.targetValue() <= 0)) {
             throw new IllegalArgumentException("Enter a positive target value.");
         }
         if (inputs.targetType() != USERS && inputs.rateCapRps() != null) {
@@ -250,6 +306,241 @@ public final class WorkloadCalculator {
                 && !VALID_PREFIX.matcher(inputs.propertyPrefix()).matches()) {
             throw new IllegalArgumentException("Property prefix can use letters, numbers, dots, underscores, and hyphens only.");
         }
+    }
+
+    static List<WorkloadStage> buildStages(WorkloadInputs inputs) {
+        return buildStages(inputs, new ArrayList<>());
+    }
+
+    private static List<WorkloadStage> buildStages(WorkloadInputs inputs, List<String> notes) {
+        WorkloadShapeConfig config = inputs.shapeConfig();
+        WorkloadShape shape = config.shape();
+        long responseMillis = inputs.responseMillis() == null ? 500 : inputs.responseMillis();
+        long thinkMillis = inputs.thinkMillis() == null ? 0 : inputs.thinkMillis();
+        List<WorkloadStage> stages = new ArrayList<>();
+        switch (shape) {
+            case STEP -> {
+                double start = targetToIterations(config.startTarget(), inputs);
+                double end = targetToIterations(config.endTarget(), inputs);
+                double increment = targetToIterations(config.stepTarget(), inputs);
+                long hold = positiveDuration(config.stepDurationSeconds(), 300, "Step duration");
+                long ramp = nonNegativeDuration(config.rampSeconds(),
+                        Math.min(10, hold / 5), "Step ramp");
+                if (end < start || increment <= 0) {
+                    throw new IllegalArgumentException("Step end must be at or above its start, with a positive step size.");
+                }
+                addRampStage(stages, 0, start, ramp, notes);
+                addStage(stages, start, start, hold);
+                double current = start;
+                for (int count = 0; current < end - 1e-9; count++) {
+                    if (count > 1000) {
+                        throw new IllegalArgumentException("A step shape can contain at most 1000 levels.");
+                    }
+                    double next = Math.min(end, current + increment);
+                    addRampStage(stages, current, next, ramp, notes);
+                    addStage(stages, next, next, hold);
+                    current = next;
+                }
+            }
+            case SPIKE -> {
+                double baseline = targetToIterations(config.baselineTarget(), inputs);
+                double peak = targetToIterations(config.peakTarget(), inputs);
+                long warmup = positiveDuration(config.warmupSeconds(), 60, "Warm-up hold");
+                long spike = positiveDuration(config.spikeSeconds(), 60, "Spike duration");
+                long recovery = positiveDuration(config.recoverySeconds(), 60, "Recovery hold");
+                if (peak <= baseline) {
+                    throw new IllegalArgumentException("Spike peak must be greater than its baseline.");
+                }
+                addStage(stages, 0, baseline, 5);
+                addStage(stages, baseline, baseline, warmup);
+                addStage(stages, baseline, peak, 5);
+                addStage(stages, peak, peak, spike);
+                addStage(stages, peak, baseline, 5);
+                addStage(stages, baseline, baseline, recovery);
+            }
+            case STRESS -> {
+                double start = targetToIterations(config.startTarget(), inputs);
+                double ceiling = targetToIterations(config.endTarget(), inputs);
+                double increment = targetToIterations(config.stepTarget(), inputs);
+                long interval = positiveDuration(config.stepDurationSeconds(), 120, "Stress step duration");
+                if (ceiling < start || increment <= 0) {
+                    throw new IllegalArgumentException("Stress ceiling must be at or above its start, with a positive step size.");
+                }
+                addStage(stages, 0, start, 10);
+                double current = start;
+                for (int count = 0; current < ceiling - 1e-9; count++) {
+                    if (count > 1000) {
+                        throw new IllegalArgumentException("A stress shape can contain at most 1000 levels.");
+                    }
+                    double next = Math.min(ceiling, current + increment);
+                    addStage(stages, current, next, interval);
+                    current = next;
+                }
+                if (current == start) {
+                    addStage(stages, start, start, interval);
+                }
+            }
+            case CUSTOM -> {
+                int maxExpandedStages = config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 20 : 21;
+                if (config.customStages().isEmpty()) {
+                    throw new IllegalArgumentException("Custom shapes need at least 1 stage.");
+                }
+                if (config.customStages().size() > maxExpandedStages) {
+                    int maxTotalStages = maxExpandedStages
+                            + (config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 1 : 0);
+                    throw new IllegalArgumentException("Custom shapes allow at most 10 rows (up to "
+                            + maxTotalStages + " stages including ramps).");
+                }
+                for (WorkloadStage stage : config.customStages()) {
+                    addRampStage(stages, stage.fromRate(), stage.toRate(), stage.seconds(), notes);
+                }
+            }
+            default -> throw new IllegalArgumentException("Select a shaped workload.");
+        }
+        if (config.rampDownSeconds() != null && config.rampDownSeconds() > 0) {
+            double lastRate = stages.get(stages.size() - 1).toRate();
+            stages.add(new WorkloadStage(lastRate, 0, config.rampDownSeconds()));
+        }
+        if (stages.stream().noneMatch(stage -> stage.toRate() > 0)) {
+            throw new IllegalArgumentException("Enter a positive workload rate.");
+        }
+        double iterationSeconds = inputs.samplersPerIteration()
+                * (responseMillis + thinkMillis) / 1000.0;
+        if (!Double.isFinite(iterationSeconds) || iterationSeconds <= 0) {
+            throw new IllegalArgumentException("Average response time must be greater than zero.");
+        }
+        return List.copyOf(stages);
+    }
+
+    public static double toIterationsPerSecond(double target, WorkloadInputs.TargetType targetType,
+                                               int samplersPerIteration, double messagesPerSample,
+                                               long responseMillis, long thinkMillis) {
+        if (!Double.isFinite(target) || target < 0 || samplersPerIteration < 1) {
+            throw new IllegalArgumentException("Enter a valid workload target.");
+        }
+        return switch (targetType) {
+            case REQUEST_RATE -> target / samplersPerIteration;
+            case MESSAGE_RATE -> target / (messagesPerSample * samplersPerIteration);
+            case ITERATION_RATE -> target;
+            case USERS -> {
+                double iterationSeconds = samplersPerIteration * (responseMillis + thinkMillis) / 1000.0;
+                if (iterationSeconds <= 0) {
+                    throw new IllegalArgumentException("Average response time must be greater than zero.");
+                }
+                yield target / iterationSeconds;
+            }
+        };
+    }
+
+    private static double targetToIterations(Double target, WorkloadInputs inputs) {
+        if (target == null || !Double.isFinite(target) || target < 0) {
+            throw new IllegalArgumentException("Enter valid shape rates.");
+        }
+        return toIterationsPerSecond(target, inputs.targetType(), inputs.samplersPerIteration(),
+                inputs.messagesPerSample() == null ? 1 : inputs.messagesPerSample(),
+                inputs.responseMillis() == null ? 500 : inputs.responseMillis(),
+                inputs.thinkMillis() == null ? 0 : inputs.thinkMillis());
+    }
+
+    private static long positiveDuration(Long value, long fallback, String label) {
+        long duration = value == null ? fallback : value;
+        if (duration <= 0) {
+            throw new IllegalArgumentException(label + " must be greater than zero.");
+        }
+        return duration;
+    }
+
+    private static long nonNegativeDuration(Long value, long fallback, String label) {
+        long duration = value == null ? fallback : value;
+        if (duration < 0) {
+            throw new IllegalArgumentException(label + " cannot be negative.");
+        }
+        return duration;
+    }
+
+    private static void addStage(List<WorkloadStage> stages, double from, double to, long seconds) {
+        stages.add(new WorkloadStage(from, to, seconds));
+    }
+
+    private static void addRampStage(List<WorkloadStage> stages, double from, double to, long seconds,
+                                     List<String> notes) {
+        if (seconds == 0 && Double.compare(from, to) == 0) {
+            return;
+        }
+        if (seconds == 0) {
+            seconds = 1;
+            if (!notes.contains(ZERO_RAMP_NOTE)) {
+                notes.add(ZERO_RAMP_NOTE);
+            }
+        }
+        addStage(stages, from, to, seconds);
+    }
+
+    static String openModelSchedule(List<WorkloadStage> stages, String prefix,
+                                    ArrivalMode arrivalMode, int agents) {
+        StringBuilder schedule = new StringBuilder();
+        int perGeneratorCount = Math.max(1, agents);
+        for (int index = 0; index < stages.size(); index++) {
+            WorkloadStage stage = stages.get(index);
+            if (!schedule.isEmpty()) {
+                schedule.append(' ');
+            }
+            double segmentStartRate = stage.fromRate() / perGeneratorCount;
+            schedule.append("rate(${__P(").append(prefix).append(".s").append(index + 1)
+                    .append(".rate,").append(formatRate(segmentStartRate))
+                    .append(")}/sec) ")
+                    .append(arrivalMode.scheduleName()).append("(${__P(")
+                    .append(prefix).append(".s").append(index + 1).append(".secs,")
+                    .append(stage.seconds()).append(")} sec)");
+        }
+        WorkloadStage last = stages.get(stages.size() - 1);
+        schedule.append(" rate(${__P(").append(prefix).append(".s").append(stages.size() + 1)
+                .append(".rate,").append(formatRate(last.toRate() / perGeneratorCount))
+                .append(")}/sec)");
+        return schedule.toString();
+    }
+
+    private static String formatRate(double rate) {
+        return BigDecimal.valueOf(rate).setScale(4, RoundingMode.HALF_UP)
+                .stripTrailingZeros().toPlainString();
+    }
+
+    private static String openModelCliCommand(String plan, String prefix, List<WorkloadStage> stages,
+                                              ArrivalMode arrivalMode, int agents, List<String> hosts,
+                                              long heapPerGeneratorMb, CommandShell shell) {
+        String heap = heapSize(heapPerGeneratorMb);
+        StringBuilder command = new StringBuilder(switch (shell) {
+            case BASH -> "export HEAP=\"-Xms" + heap + " -Xmx" + heap + "\"\n";
+            case CMD -> "set HEAP=-Xms" + heap + " -Xmx" + heap + "\n";
+            case POWERSHELL -> "$env:HEAP = \"-Xms" + heap + " -Xmx" + heap + "\"\n";
+        });
+        boolean distributed = agents > 1 || !hosts.isEmpty();
+        String executable = shell == CommandShell.BASH ? "jmeter" : "jmeter.bat";
+        command.append(executable).append(" -n -t ").append(planPath(plan, shell));
+        if (distributed) {
+            List<String> names = hosts;
+            if (names.isEmpty()) {
+                names = new ArrayList<>();
+                for (int index = 1; index <= agents; index++) {
+                    names.add("agent" + index);
+                }
+            }
+            command.append(" -R ").append(shellArgument(String.join(",", names), shell));
+        }
+        String option = distributed ? "-G" : "-J";
+        int perGeneratorCount = distributed ? Math.max(1, agents) : 1;
+        for (int index = 0; index < stages.size(); index++) {
+            WorkloadStage stage = stages.get(index);
+            String stagePrefix = prefix + ".s" + (index + 1);
+            command.append(' ').append(shellArgument(option + stagePrefix + ".rate="
+                    + formatRate(stage.fromRate() / perGeneratorCount), shell));
+            command.append(' ').append(shellArgument(option + stagePrefix + ".secs="
+                    + stage.seconds(), shell));
+        }
+        WorkloadStage last = stages.get(stages.size() - 1);
+        command.append(' ').append(shellArgument(option + prefix + ".s" + (stages.size() + 1)
+                + ".rate=" + formatRate(last.toRate() / perGeneratorCount), shell));
+        return command.append(" -l results.jtl -e -o report").toString();
     }
 
     static boolean validGeneratorHost(String host) {
