@@ -394,6 +394,24 @@ class WorkloadApplierTest {
     }
 
     @Test
+    void undoMovesChildrenAddedToOpenModelBackToTheOriginalGroup() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        JMeterTreeNode originalSampler = (JMeterTreeNode) fixture.groupNode.getChildAt(0);
+        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
+        JMeterTreeNode parent = (JMeterTreeNode) fixture.groupNode.getParent();
+        JMeterTreeNode openModelNode = (JMeterTreeNode) parent.getChildAt(parent.getIndex(fixture.groupNode) + 1);
+        JMeterTreeNode addedSampler = fixture.model.addComponent(new HTTPSamplerProxy(), openModelNode);
+
+        WorkloadApplier.undoLast(fixture.model);
+
+        assertEquals(-1, parent.getIndex(openModelNode));
+        assertTrue(fixture.groupNode.isEnabled());
+        assertEquals(2, fixture.groupNode.getChildCount());
+        assertEquals(originalSampler, fixture.groupNode.getChildAt(0));
+        assertEquals(addedSampler, fixture.groupNode.getChildAt(1));
+    }
+
+    @Test
     void rejectsReapplyingToTheDisabledSourceAfterConversion() throws Exception {
         Fixture fixture = fixture("Checkout", true);
         WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());

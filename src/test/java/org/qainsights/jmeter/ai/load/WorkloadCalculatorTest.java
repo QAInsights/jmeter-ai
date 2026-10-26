@@ -337,8 +337,27 @@ class WorkloadCalculatorTest {
     }
 
     @Test
-    void customShapeRejectsMoreThanTenStages() {
-        List<WorkloadStage> stages = java.util.stream.IntStream.range(0, 11)
+    void customShapeAllowsTenRowsWithRampsAndRampDown() {
+        List<WorkloadStage> stages = new java.util.ArrayList<>();
+        double previous = 0;
+        for (int row = 1; row <= 10; row++) {
+            double rate = row * 10.0;
+            stages.add(new WorkloadStage(previous, rate, 10));
+            stages.add(new WorkloadStage(rate, rate, 60));
+            previous = rate;
+        }
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                stages, 5L, ArrivalMode.RANDOM);
+
+        WorkloadPlan plan = shaped(config);
+
+        assertTrue(plan.openModelSchedule().contains("load.s21.secs,5"));
+    }
+
+    @Test
+    void customShapeRejectsMoreThanTwentyOneExpandedStages() {
+        List<WorkloadStage> stages = java.util.stream.IntStream.range(0, 22)
                 .mapToObj(index -> new WorkloadStage(index, index + 1, 1))
                 .toList();
         WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,

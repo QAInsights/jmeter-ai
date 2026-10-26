@@ -74,6 +74,9 @@ import org.qainsights.jmeter.ai.utils.ProviderErrors;
 
 /** Modal, deterministic workload editor with a live load-shape preview. */
 public final class WorkloadDesignerDialog extends JDialog {
+    private static final int MAX_CUSTOM_ROWS = 10;
+    private static final String OPEN_MODEL_ASK_AI_TOOLTIP = "Ask AI fills Load and Endurance workloads.";
+
     private final LoadCommandHandler.Preparation preparation;
     private final Consumer<Completion> onFinish;
     private final FormPanel form = new FormPanel();
@@ -428,7 +431,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         JButton add = new JButton("Add stage");
         JButton remove = new JButton("Remove");
         add.addActionListener(event -> {
-            if (customStageModel.getRowCount() < 10) {
+            if (customStageModel.getRowCount() < MAX_CUSTOM_ROWS) {
                 customStageModel.addRow(new Object[]{"200", "10", "60"});
                 updateCustomTableHeight();
                 updatePreview();
@@ -486,6 +489,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void updateShapeRows() {
         WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
         boolean openModel = shape != null && shape.usesOpenModelThreadGroup();
+        askAiButton.setEnabled(askAiEnabledForShape(shape));
+        askAiButton.setToolTipText(askAiTooltipForShape(shape));
         targetRowVisibility(openModel);
         for (Map.Entry<WorkloadShape, List<FormRow>> entry : shapeRows.entrySet()) {
             boolean visible = isShapeRowVisible(entry.getKey(), shape);
@@ -513,6 +518,26 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     static boolean isShapeRowVisible(WorkloadShape rowShape, WorkloadShape selectedShape) {
         return rowShape == selectedShape;
+    }
+
+    static boolean askAiEnabledForShape(WorkloadShape shape) {
+        return shape == WorkloadShape.LOAD || shape == WorkloadShape.ENDURANCE;
+    }
+
+    static String askAiTooltipForShape(WorkloadShape shape) {
+        return shape != null && shape.usesOpenModelThreadGroup() ? OPEN_MODEL_ASK_AI_TOOLTIP : null;
+    }
+
+    static boolean customRowCountWithinLimit(int rowCount) {
+        return rowCount >= 1 && rowCount <= MAX_CUSTOM_ROWS;
+    }
+
+    static boolean stopEditingAndRecompute(JTable table, Runnable recompute) {
+        if (table.isEditing() && (table.getCellEditor() == null || !table.getCellEditor().stopCellEditing())) {
+            return false;
+        }
+        recompute.run();
+        return true;
     }
 
     private void targetRowVisibility(boolean hidden) {
@@ -1110,14 +1135,19 @@ public final class WorkloadDesignerDialog extends JDialog {
                 scriptHeavy);
         WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
         String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
-        evaluation = WorkloadFormState.evaluate(targetType,
-                target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
-                (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
-                agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context,
-                shapeConfigForForm(targetType, samplers));
+        String shapeError = shapeInputError();
+        if (shapeError == null) {
+            evaluation = WorkloadFormState.evaluate(targetType,
+                    target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
+                    (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
+                    agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context,
+                    shapeConfigForForm(targetType, samplers));
+        } else {
+            evaluation = new WorkloadFormState.Evaluation(null, shapeError);
+        }
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
         errorLabel.setText(error == null || error.isBlank() ? " " : error);
-        applyButton.setEnabled(samplers > 0 && evaluation.valid());
+        applyButton.setEnabled(canApply(samplers, evaluation));
         WorkloadPlan plan = evaluation.plan();
         chart.setPlan(plan);
         if (plan != null) {
@@ -1206,6 +1236,90 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
+    private String shapeInputError() {
+        WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
+        List<String> errors = new ArrayList<>();
+        if (shape.usesOpenModelThreadGroup()) {
+            addShapeFieldError(errors, rampDown.getText(), "Ramp down", true);
+        }
+        switch (shape) {
+            case STEP -> {
+                addShapeFieldError(errors, stepStart.getText(), "Step start target", false);
+                addShapeFieldError(errors, stepEnd.getText(), "Step end target", false);
+                addShapeFieldError(errors, stepSize.getText(), "Step size", false);
+                addShapeFieldError(errors, stepDuration.getText(), "Step duration", true);
+                addShapeFieldError(errors, stepRamp.getText(), "Ramp per step", true);
+            }
+            case SPIKE -> {
+                addShapeFieldError(errors, spikeBaseline.getText(), "Spike baseline", false);
+                addShapeFieldError(errors, spikePeak.getText(), "Spike peak", false);
+                addShapeFieldError(errors, spikeWarmup.getText(), "Warm-up hold", true);
+                addShapeFieldError(errors, spikeDuration.getText(), "Spike duration", true);
+                addShapeFieldError(errors, spikeRecovery.getText(), "Recovery hold", true);
+            }
+            case STRESS -> {
+                addShapeFieldError(errors, stressStart.getText(), "Stress start target", false);
+                addShapeFieldError(errors, stressCeiling.getText(), "Stress ceiling", false);
+                addShapeFieldError(errors, stressStep.getText(), "Stress step size", false);
+                addShapeFieldError(errors, stressDuration.getText(), "Stress step duration", true);
+            }
+            case CUSTOM -> {
+                if (!customRowCountWithinLimit(customStageModel.getRowCount())) {
+                    errors.add("Custom shapes require between 1 and 10 rows.");
+                } else {
+                    for (int row = 0; row < customStageModel.getRowCount(); row++) {
+                        int stage = row + 1;
+                        addShapeFieldError(errors, customCellText(row, 0),
+                                "Custom stage " + stage + " target", false);
+                        addShapeFieldError(errors, customCellText(row, 1),
+                                "Custom stage " + stage + " ramp", true);
+                        addShapeFieldError(errors, customCellText(row, 2),
+                                "Custom stage " + stage + " hold", true);
+                    }
+                }
+            }
+            default -> {
+            }
+        }
+        for (String error : errors) {
+            if (error != null) {
+                return error;
+            }
+        }
+        return null;
+    }
+
+    private String customCellText(int row, int column) {
+        Object value = customStageModel.getValueAt(row, column);
+        return value == null ? "" : value.toString();
+    }
+
+    private static void addShapeFieldError(List<String> errors, String value, String label, boolean wholeNumber) {
+        errors.add(shapeFieldError(value, label, wholeNumber));
+    }
+
+    static String shapeFieldError(String value, String label, boolean wholeNumber) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        if (wholeNumber) {
+            Long parsed = parseLong(value);
+            if (parsed == null) {
+                return label + " must be a whole number.";
+            }
+            return parsed < 0 ? label + " cannot be negative." : null;
+        }
+        Double parsed = parseDouble(value);
+        if (parsed == null) {
+            return label + " must be a number.";
+        }
+        return parsed < 0 ? label + " cannot be negative." : null;
+    }
+
+    static boolean canApply(int samplerCount, WorkloadFormState.Evaluation evaluation) {
+        return samplerCount > 0 && evaluation != null && evaluation.valid();
+    }
+
     private WorkloadShapeConfig shapeConfigForForm(WorkloadInputs.TargetType targetType, int samplers) {
         WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
         Long configuredRampDown = parseLong(rampDown.getText());
@@ -1213,6 +1327,9 @@ public final class WorkloadDesignerDialog extends JDialog {
                 ? configuredRampDown == null ? 120L : configuredRampDown : null;
         List<WorkloadStage> customStages = new ArrayList<>();
         if (shape == WorkloadShape.CUSTOM) {
+            if (!customRowCountWithinLimit(customStageModel.getRowCount())) {
+                throw new IllegalArgumentException("Custom shapes require between 1 and 10 rows.");
+            }
             long responseMillis = parseLong(response.getText()) == null ? 500 : parseLong(response.getText());
             long thinkMillis = parseLong(think.getText()) == null ? 0 : parseLong(think.getText());
             double messagesPerSampleValue = parseDouble(messagesPerSample.getText()) == null
@@ -1273,7 +1390,14 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void apply() {
-        if (completed || evaluation == null || !evaluation.valid()) {
+        if (completed) {
+            return;
+        }
+        if (!stopEditingAndRecompute(customStagesTable, this::updatePreview)) {
+            errorLabel.setText("Finish editing the Custom stages before applying.");
+            return;
+        }
+        if (evaluation == null || !evaluation.valid()) {
             return;
         }
         try {

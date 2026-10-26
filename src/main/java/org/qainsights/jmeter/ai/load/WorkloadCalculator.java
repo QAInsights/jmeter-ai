@@ -377,7 +377,8 @@ public final class WorkloadCalculator {
                 }
             }
             case CUSTOM -> {
-                if (config.customStages().isEmpty() || config.customStages().size() > 10) {
+                int maxExpandedStages = config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 20 : 21;
+                if (config.customStages().isEmpty() || config.customStages().size() > maxExpandedStages) {
                     throw new IllegalArgumentException("Custom shapes require between 1 and 10 stages.");
                 }
                 stages.addAll(config.customStages());

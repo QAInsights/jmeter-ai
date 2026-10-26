@@ -83,7 +83,7 @@ public final class WorkloadApplier {
                 openModelNode = new JMeterTreeNode(openModel, model);
                 model.insertNodeInto(openModelNode, parent, parent.getIndex(selectedNode) + 1);
                 added.add(openModelNode);
-                TreeMigration migration = new TreeMigration(selectedNode, openModelNode, children);
+                TreeMigration migration = new TreeMigration(selectedNode, openModelNode);
                 migrations.add(migration);
                 for (int index = 0; index < children.size(); index++) {
                     JMeterTreeNode child = children.get(index);
@@ -413,12 +413,11 @@ public final class WorkloadApplier {
             }
             for (int index = migrations.size() - 1; index >= 0; index--) {
                 TreeMigration migration = migrations.get(index);
-                for (int childIndex = 0; childIndex < migration.children().size(); childIndex++) {
-                    JMeterTreeNode child = migration.children().get(childIndex);
-                    if (child.getParent() != null) {
-                        model.removeNodeFromParent(child);
-                    }
-                    model.insertNodeInto(child, migration.originalNode(), childIndex);
+                while (migration.openModelNode().getChildCount() > 0) {
+                    JMeterTreeNode child = (JMeterTreeNode) migration.openModelNode().getChildAt(0);
+                    model.removeNodeFromParent(child);
+                    model.insertNodeInto(child, migration.originalNode(),
+                            migration.originalNode().getChildCount());
                 }
             }
             for (TreeMigration migration : migrations) {
@@ -624,11 +623,7 @@ public final class WorkloadApplier {
     private record EnabledSnapshot(JMeterTreeNode node, boolean enabled) {
     }
 
-    private record TreeMigration(JMeterTreeNode originalNode, JMeterTreeNode openModelNode,
-                                 List<JMeterTreeNode> children) {
-        private TreeMigration {
-            children = List.copyOf(children);
-        }
+    private record TreeMigration(JMeterTreeNode originalNode, JMeterTreeNode openModelNode) {
     }
 
     private record LastApplied(JMeterTreeNode threadGroup, List<PropertySnapshot> properties,

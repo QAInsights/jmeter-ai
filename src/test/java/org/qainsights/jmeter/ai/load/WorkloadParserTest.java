@@ -152,6 +152,17 @@ class WorkloadParserTest {
     }
 
     @Test
+    void reportsRampDownAsUnsupportedForLoadAndEndurance() {
+        String message = "Ramp-down needs an Open Model shape (Step, Spike, Stress or Custom).";
+
+        WorkloadSpec load = WorkloadParser.parse("@load 200 rps ramp down 2 min");
+        WorkloadSpec endurance = WorkloadParser.parse("@load endurance 200 rps for 8 h, ramp down 2 min");
+
+        assertTrue(load.unsupported().contains(message));
+        assertTrue(endurance.unsupported().contains(message));
+    }
+
+    @Test
     void unknownShapeWordsFallBackToLoad() {
         WorkloadSpec spec = WorkloadParser.parse("200 rps wave");
 

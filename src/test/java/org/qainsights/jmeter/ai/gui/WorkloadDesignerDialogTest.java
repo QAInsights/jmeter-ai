@@ -9,18 +9,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
+import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
@@ -71,6 +75,69 @@ class WorkloadDesignerDialogTest {
         assertTrue(WorkloadShape.CUSTOM.usesOpenModelThreadGroup());
         assertTrue(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.STEP));
         assertFalse(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.SPIKE));
+    }
+
+    @Test
+    void askAiIsLimitedToLoadAndEnduranceShapes() {
+        assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.LOAD));
+        assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.ENDURANCE));
+        assertFalse(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.STEP));
+        assertEquals("Ask AI fills Load and Endurance workloads.",
+                WorkloadDesignerDialog.askAiTooltipForShape(WorkloadShape.CUSTOM));
+    }
+
+    @Test
+    void customShapeRowLimitIsCheckedBeforeStageExpansion() {
+        assertTrue(WorkloadDesignerDialog.customRowCountWithinLimit(10));
+        assertFalse(WorkloadDesignerDialog.customRowCountWithinLimit(11));
+    }
+
+    @Test
+    void invalidShapeFieldTextNamesTheFieldAndDisablesApply() {
+        String rateError = WorkloadDesignerDialog.shapeFieldError("oops", "Step start target", false);
+        assertEquals("Step start target must be a number.", rateError);
+        assertEquals("Spike duration must be a whole number.",
+                WorkloadDesignerDialog.shapeFieldError("2.5", "Spike duration", true));
+        assertEquals("Ramp down must be a whole number.",
+                WorkloadDesignerDialog.shapeFieldError("bad", "Ramp down", true));
+        assertEquals("Custom stage 2 target must be a number.",
+                WorkloadDesignerDialog.shapeFieldError("oops", "Custom stage 2 target", false));
+        assertEquals(null, WorkloadDesignerDialog.shapeFieldError("", "Step size", false));
+        assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, rateError)));
+    }
+
+    @Test
+    void applyCommitsAnActiveCustomCellBeforeRecomputing() {
+        DefaultTableModel model = new DefaultTableModel(new Object[][]{{"100"}}, new Object[]{"Target"});
+        JTable table = new JTable(model);
+        table.setDefaultEditor(Object.class, new DefaultCellEditor(new JTextField()));
+        assertTrue(table.editCellAt(0, 0));
+        ((JTextField) table.getEditorComponent()).setText("300");
+        AtomicInteger recomputes = new AtomicInteger();
+
+        assertTrue(WorkloadDesignerDialog.stopEditingAndRecompute(table, recomputes::incrementAndGet));
+
+        assertEquals("300", model.getValueAt(0, 0));
+        assertEquals(1, recomputes.get());
+    }
+
+    @Test
+    void applyDoesNotRecomputeWhenCustomCellCommitFails() {
+        DefaultTableModel model = new DefaultTableModel(new Object[][]{{"100"}}, new Object[]{"Target"});
+        JTable table = new JTable(model);
+        table.setDefaultEditor(Object.class, new DefaultCellEditor(new JTextField()) {
+            @Override
+            public boolean stopCellEditing() {
+                return false;
+            }
+        });
+        assertTrue(table.editCellAt(0, 0));
+        AtomicInteger recomputes = new AtomicInteger();
+
+        assertFalse(WorkloadDesignerDialog.stopEditingAndRecompute(table, recomputes::incrementAndGet));
+
+        assertEquals(0, recomputes.get());
+        assertTrue(table.isEditing());
     }
 
     @Test

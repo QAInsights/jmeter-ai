@@ -8,6 +8,8 @@ import java.util.regex.Pattern;
 
 /** Pure parser for the load targets and timing values supported by {@code @load}. */
 public final class WorkloadParser {
+    private static final String UNSUPPORTED_RAMP_DOWN =
+            "Ramp-down needs an Open Model shape (Step, Spike, Stress or Custom).";
     private static final String NUMBER = "(\\d+(?:\\.\\d+)?(?:k|m(?!s\\b))?)";
     private static final String UNIT = "(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)";
     private static final String DURATION = NUMBER + "\\s*-?\\s*" + UNIT + "\\b";
@@ -85,6 +87,9 @@ public final class WorkloadParser {
         ShapeParse shapeParse = parseShape(body, values);
         body = shapeParse.remaining();
         List<String> unsupported = new ArrayList<>();
+        if (shapeParse.unsupportedRampDown()) {
+            unsupported.add(UNSUPPORTED_RAMP_DOWN);
+        }
         List<String> unrecognized = new ArrayList<>();
         for (String raw : FRAGMENT_SPLIT.split(body)) {
             String fragment = raw.trim();
@@ -176,7 +181,8 @@ public final class WorkloadParser {
                     config.spikeSeconds(), config.recoverySeconds(), config.customStages(),
                     rampDownSeconds, config.arrivalMode());
         }
-        return new ShapeParse(remaining, config);
+        return new ShapeParse(remaining, config, rampDownSeconds != null
+                && (shape == WorkloadShape.LOAD || shape == WorkloadShape.ENDURANCE));
     }
 
     private static WorkloadShapeConfig shapeConfig(WorkloadShape shape, String unit,
@@ -200,7 +206,7 @@ public final class WorkloadParser {
         return text.substring(0, start) + " ".repeat(end - start) + text.substring(end);
     }
 
-    private record ShapeParse(String remaining, WorkloadShapeConfig config) {
+    private record ShapeParse(String remaining, WorkloadShapeConfig config, boolean unsupportedRampDown) {
     }
 
     private static String normalizeThousands(String text) {
