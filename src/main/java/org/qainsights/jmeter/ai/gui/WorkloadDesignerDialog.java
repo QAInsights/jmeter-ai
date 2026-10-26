@@ -315,8 +315,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         formRows.add(hostsRow);
         addFormRow("Generator vCPUs", generatorVcpus);
         addFormRow("Generator RAM (GB)", generatorRamGb);
-        addFormRow("Measured max threads per generator (optional)", maxThreadsPerGenerator);
-        addFormRow("Load generators (default 1)", agents);
+        addFormRow("<html>Measured max threads per<br>generator (optional)</html>", maxThreadsPerGenerator);
+        addFormRow("<html>Load generators<br>(default 1)</html>", agents);
         addFormRow("Samples/s per vCPU", samplesPerVcpu);
         addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
