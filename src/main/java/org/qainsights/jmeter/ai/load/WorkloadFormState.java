@@ -28,13 +28,15 @@ public final class WorkloadFormState {
             Long thinkMs = optionalLong(think, "Think time must be a whole number of milliseconds.");
             Long rampSeconds = optionalDuration(ramp, rampUnit);
             Long holdSeconds = optionalDuration(hold, holdUnit);
-            Integer agentCount = optionalInteger(agents);
+            Integer agentCount = optionalInteger(agents, "Load generators must be a whole number.");
             Double messagesPerSample = targetType == WorkloadInputs.TargetType.MESSAGE_RATE
                     ? optionalNumber(context.messagesPerSample(),
                             "Messages per sample must be greater than zero.")
                     : null;
-            Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator());
-            Integer generatorVcpus = optionalInteger(context.generatorVcpus());
+            Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator(),
+                    "Measured max threads per generator must be a whole number.");
+            Integer generatorVcpus = optionalInteger(context.generatorVcpus(),
+                    "Generator vCPUs must be a whole number.");
             if (generatorVcpus != null && generatorVcpus < 1) {
                 throw new IllegalArgumentException("Generator vCPUs must be at least 1.");
             }
@@ -86,14 +88,14 @@ public final class WorkloadFormState {
         }
     }
 
-    private static Integer optionalInteger(String value) {
+    private static Integer optionalInteger(String value, String error) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Load generators must be a whole number.");
+            throw new IllegalArgumentException(error);
         }
     }
 

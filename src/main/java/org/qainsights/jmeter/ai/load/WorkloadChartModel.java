@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.load;
 
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -72,14 +74,19 @@ public final class WorkloadChartModel {
 
     static List<Double> axisTicks(double maximum) {
         double step = maximum / 4;
-        return List.of(0.0, step, step * 2, step * 3, maximum);
+        List<Double> ticks = new ArrayList<>(5);
+        for (int index = 0; index <= 4; index++) {
+            ticks.add(index * step);
+        }
+        return List.copyOf(ticks);
     }
 
     static String formatAxisTick(double value) {
         if (Math.abs(value - Math.rint(value)) < 1e-9) {
             return Long.toString(Math.round(value));
         }
-        return WorkloadCalculator.format(value);
+        return new BigDecimal(value).round(new MathContext(6))
+                .stripTrailingZeros().toPlainString();
     }
 
     public static long tickStepSeconds(long totalSeconds) {

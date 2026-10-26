@@ -62,4 +62,20 @@ class WorkloadFormStateTest {
 
         assertTrue(evaluation.valid());
     }
+
+    @Test
+    void reportsInvalidGeneratorVcpuValuesWithFieldSpecificMessage() {
+        for (String value : java.util.List.of("abc", "2.5")) {
+            WorkloadFormState.Context context = new WorkloadFormState.Context(
+                    "", "", "", java.util.List.of(), java.util.List.of(),
+                    value, "", "", false);
+
+            WorkloadFormState.Evaluation evaluation = WorkloadFormState.evaluate(
+                    WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                    "", "min", "1", 4, "load", "plan.jmx", context);
+
+            assertFalse(evaluation.valid());
+            assertEquals("Generator vCPUs must be a whole number.", evaluation.error());
+        }
+    }
 }

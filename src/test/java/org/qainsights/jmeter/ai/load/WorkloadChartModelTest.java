@@ -62,6 +62,13 @@ class WorkloadChartModelTest {
     }
 
     @Test
+    void formatsFractionalAxisTicksWithoutBinaryNoise() {
+        assertEquals(List.of("0", "0.2", "0.4", "0.6", "0.8"),
+                WorkloadChartModel.axisTicks(0.8).stream()
+                        .map(WorkloadChartModel::formatAxisTick).toList());
+    }
+
+    @Test
     void choosesNiceTicksAndFormatsHoursConsistently() {
         assertEquals(900, WorkloadChartModel.tickStepSeconds(4200));
         assertEquals(List.of(0L, 900L, 1800L, 2700L, 3600L),
