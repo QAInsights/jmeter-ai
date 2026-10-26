@@ -281,6 +281,32 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void serializesHoldRampHoldRatesAtTheStartOfEachInterval() {
+        WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(37.5, 37.5, 30),
+                        new WorkloadStage(37.5, 50, 5),
+                        new WorkloadStage(50, 50, 30)),
+                null, ArrivalMode.EVEN));
+
+        assertEquals("rate(${__P(load.s1.rate,37.5)}/sec) even_arrivals(${__P(load.s1.secs,30)} sec) "
+                + "rate(${__P(load.s2.rate,37.5)}/sec) even_arrivals(${__P(load.s2.secs,5)} sec) "
+                + "rate(${__P(load.s3.rate,50)}/sec) even_arrivals(${__P(load.s3.secs,30)} sec) "
+                + "rate(${__P(load.s4.rate,50)}/sec)", plan.openModelSchedule());
+    }
+
+    @Test
+    void openModelShapesSkipSteepRampWarningAndExplainPerGeneratorRates() {
+        WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
+                1.0, 3000.0, 3000.0, 10L, 1L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.EVEN), WorkloadInputs.TargetType.REQUEST_RATE, 3, 1, List.of());
+
+        assertFalse(plan.warnings().stream().anyMatch(value -> value.contains("Steep ramp-up")));
+        assertTrue(plan.notes().contains("load.sN.rate values are iterations per second per generator; "
+                + "one arrival runs one iteration (3 samples)."));
+    }
+
+    @Test
     void convertsUsersToIterationsAndSizesFromThePeakStage() {
         assertEquals(250.0, WorkloadCalculator.toIterationsPerSecond(500,
                 WorkloadInputs.TargetType.USERS, 2, 1, 500, 500));

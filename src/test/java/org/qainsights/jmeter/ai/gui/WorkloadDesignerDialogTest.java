@@ -11,19 +11,20 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
+import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,21 +62,15 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
-    void switchesShapeCardsAndUsesLoadFieldsForEndurance() {
-        JPanel cards = new JPanel(new java.awt.CardLayout());
-        JPanel load = new JPanel();
-        JPanel step = new JPanel();
-        cards.add(load, WorkloadDesignerDialog.shapeCardFor(WorkloadShape.LOAD));
-        cards.add(step, WorkloadDesignerDialog.shapeCardFor(WorkloadShape.STEP));
-
-        WorkloadDesignerDialog.showShapeCard(cards, WorkloadShape.STEP);
-        assertTrue(step.isVisible());
-        assertFalse(load.isVisible());
-        assertEquals("LOAD", WorkloadDesignerDialog.shapeCardFor(WorkloadShape.ENDURANCE));
-
-        WorkloadDesignerDialog.showShapeCard(cards, WorkloadShape.LOAD);
-        assertTrue(load.isVisible());
-        assertFalse(step.isVisible());
+    void selectsCoreOpenModelForShapedWorkloadsAndStandardGroupsForLoadAndEndurance() {
+        assertFalse(WorkloadShape.LOAD.usesOpenModelThreadGroup());
+        assertFalse(WorkloadShape.ENDURANCE.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.STEP.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.SPIKE.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.STRESS.usesOpenModelThreadGroup());
+        assertTrue(WorkloadShape.CUSTOM.usesOpenModelThreadGroup());
+        assertTrue(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.STEP));
+        assertFalse(WorkloadDesignerDialog.isShapeRowVisible(WorkloadShape.STEP, WorkloadShape.SPIKE));
     }
 
     @Test
@@ -103,6 +98,31 @@ class WorkloadDesignerDialogTest {
         }
         assertTrue(CommandDispatcher.loadReply(plan, result, CommandShell.CMD)
                 .contains("set HEAP=-Xms1g -Xmx1g\njmeter.bat"));
+    }
+
+    @Test
+    void showsOpenModelArrivalsInsteadOfTimerThroughput() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 500L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), null, null, null, false,
+                new WorkloadShapeConfig(WorkloadShape.STEP, 1.0, 2.0, 1.0,
+                        10L, 5L, null, null, null, null, null, java.util.List.of(), null, ArrivalMode.EVEN)));
+
+        assertEquals("Not used (Open Model arrivals)",
+                WorkloadDesignerDialog.throughputSamplesPerMinute(plan));
+    }
+
+    @Test
+    void customStageHeaderUsesTheCurrentTargetUnit() {
+        assertEquals("Target (samples/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals("Target (messages/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.MESSAGE_RATE));
+        assertEquals("Target (iterations/s)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.ITERATION_RATE));
+        assertEquals("Target (users)",
+                WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.USERS));
     }
 
     @Test

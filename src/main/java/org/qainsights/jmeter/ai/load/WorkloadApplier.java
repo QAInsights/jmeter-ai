@@ -39,6 +39,7 @@ public final class WorkloadApplier {
     static final String OPEN_MODEL_GUI = "org.apache.jmeter.threads.openmodel.gui.OpenModelThreadGroupGui";
     static final String OPEN_MODEL_SCHEDULE = "OpenModelThreadGroup.schedule";
     static final String OPEN_MODEL_MANAGED = "FeatherWand.openModelManaged";
+    static final String OPEN_MODEL_SOURCE = "FeatherWand.openModelSource";
     // The zero-based mode index for all active threads in this Thread Group (shared).
     static final int CALC_MODE_THREAD_GROUP_SHARED = 4;
     private static final Logger log = LoggerFactory.getLogger(WorkloadApplier.class);
@@ -62,12 +63,18 @@ public final class WorkloadApplier {
         JMeterTreeNode openModelNode = selectedNode;
         try {
             if (selectedNode.getTestElement() instanceof ThreadGroup) {
+                String convertedName = enabledManagedOpenModelSiblingName(selectedNode);
+                if (convertedName != null) {
+                    throw new IllegalArgumentException("This Thread Group was converted to \"" + convertedName
+                            + "\". Select it to change the shape.");
+                }
                 JMeterTreeNode parent = (JMeterTreeNode) selectedNode.getParent();
                 OpenModelThreadGroup openModel = new OpenModelThreadGroup();
                 openModel.setName(selectedNode.getName() + " (" + plan.shapeConfig().shape() + ")");
                 openModel.setProperty(TestElement.TEST_CLASS, OpenModelThreadGroup.class.getName());
                 openModel.setProperty(TestElement.GUI_CLASS, OPEN_MODEL_GUI);
                 openModel.setProperty(OPEN_MODEL_MANAGED, true);
+                openModel.setProperty(OPEN_MODEL_SOURCE, selectedNode.getName());
                 int childCount = selectedNode.getChildCount();
                 List<JMeterTreeNode> children = new ArrayList<>(childCount);
                 for (int index = 0; index < childCount; index++) {
@@ -119,6 +126,24 @@ public final class WorkloadApplier {
                     gui, currentGroup, error);
             throw error;
         }
+    }
+
+    private static String enabledManagedOpenModelSiblingName(JMeterTreeNode source) {
+        if (source.isEnabled() || source.getParent() == null) {
+            return null;
+        }
+        JMeterTreeNode parent = (JMeterTreeNode) source.getParent();
+        for (int index = 0; index < parent.getChildCount(); index++) {
+            JMeterTreeNode sibling = (JMeterTreeNode) parent.getChildAt(index);
+            if (sibling == source || !sibling.isEnabled()
+                    || !(sibling.getTestElement() instanceof OpenModelThreadGroup group)
+                    || !group.getPropertyAsBoolean(OPEN_MODEL_MANAGED)
+                    || !source.getName().equals(group.getPropertyAsString(OPEN_MODEL_SOURCE))) {
+                continue;
+            }
+            return sibling.getName();
+        }
+        return null;
     }
 
     private static void applyThinkTimer(JMeterTreeModel model, JMeterTreeNode group, WorkloadPlan plan,
@@ -183,7 +208,8 @@ public final class WorkloadApplier {
             return applyOpenModel(model, threadGroupNode, plan, flushCurrentNode, gui, currentGroup);
         }
         if (!(threadGroupNode.getTestElement() instanceof ThreadGroup)) {
-            throw new IllegalArgumentException("LOAD and ENDURANCE require a standard Thread Group.");
+            throw new IllegalArgumentException("Load and Endurance need a standard Thread Group. "
+                    + "Select the original group, or pick Step, Spike, Stress or Custom.");
         }
         ThreadGroup group = (ThreadGroup) threadGroupNode.getTestElement();
         if (!(group.getSamplerController() instanceof LoopController)) {

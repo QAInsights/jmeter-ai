@@ -139,7 +139,7 @@ public final class WorkloadCalculator {
         Integer perAgentThreads = distributed ? (int) Math.ceil(threads / (double) agents) : null;
         Double perAgentRpm = distributed && rpm != null ? round2(rpm / agents) : null;
         int rampThreads = perAgentThreads == null ? threads : perAgentThreads;
-        if (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50) {
+        if (!openModel && (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50)) {
             warnings.add("Steep ramp-up: more than 50 threads start per second, which can overload the generator and skew early results.");
         }
         int threadGeneratorsNeeded = ceilCount(threads, maxThreads);
@@ -180,6 +180,8 @@ public final class WorkloadCalculator {
         }
         if (openModel) {
             notes.add("Each OMTG arrival creates a new thread that runs one iteration. Cookies, logins and Once Only Controllers run for every arrival.");
+            notes.add(prefix + ".sN.rate values are iterations per second per generator; one arrival runs one iteration ("
+                    + inputs.samplersPerIteration() + " samples).");
             notes.add("JMeter 5.5 or newer is required on every load generator.");
             notes.add("Open Model Thread Group does not cap concurrency. A slow server can cause thread growth.");
         }
@@ -456,8 +458,9 @@ public final class WorkloadCalculator {
             if (!schedule.isEmpty()) {
                 schedule.append(' ');
             }
+            double segmentStartRate = stage.fromRate() / perGeneratorCount;
             schedule.append("rate(${__P(").append(prefix).append(".s").append(index + 1)
-                    .append(".rate,").append(formatRate(stage.fromRate() / perGeneratorCount))
+                    .append(".rate,").append(formatRate(segmentStartRate))
                     .append(")}/sec) ")
                     .append(arrivalMode.scheduleName()).append("(${__P(")
                     .append(prefix).append(".s").append(index + 1).append(".secs,")

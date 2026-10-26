@@ -375,6 +375,7 @@ class WorkloadApplierTest {
                 openModelNode.getTestElement());
         assertEquals("Checkout (Spike)", openModelNode.getName());
         assertEquals("true", openModel.getPropertyAsString(WorkloadApplier.OPEN_MODEL_MANAGED));
+        assertEquals("Checkout", openModel.getPropertyAsString(WorkloadApplier.OPEN_MODEL_SOURCE));
         assertEquals(openModelPlan().openModelSchedule(),
                 openModel.getPropertyAsString(WorkloadApplier.OPEN_MODEL_SCHEDULE));
         assertFalse(fixture.groupNode.isEnabled());
@@ -390,6 +391,22 @@ class WorkloadApplierTest {
         assertTrue(fixture.groupNode.isEnabled());
         assertEquals(firstSampler, fixture.groupNode.getChildAt(0));
         assertEquals(secondChild, fixture.groupNode.getChildAt(1));
+    }
+
+    @Test
+    void rejectsReapplyingToTheDisabledSourceAfterConversion() throws Exception {
+        Fixture fixture = fixture("Checkout", true);
+        WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan());
+        JMeterTreeNode parent = (JMeterTreeNode) fixture.groupNode.getParent();
+        JMeterTreeNode openModelNode = (JMeterTreeNode) parent.getChildAt(parent.getIndex(fixture.groupNode) + 1);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> WorkloadApplier.apply(fixture.model, fixture.groupNode, openModelPlan()));
+
+        assertEquals("This Thread Group was converted to \"Checkout (Spike)\". Select it to change the shape.",
+                error.getMessage());
+        assertTrue(openModelNode.isEnabled());
+        assertEquals(0, fixture.groupNode.getChildCount());
     }
 
     @Test
@@ -441,7 +458,15 @@ class WorkloadApplierTest {
                 .getPropertyAsString(WorkloadApplier.OPEN_MODEL_SCHEDULE));
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> WorkloadApplier.apply(fixture.model, openModelNode, plan("load", 20, 60, 660, 600.0, 0)));
-        assertTrue(error.getMessage().contains("standard Thread Group"));
+        assertEquals("Load and Endurance need a standard Thread Group. Select the original group, "
+                + "or pick Step, Spike, Stress or Custom.", error.getMessage());
+        WorkloadPlan endurance = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 10, null, 500L, 0L,
+                60L, 600L, 1, 1, "load", "plan.jmx"));
+        IllegalArgumentException enduranceError = assertThrows(IllegalArgumentException.class,
+                () -> WorkloadApplier.apply(fixture.model, openModelNode, endurance));
+        assertEquals("Load and Endurance need a standard Thread Group. Select the original group, "
+                + "or pick Step, Spike, Stress or Custom.", enduranceError.getMessage());
     }
 
     private static Fixture fixture(String name, boolean withSampler) throws Exception {
