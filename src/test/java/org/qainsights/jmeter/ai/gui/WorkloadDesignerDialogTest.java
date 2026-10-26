@@ -3,13 +3,17 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
 
 import org.junit.jupiter.api.Test;
@@ -118,5 +122,68 @@ class WorkloadDesignerDialogTest {
         assertEquals("checkout", prefix.getText());
         assertEquals("2", agents.getText());
         assertEquals(1, updates.get());
+    }
+
+    @Test
+    void closingPendingAiRequestDoesNotInterruptOrApplyLateResult() throws Exception {
+        long requestId = 1;
+        AtomicLong currentRequestId = new AtomicLong(requestId);
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch requestFinished = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicBoolean interrupted = new AtomicBoolean();
+        AtomicBoolean resultProduced = new AtomicBoolean();
+        AtomicBoolean resultApplied = new AtomicBoolean();
+        AtomicBoolean failureRecorded = new AtomicBoolean();
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                started.countDown();
+                try {
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Fake AI request was not released.");
+                    }
+                    resultProduced.set(true);
+                    return "late suggestion";
+                } catch (InterruptedException e) {
+                    interrupted.set(true);
+                    throw e;
+                } finally {
+                    requestFinished.countDown();
+                }
+            }
+
+            @Override
+            protected void done() {
+                if (!WorkloadDesignerDialog.shouldHandleAiResult(
+                        requestId, currentRequestId.get(), false, isCancelled())) {
+                    done.countDown();
+                    return;
+                }
+                try {
+                    resultApplied.set("late suggestion".equals(get()));
+                } catch (Exception e) {
+                    failureRecorded.set(true);
+                } finally {
+                    done.countDown();
+                }
+            }
+        };
+        worker.execute();
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+
+        SwingUtilities.invokeAndWait(() -> currentRequestId.set(
+                WorkloadDesignerDialog.invalidateAiRequest(requestId, worker)));
+        assertTrue(worker.isCancelled());
+        assertFalse(interrupted.get());
+
+        release.countDown();
+        assertTrue(requestFinished.await(5, TimeUnit.SECONDS));
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        assertTrue(resultProduced.get());
+        assertFalse(interrupted.get());
+        assertFalse(resultApplied.get());
+        assertFalse(failureRecorded.get());
     }
 }

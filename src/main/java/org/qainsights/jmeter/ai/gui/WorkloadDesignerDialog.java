@@ -394,16 +394,26 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void closeAiPanel(JButton runButton) {
-        aiRequestId++;
-        if (aiWorker != null) {
-            aiWorker.cancel(true);
-            aiWorker = null;
-        }
+        aiRequestId = invalidateAiRequest(aiRequestId, aiWorker);
+        aiWorker = null;
         runButton.setEnabled(true);
         runButton.setText("Run");
         aiPanelVisible = false;
         aiPanel.setVisible(false);
         rebuildFormRows();
+    }
+
+    static long invalidateAiRequest(long requestId, SwingWorker<?, ?> worker) {
+        long nextRequestId = requestId + 1;
+        if (worker != null) {
+            worker.cancel(false);
+        }
+        return nextRequestId;
+    }
+
+    static boolean shouldHandleAiResult(long requestId, long currentRequestId,
+                                        boolean completed, boolean cancelled) {
+        return requestId == currentRequestId && !completed && !cancelled;
     }
 
     private void runAi(JButton runButton) {
@@ -437,7 +447,7 @@ public final class WorkloadDesignerDialog extends JDialog {
 
             @Override
             protected void done() {
-                if (requestId != aiRequestId || completed || isCancelled()) {
+                if (!shouldHandleAiResult(requestId, aiRequestId, completed, isCancelled())) {
                     return;
                 }
                 aiWorker = null;
@@ -998,11 +1008,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void cancelAiWorker() {
-        aiRequestId++;
-        if (aiWorker != null) {
-            aiWorker.cancel(true);
-            aiWorker = null;
-        }
+        aiRequestId = invalidateAiRequest(aiRequestId, aiWorker);
+        aiWorker = null;
     }
 
     private void copyCommand() {
