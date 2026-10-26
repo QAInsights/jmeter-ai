@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.load;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import org.apache.jmeter.control.Controller;
@@ -44,6 +45,25 @@ public final class WorkloadApplier {
 
     public static synchronized ApplyResult apply(JMeterTreeModel model, JMeterTreeNode threadGroupNode,
                                                 WorkloadPlan plan) throws IllegalUserActionException {
+        GuiPackage gui = GuiPackage.getInstance();
+        boolean currentGroup = gui != null && gui.getCurrentNode() == threadGroupNode;
+        return apply(model, threadGroupNode, plan,
+                () -> {
+                    if (currentGroup) {
+                        gui.updateCurrentNode();
+                    }
+                }, gui, currentGroup);
+    }
+
+    static synchronized ApplyResult apply(JMeterTreeModel model, JMeterTreeNode threadGroupNode,
+                                          WorkloadPlan plan, Runnable flushCurrentNode)
+            throws IllegalUserActionException {
+        return apply(model, threadGroupNode, plan, flushCurrentNode, null, false);
+    }
+
+    private static ApplyResult apply(JMeterTreeModel model, JMeterTreeNode threadGroupNode,
+                                     WorkloadPlan plan, Runnable flushCurrentNode,
+                                     GuiPackage gui, boolean currentGroup) throws IllegalUserActionException {
         if (model == null || threadGroupNode == null || threadGroupNode.getRoot() != model.getRoot()
                 || !(threadGroupNode.getTestElement() instanceof ThreadGroup)) {
             throw new IllegalArgumentException("The selected Thread Group is no longer in the test plan.");
@@ -52,14 +72,10 @@ public final class WorkloadApplier {
                 || plan.thinkMillis() < 0 || plan.propertyPrefix() == null || plan.propertyPrefix().isBlank()) {
             throw new IllegalArgumentException("The workload plan is invalid.");
         }
+        flushCurrentNode.run();
         ThreadGroup group = (ThreadGroup) threadGroupNode.getTestElement();
-        if (!(group.getSamplerController() instanceof LoopController loop)) {
+        if (!(group.getSamplerController() instanceof LoopController)) {
             throw new IllegalStateException("The Thread Group has no main Loop Controller.");
-        }
-        GuiPackage gui = GuiPackage.getInstance();
-        boolean currentGroup = gui != null && gui.getCurrentNode() == threadGroupNode;
-        if (currentGroup) {
-            gui.updateCurrentNode();
         }
         List<PropertySnapshot> properties = new ArrayList<>();
         List<EnabledSnapshot> enabledStates = new ArrayList<>();
@@ -79,7 +95,9 @@ public final class WorkloadApplier {
             setProperty(properties, group, ThreadGroup.DURATION,
                     new StringProperty(ThreadGroup.DURATION, property(prefix, "duration", plan.durationSeconds())),
                     changes);
-            setProperty(properties, loop, LoopController.LOOPS,
+            setProperty(properties,
+                    () -> (TestElement) ((ThreadGroup) threadGroupNode.getTestElement()).getSamplerController(),
+                    LoopController.LOOPS,
                     new IntegerProperty(LoopController.LOOPS, LoopController.INFINITE_LOOP_COUNT), changes);
 
             if (plan.rpm() != null) {
@@ -166,16 +184,28 @@ public final class WorkloadApplier {
     }
 
     static synchronized String undoLast(JMeterTreeModel model) {
+        GuiPackage gui = GuiPackage.getInstance();
+        boolean currentGroup = gui != null && lastApplied != null
+                && gui.getCurrentNode() == lastApplied.threadGroup;
+        return undoLast(model, () -> {
+            if (currentGroup) {
+                gui.updateCurrentNode();
+            }
+        }, gui, currentGroup);
+    }
+
+    static synchronized String undoLast(JMeterTreeModel model, Runnable flushCurrentNode) {
+        return undoLast(model, flushCurrentNode, null, false);
+    }
+
+    private static String undoLast(JMeterTreeModel model, Runnable flushCurrentNode,
+                                   GuiPackage gui, boolean currentGroup) {
         if (lastApplied == null || model == null || lastApplied.threadGroup.getRoot() != model.getRoot()) {
             lastApplied = null;
             return NOTHING_TO_UNDO;
         }
-        GuiPackage gui = GuiPackage.getInstance();
         JMeterTreeNode group = lastApplied.threadGroup;
-        boolean currentGroup = gui != null && gui.getCurrentNode() == group;
-        if (currentGroup) {
-            gui.updateCurrentNode();
-        }
+        flushCurrentNode.run();
         restore(model, group, lastApplied.properties, lastApplied.enabledStates,
                 lastApplied.addedNodes, gui, currentGroup, null);
         org.qainsights.jmeter.ai.telemetry.Telemetry.record(
@@ -202,9 +232,15 @@ public final class WorkloadApplier {
 
     private static void setProperty(List<PropertySnapshot> snapshots, TestElement element, String name,
                                    JMeterProperty replacement, List<String> changes) {
+        setProperty(snapshots, () -> element, name, replacement, changes);
+    }
+
+    private static void setProperty(List<PropertySnapshot> snapshots, Supplier<TestElement> elementSupplier,
+                                    String name, JMeterProperty replacement, List<String> changes) {
+        TestElement element = elementSupplier.get();
         JMeterProperty current = element.getProperty(name);
         boolean exists = current != null && !(current instanceof NullProperty);
-        snapshots.add(new PropertySnapshot(element, name, exists ? current.clone() : null));
+        snapshots.add(new PropertySnapshot(elementSupplier, name, exists ? current.clone() : null));
         element.setProperty(replacement);
         changes.add(name + " = `" + replacement.getStringValue() + "`");
     }
@@ -212,11 +248,12 @@ public final class WorkloadApplier {
     private static void setEnabled(JMeterTreeModel model, JMeterTreeNode node, boolean enabled,
                                    List<EnabledSnapshot> enabledStates, List<PropertySnapshot> properties) {
         enabledStates.add(new EnabledSnapshot(node, node.isEnabled()));
-        JMeterProperty current = node.getTestElement().getProperty(TestElement.ENABLED);
+        TestElement element = node.getTestElement();
+        JMeterProperty current = element.getProperty(TestElement.ENABLED);
         boolean exists = current != null && !(current instanceof NullProperty);
-        properties.add(new PropertySnapshot(node.getTestElement(), TestElement.ENABLED,
+        properties.add(new PropertySnapshot(() -> element, TestElement.ENABLED,
                 exists ? current.clone() : null));
-        node.getTestElement().setProperty(new BooleanProperty(TestElement.ENABLED, enabled));
+        element.setProperty(new BooleanProperty(TestElement.ENABLED, enabled));
         node.setEnabled(enabled);
         model.nodeChanged(node);
     }
@@ -237,10 +274,11 @@ public final class WorkloadApplier {
             }
             for (int index = properties.size() - 1; index >= 0; index--) {
                 PropertySnapshot snapshot = properties.get(index);
+                TestElement element = snapshot.element().get();
                 if (snapshot.previous == null) {
-                    snapshot.element.removeProperty(snapshot.name);
+                    element.removeProperty(snapshot.name);
                 } else {
-                    snapshot.element.setProperty(snapshot.previous.clone());
+                    element.setProperty(snapshot.previous.clone());
                 }
             }
             for (EnabledSnapshot snapshot : enabledStates) {
@@ -376,7 +414,7 @@ public final class WorkloadApplier {
         }
     }
 
-    private record PropertySnapshot(TestElement element, String name, JMeterProperty previous) {
+    private record PropertySnapshot(Supplier<TestElement> element, String name, JMeterProperty previous) {
     }
 
     private record EnabledSnapshot(JMeterTreeNode node, boolean enabled) {

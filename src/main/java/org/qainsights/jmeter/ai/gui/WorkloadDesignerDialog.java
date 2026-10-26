@@ -7,6 +7,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
+import java.awt.GraphicsConfiguration;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
@@ -14,10 +15,13 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
@@ -83,6 +87,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JTextArea infoArea = notesArea(2, ThemeColors.info());
     private final JTextArea parsedArea = notesArea(2, ThemeColors.secondaryText());
     private JPanel notes;
+    private JPanel columns;
+    private JScrollPane previewScroll;
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final JButton applyButton = new JButton("Apply to Thread Group");
     private final JButton copyButton = new JButton("Copy");
@@ -90,6 +96,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private boolean capRowVisible;
     private boolean messagesPerSampleRowVisible;
     private boolean completed;
+    private boolean updatingPreview;
+    private boolean stackedColumns;
     private WorkloadFormState.Evaluation evaluation;
 
     public WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
@@ -115,8 +123,27 @@ public final class WorkloadDesignerDialog extends JDialog {
                 cancel();
             }
         });
-        setSize(1140, 840);
+        setPreferredSize(new Dimension(1140, 840));
+        GraphicsConfiguration configuration = getGraphicsConfiguration();
+        setSize(sizeWithinScreen(getPreferredSize(), configuration.getBounds(),
+                Toolkit.getDefaultToolkit().getScreenInsets(configuration)));
         setLocationRelativeTo(getOwner());
+        updateColumnsLayout();
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
+            area.addComponentListener(new ComponentAdapter() {
+                @Override
+                public void componentResized(ComponentEvent event) {
+                    updateNotesRows(area);
+                }
+            });
+        }
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                updateColumnsLayout();
+                fitChartToPreviewWidth();
+            }
+        });
         prefill(preparation.spec());
         installListeners();
         updatePreview();
@@ -138,15 +165,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         header.add(title, BorderLayout.NORTH);
         header.add(caption, BorderLayout.CENTER);
         root.add(header, BorderLayout.NORTH);
-        JPanel columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+        columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
         columns.setOpaque(false);
-        JScrollPane formScroll = new JScrollPane(buildForm());
-        formScroll.setBorder(null);
-        formScroll.setOpaque(false);
-        formScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        formScroll.getViewport().setOpaque(false);
-        columns.add(formScroll);
-        columns.add(buildPreview());
+        columns.add(scrollColumn(buildForm()));
+        previewScroll = scrollColumn(buildPreview());
+        previewScroll.getViewport().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                fitChartToPreviewWidth();
+            }
+        });
+        columns.add(previewScroll);
         root.add(columns, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
@@ -162,6 +191,55 @@ public final class WorkloadDesignerDialog extends JDialog {
         footer.add(buttons, BorderLayout.EAST);
         root.add(footer, BorderLayout.SOUTH);
         return root;
+    }
+
+    private static JScrollPane scrollColumn(Component content) {
+        JScrollPane scrollPane = new JScrollPane(content);
+        scrollPane.setBorder(null);
+        scrollPane.setOpaque(false);
+        scrollPane.setBackground(ThemeColors.canvas());
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getViewport().setBackground(ThemeColors.canvas());
+        scrollPane.getViewport().setOpaque(true);
+        return scrollPane;
+    }
+
+    static Dimension sizeWithinScreen(Dimension preferred, Rectangle bounds, Insets insets) {
+        int usableWidth = Math.max(1, bounds.width - insets.left - insets.right);
+        int usableHeight = Math.max(1, bounds.height - insets.top - insets.bottom);
+        return new Dimension(Math.min(preferred.width, (int) (usableWidth * 0.9)),
+                Math.min(preferred.height, (int) (usableHeight * 0.9)));
+    }
+
+    private void updateColumnsLayout() {
+        if (columns == null) {
+            return;
+        }
+        boolean stack = getWidth() < 900;
+        if (stackedColumns != stack) {
+            stackedColumns = stack;
+            columns.setLayout(stack
+                    ? new GridLayout(2, 1, UiTokens.SPACE_3, 0)
+                    : new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+            columns.revalidate();
+        }
+    }
+
+    private void fitChartToPreviewWidth() {
+        if (previewScroll == null) {
+            return;
+        }
+        int viewportWidth = previewScroll.getViewport().getWidth();
+        if (viewportWidth < 1) {
+            return;
+        }
+        Dimension preferred = chart.getPreferredSize();
+        int width = Math.min(420, viewportWidth);
+        if (preferred.width != width) {
+            chart.setPreferredSize(new Dimension(width, preferred.height));
+            chart.revalidate();
+        }
     }
 
     private JPanel buildForm() {
@@ -234,7 +312,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private JPanel buildPreview() {
-        JPanel preview = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
+        JPanel preview = new ScrollablePanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
         preview.setOpaque(false);
         preview.add(chart, BorderLayout.NORTH);
         JPanel lower = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
@@ -250,12 +328,13 @@ public final class WorkloadDesignerDialog extends JDialog {
             grid.add(resultValues[index]);
         }
         lower.add(grid, BorderLayout.NORTH);
-        notes = new JPanel();
+        notes = new ScrollablePanel();
         notes.setLayout(new BoxLayout(notes, BoxLayout.Y_AXIS));
         notes.setOpaque(false);
         notes.setAlignmentY(Component.TOP_ALIGNMENT);
         JScrollPane notesScroll = new JScrollPane(notes);
         notesScroll.setBorder(BorderFactory.createTitledBorder("Notes"));
+        notesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         lower.add(notesScroll, BorderLayout.CENTER);
         cliArea.setEditable(false);
         cliArea.setLineWrap(true);
@@ -300,12 +379,25 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void setNotesText(JTextArea area, String text) {
         area.setText(text);
-        int rows = 0;
-        for (String line : text.split("\n", -1)) {
-            rows += Math.max(1, (line.length() + 71) / 72);
+        updateNotesRows(area);
+    }
+
+    private static void updateNotesRows(JTextArea area) {
+        int availableWidth = area.getWidth() - area.getInsets().left - area.getInsets().right;
+        int charactersPerLine = 72;
+        if (availableWidth > 0 && availableWidth < 480) {
+            int characterWidth = Math.max(1, area.getFontMetrics(area.getFont()).charWidth('m'));
+            charactersPerLine = Math.max(20, availableWidth / characterWidth);
         }
-        area.setRows(Math.min(18, Math.max(2, rows)));
-        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
+        int rows = 0;
+        for (String line : area.getText().split("\n", -1)) {
+            rows += Math.max(1, (line.length() + charactersPerLine - 1) / charactersPerLine);
+        }
+        int desiredRows = Math.min(18, Math.max(2, rows));
+        if (area.getRows() != desiredRows) {
+            area.setRows(desiredRows);
+            area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
+        }
     }
 
     private void prefill(WorkloadSpec spec) {
@@ -339,29 +431,13 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void installListeners() {
-        DocumentListener listener = new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) {
-                changed();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent event) {
-                changed();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent event) {
-                changed();
-            }
-
-            private void changed() {
-                if (prefix.hasFocus()) {
-                    prefixEdited = true;
-                }
-                updatePreview();
-            }
-        };
+        DocumentListener listener = new DeferredPreviewListener(
+                () -> {
+                    if (prefix.hasFocus()) {
+                        prefixEdited = true;
+                    }
+                    updatePreview();
+                }, () -> updatingPreview);
         for (JTextField field : List.of(target, cap, response, think, ramp, hold, agents,
                 generatorHosts, maxThreadsPerGenerator, messagesPerSample, prefix)) {
             field.getDocument().addDocumentListener(listener);
@@ -382,6 +458,18 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void updatePreview() {
+        if (updatingPreview) {
+            return;
+        }
+        updatingPreview = true;
+        try {
+            updatePreviewContent();
+        } finally {
+            updatingPreview = false;
+        }
+    }
+
+    private void updatePreviewContent() {
         updateTargetRows();
         JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
         int samplers = WorkloadApplier.countEnabledSamplers(node);
@@ -563,6 +651,45 @@ public final class WorkloadDesignerDialog extends JDialog {
         return gui == null ? null : gui.getMainFrame();
     }
 
+    static final class DeferredPreviewListener implements DocumentListener {
+        private final Runnable update;
+        private final BooleanSupplier updating;
+        private boolean pending;
+
+        DeferredPreviewListener(Runnable update, BooleanSupplier updating) {
+            this.update = update;
+            this.updating = updating;
+        }
+
+        @Override
+        public void insertUpdate(DocumentEvent event) {
+            changed();
+        }
+
+        @Override
+        public void removeUpdate(DocumentEvent event) {
+            changed();
+        }
+
+        @Override
+        public void changedUpdate(DocumentEvent event) {
+            changed();
+        }
+
+        private void changed() {
+            if (pending || updating.getAsBoolean()) {
+                return;
+            }
+            pending = true;
+            SwingUtilities.invokeLater(() -> {
+                pending = false;
+                if (!updating.getAsBoolean()) {
+                    update.run();
+                }
+            });
+        }
+    }
+
     public record Completion(WorkloadPlan plan, WorkloadApplier.ApplyResult result, String error, boolean cancelled) {
     }
 
@@ -572,6 +699,43 @@ public final class WorkloadDesignerDialog extends JDialog {
     private static final class FormPanel extends JPanel implements Scrollable {
         private FormPanel() {
             super(new GridBagLayout());
+            setOpaque(false);
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return UiTokens.CONTROL_HEIGHT;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+            return Math.max(UiTokens.CONTROL_HEIGHT, visibleRect.height - UiTokens.CONTROL_HEIGHT);
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            Container parent = getParent();
+            return parent instanceof JViewport viewport && getPreferredSize().height < viewport.getHeight();
+        }
+    }
+
+    private static final class ScrollablePanel extends JPanel implements Scrollable {
+        private ScrollablePanel() {
+            setOpaque(false);
+        }
+
+        private ScrollablePanel(java.awt.LayoutManager layout) {
+            super(layout);
             setOpaque(false);
         }
 

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -67,6 +68,33 @@ class WorkloadApplierTest {
         WorkloadApplier.undoLast(fixture.model);
         assertEquals(8, fixture.loop.getLoops());
         assertEquals(3, nested.getLoops());
+    }
+
+    @Test
+    void resolvesTheMainLoopControllerAfterGuiFlushAndUndoFlush() throws Exception {
+        Fixture fixture = fixture("Refreshed main loop", true);
+        fixture.loop.setLoops(7);
+
+        WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 40, 60, 660, 2400.0, 0), () -> {
+                    LoopController refreshed = new LoopController();
+                    refreshed.setLoops(1);
+                    fixture.group.setSamplerController(refreshed);
+                });
+
+        LoopController applied = (LoopController) fixture.group.getSamplerController();
+        assertNotSame(fixture.loop, applied);
+        assertEquals(-1, applied.getLoops());
+
+        WorkloadApplier.undoLast(fixture.model, () -> {
+            LoopController refreshed = new LoopController();
+            refreshed.setLoops(-1);
+            fixture.group.setSamplerController(refreshed);
+        });
+
+        LoopController restored = (LoopController) fixture.group.getSamplerController();
+        assertNotSame(applied, restored);
+        assertEquals(1, restored.getLoops());
     }
 
     @Test

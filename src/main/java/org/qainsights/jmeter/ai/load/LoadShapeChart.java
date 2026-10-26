@@ -45,6 +45,8 @@ public final class LoadShapeChart extends JComponent {
         super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         try {
+            g.setColor(getBackground());
+            g.fillRect(0, 0, getWidth(), getHeight());
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
             int left = 54;
