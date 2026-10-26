@@ -17,6 +17,7 @@ public final class WorkloadCalculator {
             "Assumed 500 ms average response time. Measure it with a 1-user run (for example `@fix`) and update it.";
     private static final Pattern SAFE_PLAN_PATH = Pattern.compile("[A-Za-z0-9._/-]+");
     private static final Pattern VALID_HOST = Pattern.compile("[A-Za-z0-9._:-]+");
+    private static final Pattern VALID_PREFIX = Pattern.compile("[A-Za-z0-9._-]+");
 
     private WorkloadCalculator() {
     }
@@ -173,6 +174,10 @@ public final class WorkloadCalculator {
             if (host == null || !VALID_HOST.matcher(host).matches()) {
                 throw new IllegalArgumentException("Enter generator hosts using letters, numbers, dots, underscores, colons, or hyphens.");
             }
+        }
+        if (inputs.propertyPrefix() != null && !inputs.propertyPrefix().isBlank()
+                && !VALID_PREFIX.matcher(inputs.propertyPrefix()).matches()) {
+            throw new IllegalArgumentException("Property prefix can use letters, numbers, dots, underscores, and hyphens only.");
         }
     }
 

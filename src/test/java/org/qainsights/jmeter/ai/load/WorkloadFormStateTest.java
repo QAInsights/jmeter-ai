@@ -50,4 +50,16 @@ class WorkloadFormStateTest {
         assertEquals("Enter generator hosts using letters, numbers, dots, underscores, colons, or hyphens.",
                 evaluation.error());
     }
+
+    @Test
+    void ignoresHiddenMessagesPerSampleValueForNonMessageTargets() {
+        WorkloadFormState.Context context = new WorkloadFormState.Context(
+                "", "1000", "not-a-number", java.util.List.of(), java.util.List.of());
+
+        WorkloadFormState.Evaluation evaluation = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", context);
+
+        assertTrue(evaluation.valid());
+    }
 }

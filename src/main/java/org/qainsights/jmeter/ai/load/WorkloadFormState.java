@@ -29,8 +29,10 @@ public final class WorkloadFormState {
             Long rampSeconds = optionalDuration(ramp, rampUnit);
             Long holdSeconds = optionalDuration(hold, holdUnit);
             Integer agentCount = optionalInteger(agents);
-            Double messagesPerSample = optionalNumber(context.messagesPerSample(),
-                    "Messages per sample must be greater than zero.");
+            Double messagesPerSample = targetType == WorkloadInputs.TargetType.MESSAGE_RATE
+                    ? optionalNumber(context.messagesPerSample(),
+                            "Messages per sample must be greater than zero.")
+                    : null;
             Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator());
             List<String> hosts = context.generatorHosts() == null || context.generatorHosts().isBlank()
                     ? List.of() : Arrays.stream(context.generatorHosts().split(",", -1))

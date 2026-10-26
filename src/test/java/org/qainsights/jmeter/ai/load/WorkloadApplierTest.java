@@ -173,6 +173,25 @@ class WorkloadApplierTest {
     }
 
     @Test
+    void nestedThroughputTimerPreventsAddingOrChangingAGroupTimer() throws Exception {
+        Fixture fixture = fixture("Nested rate", true);
+        LoopController nestedController = new LoopController();
+        JMeterTreeNode controllerNode = fixture.model.addComponent(nestedController, fixture.groupNode);
+        ConstantThroughputTimer nestedTimer = new ConstantThroughputTimer();
+        nestedTimer.setName("Nested user rate");
+        nestedTimer.setProperty(new StringProperty(ConstantThroughputTimer.THROUGHPUT, "300"));
+        JMeterTreeNode nestedTimerNode = fixture.model.addComponent(nestedTimer, controllerNode);
+
+        WorkloadApplier.ApplyResult result = WorkloadApplier.apply(fixture.model, fixture.groupNode,
+                plan("load", 20, 60, 660, 600.0, 0));
+
+        assertNull(directChild(fixture.groupNode, ConstantThroughputTimer.class));
+        assertEquals("300", nestedTimer.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
+        assertTrue(nestedTimerNode.isEnabled());
+        assertTrue(result.warnings().stream().anyMatch(text -> text.contains("nested under a controller")));
+    }
+
+    @Test
     void addsOrUpdatesTheNamedThinkTimerAndReportsOtherTimers() throws Exception {
         Fixture fixture = fixture("Thinking", true);
         ConstantTimer other = new ConstantTimer();

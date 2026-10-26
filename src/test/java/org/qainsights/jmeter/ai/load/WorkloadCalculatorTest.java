@@ -206,4 +206,13 @@ class WorkloadCalculatorTest {
                 WorkloadInputs.TargetType.USERS, 1, null, null, null, null, null, null,
                 0, "load", "plan.jmx")));
     }
+
+    @Test
+    void rejectsUnsafePropertyPrefixes() {
+        for (String prefix : List.of("my load", "a,b", "bad)prefix")) {
+            assertThrows(IllegalArgumentException.class, () -> WorkloadCalculator.calculate(new WorkloadInputs(
+                    WorkloadInputs.TargetType.REQUEST_RATE, 200, null, null, null, null, null,
+                    null, 1, prefix, "plan.jmx")));
+        }
+    }
 }
