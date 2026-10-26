@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
@@ -14,6 +16,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -45,6 +49,8 @@ import org.qainsights.jmeter.ai.load.WorkloadSpec;
 public final class WorkloadDesignerDialog extends JDialog {
     private final LoadCommandHandler.Preparation preparation;
     private final Consumer<Completion> onFinish;
+    private final JPanel form = new JPanel();
+    private final JPanel capRow;
     private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
@@ -64,6 +70,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JTextArea warningsArea = notesArea(2, ThemeColors.warning());
     private final JTextArea assumptionsArea = notesArea(2, ThemeColors.info());
     private final JTextArea parsedArea = notesArea(2, ThemeColors.secondaryText());
+    private JPanel notes;
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final JButton applyButton = new JButton("Apply to Thread Group");
     private final JButton copyButton = new JButton("Copy");
@@ -76,6 +83,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         super(mainFrame(), "Workload Designer", ModalityType.APPLICATION_MODAL);
         this.preparation = preparation;
         this.onFinish = onFinish == null ? ignored -> { } : onFinish;
+        capRow = formRow(new JLabel("<html>Cap at requests<br>per second</html>"), cap);
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -92,7 +100,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 cancel();
             }
         });
-        setSize(920, 660);
+        setSize(920, 700);
         setLocationRelativeTo(getOwner());
         prefill(preparation.spec());
         installListeners();
@@ -104,6 +112,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         root.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_4, UiTokens.SPACE_4,
                 UiTokens.SPACE_3, UiTokens.SPACE_4));
         root.setBackground(ThemeColors.canvas());
+        JPanel header = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+        header.setOpaque(false);
+        JLabel title = new JLabel("Workload Designer");
+        title.setFont(UiTokens.title(title.getFont()));
+        JLabel caption = new JLabel("<html>Little's Law: threads ≈ requests per second × (response time + think time), "
+                + "sized with 1.5× headroom.<br>Values are written as ${__P()} properties so CI can override them.</html>");
+        caption.setFont(UiTokens.caption(caption.getFont()));
+        caption.setForeground(ThemeColors.secondaryText());
+        header.add(title, BorderLayout.NORTH);
+        header.add(caption, BorderLayout.CENTER);
+        root.add(header, BorderLayout.NORTH);
         JPanel columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
         columns.setOpaque(false);
         columns.add(buildForm());
@@ -126,7 +145,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private JPanel buildForm() {
-        JPanel form = new JPanel(new GridLayout(0, 2, UiTokens.SPACE_2, UiTokens.SPACE_2));
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
         form.setOpaque(false);
         groupCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(value == null ? "" : value.getName()));
@@ -134,29 +153,33 @@ public final class WorkloadDesignerDialog extends JDialog {
             groupCombo.addItem(node);
         }
         groupCombo.setSelectedItem(preparation.selectedGroup());
-        form.add(new JLabel("Thread Group"));
-        form.add(groupCombo);
-        form.add(new JLabel("Target type"));
-        form.add(targetCombo);
-        form.add(new JLabel("Target value"));
-        form.add(target);
-        form.add(new JLabel("<html>Cap at requests<br>per second</html>"));
-        form.add(cap);
-        form.add(new JLabel("<html>Average response time<br>(ms, default 500)</html>"));
-        form.add(response);
-        form.add(new JLabel("<html>Think time per request<br>(ms, default 0)</html>"));
-        form.add(think);
-        form.add(new JLabel("<html>Ramp-up<br>(default 10% of hold)</html>"));
-        form.add(withUnit(ramp, rampUnit));
-        form.add(new JLabel("<html>Hold<br>(default 10 min)</html>"));
-        form.add(withUnit(hold, holdUnit));
-        form.add(new JLabel("Load generators (default 1)"));
-        form.add(agents);
-        form.add(new JLabel("Property prefix"));
-        form.add(prefix);
+        addFormRow("Thread Group", groupCombo);
+        addFormRow("Target type", targetCombo);
+        addFormRow("Target value", target);
+        addFormRow("<html>Average response time<br>(ms, default 500)</html>", response);
+        addFormRow("<html>Think time per request<br>(ms, default 0)</html>", think);
+        addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
+        addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
+        addFormRow("Load generators (default 1)", agents);
+        addFormRow("Property prefix", prefix);
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
         return form;
+    }
+
+    private void addFormRow(String label, JComponent field) {
+        form.add(formRow(new JLabel(label), field));
+        form.add(Box.createVerticalStrut(UiTokens.SPACE_1));
+    }
+
+    private static JPanel formRow(JComponent label, JComponent field) {
+        JPanel row = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_2, 0));
+        row.setOpaque(false);
+        row.add(label);
+        row.add(field);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        return row;
     }
 
     private JPanel buildPreview() {
@@ -175,11 +198,9 @@ public final class WorkloadDesignerDialog extends JDialog {
             grid.add(resultValues[index]);
         }
         lower.add(grid, BorderLayout.NORTH);
-        JPanel notes = new JPanel(new GridLayout(0, 1, 0, 2));
+        notes = new JPanel();
+        notes.setLayout(new BoxLayout(notes, BoxLayout.Y_AXIS));
         notes.setOpaque(false);
-        notes.add(warningsArea);
-        notes.add(assumptionsArea);
-        notes.add(parsedArea);
         JScrollPane notesScroll = new JScrollPane(notes);
         notesScroll.setBorder(BorderFactory.createTitledBorder("Notes"));
         lower.add(notesScroll, BorderLayout.CENTER);
@@ -217,6 +238,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         area.setForeground(color);
         area.setBackground(ThemeColors.canvas());
         area.setOpaque(false);
+        area.setAlignmentX(Component.LEFT_ALIGNMENT);
+        area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
         return area;
     }
 
@@ -239,8 +262,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         target.setText(amount);
         setLong(response, spec.responseMillis());
         setLong(think, spec.thinkMillis());
-        setLong(ramp, spec.rampSeconds());
-        setLong(hold, spec.holdSeconds());
+        setDuration(ramp, rampUnit, spec.rampSeconds());
+        setDuration(hold, holdUnit, spec.holdSeconds());
         if (spec.agents() != null) {
             agents.setText(Integer.toString(spec.agents()));
         }
@@ -287,6 +310,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void updatePreview() {
+        updateCapVisibility();
         JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
         int samplers = WorkloadApplier.countEnabledSamplers(node);
         evaluation = WorkloadFormState.evaluate((WorkloadInputs.TargetType) targetCombo.getSelectedItem(),
@@ -324,6 +348,34 @@ public final class WorkloadDesignerDialog extends JDialog {
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
         parsedArea.setText(parsedNotes(preparation.spec()));
         parsedArea.setVisible(!parsedArea.getText().isBlank());
+        notes.removeAll();
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, parsedArea)) {
+            if (area.isVisible()) {
+                area.setAlignmentX(Component.LEFT_ALIGNMENT);
+                notes.add(area);
+            }
+        }
+        notes.revalidate();
+        notes.repaint();
+    }
+
+    private void updateCapVisibility() {
+        boolean visible = targetCombo.getSelectedItem() == WorkloadInputs.TargetType.USERS;
+        boolean currentlyVisible = capRow.getParent() == form;
+        if (visible == currentlyVisible) {
+            return;
+        }
+        if (visible) {
+            form.add(capRow, 6);
+            form.add(Box.createVerticalStrut(UiTokens.SPACE_1), 7);
+        } else {
+            form.remove(capRow);
+            if (form.getComponentCount() > 7) {
+                form.remove(6);
+            }
+        }
+        form.revalidate();
+        form.repaint();
     }
 
     private void apply() {
@@ -391,6 +443,24 @@ public final class WorkloadDesignerDialog extends JDialog {
     private static void setLong(JTextField field, Long value) {
         if (value != null) {
             field.setText(Long.toString(value));
+        }
+    }
+
+    private static void setDuration(JTextField field, JComboBox<String> unit, Long seconds) {
+        if (seconds == null) {
+            return;
+        }
+        for (String candidate : List.of("h", "min", "s")) {
+            long multiplier = switch (candidate) {
+                case "h" -> 3600;
+                case "min" -> 60;
+                default -> 1;
+            };
+            if (seconds % multiplier == 0) {
+                field.setText(Long.toString(seconds / multiplier));
+                unit.setSelectedItem(candidate);
+                return;
+            }
         }
     }
 

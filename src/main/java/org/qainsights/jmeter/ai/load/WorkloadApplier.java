@@ -31,6 +31,8 @@ public final class WorkloadApplier {
     static final String THINK_NAME = "Think time (Feather Wand)";
     static final String CTT_GUI = "org.apache.jmeter.testbeans.gui.TestBeanGUI";
     static final String TIMER_GUI = "org.apache.jmeter.timers.gui.ConstantTimerGui";
+    // The zero-based mode index for all active threads in this Thread Group (shared).
+    static final int CALC_MODE_THREAD_GROUP_SHARED = 4;
     private static final Logger log = LoggerFactory.getLogger(WorkloadApplier.class);
     private static final Pattern NON_SLUG = Pattern.compile("[^a-z0-9]+");
     private static LastApplied lastApplied;
@@ -90,7 +92,7 @@ public final class WorkloadApplier {
                 new StringProperty(ConstantThroughputTimer.THROUGHPUT,
                                 property(prefix, "rpm", WorkloadCalculator.format(plan.rpm()))), changes);
                 setProperty(properties, timer, ConstantThroughputTimer.CALC_MODE,
-                        new IntegerProperty(ConstantThroughputTimer.CALC_MODE, 5), changes);
+                        new IntegerProperty(ConstantThroughputTimer.CALC_MODE, CALC_MODE_THREAD_GROUP_SHARED), changes);
                 JMeterTreeNode timerNode = model.getNodeOf(timer);
                 if (timerNode != null) {
                     model.nodeChanged(timerNode);

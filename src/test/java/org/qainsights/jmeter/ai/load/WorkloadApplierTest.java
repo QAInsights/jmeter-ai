@@ -42,7 +42,10 @@ class WorkloadApplierTest {
         assertEquals(-1, fixture.loop.getLoops());
         ConstantThroughputTimer timer = directChild(fixture.groupNode, ConstantThroughputTimer.class);
         assertEquals("${__P(shop.rpm,12000)}", timer.getPropertyAsString(ConstantThroughputTimer.THROUGHPUT));
-        assertEquals(5, timer.getCalcMode());
+        int appliedMode = timer.getCalcMode();
+        ConstantThroughputTimer validationTimer = new ConstantThroughputTimer();
+        validationTimer.setCalcMode(appliedMode);
+        assertEquals(4, validationTimer.getCalcMode());
         assertEquals(8, result.changes().size());
         assertTrue(result.changes().contains("Added " + WorkloadApplier.CTT_NAME));
     }

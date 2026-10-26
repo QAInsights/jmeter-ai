@@ -85,7 +85,8 @@ public final class WorkloadCalculator {
         if (threads > 1000) {
             warnings.add("Above 1,000 threads, watch the load generator's CPU and heap, and consider splitting across agents.");
         }
-        if (rampSeconds == 0 || threads / (double) rampSeconds > 50) {
+        int rampThreads = perAgentThreads == null ? threads : perAgentThreads;
+        if (rampSeconds == 0 || rampThreads / (double) rampSeconds > 50) {
             warnings.add("Steep ramp-up: more than 50 threads start per second, which can overload the generator and skew early results.");
         }
         String command = cliCommand(planFile, prefix, threads, rampSeconds, durationSeconds, rpm,

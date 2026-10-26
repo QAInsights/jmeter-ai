@@ -99,6 +99,17 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void steepRampWarningUsesThePerAgentThreadCount() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 2000, null, 500L,
+                null, 8L, 600L, 4, 1, "load", "plan.jmx"));
+
+        assertEquals(1500, plan.threads());
+        assertEquals(375, plan.perAgentThreads());
+        assertFalse(plan.warnings().stream().anyMatch(value -> value.contains("Steep ramp-up")));
+    }
+
+    @Test
     void formatsWholeAndFractionalCliValuesWithoutUnnecessaryZeros() {
         WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.REQUEST_RATE, 1.2345, null, 500L,
