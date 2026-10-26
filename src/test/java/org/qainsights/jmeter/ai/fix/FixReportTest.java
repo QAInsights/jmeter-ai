@@ -42,6 +42,18 @@ class FixReportTest {
     }
 
     @Test
+    void markdownIdentifiesAnInconclusiveMultiUserCheck() {
+        FixResult result = new FixResult(FixResult.Status.ALREADY_PASSING, 0, 1, 0, 1,
+                0, 0, null, List.of(), List.of(), "", null, List.of(), true, 0, 0, 0, 0);
+        result.setConcurrencyReason("The multi-user check did not finish within 120 s.");
+
+        String markdown = FixReport.markdown(result);
+
+        assertTrue(markdown.contains("Inconclusive: The multi-user check did not finish within 120 s."));
+        assertFalse(markdown.contains("2 users × 2 loops:"));
+    }
+
+    @Test
     void markdownListsAddedResultCollectorsAndAssertionsByGuiClass() {
         HashTree tree = new ListedHashTree();
         HashTree children = tree.add(new TestPlan("Test Plan"));

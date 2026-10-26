@@ -1,10 +1,13 @@
 package org.qainsights.jmeter.ai.utils;
 
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SafeTextTest {
@@ -84,5 +87,13 @@ class SafeTextTest {
     void leavesOrdinaryTextUnchanged() {
         String ordinary = "The response contained no credential fields and status was 200.";
         assertEquals(ordinary, SafeText.redactSensitiveValues(ordinary));
+    }
+
+    @Test
+    void redactsLongDelimiterFreeSensitiveNameRunsQuickly() {
+        String repeated = "token".repeat(10_000);
+
+        assertTimeout(Duration.ofSeconds(1),
+                () -> assertEquals(repeated, SafeText.redactSensitiveValues(repeated)));
     }
 }

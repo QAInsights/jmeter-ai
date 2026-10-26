@@ -199,9 +199,14 @@ class TestPlanRunnerTest {
     }
 
     @Test
-    void prepareExecutionTreeStripsUserListenersWithoutChangingLiveTree() {
+    void prepareExecutionTreeOverridesLoadAndStripsListenersWithoutChangingLiveTree() {
         HashTree liveTree = planWithLoops(1);
         HashTree planChildren = liveTree.getTree(liveTree.list().iterator().next());
+        ThreadGroup liveGroup = threadGroup(liveTree);
+        liveGroup.setRampUp(11);
+        liveGroup.setDelay(13);
+        liveGroup.setScheduler(true);
+        liveGroup.setDuration(17);
         ResultCollector resultCollector = new ResultCollector();
         resultCollector.setName("User JTL");
         resultCollector.setProperty(TestElement.GUI_CLASS,
@@ -213,22 +218,42 @@ class TestPlanRunnerTest {
                 "org.apache.jmeter.visualizers.ViewResultsFullVisualizer");
         planChildren.add(visualizerBacked);
 
-        HashTree execTree = TestPlanRunner.prepareExecutionTree(liveTree, 0, 0);
+        HashTree execTree = TestPlanRunner.prepareExecutionTree(liveTree, 2, 2);
+        ThreadGroup execGroup = threadGroup(execTree);
 
         assertFalse(containsElement(execTree, element -> element instanceof ResultCollector));
         assertFalse(containsElement(execTree, element ->
                 "org.apache.jmeter.visualizers.ViewResultsFullVisualizer"
                         .equals(element.getPropertyAsString(TestElement.GUI_CLASS))));
+        assertEquals(2, execGroup.getNumThreads());
+        assertEquals(0, execGroup.getRampUp());
+        assertEquals(0, execGroup.getDelay());
+        assertFalse(execGroup.getScheduler());
+        assertEquals(0, execGroup.getDuration());
         assertTrue(containsElement(liveTree, element -> element == resultCollector));
         assertTrue(containsElement(liveTree, element -> element == visualizerBacked));
+        assertEquals(1, liveGroup.getNumThreads());
+        assertEquals(11, liveGroup.getRampUp());
+        assertEquals(13, liveGroup.getDelay());
+        assertTrue(liveGroup.getScheduler());
+        assertEquals(17, liveGroup.getDuration());
     }
 
     private static LoopController originalController(HashTree plan) {
-        Object testPlan = plan.list().iterator().next();
-        HashTree planChildren = plan.getTree(testPlan);
-        Object group = planChildren.list().iterator().next();
-        ThreadGroup threadGroup = (ThreadGroup) group;
-        return (LoopController) threadGroup.getSamplerController();
+        return (LoopController) threadGroup(plan).getSamplerController();
+    }
+
+    private static ThreadGroup threadGroup(HashTree tree) {
+        for (Object key : tree.list()) {
+            if (key instanceof ThreadGroup group) {
+                return group;
+            }
+            ThreadGroup nested = threadGroup(tree.getTree(key));
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
     }
 
     private static boolean containsElement(HashTree tree,

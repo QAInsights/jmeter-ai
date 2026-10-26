@@ -132,7 +132,8 @@ final class FixCommandRunner {
 
             @Override
             protected void done() {
-                if (ACTIVE_RUN_TOKEN.compareAndSet(runToken, null)) {
+                boolean activeRun = ACTIVE_RUN_TOKEN.compareAndSet(runToken, null);
+                if (activeRun) {
                     cb.hideStopButton();
                     cb.setCancelHandle(null);
                     cb.setInputEnabled(true);
@@ -160,9 +161,10 @@ final class FixCommandRunner {
                                 }
                                 String currentTreeHash = currentPlanTreeHash();
                                 boolean treeChanged = treeChanged(completedTreeHash, currentTreeHash);
-                                if (needsUndoConfirmation(backups.currentPlanMatches(backup),
+                                boolean currentPlanMatches = backups.currentPlanMatches(backup);
+                                if (needsUndoConfirmation(currentPlanMatches,
                                         completedTreeHash, currentTreeHash)
-                                        && !confirmUndoPlanChange(treeChanged)) {
+                                        && !confirmUndoPlanChange(currentPlanMatches, treeChanged)) {
                                     return false;
                                 }
                                 boolean savedFileChanged = backups.restoreAndCheckSavedFileChanged(backup);
@@ -185,8 +187,12 @@ final class FixCommandRunner {
                     log.warn("Make it pass was interrupted", e);
                 } catch (ExecutionException e) {
                     if (isCancellationFailure(cancelled.get(), e.getCause())) {
-                        log.debug("Make it pass was cancelled", e);
-                        finishWithMessage("Make it pass was cancelled.");
+                        if (activeRun) {
+                            log.debug("Make it pass was cancelled", e);
+                            finishWithMessage("Make it pass was cancelled.");
+                        } else {
+                            log.debug("Ignoring cancellation from inactive Make it pass run", e);
+                        }
                     } else {
                         cb.appendErrorMessageToChat("Make it pass failed", asException(e.getCause()));
                     }
@@ -270,11 +276,11 @@ final class FixCommandRunner {
         }
     }
 
-    private boolean confirmUndoPlanChange(boolean treeChanged) {
+    private boolean confirmUndoPlanChange(boolean currentPlanMatches, boolean treeChanged) {
         org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
         int choice = javax.swing.JOptionPane.showConfirmDialog(
                 gui == null ? null : gui.getMainFrame(),
-                undoConfirmationMessage(treeChanged),
+                undoConfirmationMessage(currentPlanMatches, treeChanged),
                 "Undo all", javax.swing.JOptionPane.YES_NO_OPTION, javax.swing.JOptionPane.WARNING_MESSAGE);
         return choice == javax.swing.JOptionPane.YES_OPTION;
     }
@@ -288,8 +294,8 @@ final class FixCommandRunner {
         return !currentPlanMatches || treeChanged(completedTreeHash, currentTreeHash);
     }
 
-    static String undoConfirmationMessage(boolean treeChanged) {
-        return treeChanged
+    static String undoConfirmationMessage(boolean currentPlanMatches, boolean treeChanged) {
+        return currentPlanMatches && treeChanged
                 ? "You changed the plan after Make it pass finished. Undo all also discards those changes."
                 : "The open test plan is different from the plan this result belongs to. Undo all will replace it. "
                         + "Continue?";

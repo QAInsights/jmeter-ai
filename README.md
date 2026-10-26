@@ -721,7 +721,7 @@ Before the first run, Feather Wand shows the HTTP sampler and HTTP Request Defau
 | Property | Description | Default |
 | --- | --- | --- |
 | `jmeter.ai.fix.max.rounds` | Maximum repair rounds, clamped from 1 to 10 | `5` |
-| `jmeter.ai.fix.timeout.seconds` | Timeout for each single-iteration JMeter check, clamped from 10 to 900 seconds | `120` |
+| `jmeter.ai.fix.timeout.seconds` | Timeout for each JMeter check, clamped from 10 to 900 seconds | `120` |
 | `jmeter.ai.fix.concurrency.check` | Run the final two-user, two-loop check and repair its failures | `true` |
 
 ### Optional Jev Smart Routing

@@ -110,13 +110,62 @@ public final class PlanHosts {
                 || path.regionMatches(true, 0, "https://", 0, 8))) {
             return;
         }
+        String resolvedPath = resolve(path, variables);
+        String authority;
         try {
-            String host = new URI(resolve(path, variables)).getHost();
-            if (host != null && !host.contains("${")) {
+            URI uri = new URI(resolvedPath);
+            String host = uri.getHost();
+            if (host != null) {
                 add(hosts, host, variables);
+                return;
             }
+            authority = uri.getRawAuthority();
         } catch (URISyntaxException ignored) {
-            // Ignore invalid sampler paths; JMeter will report them during the check run.
+            authority = rawAuthority(resolvedPath);
+            if (authority == null || !authority.contains("${")) {
+                return;
+            }
         }
+        String host = hostFromAuthority(authority);
+        if (host != null && !host.isBlank() && !host.contains("%")) {
+            add(hosts, host, variables);
+        }
+    }
+
+    private static String rawAuthority(String absoluteUrl) {
+        int schemeEnd = absoluteUrl.indexOf("://");
+        if (schemeEnd < 0) {
+            return null;
+        }
+        int start = schemeEnd + 3;
+        int end = absoluteUrl.length();
+        for (char delimiter : new char[] {'/', '?', '#'}) {
+            int index = absoluteUrl.indexOf(delimiter, start);
+            if (index >= 0) {
+                end = Math.min(end, index);
+            }
+        }
+        return absoluteUrl.substring(start, end);
+    }
+
+    private static String hostFromAuthority(String authority) {
+        if (authority == null || authority.isBlank()) {
+            return null;
+        }
+        String host = authority.substring(authority.lastIndexOf('@') + 1);
+        if (host.startsWith("[")) {
+            int closingBracket = host.indexOf(']');
+            if (closingBracket >= 0) {
+                return host.substring(0, closingBracket + 1);
+            }
+        }
+        int colon = host.lastIndexOf(':');
+        if (colon >= 0 && host.indexOf(':') == colon) {
+            String port = host.substring(colon + 1);
+            if (port.isEmpty() || port.chars().allMatch(Character::isDigit)) {
+                return host.substring(0, colon);
+            }
+        }
+        return host;
     }
 }

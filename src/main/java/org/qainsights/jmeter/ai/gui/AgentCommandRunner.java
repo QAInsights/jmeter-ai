@@ -132,11 +132,7 @@ final class AgentCommandRunner {
                                         reasoning -> cb.appendReasoningToken(reasoning),
                                         notice -> cb.appendJevRoute(notice, selectedModel),
                                         triage -> cb.appendJevTriage(triage, selectedModel),
-                                        summary -> {
-                                            if (summary.getFailureCount() > 0) {
-                                                offeredFix.set(true);
-                                            }
-                                        }));
+                                        summary -> offeredFix.set(summary.getFailureCount() > 0)));
                     } finally {
                         glowController.onRunFinished();
                     }

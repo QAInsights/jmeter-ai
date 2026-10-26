@@ -42,7 +42,7 @@ public final class PlanDiff {
         before.forEach((path, oldElement) -> {
             ElementSnapshot newElement = after.get(path);
             if (newElement == null) {
-                removals.add(ElementChange.element(path, oldElement));
+                removals.add(ElementChange.removed(path, oldElement));
             } else if (!oldElement.equals(newElement)) {
                 modifications.add(ElementChange.modified(path, oldElement, newElement));
             }
@@ -197,13 +197,20 @@ public final class PlanDiff {
             return new ElementChange(path, snapshot.className, Map.of(), snapshot.properties);
         }
 
+        private static ElementChange removed(String path, ElementSnapshot snapshot) {
+            return new ElementChange(path, snapshot.className, snapshot.properties, Map.of());
+        }
+
         private static ElementChange modified(String path, ElementSnapshot before, ElementSnapshot after) {
             return new ElementChange(path, before.className, before.properties, after.properties);
         }
 
         public String path() { return path; }
         public String className() { return className; }
-        public String guiClass() { return afterProperties.getOrDefault(TestElement.GUI_CLASS, ""); }
+        public String guiClass() {
+            return afterProperties.getOrDefault(TestElement.GUI_CLASS,
+                    beforeProperties.getOrDefault(TestElement.GUI_CLASS, ""));
+        }
         public boolean isResponseAssertion() {
             return className.equals("org.apache.jmeter.assertions.ResponseAssertion")
                     && guiClass().equals("org.apache.jmeter.assertions.gui.AssertionGui");

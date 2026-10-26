@@ -57,6 +57,21 @@ class PlanDiffTest {
     }
 
     @Test
+    void removedElementsKeepTheirSnapshotProperties() {
+        HashTree beforeTree = plan();
+        HashTree beforeChildren = beforeTree.getTree(beforeTree.list().iterator().next());
+        beforeChildren.add(listener("Results", "org.apache.jmeter.visualizers.SummaryReport"));
+
+        PlanDiff diff = PlanDiff.between(PlanDiff.snapshot(beforeTree), PlanDiff.snapshot(plan()));
+
+        PlanDiff.ElementChange removed = diff.removed().get(0);
+        assertEquals("org.apache.jmeter.visualizers.SummaryReport", removed.guiClass());
+        assertEquals("org.apache.jmeter.visualizers.SummaryReport",
+                removed.beforeProperties().get(TestElement.GUI_CLASS));
+        assertTrue(removed.afterProperties().isEmpty());
+    }
+
+    @Test
     void masksSensitivePropertyValues() {
         HashTree tree = plan();
         HashTree children = tree.getTree(tree.list().iterator().next());

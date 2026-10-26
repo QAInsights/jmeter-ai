@@ -79,9 +79,13 @@ final class FixResultCard extends JPanel {
             content.add(label(result.reason()));
         }
         if (result.concurrencyChecked()) {
-            content.add(label("Multi-user check: " + result.concurrencyBeforeFailed() + " of "
-                    + result.concurrencyBeforeTotal() + " requests failed → "
-                    + result.concurrencyAfterFailed() + " of " + result.concurrencyAfterTotal() + " failed"));
+            if (!result.concurrencyReason().isBlank()) {
+                content.add(label("Inconclusive: " + result.concurrencyReason()));
+            } else {
+                content.add(label("Multi-user check: " + result.concurrencyBeforeFailed() + " of "
+                        + result.concurrencyBeforeTotal() + " requests failed → "
+                        + result.concurrencyAfterFailed() + " of " + result.concurrencyAfterTotal() + " failed"));
+            }
         }
         if (!result.beforeFailures().isEmpty()) {
             content.add(label("Before failures:"));

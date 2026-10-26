@@ -29,6 +29,7 @@ public final class FixResult {
     private final int concurrencyBeforeTotal;
     private final int concurrencyAfterFailed;
     private final int concurrencyAfterTotal;
+    private String concurrencyReason = "";
     private File reportFile;
     private List<Failure> beforeFailures = List.of();
     private List<String> roundSummaries = List.of();
@@ -95,6 +96,10 @@ public final class FixResult {
     public int concurrencyBeforeTotal() { return concurrencyBeforeTotal; }
     public int concurrencyAfterFailed() { return concurrencyAfterFailed; }
     public int concurrencyAfterTotal() { return concurrencyAfterTotal; }
+    public String concurrencyReason() { return concurrencyReason; }
+    public void setConcurrencyReason(String concurrencyReason) {
+        this.concurrencyReason = concurrencyReason == null ? "" : concurrencyReason;
+    }
     public File reportFile() { return reportFile; }
     public void setReportFile(File reportFile) { this.reportFile = reportFile; }
     public List<Failure> beforeFailures() { return beforeFailures; }

@@ -97,10 +97,14 @@ public final class FixReport {
         }
         text.append("\n## Multi-user check\n\n");
         if (result.concurrencyChecked()) {
-            text.append("2 users × 2 loops: ").append(result.concurrencyBeforeFailed()).append(" of ")
-                    .append(result.concurrencyBeforeTotal()).append(" failed → ")
-                    .append(result.concurrencyAfterFailed()).append(" of ")
-                    .append(result.concurrencyAfterTotal()).append(" failed.\n");
+            if (!result.concurrencyReason().isBlank()) {
+                text.append("Inconclusive: ").append(result.concurrencyReason()).append('\n');
+            } else {
+                text.append("2 users × 2 loops: ").append(result.concurrencyBeforeFailed()).append(" of ")
+                        .append(result.concurrencyBeforeTotal()).append(" failed → ")
+                        .append(result.concurrencyAfterFailed()).append(" of ")
+                        .append(result.concurrencyAfterTotal()).append(" failed.\n");
+            }
         } else {
             text.append("Not run.\n");
         }

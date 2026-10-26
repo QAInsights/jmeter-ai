@@ -60,6 +60,19 @@ class SoftFailureDetectorTest {
     }
 
     @Test
+    void onlyChecksTitlesInHtmlResponses() throws Exception {
+        HTTPSampleResult svg = html("Not Found", "", "https://shop.test/icon.svg", "/icon.svg");
+        svg.setContentType("image/svg+xml");
+        svg.setResponseData("<svg><title>Not Found</title></svg>", "UTF-8");
+        assertNull(SoftFailureDetector.reason(svg));
+
+        HTTPSampleResult htmlWithoutType = html("Not Found", "", "https://shop.test/item", "/item");
+        htmlWithoutType.setContentType("");
+        htmlWithoutType.setResponseData("  <!doctype html><html><title>Not Found</title></html>", "UTF-8");
+        assertNotNull(SoftFailureDetector.reason(htmlWithoutType));
+    }
+
+    @Test
     void summaryCountsSoftFailuresAndKeepsBoundedObservations() throws Exception {
         HTTPSampleResult result = html("Invalid request", "", "https://shop.test/item?token=secret", "/item");
         var summary = org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.of(

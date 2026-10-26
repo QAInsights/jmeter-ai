@@ -11,7 +11,15 @@ class FixCommandRunnerTest {
     void asksBeforeUndoWhenSamePlanTreeChangedAfterCompletion() {
         assertTrue(FixCommandRunner.needsUndoConfirmation(true, "completed-tree", "later-edits"));
         assertEquals("You changed the plan after Make it pass finished. Undo all also discards those changes.",
-                FixCommandRunner.undoConfirmationMessage(true));
+                FixCommandRunner.undoConfirmationMessage(true, true));
+    }
+
+    @Test
+    void differentPlanMessageTakesPrecedenceWhenItsTreeAlsoChanged() {
+        assertTrue(FixCommandRunner.needsUndoConfirmation(false, "completed-tree", "different-tree"));
+        assertEquals("The open test plan is different from the plan this result belongs to. Undo all will replace it. "
+                        + "Continue?",
+                FixCommandRunner.undoConfirmationMessage(false, true));
     }
 
     @Test

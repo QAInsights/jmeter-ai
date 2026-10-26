@@ -155,7 +155,7 @@ final class FixReportDialog extends JDialog {
                 Desktop.getDesktop().open(reportFile);
                 return;
             }
-        } catch (IOException | UnsupportedOperationException | SecurityException ignored) {
+        } catch (IOException | UnsupportedOperationException | IllegalArgumentException | SecurityException ignored) {
             // Fall back to the existing report-opening handler.
         }
         reportFallback.accept(reportPath());

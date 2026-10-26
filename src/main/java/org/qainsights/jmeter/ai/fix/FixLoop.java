@@ -70,7 +70,8 @@ public final class FixLoop {
         }
     }
 
-    private static final Pattern PASSWORD_ARGUMENT = Pattern.compile("(?i)(password|passwd|pwd|pass)");
+    private static final Pattern PASSWORD_ARGUMENT =
+            Pattern.compile("(?i)(^|[^a-z])(password|passwd|pwd|pass)([^a-z]|$)");
 
     private final SingleIterationRunner runner;
     private final BackupStore backups;
@@ -84,6 +85,7 @@ public final class FixLoop {
     private final List<String> roundSummaries = new ArrayList<>();
     private TestRunSummary concurrencyBefore;
     private TestRunSummary concurrencyAfter;
+    private String concurrencyReason = "";
     private final List<String> skippedPageChecks = new ArrayList<>();
     private boolean assertionTelemetryRecorded;
     private boolean softFailureTelemetryRecorded;
@@ -119,6 +121,7 @@ public final class FixLoop {
         roundSummaries.clear();
         concurrencyBefore = null;
         concurrencyAfter = null;
+        concurrencyReason = "";
         skippedPageChecks.clear();
         assertionTelemetryRecorded = false;
         softFailureTelemetryRecorded = false;
@@ -333,6 +336,9 @@ public final class FixLoop {
             return new GateResult(single, single, GateStage.PASSED);
         }
         TestRunSummary multi = runConcurrencyCheck(request);
+        if (multi.getFailureCount() == 0 && !passes(multi)) {
+            return new GateResult(single, single, GateStage.PASSED);
+        }
         return new GateResult(multi, single, passes(multi) ? GateStage.PASSED : GateStage.TWO_USERS);
     }
 
@@ -397,7 +403,15 @@ public final class FixLoop {
             concurrencyBefore = summary;
         }
         concurrencyAfter = summary;
+        concurrencyReason = summary.getFailureCount() == 0 && !passes(summary)
+                ? concurrencyTimeoutReason(request.timeoutSeconds()) : "";
         return summary;
+    }
+
+    private static String concurrencyTimeoutReason(long timeoutSeconds) {
+        return "The multi-user check did not finish within " + timeoutSeconds
+                + " s before every request ran. Raise jmeter.ai.fix.timeout.seconds. "
+                + "The single-user result is shown.";
     }
 
     private TestRunSummary runSingleCheck(long timeoutSeconds) {
@@ -488,6 +502,7 @@ public final class FixLoop {
                     concurrencyAfter == null ? 0 : concurrencyAfter.getTotalSamples());
             result.setBeforeFailures(before == null ? List.of() : before.getFailures());
             result.setRoundSummaries(roundSummaries);
+            result.setConcurrencyReason(concurrencyReason);
             result.setDeterministicHints(deterministicHints(before));
             result.setSkippedPageChecks(skippedPageChecks);
             return result;

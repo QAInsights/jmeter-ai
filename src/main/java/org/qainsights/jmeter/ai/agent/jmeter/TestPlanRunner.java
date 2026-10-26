@@ -346,6 +346,10 @@ public final class TestPlanRunner {
             }
             if (key instanceof ThreadGroup threadGroup) {
                 threadGroup.setNumThreads(threads);
+                threadGroup.setRampUp(0);
+                threadGroup.setDelay(0);
+                threadGroup.setScheduler(false);
+                threadGroup.setDuration(0);
                 if (threadGroup.getSamplerController() instanceof LoopController) {
                     LoopController loopController = (LoopController) threadGroup.getSamplerController();
                     loopController.setLoops(loops);

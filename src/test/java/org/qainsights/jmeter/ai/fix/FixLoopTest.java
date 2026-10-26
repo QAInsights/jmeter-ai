@@ -324,6 +324,34 @@ class FixLoopTest {
     }
 
     @Test
+    void timedOutMultiUserCheckKeepsTheSingleUserPass() {
+        AtomicInteger rounds = new AtomicInteger();
+        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0)),
+                List.of(summary(4, 0, true), summary(4, 0, true)), rounds, new AtomicInteger());
+
+        FixResult result = loop.run(new FixRequest(1, 120, true), null);
+
+        assertEquals(FixResult.Status.ALREADY_PASSING, result.status());
+        assertEquals(0, rounds.get());
+        assertEquals(2, result.afterTotal());
+        assertTrue(result.concurrencyReason().contains("did not finish"));
+    }
+
+    @Test
+    void multiUserCheckWithoutSamplesKeepsTheSingleUserPass() {
+        AtomicInteger rounds = new AtomicInteger();
+        FixLoop loop = multiUserLoop(List.of(summary(2, 0), summary(2, 0)),
+                List.of(summary(0, 0), summary(0, 0)), rounds, new AtomicInteger());
+
+        FixResult result = loop.run(new FixRequest(1, 120, true), null);
+
+        assertEquals(FixResult.Status.ALREADY_PASSING, result.status());
+        assertEquals(0, rounds.get());
+        assertEquals(2, result.afterTotal());
+        assertTrue(result.concurrencyReason().contains("did not finish"));
+    }
+
+    @Test
     void requestClampsRoundAndTimeoutLimits() {
         FixRequest request = new FixRequest(99, 1);
         assertEquals(10, request.maxRounds());
@@ -345,6 +373,23 @@ class FixLoopTest {
         assertTrue(hints.get(0).contains("Login"));
         assertFalse(hints.get(0).contains("literal-secret"));
         assertFalse(hints.get(0).contains("Profile"));
+    }
+
+    @Test
+    void literalPasswordHintsMatchWholeNamePartsOnly() {
+        HashTree nonSensitiveTree = new ListedHashTree();
+        HashTree nonSensitivePlan = nonSensitiveTree.add(new TestPlan("Test Plan"));
+        for (String name : List.of("passenger_name", "bypass", "compass")) {
+            nonSensitivePlan.add(samplerWithArgument(name, name, "literal"));
+        }
+        assertTrue(FixLoop.literalPasswordHints(nonSensitiveTree).isEmpty());
+
+        HashTree sensitiveTree = new ListedHashTree();
+        HashTree sensitivePlan = sensitiveTree.add(new TestPlan("Test Plan"));
+        for (String name : List.of("password", "user_pass", "pwd")) {
+            sensitivePlan.add(samplerWithArgument(name, name, "literal"));
+        }
+        assertEquals(3, FixLoop.literalPasswordHints(sensitiveTree).size());
     }
 
     @Test

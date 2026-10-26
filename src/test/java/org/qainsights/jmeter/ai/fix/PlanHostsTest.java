@@ -22,6 +22,24 @@ class PlanHostsTest {
     }
 
     @Test
+    void includesUnresolvedHostFromAbsoluteSamplerPath() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("");
+        sampler.setPath("https://${TARGET_HOST}:8443/api");
+
+        assertEquals(Set.of("${TARGET_HOST}"), PlanHosts.collect(tree(sampler)));
+    }
+
+    @Test
+    void collectsUnderscoreHostFromAbsoluteSamplerPathWithoutUserInfoOrPort() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setDomain("");
+        sampler.setPath("https://user:secret@my_host:8443/api");
+
+        assertEquals(Set.of("my_host"), PlanHosts.collect(tree(sampler)));
+    }
+
+    @Test
     void resolvesDomainFromUserDefinedVariablesElement() {
         Arguments variables = new Arguments();
         variables.addArgument("HOST", "target.example.test");

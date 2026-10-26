@@ -79,6 +79,18 @@ class FixResultCardTest {
         assertTrue(labels.stream().anyMatch(label -> label.contains("Listeners added: 2")), labels.toString());
     }
 
+    @Test
+    void cardExplainsWhenTheMultiUserCheckWasInconclusive() {
+        FixResult result = new FixResult(FixResult.Status.ALREADY_PASSING, 0, 1, 0, 1,
+                0, 0, null, List.of(), List.of(), "", null, List.of(), true, 0, 0, 0, 0);
+        result.setConcurrencyReason("The multi-user check did not finish within 120 s.");
+
+        FixResultCard card = new FixResultCard(result, () -> true, () -> { }, () -> { });
+
+        assertTrue(labelTexts(card).stream().anyMatch(label ->
+                label.contains("Inconclusive: The multi-user check did not finish")));
+    }
+
     private static List<String> buttonNames(JPanel panel) {
         List<String> names = new ArrayList<>();
         collectButtons(panel, names);

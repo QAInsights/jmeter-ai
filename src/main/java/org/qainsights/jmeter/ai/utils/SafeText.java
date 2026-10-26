@@ -10,8 +10,8 @@ public final class SafeText {
     private static final String SENSITIVE_NAME =
             "(?:token|session|sid|csrf|xsrf|cookie|auth|password|passwd|secret|api[_-]?key|apikey)";
     private static final Pattern SENSITIVE_FIELD_VALUE = Pattern.compile(
-            "(?i)([\"']?[^\"'\\s:=&,{}\\[\\]]*" + SENSITIVE_NAME
-                    + "[^\"'\\s:=&,{}\\[\\]]*[\"']?\\s*[:=]\\s*)"
+            "(?i)([\"']?[^\"'\\s:=&,{}\\[\\]]{0,64}" + SENSITIVE_NAME
+                    + "[^\"'\\s:=&,{}\\[\\]]{0,64}[\"']?\\s*[:=]\\s*)"
                     + "(?:\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|[^&,\\s}\\]]+)");
     private static final Pattern HIDDEN_INPUT = Pattern.compile(
             "(?is)<input\\b[^>]*>");
@@ -43,7 +43,9 @@ public final class SafeText {
         }
         String redacted = redactHiddenInputs(text);
         redacted = BEARER_VALUE.matcher(redacted).replaceAll("$1***");
-        redacted = SENSITIVE_FIELD_VALUE.matcher(redacted).replaceAll("$1***");
+        if (redacted.indexOf(':') >= 0 || redacted.indexOf('=') >= 0) {
+            redacted = SENSITIVE_FIELD_VALUE.matcher(redacted).replaceAll("$1***");
+        }
         return JWT.matcher(redacted).replaceAll("***");
     }
 
