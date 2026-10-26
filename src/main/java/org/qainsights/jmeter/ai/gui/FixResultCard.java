@@ -2,8 +2,6 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Desktop;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -127,15 +125,8 @@ final class FixResultCard extends JPanel {
         if (result.reportFile() != null) {
             JButton report = new JButton("Open report");
             report.addActionListener(event -> {
-                try {
-                    if (Desktop.isDesktopSupported()) {
-                        Desktop.getDesktop().open(result.reportFile());
-                    } else {
-                        reportFallback.accept(result.reportFile().getAbsolutePath());
-                    }
-                } catch (IOException | UnsupportedOperationException e) {
-                    reportFallback.accept(result.reportFile().getAbsolutePath());
-                }
+                FixReportDialog dialog = new FixReportDialog(result.reportFile(), reportFallback);
+                dialog.setVisible(true);
             });
             actions.add(report);
         }

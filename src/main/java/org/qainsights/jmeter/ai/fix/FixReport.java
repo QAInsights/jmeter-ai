@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.jmeter.testelement.TestElement;
 import org.qainsights.jmeter.ai.utils.SafeText;
 
 /** Writes a retained Markdown summary of a Make it pass run. */
@@ -53,9 +54,9 @@ public final class FixReport {
         if (diff == null || (diff.added().isEmpty() && diff.removed().isEmpty() && diff.modified().isEmpty())) {
             text.append("No plan changes recorded.\n\n");
         } else {
-            appendChanges(text, "Added", diff.added());
-            appendChanges(text, "Removed", diff.removed());
-            appendChanges(text, "Modified", diff.modified());
+            appendChanges(text, "Added", diff.added(), ChangeKind.ADDED);
+            appendChanges(text, "Removed", diff.removed(), ChangeKind.REMOVED);
+            appendChanges(text, "Modified", diff.modified(), ChangeKind.MODIFIED);
         }
         text.append("## Why\n\n");
         for (int i = 0; i < result.roundSummaries().size(); i++) {
@@ -106,7 +107,8 @@ public final class FixReport {
         return text.toString();
     }
 
-    private static void appendChanges(StringBuilder text, String heading, List<PlanDiff.ElementChange> changes) {
+    private static void appendChanges(StringBuilder text, String heading, List<PlanDiff.ElementChange> changes,
+                                      ChangeKind kind) {
         text.append("### ").append(heading).append('\n');
         if (changes.isEmpty()) {
             text.append("None.\n");
@@ -118,6 +120,12 @@ public final class FixReport {
                 for (String property : properties) {
                     String oldValue = change.beforeProperties().get(property);
                     String newValue = change.afterProperties().get(property);
+                    if (kind != ChangeKind.REMOVED && isClassProperty(property)) {
+                        continue;
+                    }
+                    if (kind == ChangeKind.ADDED && (newValue == null || newValue.isEmpty())) {
+                        continue;
+                    }
                     if (!Objects.equals(oldValue, newValue)) {
                         text.append("  - `").append(property).append("`: `").append(oldValue == null ? "" : oldValue)
                                 .append("` → `").append(newValue == null ? "" : newValue).append("`\n");
@@ -126,6 +134,14 @@ public final class FixReport {
             });
         }
         text.append('\n');
+    }
+
+    private static boolean isClassProperty(String property) {
+        return TestElement.GUI_CLASS.equals(property) || TestElement.TEST_CLASS.equals(property);
+    }
+
+    private enum ChangeKind {
+        ADDED, REMOVED, MODIFIED
     }
 
     private static void appendAssertions(StringBuilder text, PlanDiff diff) {

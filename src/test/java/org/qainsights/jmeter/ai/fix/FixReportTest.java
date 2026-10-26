@@ -11,6 +11,7 @@ import org.apache.jorphan.collections.HashTree;
 import org.apache.jorphan.collections.ListedHashTree;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FixReportTest {
@@ -61,6 +62,29 @@ class FixReportTest {
         assertTrue(markdown.contains("- Test Plan/Make it pass: page check"));
         assertTrue(markdown.contains("- Test Plan/Make it pass - View Results Tree"));
         assertTrue(markdown.contains("- Test Plan/Make it pass - Summary Report"));
+        assertFalse(markdown.contains("`TestElement.gui_class`"));
+        assertFalse(markdown.contains("`TestElement.test_class`"));
+        assertFalse(markdown.contains("`` → ``"));
+    }
+
+    @Test
+    void changedElementsOmitOnlyClassProperties() {
+        PlanDiff.ElementSnapshot before = new PlanDiff.ElementSnapshot("HTTPSamplerProxy", Map.of(
+                TestElement.GUI_CLASS, "before-gui", TestElement.TEST_CLASS, "before-class",
+                "path", "/old", "empty-value", "before"));
+        PlanDiff.ElementSnapshot after = new PlanDiff.ElementSnapshot("HTTPSamplerProxy", Map.of(
+                TestElement.GUI_CLASS, "after-gui", TestElement.TEST_CLASS, "after-class",
+                "path", "/new", "empty-value", ""));
+        PlanDiff diff = PlanDiff.between(Map.of("Plan/Request", before), Map.of("Plan/Request", after));
+        FixResult result = new FixResult(FixResult.Status.FIXED, 1, 1, 0, 1,
+                1, 0, null, List.of(), List.of(), "", diff, List.of());
+
+        String markdown = FixReport.markdown(result);
+
+        assertTrue(markdown.contains("`path`: `/old` → `/new`"));
+        assertTrue(markdown.contains("`empty-value`: `before` → ``"));
+        assertFalse(markdown.contains("`TestElement.gui_class`"));
+        assertFalse(markdown.contains("`TestElement.test_class`"));
     }
 
     private static ResultCollector listener(String name, String guiClass) {
