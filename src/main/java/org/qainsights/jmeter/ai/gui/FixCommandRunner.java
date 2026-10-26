@@ -116,7 +116,7 @@ final class FixCommandRunner {
                 FixLoop loop = new FixLoop(testRunner, backups,
                         PlanCensus::live,
                         message -> agent.runRestricted(message, registry, "",
-                                new AgentRunListeners(this::publish, null, null, null, null)),
+                                new AgentRunListeners(this::publish, null, null, null, null), cancelled::get),
                         cancelled::get);
                 try {
                     return loop.run(request, this::publish);

@@ -8,12 +8,21 @@ import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.claude.ClaudeChatModel;
 import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
+import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
+import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
+import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolConfirmationGate;
+import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
+import org.qainsights.jmeter.ai.agent.tool.ToolResult;
+import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 
 import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.Message;
@@ -186,6 +195,54 @@ class JMeterAgentTest {
         agent.run("show me the tree", null, progressLines::add);
 
         assertTrue(progressLines.stream().noneMatch(l -> l.contains("declined")));
+    }
+
+    @Test
+    void runRestricted_stopBeforeConfirmationDeclinesToolWithoutOpeningGate() {
+        AtomicBoolean stopRequested = new AtomicBoolean();
+        AtomicInteger confirmationCalls = new AtomicInteger();
+        AtomicInteger toolExecutions = new AtomicInteger();
+        AtomicInteger modelNextCalls = new AtomicInteger();
+        ToolConfirmationGate confirmationGate = (toolName, args) -> {
+            confirmationCalls.incrementAndGet();
+            return true;
+        };
+        AgentChatModelFactory modelFactory = (specs, systemPrompt, priorTurns) -> new ChatModel() {
+            @Override
+            public AssistantTurn start(String userMessage) {
+                return new AssistantTurn("", Collections.singletonList(
+                        new AssistantTurn.ToolCall("tc_1", "delete_element", Collections.emptyMap())));
+            }
+
+            @Override
+            public AssistantTurn next(List<ToolOutcome> outcomes) {
+                modelNextCalls.incrementAndGet();
+                return new AssistantTurn("Unexpected", Collections.emptyList());
+            }
+        };
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder("delete_element").description("delete").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                toolExecutions.incrementAndGet();
+                return ToolResult.ok("deleted");
+            }
+        });
+        JMeterAgent agent = new JMeterAgent(modelFactory, 5, confirmationGate);
+
+        AgentLoop.AgentResult result = agent.runRestricted("stop", registry, "",
+                new AgentRunListeners(null, call -> stopRequested.set(true), null, null, null),
+                stopRequested::get);
+
+        assertFalse(result.isCompleted());
+        assertEquals(0, confirmationCalls.get());
+        assertEquals(0, toolExecutions.get());
+        assertEquals(0, modelNextCalls.get());
     }
 
     @Test

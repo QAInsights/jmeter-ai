@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.apache.jmeter.gui.UndoHistory;
@@ -405,24 +406,35 @@ public final class JMeterAgent {
             sinks.routingNotice().accept(new AgentRequestRouter.Notice(decision, toolNames, fullRegistry.size()));
         }
         maybeWarnAboutUndoHistory(sinks.progress());
-        return runShared(userMessage, priorConversationTurns, sinks, registry, expander, "");
+        return runShared(userMessage, priorConversationTurns, sinks, registry, expander, "", null);
     }
 
     /** Runs one agent loop using only the supplied tools and no Jev routing. */
     public AgentLoop.AgentResult runRestricted(String message, ToolRegistry registry, String extraInstructions,
                                                 AgentRunListeners listeners) {
+        return runRestricted(message, registry, extraInstructions, listeners, null);
+    }
+
+    /** Runs a restricted agent loop that stops when the supplied cancellation signal is set. */
+    public AgentLoop.AgentResult runRestricted(String message, ToolRegistry registry, String extraInstructions,
+                                                AgentRunListeners listeners, BooleanSupplier stopRequested) {
         if (registry == null) {
             throw new IllegalArgumentException("registry must not be null");
         }
         AgentRunListeners sinks = AgentRunListeners.orEmpty(listeners);
         maybeWarnAboutUndoHistory(sinks.progress());
-        return runShared(message, Collections.emptyList(), sinks, registry, null, extraInstructions);
+        return runShared(message, Collections.emptyList(), sinks, registry, null, extraInstructions, stopRequested);
     }
 
     private AgentLoop.AgentResult runShared(String userMessage, List<String> priorConversationTurns,
                                             AgentRunListeners sinks, ToolRegistry registry,
-                                            AgentToolExpander expander, String extraInstructions) {
-        ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, confirmationGate);
+                                            AgentToolExpander expander, String extraInstructions,
+                                            BooleanSupplier stopRequested) {
+        ToolConfirmationGate gate = confirmationGate;
+        if (stopRequested != null && gate != null) {
+            gate = (name, args) -> !stopRequested.getAsBoolean() && confirmationGate.confirm(name, args);
+        }
+        ToolExecutor executor = new ToolExecutor(registry, DESTRUCTIVE_TOOLS, gate);
         List<ToolSpec> specs = registry.getSpecs();
         String systemPrompt = AgentSystemPrompt.build(new SchemaGrounding());
         if (extraInstructions != null && !extraInstructions.isBlank()) {
@@ -433,7 +445,7 @@ public final class JMeterAgent {
         if (expander != null) {
             expander.bindSpecSink(chat::updateToolSpecs);
         }
-        return new AgentLoop(chat, executor, maxIterations)
+        return new AgentLoop(chat, executor, maxIterations, stopRequested)
                 .run(userMessage, sinks.progress(), sinks.toolCallStarted(), sinks.reasoning());
     }
 
