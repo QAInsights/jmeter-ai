@@ -109,6 +109,7 @@ public class InputBoxIntellisenseTest {
         assertTrue(InputBoxIntellisense.isCompleteCommand("@load", 5, "@load"));
         assertFalse(InputBoxIntellisense.isCompleteCommand("@lo", 3, "@load"));
         assertFalse(InputBoxIntellisense.isCompleteCommand("@loadx", 6, "@load"));
+        assertFalse(InputBoxIntellisense.isCompleteCommand("@prompts", 8, "@prompts"));
     }
 
     @Test

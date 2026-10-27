@@ -238,7 +238,8 @@ public class InputBoxIntellisense {
             return false;
         }
         String token = text.substring(atIdx, caret);
-        return !token.startsWith(PROMPTS_COMMAND + " ") && token.equals(selected);
+        return !PROMPTS_COMMAND.equals(selected)
+                && !token.startsWith(PROMPTS_COMMAND + " ") && token.equals(selected);
     }
 
     /**
