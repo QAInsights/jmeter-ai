@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -7,6 +8,7 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -20,6 +22,7 @@ import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -45,6 +48,7 @@ import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkloadDesignerDialogTest {
@@ -145,6 +149,53 @@ class WorkloadDesignerDialogTest {
 
         assertFalse(area.isOpaque());
         assertEquals(0, area.getBackground().getAlpha());
+    }
+
+    @Test
+    void expandedAdvancedCardContainsBothRows() {
+        SectionCard advancedCard = new SectionCard("Advanced");
+        JLabel samplesLabel = new JLabel("Samples/s per vCPU");
+        JPanel samplesField = new JPanel();
+        JLabel prefixLabel = new JLabel("Property prefix");
+        JPanel prefixField = new JPanel();
+        List<WorkloadDesignerDialog.FormRow> rows = List.of(
+                new WorkloadDesignerDialog.FormRow(samplesLabel, samplesField, advancedCard, false),
+                new WorkloadDesignerDialog.FormRow(prefixLabel, prefixField, advancedCard, false));
+
+        WorkloadDesignerDialog.populateFormCardBody(
+                advancedCard, rows, 1, advancedCard, true, null, false, null, false);
+
+        assertEquals(2, advancedCard.body().getComponentCount());
+        assertTrue(samplesLabel.getParent() != null);
+        assertTrue(prefixLabel.getParent() != null);
+    }
+
+    @Test
+    void keepsAiPanelAttachedWhenRebuildingFormCardBodies() {
+        SectionCard aiCard = new SectionCard("Ask AI");
+        JPanel aiPanel = new JPanel();
+        aiCard.body().add(aiPanel, BorderLayout.CENTER);
+        SectionCard targetCard = new SectionCard("Target");
+        targetCard.body().add(new JPanel(), BorderLayout.CENTER);
+
+        WorkloadDesignerDialog.clearFormCardBody(targetCard, aiCard);
+        WorkloadDesignerDialog.clearFormCardBody(aiCard, aiCard);
+
+        assertEquals(0, targetCard.body().getComponentCount());
+        assertSame(aiPanel, aiCard.body().getComponent(0));
+    }
+
+    @Test
+    void commandPreviewCanGrowBeyondEightRows() {
+        JTextArea cliArea = new JTextArea();
+        cliArea.setText(String.join("\n", List.of(
+                "stage 1", "stage 2", "stage 3", "stage 4", "stage 5", "stage 6",
+                "stage 7", "stage 8", "stage 9", "stage 10", "stage 11", "stage 12")));
+        cliArea.setSize(500, 300);
+
+        WorkloadDesignerDialog.updateCommandRows(cliArea);
+
+        assertTrue(cliArea.getRows() > 8);
     }
 
     @Test

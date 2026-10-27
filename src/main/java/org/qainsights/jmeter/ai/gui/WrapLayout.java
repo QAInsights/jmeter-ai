@@ -101,6 +101,7 @@ final class WrapLayout extends FlowLayout {
                     - insets.top - insets.bottom;
             int availableHeight = parent.getHeight() - insets.top - insets.bottom;
             int y = insets.top + Math.max(0, (availableHeight - preferredHeight) / 2);
+            int contentWidth = Math.max(1, right - left);
             int rowHeight = 0;
             boolean rowHasComponent = false;
             for (Component component : parent.getComponents()) {
@@ -108,7 +109,8 @@ final class WrapLayout extends FlowLayout {
                     continue;
                 }
                 Dimension size = component.getPreferredSize();
-                if (rowHasComponent && x + getHgap() + size.width > right) {
+                int componentWidth = Math.min(contentWidth, size.width);
+                if (rowHasComponent && x + getHgap() + componentWidth > right) {
                     x = left;
                     y += rowHeight + getVgap();
                     rowHeight = 0;
@@ -117,8 +119,8 @@ final class WrapLayout extends FlowLayout {
                 if (rowHasComponent) {
                     x += getHgap();
                 }
-                component.setBounds(x, y, size.width, size.height);
-                x += size.width;
+                component.setBounds(x, y, componentWidth, size.height);
+                x += componentWidth;
                 rowHeight = Math.max(rowHeight, size.height);
                 rowHasComponent = true;
             }

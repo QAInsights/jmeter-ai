@@ -649,7 +649,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         cliArea.setFont(cliFont(textAreaFont));
         if (commandCodeBlock != null) {
             commandCodeBlock.updateTextInsets();
-            updateCommandRows();
+            updateCommandRows(cliArea);
         }
         cliArea.setForeground(ThemeColors.foreground());
         if (resultValues[9] != null) {
@@ -873,10 +873,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             }
         });
         advancedCard.body().setVisible(false);
-        for (FormRow row : rowsByCard.get(advancedCard)) {
-            row.label().setVisible(false);
-            row.field().setVisible(false);
-        }
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
         shapeCombo.addActionListener(event -> {
@@ -1445,41 +1441,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         try {
             aiCard.setVisible(aiPanelVisible);
             for (SectionCard card : formCards) {
+                clearFormCardBody(card, aiCard);
+                if (card == aiCard) {
+                    continue;
+                }
                 JPanel body = card.body();
-                body.removeAll();
-                body.setLayout(new GridBagLayout());
                 int columns = formColumns(card, body.getWidth());
                 cardRowColumns.put(card, columns);
-                int rowIndex = 0;
-                int columnIndex = 0;
-                for (FormRow row : rowsByCard.get(card)) {
-                    if ((row == capRow && !capRowVisible)
-                            || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)
-                            || card == advancedCard && !advancedExpanded
-                            || !row.label().isVisible() || !row.field().isVisible()) {
-                        continue;
-                    }
-                    JPanel cell = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
-                    cell.setOpaque(false);
-                    cell.add(row.label(), BorderLayout.NORTH);
-                    cell.add(row.field(), BorderLayout.CENTER);
-                    GridBagConstraints constraints = new GridBagConstraints();
-                    constraints.gridx = columnIndex;
-                    constraints.gridy = rowIndex;
-                    constraints.gridwidth = row.fullWidth() || columns == 1 ? columns : 1;
-                    constraints.weightx = 1;
-                    constraints.anchor = GridBagConstraints.NORTHWEST;
-                    constraints.fill = GridBagConstraints.HORIZONTAL;
-                    constraints.insets = new Insets(0, 0, UiTokens.SPACE_3,
-                            constraints.gridwidth == 1 && columnIndex == 0 ? UiTokens.SPACE_3 : 0);
-                    body.add(cell, constraints);
-                    if (row.fullWidth() || columns == 1 || columnIndex + 1 >= columns) {
-                        rowIndex++;
-                        columnIndex = 0;
-                    } else {
-                        columnIndex++;
-                    }
-                }
+                populateFormCardBody(card, rowsByCard.get(card), columns, advancedCard,
+                        advancedExpanded, capRow, capRowVisible,
+                        messagesPerSampleRow, messagesPerSampleRowVisible);
                 card.body().setVisible(card != advancedCard || advancedExpanded);
                 body.revalidate();
                 body.repaint();
@@ -1492,6 +1463,50 @@ public final class WorkloadDesignerDialog extends JDialog {
             }
         } finally {
             refreshingFormRows = false;
+        }
+    }
+
+    static void clearFormCardBody(SectionCard card, SectionCard aiCard) {
+        if (card != aiCard) {
+            card.body().removeAll();
+        }
+    }
+
+    static void populateFormCardBody(SectionCard card, List<FormRow> rows, int columns,
+                                     SectionCard advancedCard, boolean advancedExpanded,
+                                     FormRow capRow, boolean capRowVisible,
+                                     FormRow messagesPerSampleRow, boolean messagesPerSampleRowVisible) {
+        JPanel body = card.body();
+        body.setLayout(new GridBagLayout());
+        int rowIndex = 0;
+        int columnIndex = 0;
+        for (FormRow row : rows) {
+            if ((row == capRow && !capRowVisible)
+                    || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)
+                    || card == advancedCard && !advancedExpanded
+                    || !row.label().isVisible() || !row.field().isVisible()) {
+                continue;
+            }
+            JPanel cell = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+            cell.setOpaque(false);
+            cell.add(row.label(), BorderLayout.NORTH);
+            cell.add(row.field(), BorderLayout.CENTER);
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.gridx = columnIndex;
+            constraints.gridy = rowIndex;
+            constraints.gridwidth = row.fullWidth() || columns == 1 ? columns : 1;
+            constraints.weightx = 1;
+            constraints.anchor = GridBagConstraints.NORTHWEST;
+            constraints.fill = GridBagConstraints.HORIZONTAL;
+            constraints.insets = new Insets(0, 0, UiTokens.SPACE_3,
+                    constraints.gridwidth == 1 && columnIndex == 0 ? UiTokens.SPACE_3 : 0);
+            body.add(cell, constraints);
+            if (row.fullWidth() || columns == 1 || columnIndex + 1 >= columns) {
+                rowIndex++;
+                columnIndex = 0;
+            } else {
+                columnIndex++;
+            }
         }
     }
 
@@ -1648,7 +1663,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         cliArea.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent event) {
-                updateCommandRows();
+                updateCommandRows(cliArea);
             }
         });
         shellControl = new SegmentedControl<>(shellCombo, CommandShell::displayName);
@@ -1714,7 +1729,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private void updateCommandRows() {
+    static void updateCommandRows(JTextArea cliArea) {
         int availableWidth = cliArea.getWidth() - cliArea.getInsets().left - cliArea.getInsets().right;
         int charactersPerLine = 78;
         if (availableWidth > 0) {
@@ -1725,7 +1740,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         for (String line : cliArea.getText().split("\n", -1)) {
             rows += Math.max(1, (line.length() + charactersPerLine - 1) / charactersPerLine);
         }
-        int desiredRows = Math.min(8, Math.max(3, rows));
+        int desiredRows = Math.max(3, rows);
         if (cliArea.getRows() != desiredRows) {
             cliArea.setRows(desiredRows);
             cliArea.setMaximumSize(new Dimension(Integer.MAX_VALUE, cliArea.getPreferredSize().height));
@@ -1967,7 +1982,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             setNotesText(assumptionsArea, "");
             setNotesText(infoArea, infoNotes(List.of(), preparation.redirectNote()));
         }
-        updateCommandRows();
+        updateCommandRows(cliArea);
         warningsArea.setVisible(!warningsArea.getText().isBlank());
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
         infoArea.setVisible(!infoArea.getText().isBlank());
@@ -2493,7 +2508,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         };
     }
 
-    private record FormRow(JComponent label, JComponent field, SectionCard card, boolean fullWidth) {
+    record FormRow(JComponent label, JComponent field, SectionCard card, boolean fullWidth) {
     }
 
     private static final class LegendIcon implements Icon {
