@@ -993,7 +993,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         customStagesTable.getTableHeader().setFont(UiTokens.label(UIManager.getFont("Label.font")));
         customStagesTable.getTableHeader().setBackground(ThemeColors.elevatedSurface());
         customStagesTable.getTableHeader().setForeground(ThemeColors.secondaryText());
-        customStagesScroll = new JScrollPane(customStagesTable);
+        customStagesScroll = new PreferredHeightScrollPane(customStagesTable);
         customStagesScroll.setBorder(null);
         customStagesScroll.setOpaque(false);
         customStagesScroll.getViewport().setOpaque(false);
@@ -1058,7 +1058,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         int headerHeight = customStagesTable.getTableHeader().getPreferredSize().height;
         int rowHeight = customStagesTable.getRowHeight();
         int height = headerHeight + rowHeight * (customStageModel.getRowCount() + 1);
-        customStagesScroll.setPreferredSize(new Dimension(360, height));
+        customStagesScroll.setPreferredSize(new Dimension(customStagesScroll.getMinimumSize().width, height));
         customStagesScroll.revalidate();
         form.revalidate();
     }
@@ -2680,6 +2680,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
 
         @Override
+        public Dimension getMinimumSize() {
+            return PreferredHeightMinimum.preserve(super.getMinimumSize(), getPreferredSize());
+        }
+
+        @Override
         public Dimension getPreferredSize() {
             Insets insets = getInsets();
             Dimension contentSize = content.getPreferredSize();
@@ -2719,6 +2724,17 @@ public final class WorkloadDesignerDialog extends JDialog {
             } finally {
                 g.dispose();
             }
+        }
+    }
+
+    private static final class PreferredHeightScrollPane extends JScrollPane {
+        private PreferredHeightScrollPane(JComponent view) {
+            super(view);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            return PreferredHeightMinimum.preserve(super.getMinimumSize(), getPreferredSize());
         }
     }
 
@@ -2771,8 +2787,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         @Override
         public Dimension getMinimumSize() {
             Dimension minimum = super.getMinimumSize();
-            Dimension preferred = getPreferredSize();
-            return new Dimension(minimum.width, Math.max(minimum.height, preferred.height));
+            return PreferredHeightMinimum.preserve(minimum, getPreferredSize());
         }
     }
 

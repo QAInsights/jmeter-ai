@@ -130,6 +130,11 @@ final class FieldShell extends JPanel {
     }
 
     @Override
+    public Dimension getMinimumSize() {
+        return PreferredHeightMinimum.preserve(super.getMinimumSize(), getPreferredSize());
+    }
+
+    @Override
     public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
         if (control != null) {

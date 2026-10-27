@@ -256,6 +256,7 @@ class WorkloadDesignerDialogTest {
                         assertTrue(dialogField(dialog, "columns", JPanel.class)
                                 .getLayout() instanceof GridBagLayout,
                                 "900 px should retain the two-column layout");
+                        assertDialogControlHeights(dialog, "900x840");
 
                         dialog.setSize(899, 840);
                         invokePrivate(dialog, "updateColumnsLayout");
@@ -263,6 +264,7 @@ class WorkloadDesignerDialogTest {
                         assertTrue(dialogField(dialog, "columns", JPanel.class)
                                 .getLayout() instanceof BoxLayout,
                                 "899 px should switch to the stacked layout");
+                        assertDialogControlHeights(dialog, "899x840");
                     } finally {
                         originalFonts.forEach(UIManager::put);
                         invokePrivate(dialog, "refreshLookAndFeel");
@@ -392,6 +394,11 @@ class WorkloadDesignerDialogTest {
                 stage + " command area is compressed: " + metrics);
         assertTrue(stagesScroll.getHeight() >= stagesScroll.getPreferredSize().height,
                 stage + " custom table is compressed: " + metrics);
+        assertTrue(stagesScroll.getPreferredSize().width <= stagesScroll.getWidth(),
+                stage + " custom table preferred width exceeds its available width: " + metrics);
+        Container stagesBody = stagesScroll.getParent();
+        assertTrue(stagesBody.getPreferredSize().width <= stagesBody.getWidth(),
+                stage + " custom table body preferred width exceeds its available width: " + metrics);
     }
 
     private static String componentSizes(Component component) {
