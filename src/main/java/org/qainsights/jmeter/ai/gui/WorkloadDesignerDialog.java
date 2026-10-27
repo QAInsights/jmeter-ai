@@ -219,7 +219,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final KpiTile[] kpiTiles = new KpiTile[4];
     private JPanel kpiGrid;
     private JPanel detailsGrid;
-    private JPanel commandCodeBlock;
+    private CodeBlockPanel commandCodeBlock;
     private SegmentedControl<WorkloadShape> shapeControl;
     private SegmentedControl<CommandShell> shellControl;
     private SegmentedControl<String> rampUnitControl;
@@ -643,11 +643,16 @@ public final class WorkloadDesignerDialog extends JDialog {
             updateNotesRows(area);
         }
         cliArea.setFont(cliFont(textAreaFont));
+        if (commandCodeBlock != null) {
+            commandCodeBlock.updateTextInsets();
+            updateCommandRows();
+        }
         cliArea.setForeground(ThemeColors.foreground());
         if (resultValues[9] != null) {
             resultValues[9].setFont(cliFont(textAreaFont));
         }
         chart.setFont(labelFont);
+        fitChartToPreviewWidth();
         customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 10);
         customStagesTable.getTableHeader().setFont(UiTokens.label(labelFont));
         customStagesTable.setBackground(ThemeColors.elevatedSurface());
@@ -771,8 +776,8 @@ public final class WorkloadDesignerDialog extends JDialog {
             return;
         }
         Dimension preferred = chart.getPreferredSize();
-        if (preferred.width != width || preferred.height != 210) {
-            chart.setPreferredSize(new Dimension(width, 210));
+        if (preferred.width != width) {
+            chart.setPreferredSize(new Dimension(width, preferred.height));
             chart.revalidate();
         }
     }
@@ -1512,6 +1517,28 @@ public final class WorkloadDesignerDialog extends JDialog {
         return cardWidth < 600 ? 2 : 4;
     }
 
+    static String wrapKpiTitle(String text, java.awt.FontMetrics metrics, int width) {
+        if (width <= 0 || metrics.stringWidth(text) <= width) {
+            return text;
+        }
+        StringBuilder wrapped = new StringBuilder("<html>");
+        int lineWidth = 0;
+        int spaceWidth = metrics.charWidth(' ');
+        for (String word : text.split(" ")) {
+            int wordWidth = metrics.stringWidth(word);
+            if (lineWidth > 0 && lineWidth + spaceWidth + wordWidth > width) {
+                wrapped.append("<br>");
+                lineWidth = 0;
+            } else if (lineWidth > 0) {
+                wrapped.append(' ');
+                lineWidth += spaceWidth;
+            }
+            wrapped.append(word.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"));
+            lineWidth += wordWidth;
+        }
+        return wrapped.append("</html>").toString();
+    }
+
     private void updateKpiLayout() {
         if (kpiGrid == null) {
             return;
@@ -1612,8 +1639,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
         cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
-        cliArea.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
-                UiTokens.SPACE_2, UiTokens.SPACE_3));
         cliArea.setOpaque(false);
         cliArea.setForeground(ThemeColors.foreground());
         cliArea.addComponentListener(new ComponentAdapter() {
@@ -1626,12 +1651,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         JPanel cliPanel = new JPanel(new BorderLayout(0, UiTokens.SPACE_2));
         cliPanel.setOpaque(false);
         cliPanel.add(shellControl, BorderLayout.NORTH);
-        commandCodeBlock = new CodeBlockPanel();
-        JPanel copyRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        copyRow.setOpaque(false);
-        copyRow.add(copyButton);
-        commandCodeBlock.add(copyRow, BorderLayout.NORTH);
-        commandCodeBlock.add(cliArea, BorderLayout.CENTER);
+        commandCodeBlock = new CodeBlockPanel(cliArea, copyButton);
         cliPanel.add(commandCodeBlock, BorderLayout.CENTER);
         copyButton.addActionListener(event -> copyCommand());
         cliCard.body().add(cliPanel, BorderLayout.CENTER);
@@ -2273,7 +2293,11 @@ public final class WorkloadDesignerDialog extends JDialog {
             Toolkit.getDefaultToolkit().getSystemClipboard()
                     .setContents(new StringSelection(cliArea.getText()), null);
             copyButton.setText("Copied");
-            javax.swing.Timer timer = new javax.swing.Timer(1500, event -> copyButton.setText("Copy"));
+            commandCodeBlock.updateTextInsets();
+            javax.swing.Timer timer = new javax.swing.Timer(1500, event -> {
+                copyButton.setText("Copy");
+                commandCodeBlock.updateTextInsets();
+            });
             timer.setRepeats(false);
             timer.start();
         } catch (Exception ignored) {
@@ -2522,11 +2546,13 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private static final class KpiTile extends JPanel {
+        private final String label;
         private final JLabel title = new JLabel();
         private final JTextArea value = new JTextArea(1, 8);
 
         private KpiTile(String label) {
             super(new BorderLayout(0, UiTokens.SPACE_1));
+            this.label = label;
             setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
                     UiTokens.SPACE_2, UiTokens.SPACE_3));
@@ -2541,6 +2567,16 @@ public final class WorkloadDesignerDialog extends JDialog {
             add(value, BorderLayout.CENTER);
             add(title, BorderLayout.SOUTH);
             refreshFonts();
+        }
+
+        @Override
+        public void doLayout() {
+            super.doLayout();
+            String wrapped = wrapKpiTitle(label, title.getFontMetrics(title.getFont()), title.getWidth());
+            if (!wrapped.equals(title.getText())) {
+                title.setText(wrapped);
+                revalidate();
+            }
         }
 
         private void setValue(String text) {
@@ -2580,12 +2616,60 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private static final class CodeBlockPanel extends JPanel {
-        private CodeBlockPanel() {
-            super(new BorderLayout());
+    static final class CodeBlockPanel extends JPanel {
+        private final JComponent content;
+        private final JComponent overlay;
+
+        CodeBlockPanel(JComponent content, JComponent overlay) {
+            super(null);
+            this.content = content;
+            this.overlay = overlay;
             setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1,
                     UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2));
+            content.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
+                    UiTokens.SPACE_2, UiTokens.SPACE_3));
+            updateTextInsets();
+            add(content);
+            add(overlay);
+            setComponentZOrder(overlay, 0);
+        }
+
+        void updateTextInsets() {
+            int buttonWidth = overlay.getPreferredSize().width;
+            Font buttonFont = overlay.getFont();
+            if (buttonFont != null) {
+                int copiedWidth = overlay.getFontMetrics(buttonFont).stringWidth("Copied");
+                Insets buttonInsets = overlay.getInsets();
+                buttonWidth = Math.max(buttonWidth,
+                        copiedWidth + buttonInsets.left + buttonInsets.right);
+            }
+            content.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
+                    UiTokens.SPACE_2, buttonWidth + UiTokens.SPACE_2));
+            revalidate();
+            repaint();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            Insets insets = getInsets();
+            Dimension contentSize = content.getPreferredSize();
+            Dimension overlaySize = overlay.getPreferredSize();
+            return new Dimension(insets.left + Math.max(contentSize.width, overlaySize.width) + insets.right,
+                    insets.top + Math.max(contentSize.height, overlaySize.height) + insets.bottom);
+        }
+
+        @Override
+        public void doLayout() {
+            Insets insets = getInsets();
+            int x = insets.left;
+            int y = insets.top;
+            int width = Math.max(0, getWidth() - insets.left - insets.right);
+            int height = Math.max(0, getHeight() - insets.top - insets.bottom);
+            content.setBounds(x, y, width, height);
+            Dimension overlaySize = overlay.getPreferredSize();
+            overlay.setBounds(x + width - overlaySize.width, y,
+                    overlaySize.width, overlaySize.height);
         }
 
         @Override

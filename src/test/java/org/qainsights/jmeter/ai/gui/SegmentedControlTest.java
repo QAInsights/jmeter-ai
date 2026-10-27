@@ -63,6 +63,10 @@ class SegmentedControlTest {
         control.doLayout();
 
         assertTrue(control.getWidth() >= preferredWidth);
+        assertEquals(UiTokens.SPACE_2,
+                trailingSlot.getWidth() - control.getX() - control.getWidth());
+        assertEquals((UiTokens.CONTROL_HEIGHT - control.getPreferredSize().height) / 2,
+                control.getY());
         assertEquals(((JButton) control.getComponent(0)).getY(),
                 ((JButton) control.getComponent(2)).getY());
     }

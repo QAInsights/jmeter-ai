@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
@@ -15,9 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.prefs.Preferences;
 
 import javax.swing.DefaultCellEditor;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -36,6 +40,7 @@ import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,6 +54,17 @@ class WorkloadDesignerDialogTest {
         JLabel label = WorkloadDesignerDialog.createHostsSourceLabel();
 
         assertFalse(label.isVisible());
+    }
+
+    @Test
+    void wrapsKpiTitlesWhenTheyExceedTheAvailableWidth() {
+        FontMetrics metrics = new JLabel().getFontMetrics(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+
+        assertEquals("<html>Generators<br>needed</html>",
+                WorkloadDesignerDialog.wrapKpiTitle("Generators needed", metrics,
+                        metrics.stringWidth("Generators")));
+        assertEquals("Threads", WorkloadDesignerDialog.wrapKpiTitle("Threads", metrics,
+                metrics.stringWidth("Generators")));
     }
 
     @Test
@@ -102,6 +118,23 @@ class WorkloadDesignerDialogTest {
         assertEquals(80, form.getHeight());
         assertEquals(0, preview.getY());
         assertEquals(160, preview.getHeight());
+    }
+
+    @Test
+    void commandBlockOverlaysCopyAtTopRightAndReservesTextSpace() {
+        JTextArea text = new JTextArea(3, 20);
+        JButton copy = new JButton("Copy");
+        WorkloadDesignerDialog.CodeBlockPanel block =
+                new WorkloadDesignerDialog.CodeBlockPanel(text, copy);
+        block.setSize(420, 100);
+
+        block.doLayout();
+
+        Insets blockInsets = block.getInsets();
+        assertEquals(blockInsets.top, copy.getY());
+        assertEquals(block.getWidth() - blockInsets.right, copy.getX() + copy.getWidth());
+        assertTrue(text.getX() + text.getWidth() - text.getInsets().right + UiTokens.SPACE_2
+                <= copy.getX());
     }
 
     @Test

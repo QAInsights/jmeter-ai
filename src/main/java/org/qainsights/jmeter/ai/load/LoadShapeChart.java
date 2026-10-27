@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.load;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -17,6 +19,9 @@ import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
 /** Antialiased closed-model thread and sample-rate chart. */
 public final class LoadShapeChart extends JComponent {
+    private static final int BASE_PREFERRED_HEIGHT = 210;
+    private static final float BASE_FONT_SIZE = 12f;
+
     private WorkloadPlan plan;
 
     public LoadShapeChart() {
@@ -39,6 +44,22 @@ public final class LoadShapeChart extends JComponent {
     public void setPlan(WorkloadPlan plan) {
         this.plan = plan;
         repaint();
+    }
+
+    static int preferredHeightForFont(Font font) {
+        float fontSize = font == null ? BASE_FONT_SIZE : font.getSize2D();
+        return Math.max(1, Math.round(BASE_PREFERRED_HEIGHT * fontSize / BASE_FONT_SIZE));
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        Dimension preferred = super.getPreferredSize();
+        return new Dimension(preferred.width, preferredHeightForFont(getFont()));
+    }
+
+    @Override
+    public Dimension getMinimumSize() {
+        return new Dimension(0, preferredHeightForFont(getFont()));
     }
 
     @Override

@@ -8,6 +8,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.KeyboardFocusManager;
 import java.awt.RenderingHints;
 import java.beans.PropertyChangeListener;
@@ -63,25 +64,33 @@ final class FieldShell extends JPanel {
     private static final class CenteredSlot extends JPanel {
 
         private final JComponent content;
+        private final int rightInset;
 
         private CenteredSlot(JComponent content) {
             super(new GridBagLayout());
             this.content = content;
+            rightInset = content instanceof SegmentedControl<?> ? UiTokens.SPACE_2 : 0;
             content.setOpaque(false);
             setOpaque(false);
             GridBagConstraints constraints = new GridBagConstraints();
             constraints.anchor = GridBagConstraints.CENTER;
+            constraints.insets = new Insets(0, 0, 0, rightInset);
             add(content, constraints);
         }
 
         @Override
         public Dimension getMinimumSize() {
-            return content.getPreferredSize();
+            return preferredSizeWithInset();
         }
 
         @Override
         public Dimension getPreferredSize() {
-            return content.getPreferredSize();
+            return preferredSizeWithInset();
+        }
+
+        private Dimension preferredSizeWithInset() {
+            Dimension preferred = content.getPreferredSize();
+            return new Dimension(preferred.width + rightInset, preferred.height);
         }
     }
 
