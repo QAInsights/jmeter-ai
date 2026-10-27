@@ -16,6 +16,7 @@ import java.awt.event.KeyEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,12 +32,14 @@ import javax.swing.BoxLayout;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -224,6 +227,46 @@ class WorkloadDesignerDialogTest {
                     zoomRefresh.invoke(dialog, false);
                     assertTrue(textUi == goal.getUI(),
                             "Zoom styling refresh should not reinstall the text UI");
+
+                    Map<String, Font> originalFonts = new LinkedHashMap<>();
+                    for (String key : List.of("Label.font", "TextField.font", "TextArea.font",
+                            "Button.font", "ComboBox.font", "Table.font")) {
+                        Font font = UIManager.getFont(key);
+                        if (font != null) {
+                            originalFonts.put(key, font);
+                            UIManager.put(key, font.deriveFont(font.getSize2D() * 1.1f));
+                        }
+                    }
+                    try {
+                        dialog.setSize(1700, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        invokePrivate(dialog, "refreshLookAndFeel");
+                        layoutDialog(dialog);
+                        assertDialogControlHeights(dialog, "1700x840 after zoom");
+
+                        dialog.setSize(1140, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertDialogControlHeights(dialog, "1140x840 after zoom and resize");
+                        assertWideColumnSizing(dialog, "1140x840 after zoom and resize");
+
+                        dialog.setSize(900, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertTrue(dialogField(dialog, "columns", JPanel.class)
+                                .getLayout() instanceof GridBagLayout,
+                                "900 px should retain the two-column layout");
+
+                        dialog.setSize(899, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertTrue(dialogField(dialog, "columns", JPanel.class)
+                                .getLayout() instanceof BoxLayout,
+                                "899 px should switch to the stacked layout");
+                    } finally {
+                        originalFonts.forEach(UIManager::put);
+                        invokePrivate(dialog, "refreshLookAndFeel");
+                    }
                 } catch (Throwable exception) {
                     failure.set(exception);
                 } finally {
@@ -261,6 +304,43 @@ class WorkloadDesignerDialogTest {
             }
             if (component instanceof Container child) {
                 JButton match = findButton(child, text);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void assertWideColumnSizing(WorkloadDesignerDialog dialog, String stage)
+            throws ReflectiveOperationException {
+        JPanel columns = dialogField(dialog, "columns", JPanel.class);
+        JPanel form = dialogField(dialog, "form", JPanel.class);
+        JScrollPane bodyScroll = dialogField(dialog, "bodyScroll", JScrollPane.class);
+        JComponent chart = dialogField(dialog, "chart", JComponent.class);
+        int contentWidth = bodyScroll.getViewport().getExtentSize().width;
+        JLabel threadGroupLabel = findLabel(form, "Thread Group");
+
+        assertTrue(columns.getPreferredSize().width <= contentWidth,
+                stage + " preferred body width exceeds viewport: " + columns.getPreferredSize()
+                        + " vs " + contentWidth);
+        assertTrue(chart.getPreferredSize().width <= contentWidth,
+                stage + " chart preferred width exceeds viewport: " + chart.getPreferredSize()
+                        + " vs " + contentWidth);
+        assertTrue(form.getWidth() >= Math.ceil(contentWidth * 0.4),
+                stage + " form width is below 40%: " + form.getWidth() + " / " + contentWidth);
+        assertTrue(threadGroupLabel != null
+                        && threadGroupLabel.getWidth() >= threadGroupLabel.getPreferredSize().width,
+                stage + " Thread Group label is clipped: " + threadGroupLabel);
+    }
+
+    private static JLabel findLabel(Container container, String text) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JLabel label && text.equals(label.getText())) {
+                return label;
+            }
+            if (component instanceof Container child) {
+                JLabel match = findLabel(child, text);
                 if (match != null) {
                     return match;
                 }

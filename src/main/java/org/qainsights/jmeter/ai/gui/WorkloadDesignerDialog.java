@@ -92,6 +92,9 @@ import org.slf4j.LoggerFactory;
 
 /** Modal, deterministic workload editor with a live load-shape preview. */
 public final class WorkloadDesignerDialog extends JDialog {
+    private static final double WIDE_FORM_COLUMN_WEIGHT = 0.44;
+    private static final double WIDE_PREVIEW_COLUMN_WEIGHT = 0.56;
+
     private static final int MAX_CUSTOM_ROWS = 10;
     private static final String OPEN_MODEL_ASK_AI_TOOLTIP = "Ask AI fills Load and Endurance workloads.";
     private static final String ASK_AI_RUNNING_TOOLTIP = "Ask AI is working on a suggestion.";
@@ -179,6 +182,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private JPanel notes;
     private JPanel columns;
     private JPanel preview;
+    private WideColumnWrapper formWideColumn;
+    private WideColumnWrapper previewWideColumn;
     private JScrollPane bodyScroll;
     private final JTextArea cliArea = new JTextArea(4, 24);
     private final QuietButton applyButton =
@@ -358,7 +363,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             @Override
             public void componentResized(ComponentEvent event) {
                 updateColumnsLayout();
-                fitChartToPreviewWidth();
             }
         });
         prefill(preparation.spec());
@@ -407,10 +411,12 @@ public final class WorkloadDesignerDialog extends JDialog {
         columnsBottomFiller.setOpaque(false);
         buildForm();
         preview = buildPreview();
+        formWideColumn = new WideColumnWrapper(form);
+        previewWideColumn = new WideColumnWrapper(preview);
         rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
         rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
-        columns.add(form, wideColumnConstraints(0, UiTokens.SPACE_4));
-        columns.add(preview, wideColumnConstraints(1, 0));
+        columns.add(formWideColumn, wideColumnConstraints(0, UiTokens.SPACE_4));
+        columns.add(previewWideColumn, wideColumnConstraints(1, 0));
         columns.add(columnsBottomFiller, wideColumnFillerConstraints());
         bodyScroll = new JScrollPane(columns);
         bodyScroll.setBorder(null);
@@ -425,7 +431,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             @Override
             public void componentResized(ComponentEvent event) {
                 updateColumnsLayout();
-                fitChartToPreviewWidth();
                 updateKpiLayout();
             }
         });
@@ -665,7 +670,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             resultValues[9].setFont(cliFont(textAreaFont));
         }
         chart.setFont(labelFont);
-        fitChartToPreviewWidth();
         customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 10);
         customStagesTable.getTableHeader().setFont(UiTokens.label(labelFont));
         customStagesTable.setBackground(ThemeColors.elevatedSurface());
@@ -711,8 +715,10 @@ public final class WorkloadDesignerDialog extends JDialog {
             } else {
                 rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
                 rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
-                columns.add(form, wideColumnConstraints(0, UiTokens.SPACE_4));
-                columns.add(preview, wideColumnConstraints(1, 0));
+                formWideColumn.setContent(form);
+                previewWideColumn.setContent(preview);
+                columns.add(formWideColumn, wideColumnConstraints(0, UiTokens.SPACE_4));
+                columns.add(previewWideColumn, wideColumnConstraints(1, 0));
                 columns.add(columnsBottomFiller, wideColumnFillerConstraints());
             }
             columns.revalidate();
@@ -724,7 +730,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.gridx = column;
         constraints.gridy = 0;
-        constraints.weightx = 1;
+        constraints.weightx = column == 0 ? WIDE_FORM_COLUMN_WEIGHT : WIDE_PREVIEW_COLUMN_WEIGHT;
         constraints.weighty = 0;
         constraints.anchor = GridBagConstraints.NORTHWEST;
         constraints.fill = GridBagConstraints.HORIZONTAL;
@@ -737,7 +743,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         constraints.gridx = 0;
         constraints.gridy = 1;
         constraints.gridwidth = 2;
-        constraints.weightx = 1;
+        constraints.weightx = 0;
         constraints.weighty = 1;
         constraints.fill = GridBagConstraints.BOTH;
         return constraints;
@@ -785,21 +791,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             if (current.isVisible()) {
                 previousVisible = current;
             }
-        }
-    }
-
-    private void fitChartToPreviewWidth() {
-        if (loadShapeCard == null || chart == null) {
-            return;
-        }
-        int width = loadShapeCard.body().getWidth();
-        if (width < 1) {
-            return;
-        }
-        Dimension preferred = chart.getPreferredSize();
-        if (preferred.width != width) {
-            chart.setPreferredSize(new Dimension(width, preferred.height));
-            chart.revalidate();
         }
     }
 
@@ -2027,7 +2018,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         notes.revalidate();
         notes.repaint();
         syncKpiTiles();
-        fitChartToPreviewWidth();
         updateKpiLayout();
     }
 
@@ -2742,6 +2732,31 @@ public final class WorkloadDesignerDialog extends JDialog {
             super.paintComponent(graphics);
             graphics.setColor(ThemeColors.separator());
             graphics.drawLine(0, 0, getWidth(), 0);
+        }
+    }
+
+    private static final class WideColumnWrapper extends JPanel {
+        private WideColumnWrapper(JPanel content) {
+            super(new BorderLayout());
+            setOpaque(false);
+            setContent(content);
+        }
+
+        private void setContent(JPanel content) {
+            removeAll();
+            add(content, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            return new Dimension(0, preferred.height);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            Dimension minimum = super.getMinimumSize();
+            return new Dimension(0, Math.max(minimum.height, getPreferredSize().height));
         }
     }
 
