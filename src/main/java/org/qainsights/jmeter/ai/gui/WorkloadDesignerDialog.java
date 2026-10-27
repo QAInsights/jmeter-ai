@@ -245,7 +245,11 @@ public final class WorkloadDesignerDialog extends JDialog {
     private WorkloadFormState.Evaluation evaluation;
     private final PropertyChangeListener lookAndFeelListener = event -> {
         if ("lookAndFeel".equals(event.getPropertyName())) {
-            SwingUtilities.invokeLater(this::refreshLookAndFeel);
+            Object oldLookAndFeel = event.getOldValue();
+            Object newLookAndFeel = event.getNewValue();
+            boolean updateComponentTree = oldLookAndFeel == null || newLookAndFeel == null
+                    || oldLookAndFeel.getClass() != newLookAndFeel.getClass();
+            SwingUtilities.invokeLater(() -> refreshLookAndFeel(updateComponentTree));
         }
     };
 
@@ -558,7 +562,6 @@ public final class WorkloadDesignerDialog extends JDialog {
                     if (GuiPackage.getInstance() != null) {
                         ActionRouter.getInstance().doActionNow(new ActionEvent(
                                 WorkloadDesignerDialog.this, ActionEvent.ACTION_PERFORMED, entry.getValue()));
-                        SwingUtilities.invokeLater(WorkloadDesignerDialog.this::refreshLookAndFeel);
                     }
                 }
             });
@@ -566,7 +569,13 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void refreshLookAndFeel() {
-        SwingUtilities.updateComponentTreeUI(this);
+        refreshLookAndFeel(true);
+    }
+
+    private void refreshLookAndFeel(boolean updateComponentTree) {
+        if (updateComponentTree) {
+            SwingUtilities.updateComponentTreeUI(this);
+        }
         installZoomBindings();
         for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea,
                 aiSuggestionText, cliArea)) {
@@ -1183,6 +1192,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         content.add(goalLabel, BorderLayout.NORTH);
         JScrollPane goalScroll = new JScrollPane(aiGoal);
         goalScroll.setBorder(null);
+        goalScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         goalScroll.setOpaque(false);
         goalScroll.getViewport().setOpaque(false);
         FieldShell goalShell = new FieldShell(goalScroll, (JComponent) null, 88);
@@ -1580,7 +1590,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private JPanel buildPreview() {
-        JPanel previewColumn = new JPanel();
+        JPanel previewColumn = new HeightPreservingPanel();
         previewColumn.setLayout(new BoxLayout(previewColumn, BoxLayout.Y_AXIS));
         previewColumn.setOpaque(false);
         previewColumn.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -2735,7 +2745,23 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private static final class FormPanel extends JPanel implements Scrollable {
+    private static class HeightPreservingPanel extends JPanel {
+        private HeightPreservingPanel() {
+        }
+
+        private HeightPreservingPanel(java.awt.LayoutManager layout) {
+            super(layout);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            Dimension minimum = super.getMinimumSize();
+            Dimension preferred = getPreferredSize();
+            return new Dimension(minimum.width, Math.max(minimum.height, preferred.height));
+        }
+    }
+
+    private static final class FormPanel extends HeightPreservingPanel implements Scrollable {
         private FormPanel() {
             super(new GridBagLayout());
             setOpaque(false);

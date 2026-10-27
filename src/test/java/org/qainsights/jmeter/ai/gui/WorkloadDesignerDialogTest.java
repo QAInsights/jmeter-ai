@@ -2,15 +2,19 @@ package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.prefs.Preferences;
 
 import javax.swing.BoxLayout;
@@ -28,6 +33,7 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -39,14 +45,17 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.text.DefaultCaret;
 
 import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
+import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadParser;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
@@ -56,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class WorkloadDesignerDialogTest {
 
@@ -145,6 +155,181 @@ class WorkloadDesignerDialogTest {
         assertEquals(block.getWidth() - blockInsets.right, copy.getX() + copy.getWidth());
         assertTrue(text.getX() + text.getWidth() - text.getInsets().right + UiTokens.SPACE_2
                 <= copy.getX());
+    }
+
+    @Test
+    void dialogControlsKeepTheirPreferredHeightsAcrossResizeAndRefresh() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/layout-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.setSize(1140, 840);
+                    dialog.addNotify();
+                    layoutDialog(dialog);
+
+                    dialogField(dialog, "askAiButton", JButton.class).doClick(0);
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.CUSTOM);
+                    JButton addStage = findButton(dialog, "Add stage");
+                    assertTrue(addStage != null, "Custom stage controls should be visible");
+                    addStage.doClick(0);
+                    addStage.doClick(0);
+                    addStage.doClick(0);
+
+                    JTextArea command = dialogField(dialog, "cliArea", JTextArea.class);
+                    command.setText(String.join("\n", List.of(
+                            "stage 1 --target 100 --ramp 10 --hold 60",
+                            "stage 2 --target 200 --ramp 10 --hold 60",
+                            "stage 3 --target 300 --ramp 10 --hold 60",
+                            "stage 4 --target 400 --ramp 10 --hold 60",
+                            "stage 5 --target 500 --ramp 10 --hold 60",
+                            "stage 6 --target 600 --ramp 10 --hold 60",
+                            "stage 7 --target 700 --ramp 10 --hold 60",
+                            "stage 8 --target 800 --ramp 10 --hold 60",
+                            "stage 9 --target 900 --ramp 10 --hold 60",
+                            "stage 10 --target 1000 --ramp 10 --hold 60")));
+                    WorkloadDesignerDialog.updateCommandRows(command);
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840");
+
+                    dialog.setSize(640, 840);
+                    invokePrivate(dialog, "updateColumnsLayout");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "640x840");
+
+                    dialog.setSize(1140, 840);
+                    invokePrivate(dialog, "updateColumnsLayout");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840 after resize");
+
+                    invokePrivate(dialog, "refreshLookAndFeel");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840 after refresh");
+
+                    JTextArea goal = dialogField(dialog, "aiGoal", JTextArea.class);
+                    Object textUi = goal.getUI();
+                    Method zoomRefresh = WorkloadDesignerDialog.class.getDeclaredMethod(
+                            "refreshLookAndFeel", boolean.class);
+                    zoomRefresh.setAccessible(true);
+                    zoomRefresh.invoke(dialog, false);
+                    assertTrue(textUi == goal.getUI(),
+                            "Zoom styling refresh should not reinstall the text UI");
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Dialog layout reproduction failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    private static <T> T dialogField(WorkloadDesignerDialog dialog, String name, Class<T> type)
+            throws ReflectiveOperationException {
+        Field field = WorkloadDesignerDialog.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return type.cast(field.get(dialog));
+    }
+
+    private static void invokePrivate(WorkloadDesignerDialog dialog, String name)
+            throws ReflectiveOperationException {
+        Method method = WorkloadDesignerDialog.class.getDeclaredMethod(name);
+        method.setAccessible(true);
+        method.invoke(dialog);
+    }
+
+    private static JButton findButton(Container container, String text) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JButton button && text.equals(button.getText())) {
+                return button;
+            }
+            if (component instanceof Container child) {
+                JButton match = findButton(child, text);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void layoutDialog(WorkloadDesignerDialog dialog) {
+        for (int i = 0; i < 3; i++) {
+            dialog.validate();
+            layoutRecursively(dialog);
+        }
+    }
+
+    private static void layoutRecursively(Container container) {
+        container.doLayout();
+        for (Component component : container.getComponents()) {
+            if (component instanceof Container child) {
+                layoutRecursively(child);
+            }
+        }
+    }
+
+    private static void assertDialogControlHeights(WorkloadDesignerDialog dialog, String stage)
+            throws ReflectiveOperationException {
+        JTextArea goal = dialogField(dialog, "aiGoal", JTextArea.class);
+        JTextArea command = dialogField(dialog, "cliArea", JTextArea.class);
+        JTable stages = dialogField(dialog, "customStagesTable", JTable.class);
+        FieldShell goalShell = (FieldShell) SwingUtilities.getAncestorOfClass(FieldShell.class, goal);
+        JScrollPane goalScroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, goal);
+        WorkloadDesignerDialog.CodeBlockPanel codeBlock =
+                (WorkloadDesignerDialog.CodeBlockPanel) SwingUtilities.getAncestorOfClass(
+                        WorkloadDesignerDialog.CodeBlockPanel.class, command);
+        JScrollPane stagesScroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, stages);
+        String metrics = "goal shell " + componentSizes(goalShell)
+                + "; command block " + componentSizes(codeBlock)
+                + "; command area " + componentSizes(command)
+                + "; custom table scroll " + componentSizes(stagesScroll);
+
+        assertTrue(goalShell.getHeight() >= goalShell.getPreferredSize().height,
+                stage + " goal shell is compressed: " + metrics);
+        assertEquals(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER, goalScroll.getHorizontalScrollBarPolicy(),
+                stage + " goal scroll policy: " + metrics);
+        assertTrue(command.getRows() >= 10, stage + " command rows: " + metrics);
+        assertTrue(codeBlock.getHeight() >= codeBlock.getPreferredSize().height,
+                stage + " command block is compressed: " + metrics);
+        assertTrue(command.getHeight() >= command.getPreferredSize().height,
+                stage + " command area is compressed: " + metrics);
+        assertTrue(stagesScroll.getHeight() >= stagesScroll.getPreferredSize().height,
+                stage + " custom table is compressed: " + metrics);
+    }
+
+    private static String componentSizes(Component component) {
+        StringBuilder sizes = new StringBuilder();
+        for (Component current = component; current != null; current = current.getParent()) {
+            if (!sizes.isEmpty()) {
+                sizes.append(" <- ");
+            }
+            sizes.append(current.getClass().getSimpleName())
+                    .append("{bounds=").append(current.getBounds())
+                    .append(", pref=").append(current.getPreferredSize())
+                    .append(", min=").append(current.getMinimumSize());
+            if (current instanceof Container container && container.getLayout() != null) {
+                sizes.append(", layout=").append(container.getLayout().getClass().getSimpleName());
+            }
+            sizes.append('}');
+        }
+        return sizes.toString();
     }
 
     @Test
