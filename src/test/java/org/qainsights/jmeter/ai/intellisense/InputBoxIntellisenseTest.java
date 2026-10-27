@@ -85,4 +85,34 @@ public class InputBoxIntellisenseTest {
         JScrollPane scrollPane = new JScrollPane(textArea);
         assertSame(scrollPane.getViewport(), InputBoxIntellisense.anchorFor(textArea));
     }
+
+    @Test
+    void commandInsertionAddsOneTrailingSpaceAndPlacesTheCaret() {
+        assertEquals(new InputBoxIntellisense.Insertion("@load ", 6),
+                InputBoxIntellisense.insert("@lo", 3, "@load"));
+        assertEquals(new InputBoxIntellisense.Insertion("@load ", 6),
+                InputBoxIntellisense.insert("@load", 5, "@load"));
+        assertEquals(new InputBoxIntellisense.Insertion("@load rest", 6),
+                InputBoxIntellisense.insert("@lo rest", 3, "@load"));
+        assertEquals(new InputBoxIntellisense.Insertion("hi @fix ", 8),
+                InputBoxIntellisense.insert("hi @f", 5, "@fix"));
+    }
+
+    @Test
+    void promptsCommandInsertionDoesNotDuplicateItsTrailingSpace() {
+        assertEquals(new InputBoxIntellisense.Insertion("@prompts ", 9),
+                InputBoxIntellisense.insert("@prompts", 8, "@prompts "));
+    }
+
+    @Test
+    void recognizesOnlyCompleteCommandMatches() {
+        assertTrue(InputBoxIntellisense.isCompleteCommand("@load", 5, "@load"));
+        assertFalse(InputBoxIntellisense.isCompleteCommand("@lo", 3, "@load"));
+        assertFalse(InputBoxIntellisense.isCompleteCommand("@loadx", 6, "@load"));
+    }
+
+    @Test
+    void completedCommandPrefixHasNoSuggestions() {
+        assertTrue(new CommandIntellisenseProvider().getSuggestions("@load ").isEmpty());
+    }
 }

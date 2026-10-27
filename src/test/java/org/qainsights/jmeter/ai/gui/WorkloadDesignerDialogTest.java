@@ -3,6 +3,9 @@ package org.qainsights.jmeter.ai.gui;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -16,11 +19,13 @@ import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 
+import org.apache.jmeter.gui.action.ActionNames;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
@@ -85,8 +90,31 @@ class WorkloadDesignerDialogTest {
         assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.LOAD));
         assertTrue(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.ENDURANCE));
         assertFalse(WorkloadDesignerDialog.askAiEnabledForShape(WorkloadShape.STEP));
+        assertFalse(WorkloadDesignerDialog.askAiButtonEnabled(WorkloadShape.LOAD, true));
+        assertTrue(WorkloadDesignerDialog.askAiButtonEnabled(WorkloadShape.LOAD, false));
+        assertFalse(WorkloadDesignerDialog.askAiButtonEnabled(WorkloadShape.STEP, false));
         assertEquals("Ask AI fills Load and Endurance workloads.",
                 WorkloadDesignerDialog.askAiTooltipForShape(WorkloadShape.CUSTOM));
+    }
+
+    @Test
+    void zoomShortcutsMapToJMeterZoomActions() {
+        Map<KeyStroke, String> shortcuts =
+                WorkloadDesignerDialog.zoomKeyStrokes(InputEvent.CTRL_DOWN_MASK);
+
+        assertEquals(6, shortcuts.size());
+        assertEquals(ActionNames.ZOOM_IN,
+                shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK)));
+        assertEquals(ActionNames.ZOOM_IN, shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS,
+                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)));
+        assertEquals(ActionNames.ZOOM_IN,
+                shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, InputEvent.CTRL_DOWN_MASK)));
+        assertEquals(ActionNames.ZOOM_IN, shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_ADD,
+                InputEvent.CTRL_DOWN_MASK)));
+        assertEquals(ActionNames.ZOOM_OUT,
+                shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK)));
+        assertEquals(ActionNames.ZOOM_OUT, shortcuts.get(KeyStroke.getKeyStroke(KeyEvent.VK_SUBTRACT,
+                InputEvent.CTRL_DOWN_MASK)));
     }
 
     @Test

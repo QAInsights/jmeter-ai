@@ -27,6 +27,9 @@ public class InputBoxIntellisense {
     /** Command that switches the popup into prompt-picker mode once followed by a space. */
     static final String PROMPTS_COMMAND = "@prompts";
 
+    record Insertion(String text, int caret) {
+    }
+
     private final JTextArea textArea;
     private final CommandIntellisenseProvider intellisenseProvider;
     private final IntellisensePopup intellisensePopup;
@@ -123,7 +126,17 @@ public class InputBoxIntellisense {
                 return false;
             }
             switch (e.getKeyCode()) {
-                case KeyEvent.VK_ENTER, KeyEvent.VK_TAB -> {
+                case KeyEvent.VK_ENTER -> {
+                    if (isCompleteCommand(textArea.getText(), textArea.getCaretPosition(),
+                            intellisensePopup.getSelectedValue())) {
+                        intellisensePopup.hide();
+                        return false;
+                    }
+                    insertSelectedCommand();
+                    updateIntellisense();
+                    return true;
+                }
+                case KeyEvent.VK_TAB -> {
                     insertSelectedCommand();
                     // re-evaluate: "@prompts " drops straight into the
                     // picker, anything else leaves no @ token and hides it
@@ -186,6 +199,48 @@ public class InputBoxIntellisense {
         );
     }
 
+    static Insertion insert(String text, int caret, String insertion) {
+        return insert(text, caret, insertion, true);
+    }
+
+    private static Insertion insert(String text, int caret, String insertion, boolean commandPick) {
+        if (text == null) {
+            text = "";
+        }
+        int position = Math.max(0, Math.min(caret, text.length()));
+        int atIdx = text.lastIndexOf("@", position - 1);
+        if (atIdx < 0 || insertion == null) {
+            return new Insertion(text, position);
+        }
+
+        String before = text.substring(0, atIdx);
+        String after = text.substring(position);
+        String inserted = insertion;
+        if (commandPick) {
+            inserted = inserted.stripTrailing();
+            if (after.isEmpty() || !Character.isWhitespace(after.charAt(0))) {
+                inserted += " ";
+            }
+        }
+        int insertedCaret = before.length() + inserted.length();
+        if (commandPick && !after.isEmpty() && Character.isWhitespace(after.charAt(0))) {
+            insertedCaret++;
+        }
+        return new Insertion(before + inserted + after, insertedCaret);
+    }
+
+    static boolean isCompleteCommand(String text, int caret, String selected) {
+        if (text == null || selected == null || caret <= 0 || caret > text.length()) {
+            return false;
+        }
+        int atIdx = text.lastIndexOf("@", caret - 1);
+        if (atIdx < 0 || (atIdx > 0 && Character.isLetterOrDigit(text.charAt(atIdx - 1)))) {
+            return false;
+        }
+        String token = text.substring(atIdx, caret);
+        return !token.startsWith(PROMPTS_COMMAND + " ") && token.equals(selected);
+    }
+
     /**
      * Sets up mouse listeners for the intellisense popup.
      */
@@ -196,7 +251,7 @@ public class InputBoxIntellisense {
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 1) {
                         insertSelectedCommand();
-                        intellisensePopup.hide();
+                        updateIntellisense();
                     }
                 }
             }
@@ -415,16 +470,14 @@ public class InputBoxIntellisense {
         if (selected != null) {
             Telemetry.record(TelemetryFeature.INTELLISENSE_PICK);
             try {
-                int pos = textArea.getCaretPosition();
                 String text = textArea.getText();
-                int atIdx = text.lastIndexOf("@", pos - 1);
-                if (atIdx >= 0) {
-                    String before = text.substring(0, atIdx);
-                    String after = text.substring(pos);
-                    textArea.setText(before + selected + after);
-                    textArea.setCaretPosition((before + selected).length());
-                    exitPromptMode();
+                Insertion inserted = insert(text, textArea.getCaretPosition(),
+                        selected, promptMatches.isEmpty());
+                if (!inserted.text().equals(text)) {
+                    textArea.setText(inserted.text());
+                    textArea.setCaretPosition(inserted.caret());
                 }
+                exitPromptMode();
             } catch (Exception ex) {
                 // fallback: do nothing
             }

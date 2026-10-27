@@ -15,10 +15,14 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +33,7 @@ import java.util.function.Function;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -53,6 +58,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.action.ActionRouter;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
@@ -80,6 +87,7 @@ import org.slf4j.LoggerFactory;
 public final class WorkloadDesignerDialog extends JDialog {
     private static final int MAX_CUSTOM_ROWS = 10;
     private static final String OPEN_MODEL_ASK_AI_TOOLTIP = "Ask AI fills Load and Endurance workloads.";
+    private static final String ASK_AI_RUNNING_TOOLTIP = "Ask AI is working on a suggestion.";
     private static final Logger log = LoggerFactory.getLogger(WorkloadDesignerDialog.class);
     private static final String WIDTH_PREFERENCE = "workloadDesigner.width";
     private static final String HEIGHT_PREFERENCE = "workloadDesigner.height";
@@ -161,6 +169,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JButton askAiButton = new JButton("Ask AI");
     private final JButton copySuggestionButton = new JButton("Copy");
     private final JLabel hostsSourceLabel = createHostsSourceLabel();
+    private JLabel titleLabel;
+    private JLabel captionLabel;
     private final JPanel hostsFieldPanel = new JPanel(new BorderLayout());
     private final JPanel aiPanel = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_1));
     private final PlaceholderTextArea aiGoal = new PlaceholderTextArea(3, 30);
@@ -172,6 +182,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private SwingWorker<WorkloadAiAssistant.Suggestion, Void> aiWorker;
     private long aiRequestId;
     private boolean aiPanelVisible;
+    private boolean aiRequestRunning;
     private boolean hostsFromPropertiesVisible;
     private boolean prefixEdited;
     private boolean capRowVisible;
@@ -180,6 +191,11 @@ public final class WorkloadDesignerDialog extends JDialog {
     private boolean updatingPreview;
     private boolean stackedColumns;
     private WorkloadFormState.Evaluation evaluation;
+    private final PropertyChangeListener lookAndFeelListener = event -> {
+        if ("lookAndFeel".equals(event.getPropertyName())) {
+            SwingUtilities.invokeLater(this::refreshLookAndFeel);
+        }
+    };
 
     public WorkloadDesignerDialog(LoadCommandHandler.Preparation preparation,
                                   Consumer<Completion> onFinish) {
@@ -244,6 +260,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 cancel();
             }
         });
+        installZoomBindings();
         setPreferredSize(new Dimension(1140, 840));
         GraphicsConfiguration configuration = getGraphicsConfiguration();
         Rectangle bounds = configuration.getBounds();
@@ -271,6 +288,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         prefill(preparation.spec());
         installListeners();
         updatePreview();
+        UIManager.addPropertyChangeListener(lookAndFeelListener);
     }
 
     private JPanel buildContent() {
@@ -280,14 +298,14 @@ public final class WorkloadDesignerDialog extends JDialog {
         root.setBackground(ThemeColors.canvas());
         JPanel header = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
         header.setOpaque(false);
-        JLabel title = new JLabel("Workload Designer");
-        title.setFont(UiTokens.title(title.getFont()));
-        JLabel caption = new JLabel("<html>Little's Law: threads ≈ samples per second × (response time + think time), "
+        titleLabel = new JLabel("Workload Designer");
+        titleLabel.setFont(UiTokens.title(titleLabel.getFont()));
+        captionLabel = new JLabel("<html>Little's Law: threads ≈ samples per second × (response time + think time), "
                 + "sized with 1.5× headroom.<br>Values are written as ${__P()} properties so CI can override them.</html>");
-        caption.setFont(UiTokens.caption(caption.getFont()));
-        caption.setForeground(ThemeColors.secondaryText());
-        header.add(title, BorderLayout.NORTH);
-        header.add(caption, BorderLayout.CENTER);
+        captionLabel.setFont(UiTokens.caption(captionLabel.getFont()));
+        captionLabel.setForeground(ThemeColors.secondaryText());
+        header.add(titleLabel, BorderLayout.NORTH);
+        header.add(captionLabel, BorderLayout.CENTER);
         root.add(header, BorderLayout.NORTH);
         columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
         columns.setOpaque(false);
@@ -341,6 +359,18 @@ public final class WorkloadDesignerDialog extends JDialog {
         Dimension usable = usableScreenSize(bounds, insets);
         return new Dimension(Math.min(preferred.width, (int) (usable.width * 0.9)),
                 Math.min(preferred.height, (int) (usable.height * 0.9)));
+    }
+
+    static Map<KeyStroke, String> zoomKeyStrokes(int menuMask) {
+        Map<KeyStroke, String> keyStrokes = new LinkedHashMap<>();
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, menuMask), ActionNames.ZOOM_IN);
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS,
+                menuMask | InputEvent.SHIFT_DOWN_MASK), ActionNames.ZOOM_IN);
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, menuMask), ActionNames.ZOOM_IN);
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_ADD, menuMask), ActionNames.ZOOM_IN);
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, menuMask), ActionNames.ZOOM_OUT);
+        keyStrokes.put(KeyStroke.getKeyStroke(KeyEvent.VK_SUBTRACT, menuMask), ActionNames.ZOOM_OUT);
+        return Map.copyOf(keyStrokes);
     }
 
     static Dimension initialSize(Dimension saved, Dimension fallback, Dimension minimum,
@@ -406,8 +436,59 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     @Override
     public void dispose() {
+        UIManager.removePropertyChangeListener(lookAndFeelListener);
         saveWindowSize(preferences, getSize());
         super.dispose();
+    }
+
+    private void installZoomBindings() {
+        Map<KeyStroke, String> keyStrokes =
+                zoomKeyStrokes(Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx());
+        for (Map.Entry<KeyStroke, String> entry : keyStrokes.entrySet()) {
+            String binding = "workload-designer-zoom-" + entry.getKey().getKeyCode()
+                    + "-" + entry.getKey().getModifiers();
+            getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    .put(entry.getKey(), binding);
+            getRootPane().getActionMap().put(binding, new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    if (GuiPackage.getInstance() != null) {
+                        ActionRouter.getInstance().doActionNow(new ActionEvent(
+                                WorkloadDesignerDialog.this, ActionEvent.ACTION_PERFORMED, entry.getValue()));
+                    }
+                }
+            });
+        }
+    }
+
+    private void refreshLookAndFeel() {
+        SwingUtilities.updateComponentTreeUI(this);
+        installZoomBindings();
+        Font labelFont = UIManager.getFont("Label.font");
+        if (labelFont == null) {
+            labelFont = new JLabel().getFont();
+        }
+        Font textAreaFont = UIManager.getFont("TextArea.font");
+        if (textAreaFont == null) {
+            textAreaFont = new JTextArea().getFont();
+        }
+        titleLabel.setFont(UiTokens.title(labelFont));
+        captionLabel.setFont(UiTokens.caption(labelFont));
+        hostsSourceLabel.setFont(UiTokens.caption(labelFont));
+        aiGoal.setFont(new JTextField().getFont());
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea, aiSuggestionText)) {
+            area.setFont(textAreaFont);
+        }
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
+            updateNotesRows(area);
+        }
+        cliArea.setFont(cliFont(textAreaFont));
+        chart.setFont(labelFont);
+        customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 4);
+        sizeCustomTable();
+        chart.repaint();
+        revalidate();
+        repaint();
     }
 
     private void updateColumnsLayout() {
@@ -538,8 +619,12 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private void updateCustomTableHeader() {
         WorkloadInputs.TargetType type = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
-        String targetHeader = customTargetHeader(type);
-        customStageModel.setColumnIdentifiers(new Object[]{targetHeader, "Ramp (s)", "Hold (s)"});
+        customStageModel.setColumnIdentifiers(new Object[]{customTargetHeader(type), "Ramp (s)", "Hold (s)"});
+        sizeCustomTable();
+    }
+
+    private void sizeCustomTable() {
+        String targetHeader = customStageModel.getColumnName(0);
         customStagesTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         int targetWidth = customStagesTable.getFontMetrics(customStagesTable.getFont())
                 .stringWidth(targetHeader) + UiTokens.SPACE_3 * 2;
@@ -573,8 +658,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void updateShapeRows() {
         WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
         boolean openModel = shape != null && shape.usesOpenModelThreadGroup();
-        askAiButton.setEnabled(askAiEnabledForShape(shape));
-        askAiButton.setToolTipText(askAiTooltipForShape(shape));
+        refreshAskAiButton();
         targetRowVisibility(openModel);
         for (Map.Entry<WorkloadShape, List<FormRow>> entry : shapeRows.entrySet()) {
             boolean visible = isShapeRowVisible(entry.getKey(), shape);
@@ -608,8 +692,18 @@ public final class WorkloadDesignerDialog extends JDialog {
         return shape == WorkloadShape.LOAD || shape == WorkloadShape.ENDURANCE;
     }
 
+    static boolean askAiButtonEnabled(WorkloadShape shape, boolean aiRunning) {
+        return askAiEnabledForShape(shape) && !aiRunning;
+    }
+
     static String askAiTooltipForShape(WorkloadShape shape) {
         return shape != null && shape.usesOpenModelThreadGroup() ? OPEN_MODEL_ASK_AI_TOOLTIP : null;
+    }
+
+    private void refreshAskAiButton() {
+        WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
+        askAiButton.setEnabled(askAiButtonEnabled(shape, aiRequestRunning));
+        askAiButton.setToolTipText(aiRequestRunning ? ASK_AI_RUNNING_TOOLTIP : askAiTooltipForShape(shape));
     }
 
     static boolean customRowCountWithinLimit(int rowCount) {
@@ -700,6 +794,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void closeAiPanel(JButton runButton) {
         aiRequestId = invalidateAiRequest(aiRequestId, aiWorker);
         aiWorker = null;
+        aiRequestRunning = false;
+        refreshAskAiButton();
         runButton.setEnabled(true);
         runButton.setText("Run");
         aiPanelVisible = false;
@@ -731,6 +827,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         aiErrorLabel.setText(" ");
         runButton.setEnabled(false);
         runButton.setText("Working...");
+        aiRequestRunning = true;
+        refreshAskAiButton();
         String prompt;
         try {
             prompt = WorkloadAiAssistant.buildPrompt(aiGoal.getText(), currentFormValues(),
@@ -738,6 +836,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         } catch (RuntimeException e) {
             runButton.setEnabled(true);
             runButton.setText("Run");
+            aiRequestRunning = false;
+            refreshAskAiButton();
             failAi(e.getMessage() == null ? "Could not prepare the AI prompt." : e.getMessage());
             return;
         }
@@ -755,6 +855,8 @@ public final class WorkloadDesignerDialog extends JDialog {
                     return;
                 }
                 aiWorker = null;
+                aiRequestRunning = false;
+                refreshAskAiButton();
                 runButton.setEnabled(true);
                 runButton.setText("Run");
                 try {
@@ -870,6 +972,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void failAi(String message) {
         Telemetry.record(TelemetryFeature.LOAD_AI_FAILED);
         aiErrorLabel.setText(message);
+        refreshAskAiButton();
     }
 
     private void copySuggestionSummary() {
@@ -989,7 +1092,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         cliArea.setEditable(false);
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
-        cliArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
         cliArea.setBackground(ThemeColors.codeBackground());
         cliArea.setForeground(ThemeColors.foreground());
         JPanel cliPanel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
@@ -1030,6 +1133,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         area.setAlignmentY(Component.TOP_ALIGNMENT);
         area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
         return area;
+    }
+
+    private static Font cliFont(Font textAreaFont) {
+        Font base = textAreaFont == null ? new JTextArea().getFont() : textAreaFont;
+        return new Font(Font.MONOSPACED, Font.PLAIN, base.getSize());
     }
 
     private static void setNotesText(JTextArea area, String text) {
@@ -1570,6 +1678,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void cancelAiWorker() {
         aiRequestId = invalidateAiRequest(aiRequestId, aiWorker);
         aiWorker = null;
+        aiRequestRunning = false;
+        refreshAskAiButton();
     }
 
     private void copyCommand() {
