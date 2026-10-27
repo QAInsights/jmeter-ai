@@ -211,6 +211,9 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final Callout aiSuggestionCallout = new Callout(aiSuggestionPanel, Callout.Tone.INFO);
     private final Function<String, String> aiCall;
     private final List<SectionCard> previewCards = new ArrayList<>();
+    private final List<Component> formCardGaps = new ArrayList<>();
+    private final List<Component> previewCardGaps = new ArrayList<>();
+    private final JPanel columnsBottomFiller = new JPanel();
     private final List<FieldShell> fieldShellList = new ArrayList<>();
     private final List<Callout> callouts = new ArrayList<>();
     private final KpiTile[] kpiTiles = new KpiTile[4];
@@ -378,6 +381,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         headerText.setOpaque(false);
         titleLabel = new JLabel("Workload Designer");
         titleLabel.setFont(UiTokens.title(titleLabel.getFont()));
+        titleLabel.setForeground(ThemeColors.foreground());
         captionLabel = new JLabel("<html>Threads, pacing and generators from a target load. "
                 + "Values become ${__P()} properties, so CI can override them.</html>");
         captionLabel.setFont(UiTokens.caption(captionLabel.getFont()));
@@ -394,12 +398,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         north.add(shapeControl);
         root.add(north, BorderLayout.NORTH);
         columns = new ScrollablePanel();
-        columns.setLayout(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+        columns.setLayout(new GridBagLayout());
         columns.setOpaque(false);
+        columnsBottomFiller.setOpaque(false);
         buildForm();
         preview = buildPreview();
-        columns.add(form);
-        columns.add(preview);
+        rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
+        rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
+        columns.add(form, wideColumnConstraints(0, UiTokens.SPACE_4));
+        columns.add(preview, wideColumnConstraints(1, 0));
+        columns.add(columnsBottomFiller, wideColumnFillerConstraints());
         bodyScroll = new JScrollPane(columns);
         bodyScroll.setBorder(null);
         bodyScroll.setOpaque(false);
@@ -569,6 +577,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             textAreaFont = new JTextArea().getFont();
         }
         titleLabel.setFont(UiTokens.title(labelFont));
+        titleLabel.setForeground(ThemeColors.foreground());
         captionLabel.setFont(UiTokens.caption(labelFont));
         hostsSourceLabel.setFont(UiTokens.caption(labelFont));
         hostsSourceLabel.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
@@ -667,25 +676,89 @@ public final class WorkloadDesignerDialog extends JDialog {
             return;
         }
         boolean stack = getWidth() < 900;
-        int expectedComponents = stack ? 3 : 2;
-        if (stackedColumns != stack || columns.getComponentCount() != expectedComponents) {
+        int expectedComponents = 3;
+        boolean layoutMismatch = stack
+                ? !(columns.getLayout() instanceof BoxLayout)
+                : !(columns.getLayout() instanceof GridBagLayout);
+        if (stackedColumns != stack || columns.getComponentCount() != expectedComponents || layoutMismatch) {
             stackedColumns = stack;
             columns.setLayout(stack
                     ? new BoxLayout(columns, BoxLayout.Y_AXIS)
-                    : new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+                    : new GridBagLayout());
             columns.removeAll();
             if (stack) {
+                rebuildCardStack(form, formCards, 0, formCardGaps);
+                rebuildCardStack(preview, previewCards, 0, previewCardGaps);
                 form.setAlignmentX(Component.LEFT_ALIGNMENT);
                 preview.setAlignmentX(Component.LEFT_ALIGNMENT);
                 columns.add(form);
                 columns.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_4));
                 columns.add(preview);
             } else {
-                columns.add(form);
-                columns.add(preview);
+                rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
+                rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
+                columns.add(form, wideColumnConstraints(0, UiTokens.SPACE_4));
+                columns.add(preview, wideColumnConstraints(1, 0));
+                columns.add(columnsBottomFiller, wideColumnFillerConstraints());
             }
             columns.revalidate();
             columns.repaint();
+        }
+    }
+
+    static GridBagConstraints wideColumnConstraints(int column, int rightInset) {
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = column;
+        constraints.gridy = 0;
+        constraints.weightx = 1;
+        constraints.weighty = 0;
+        constraints.anchor = GridBagConstraints.NORTHWEST;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.insets = new Insets(0, 0, 0, rightInset);
+        return constraints;
+    }
+
+    static GridBagConstraints wideColumnFillerConstraints() {
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = 0;
+        constraints.gridy = 1;
+        constraints.gridwidth = 2;
+        constraints.weightx = 1;
+        constraints.weighty = 1;
+        constraints.fill = GridBagConstraints.BOTH;
+        return constraints;
+    }
+
+    private static void rebuildCardStack(JPanel column, List<SectionCard> cards, int gap,
+                                         List<Component> gaps) {
+        column.removeAll();
+        gaps.clear();
+        SectionCard previous = null;
+        for (SectionCard card : cards) {
+            if (previous != null && gap > 0) {
+                Component spacer = javax.swing.Box.createVerticalStrut(gap);
+                spacer.setVisible(previous.isVisible() && card.isVisible());
+                gaps.add(spacer);
+                column.add(spacer);
+            }
+            card.setAlignmentX(Component.LEFT_ALIGNMENT);
+            column.add(card);
+            previous = card;
+        }
+        updateCardGaps(cards, gaps);
+    }
+
+    private static void updateCardGaps(List<SectionCard> cards, List<Component> gaps) {
+        if (gaps.size() != Math.max(0, cards.size() - 1)) {
+            return;
+        }
+        SectionCard previousVisible = null;
+        for (int index = 0; index < gaps.size(); index++) {
+            SectionCard current = cards.get(index + 1);
+            gaps.get(index).setVisible(previousVisible != null && current.isVisible());
+            if (cards.get(index).isVisible()) {
+                previousVisible = cards.get(index);
+            }
         }
     }
 
@@ -709,10 +782,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         form.setOpaque(false);
         aiCard.body().add(aiPanel, BorderLayout.CENTER);
         aiCard.setVisible(false);
-        form.add(aiCard);
+        registerFormCard(aiCard);
 
         registerFormCard(targetCard);
-        form.add(targetCard);
         groupCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(value == null ? "" : value.getName()));
         for (JMeterTreeNode node : preparation.threadGroups()) {
@@ -730,7 +802,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         formRows.add(messagesPerSampleRow);
 
         registerFormCard(shapeCard);
-        form.add(shapeCard);
         addShapeFormRow(WorkloadShape.STEP, "Start target", stepStart);
         addShapeFormRow(WorkloadShape.STEP, "End target", stepEnd);
         addShapeFormRow(WorkloadShape.STEP, "Step size", stepSize);
@@ -755,19 +826,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         arrivalsRow = addFormRow(shapeCard, "Arrivals", comboFieldShell(arrivalModeCombo));
 
         registerFormCard(timingCard);
-        form.add(timingCard);
         addFormRow(timingCard, "Average response time", fieldShell(response, "ms"));
         addFormRow(timingCard, "Think time per sample", fieldShell(think, "ms"));
         rampUnitControl = new SegmentedControl<>(rampUnit, Function.identity(),
-                FlowLayout.RIGHT, UiTokens.SPACE_2, 2);
+                FlowLayout.RIGHT, UiTokens.SPACE_2, 2, UiTokens.CONTROL_HEIGHT - UiTokens.SPACE_2);
         holdUnitControl = new SegmentedControl<>(holdUnit, Function.identity(),
-                FlowLayout.RIGHT, UiTokens.SPACE_2, 2);
+                FlowLayout.RIGHT, UiTokens.SPACE_2, 2, UiTokens.CONTROL_HEIGHT - UiTokens.SPACE_2);
         rampRow = addFormRow(timingCard, "Ramp-up", fieldShell(ramp, rampUnitControl));
         holdRow = addFormRow(timingCard, "Hold", fieldShell(hold, holdUnitControl));
 
         generatorsCard.setHeaderTrailing(hostsSourceLabel);
         registerFormCard(generatorsCard);
-        form.add(generatorsCard);
         rowsByCard.get(generatorsCard).add(hostsRow);
         formRows.add(hostsRow);
         addFormRow(generatorsCard, "vCPUs per generator", fieldShell(generatorVcpus));
@@ -777,7 +846,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         addFormRow(generatorsCard, "Generators", fieldShell(agents));
 
         registerFormCard(advancedCard);
-        form.add(advancedCard);
         addFormRow(advancedCard, "Samples/s per vCPU", fieldShell(samplesPerVcpu, "samples/s"));
         addFormRow(advancedCard, "Property prefix", fieldShell(prefix));
         advancedChevron = new JButton();
@@ -1407,6 +1475,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 body.revalidate();
                 body.repaint();
             }
+            updateCardGaps(formCards, formCardGaps);
             form.revalidate();
             form.repaint();
             if (columns != null) {
@@ -1492,7 +1561,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         });
         loadShapeCard.body().add(kpiGrid, BorderLayout.SOUTH);
         previewCards.add(loadShapeCard);
-        previewColumn.add(loadShapeCard);
 
         JPanel detailsBody = new JPanel(new BorderLayout(0, UiTokens.SPACE_2));
         detailsBody.setOpaque(false);
@@ -1538,7 +1606,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         detailsBody.add(notes, BorderLayout.CENTER);
         planDetailsCard.body().add(detailsBody, BorderLayout.CENTER);
         previewCards.add(planDetailsCard);
-        previewColumn.add(planDetailsCard);
 
         cliArea.setEditable(false);
         ((DefaultCaret) cliArea.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
@@ -1569,7 +1636,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         copyButton.addActionListener(event -> copyCommand());
         cliCard.body().add(cliPanel, BorderLayout.CENTER);
         previewCards.add(cliCard);
-        previewColumn.add(cliCard);
         for (SectionCard card : previewCards) {
             card.setAlignmentX(Component.LEFT_ALIGNMENT);
         }

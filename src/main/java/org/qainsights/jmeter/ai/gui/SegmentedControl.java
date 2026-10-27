@@ -39,27 +39,36 @@ final class SegmentedControl<T> extends JComponent {
     private final PropertyChangeListener focusListener = event -> repaint();
     private final int horizontalPadding;
     private final int verticalPadding;
+    private final int preferredTrackHeight;
 
     SegmentedControl(JComboBox<T> combo, Function<T, String> labeler) {
-        this(combo, labeler, ignored -> null, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1);
+        this(combo, labeler, ignored -> null, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1, 0);
     }
 
     SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, Function<T, Icon> iconer) {
-        this(combo, labeler, iconer, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1);
+        this(combo, labeler, iconer, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1, 0);
     }
 
     SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, int alignment,
                      int horizontalPadding, int verticalPadding) {
-        this(combo, labeler, ignored -> null, alignment, horizontalPadding, verticalPadding);
+        this(combo, labeler, ignored -> null, alignment, horizontalPadding, verticalPadding, 0);
+    }
+
+    SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, int alignment,
+                     int horizontalPadding, int verticalPadding, int preferredTrackHeight) {
+        this(combo, labeler, ignored -> null, alignment, horizontalPadding, verticalPadding,
+                preferredTrackHeight);
     }
 
     private SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, Function<T, Icon> iconer,
-                             int alignment, int horizontalPadding, int verticalPadding) {
+                             int alignment, int horizontalPadding, int verticalPadding,
+                             int preferredTrackHeight) {
         this.combo = Objects.requireNonNull(combo);
         this.labeler = Objects.requireNonNull(labeler);
         this.iconer = Objects.requireNonNull(iconer);
         this.horizontalPadding = horizontalPadding;
         this.verticalPadding = verticalPadding;
+        this.preferredTrackHeight = Math.max(0, preferredTrackHeight);
         wrapLayout = new WrapLayout(alignment, UiTokens.SPACE_1, UiTokens.SPACE_1);
         setLayout(wrapLayout);
         setOpaque(false);
@@ -108,9 +117,12 @@ final class SegmentedControl<T> extends JComponent {
     @Override
     public java.awt.Dimension getPreferredSize() {
         int width = getWidth();
-        return width > 0
+        java.awt.Dimension preferred = preferredTrackHeight > 0
+                ? wrapLayout.preferredLayoutSizeForWidth(this, Integer.MAX_VALUE)
+                : width > 0
                 ? wrapLayout.preferredLayoutSizeForWidth(this, width)
                 : wrapLayout.preferredLayoutSize(this);
+        return new java.awt.Dimension(preferred.width, Math.max(preferred.height, preferredTrackHeight));
     }
 
     @Override

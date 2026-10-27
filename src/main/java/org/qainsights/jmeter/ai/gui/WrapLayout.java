@@ -97,7 +97,10 @@ final class WrapLayout extends FlowLayout {
             int left = insets.left;
             int right = parent.getWidth() - insets.right;
             int x = left;
-            int y = insets.top;
+            int preferredHeight = preferredLayoutSizeForWidth(parent, parent.getWidth()).height
+                    - insets.top - insets.bottom;
+            int availableHeight = parent.getHeight() - insets.top - insets.bottom;
+            int y = insets.top + Math.max(0, (availableHeight - preferredHeight) / 2);
             int rowHeight = 0;
             boolean rowHasComponent = false;
             for (Component component : parent.getComponents()) {

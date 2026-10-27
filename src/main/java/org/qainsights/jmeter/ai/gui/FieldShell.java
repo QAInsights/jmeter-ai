@@ -6,6 +6,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.KeyboardFocusManager;
 import java.awt.RenderingHints;
 import java.beans.PropertyChangeListener;
@@ -53,8 +55,33 @@ final class FieldShell extends JPanel {
         prepareControl(control);
         add(control, BorderLayout.CENTER);
         if (trailing != null) {
-            trailing.setOpaque(false);
-            add(trailing, BorderLayout.EAST);
+            JPanel trailingSlot = new CenteredSlot(trailing);
+            add(trailingSlot, BorderLayout.EAST);
+        }
+    }
+
+    private static final class CenteredSlot extends JPanel {
+
+        private final JComponent content;
+
+        private CenteredSlot(JComponent content) {
+            super(new GridBagLayout());
+            this.content = content;
+            content.setOpaque(false);
+            setOpaque(false);
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.anchor = GridBagConstraints.CENTER;
+            add(content, constraints);
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            return content.getPreferredSize();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return content.getPreferredSize();
         }
     }
 

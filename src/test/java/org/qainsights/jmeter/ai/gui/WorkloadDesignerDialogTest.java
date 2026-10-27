@@ -85,6 +85,26 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void wideColumnConstraintsKeepColumnsTopAlignedWithoutStretchingTheirContents() {
+        javax.swing.JPanel columns = new javax.swing.JPanel(new java.awt.GridBagLayout());
+        javax.swing.JPanel form = new javax.swing.JPanel();
+        javax.swing.JPanel preview = new javax.swing.JPanel();
+        form.setPreferredSize(new Dimension(100, 80));
+        preview.setPreferredSize(new Dimension(100, 160));
+        columns.add(form, WorkloadDesignerDialog.wideColumnConstraints(0, 12));
+        columns.add(preview, WorkloadDesignerDialog.wideColumnConstraints(1, 0));
+        columns.add(new javax.swing.JPanel(), WorkloadDesignerDialog.wideColumnFillerConstraints());
+
+        columns.setSize(300, 400);
+        columns.doLayout();
+
+        assertEquals(0, form.getY());
+        assertEquals(80, form.getHeight());
+        assertEquals(0, preview.getY());
+        assertEquals(160, preview.getHeight());
+    }
+
+    @Test
     void selectsCoreOpenModelForShapedWorkloadsAndStandardGroupsForLoadAndEndurance() {
         assertFalse(WorkloadShape.LOAD.usesOpenModelThreadGroup());
         assertFalse(WorkloadShape.ENDURANCE.usesOpenModelThreadGroup());
