@@ -218,7 +218,7 @@ public class InputBoxIntellisense {
         return insert(text, caret, insertion, true);
     }
 
-    private static Insertion insert(String text, int caret, String insertion, boolean commandPick) {
+    static Insertion insert(String text, int caret, String insertion, boolean commandPick) {
         if (text == null) {
             text = "";
         }
@@ -229,7 +229,12 @@ public class InputBoxIntellisense {
         }
 
         String before = text.substring(0, atIdx);
-        String after = text.substring(position);
+        int replacementEnd = position;
+        while (replacementEnd < text.length()
+                && !Character.isWhitespace(text.charAt(replacementEnd))) {
+            replacementEnd++;
+        }
+        String after = text.substring(replacementEnd);
         String inserted = insertion;
         if (commandPick) {
             inserted = inserted.stripTrailing();
@@ -246,6 +251,9 @@ public class InputBoxIntellisense {
 
     static boolean isCompleteCommand(String text, int caret, String selected) {
         if (text == null || selected == null || caret <= 0 || caret > text.length()) {
+            return false;
+        }
+        if (caret < text.length() && !Character.isWhitespace(text.charAt(caret))) {
             return false;
         }
         int atIdx = text.lastIndexOf("@", caret - 1);

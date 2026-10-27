@@ -91,7 +91,11 @@ public class InputBoxIntellisenseTest {
         assertEquals(new InputBoxIntellisense.Insertion("@load ", 6),
                 InputBoxIntellisense.insert("@lo", 3, "@load"));
         assertEquals(new InputBoxIntellisense.Insertion("@load ", 6),
+                InputBoxIntellisense.insert("@load", 3, "@load"));
+        assertEquals(new InputBoxIntellisense.Insertion("@load ", 6),
                 InputBoxIntellisense.insert("@load", 5, "@load"));
+        assertEquals(new InputBoxIntellisense.Insertion("@load rest", 6),
+                InputBoxIntellisense.insert("@load rest", 3, "@load"));
         assertEquals(new InputBoxIntellisense.Insertion("@load rest", 6),
                 InputBoxIntellisense.insert("@lo rest", 3, "@load"));
         assertEquals(new InputBoxIntellisense.Insertion("hi @fix ", 8),
@@ -105,9 +109,17 @@ public class InputBoxIntellisenseTest {
     }
 
     @Test
+    void promptBodyInsertionReplacesTheEntireActiveToken() {
+        assertEquals(new InputBoxIntellisense.Insertion("BODY", 4),
+                InputBoxIntellisense.insert("@prompts analyze", 12, "BODY", false));
+    }
+
+    @Test
     void recognizesOnlyCompleteCommandMatches() {
         assertTrue(InputBoxIntellisense.isCompleteCommand("@load", 5, "@load"));
+        assertTrue(InputBoxIntellisense.isCompleteCommand("@load rest", 5, "@load"));
         assertFalse(InputBoxIntellisense.isCompleteCommand("@lo", 3, "@load"));
+        assertFalse(InputBoxIntellisense.isCompleteCommand("@loadx", 5, "@load"));
         assertFalse(InputBoxIntellisense.isCompleteCommand("@loadx", 6, "@load"));
         assertFalse(InputBoxIntellisense.isCompleteCommand("@prompts", 8, "@prompts"));
     }
