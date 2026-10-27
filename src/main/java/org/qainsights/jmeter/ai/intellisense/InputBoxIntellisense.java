@@ -138,6 +138,9 @@ public class InputBoxIntellisense {
                         if (e.getComponent() == textArea) {
                             return false;
                         }
+                        if (e.isShiftDown()) {
+                            return false;
+                        }
                         if (submitAction != null) {
                             submitAction.run();
                         }
@@ -508,8 +511,8 @@ public class InputBoxIntellisense {
                         selected, promptMatches.isEmpty());
                 if (!inserted.text().equals(text)) {
                     textArea.setText(inserted.text());
-                    textArea.setCaretPosition(inserted.caret());
                 }
+                textArea.setCaretPosition(inserted.caret());
                 exitPromptMode();
             } catch (Exception ex) {
                 // fallback: do nothing
