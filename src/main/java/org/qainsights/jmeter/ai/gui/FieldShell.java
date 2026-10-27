@@ -11,6 +11,7 @@ import java.awt.RenderingHints;
 import java.beans.PropertyChangeListener;
 
 import javax.swing.BorderFactory;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -71,10 +72,14 @@ final class FieldShell extends JPanel {
         } else if (control instanceof JTextArea area) {
             area.setBorder(BorderFactory.createEmptyBorder());
             area.setOpaque(false);
+        } else if (control instanceof JComboBox<?> combo) {
+            combo.setBorder(BorderFactory.createEmptyBorder());
+            combo.setOpaque(false);
         }
     }
 
     void refreshTheme() {
+        prepareControl(control);
         if (trailing instanceof JLabel label) {
             label.setFont(UiTokens.caption(UIManager.getFont("Label.font")));
             label.setForeground(ThemeColors.secondaryText());

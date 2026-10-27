@@ -15,6 +15,7 @@ import java.awt.GridLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -61,6 +62,7 @@ import javax.swing.Icon;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.DefaultCaret;
 
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.action.ActionNames;
@@ -119,6 +121,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JComboBox<WorkloadShape> shapeCombo = new JComboBox<>(WorkloadShape.values());
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
+    private final int initialTargetFontSize = targetCombo.getFont().getSize();
     private final PlaceholderTextField target = new PlaceholderTextField();
     private final PlaceholderTextField cap = new PlaceholderTextField();
     private final PlaceholderTextField response = new PlaceholderTextField();
@@ -263,12 +266,13 @@ public final class WorkloadDesignerDialog extends JDialog {
         this.preferences = preferences;
         shellCombo.setSelectedItem(CommandShell.forOsName(System.getProperty("os.name")));
         target.setPlaceholder("100");
+        target.setColumns(6);
         maxThreadsPerGenerator.setToolTipText(
                 "From a calibration run on one generator at under 80% CPU");
         response.setPlaceholder("500");
         think.setPlaceholder("0");
         ramp.setPlaceholder("10% of hold");
-        hold.setPlaceholder("10");
+        hold.setPlaceholder("600");
         agents.setPlaceholder("1");
         generatorVcpus.setPlaceholder("4");
         generatorRamGb.setPlaceholder("8");
@@ -307,6 +311,14 @@ public final class WorkloadDesignerDialog extends JDialog {
             @Override
             public void windowClosing(WindowEvent event) {
                 cancel();
+            }
+
+            @Override
+            public void windowOpened(WindowEvent event) {
+                SwingUtilities.invokeLater(() -> {
+                    bodyScroll.getViewport().setViewPosition(new Point(0, 0));
+                    target.requestFocusInWindow();
+                });
             }
         });
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
@@ -403,6 +415,12 @@ public final class WorkloadDesignerDialog extends JDialog {
                 updateColumnsLayout();
                 fitChartToPreviewWidth();
                 updateKpiLayout();
+            }
+        });
+        bodyScroll.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                SwingUtilities.invokeLater(WorkloadDesignerDialog.this::updateColumnsLayout);
             }
         });
         root.add(bodyScroll, BorderLayout.CENTER);
@@ -532,6 +550,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                     if (GuiPackage.getInstance() != null) {
                         ActionRouter.getInstance().doActionNow(new ActionEvent(
                                 WorkloadDesignerDialog.this, ActionEvent.ACTION_PERFORMED, entry.getValue()));
+                        SwingUtilities.invokeLater(WorkloadDesignerDialog.this::refreshLookAndFeel);
                     }
                 }
             });
@@ -552,6 +571,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         titleLabel.setFont(UiTokens.title(labelFont));
         captionLabel.setFont(UiTokens.caption(labelFont));
         hostsSourceLabel.setFont(UiTokens.caption(labelFont));
+        hostsSourceLabel.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
         aiGoal.setFont(new JTextField().getFont());
         JTextField inputStyle = new JTextField();
         aiGoal.setForeground(inputStyle.getForeground());
@@ -567,12 +587,12 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         for (FormRow row : formRows) {
             row.label().setFont(UiTokens.label(labelFont));
-            row.label().setForeground(ThemeColors.secondaryText());
+            row.label().setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
         }
         for (JLabel label : resultLabels) {
             if (label != null) {
-                label.setFont(UiTokens.caption(labelFont));
-                label.setForeground(ThemeColors.secondaryText());
+                label.setFont(UiTokens.body(labelFont));
+                label.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
             }
         }
         for (SectionCard card : formCards) {
@@ -600,7 +620,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         if (targetSuffixLabel != null) {
             targetSuffixLabel.setFont(UiTokens.label(labelFont));
-            targetSuffixLabel.setForeground(ThemeColors.secondaryText());
+            targetSuffixLabel.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
         }
         for (KpiTile tile : kpiTiles) {
             if (tile != null) {
@@ -700,10 +720,10 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         groupCombo.setSelectedItem(preparation.selectedGroup());
         targetSuffixLabel = formLabel("samples/s");
-        addFormRow(targetCard, "Thread Group", groupCombo, true);
-        addFormRow(targetCard, "Target type", targetCombo);
+        addFormRow(targetCard, "Thread Group", comboFieldShell(groupCombo), true);
+        addFormRow(targetCard, "Target type", comboFieldShell(targetCombo));
         targetRow = addFormRow(targetCard, "Target value",
-                createFieldShell(target, targetSuffixLabel));
+                targetValueShell = createFieldShell(target, targetSuffixLabel));
         rowsByCard.get(targetCard).add(capRow);
         rowsByCard.get(targetCard).add(messagesPerSampleRow);
         formRows.add(capRow);
@@ -732,14 +752,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         rampDownShell = createFieldShell(rampDown, (JComponent) null);
         rampDownOptions.add(rampDownShell, BorderLayout.CENTER);
         rampDownRow = addFormRow(shapeCard, "Ramp down (s)", rampDownOptions);
-        arrivalsRow = addFormRow(shapeCard, "Arrivals", arrivalModeCombo);
+        arrivalsRow = addFormRow(shapeCard, "Arrivals", comboFieldShell(arrivalModeCombo));
 
         registerFormCard(timingCard);
         form.add(timingCard);
         addFormRow(timingCard, "Average response time", fieldShell(response, "ms"));
         addFormRow(timingCard, "Think time per sample", fieldShell(think, "ms"));
-        rampUnitControl = new SegmentedControl<>(rampUnit, Function.identity());
-        holdUnitControl = new SegmentedControl<>(holdUnit, Function.identity());
+        rampUnitControl = new SegmentedControl<>(rampUnit, Function.identity(),
+                FlowLayout.RIGHT, UiTokens.SPACE_2, 2);
+        holdUnitControl = new SegmentedControl<>(holdUnit, Function.identity(),
+                FlowLayout.RIGHT, UiTokens.SPACE_2, 2);
         rampRow = addFormRow(timingCard, "Ramp-up", fieldShell(ramp, rampUnitControl));
         holdRow = addFormRow(timingCard, "Hold", fieldShell(hold, holdUnitControl));
 
@@ -799,7 +821,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         card.body().addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent event) {
-                int columns = fieldsPerRow(card.body().getWidth());
+                int columns = formColumns(card, card.body().getWidth());
                 if (!Integer.valueOf(columns).equals(cardRowColumns.get(card))) {
                     rebuildFormRows();
                 }
@@ -830,7 +852,14 @@ public final class WorkloadDesignerDialog extends JDialog {
     private JLabel formLabel(String text) {
         JLabel label = new JLabel(text);
         label.setFont(UiTokens.label(UIManager.getFont("Label.font")));
-        label.setForeground(ThemeColors.secondaryText());
+        label.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
+        return label;
+    }
+
+    private JLabel detailLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(UiTokens.body(UIManager.getFont("Label.font")));
+        label.setForeground(ThemeColors.secondaryText(ThemeColors.elevatedSurface()));
         return label;
     }
 
@@ -841,6 +870,12 @@ public final class WorkloadDesignerDialog extends JDialog {
     private FieldShell createFieldShell(JTextField field, JComponent trailing) {
         FieldShell shell = new FieldShell(field, trailing);
         fieldShells.put(field, shell);
+        fieldShellList.add(shell);
+        return shell;
+    }
+
+    private FieldShell comboFieldShell(JComboBox<?> combo) {
+        FieldShell shell = new FieldShell(combo);
         fieldShellList.add(shell);
         return shell;
     }
@@ -1060,6 +1095,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         aiGoal.setOpaque(inputStyle.isOpaque());
         aiGoal.setPlaceholder(
                 "e.g. Black Friday peak, 2x last year's 120k orders/hour, checkout in 1 of 10 visits");
+        ((DefaultCaret) aiSuggestionText.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         content.setOpaque(false);
         JLabel goalLabel = formLabel("Describe the goal");
@@ -1335,7 +1371,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 JPanel body = card.body();
                 body.removeAll();
                 body.setLayout(new GridBagLayout());
-                int columns = fieldsPerRow(body.getWidth());
+                int columns = formColumns(card, body.getWidth());
                 cardRowColumns.put(card, columns);
                 int rowIndex = 0;
                 int columnIndex = 0;
@@ -1385,8 +1421,26 @@ public final class WorkloadDesignerDialog extends JDialog {
         return cardContentWidth < 420 ? 1 : 2;
     }
 
+    static int targetFieldsPerRow(int cardContentWidth, int targetTypeWidth, int targetValueWidth,
+                                  boolean fontIncreased) {
+        int columns = fieldsPerRow(cardContentWidth);
+        return columns == 2 && (fontIncreased
+                || cardContentWidth < targetTypeWidth + targetValueWidth + UiTokens.SPACE_3) ? 1 : columns;
+    }
+
+    private int formColumns(SectionCard card, int cardContentWidth) {
+        int columns = fieldsPerRow(cardContentWidth);
+        if (card != targetCard || columns == 1 || targetValueShell == null) {
+            return columns;
+        }
+        int targetTypeWidth = targetCombo.getPreferredSize().width + UiTokens.SPACE_2 * 2;
+        boolean fontIncreased = targetCombo.getFont().getSize() > initialTargetFontSize;
+        return targetFieldsPerRow(cardContentWidth, targetTypeWidth, targetValueShell.getPreferredSize().width,
+                fontIncreased);
+    }
+
     static int kpiColumns(int cardWidth) {
-        return cardWidth < 520 ? 2 : 4;
+        return cardWidth < 600 ? 2 : 4;
     }
 
     private void updateKpiLayout() {
@@ -1448,7 +1502,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 "Throughput samples / min", "Total duration", "Per agent",
                 "Sampler mix", "Generators needed", "Capacity per generator", "Heap per generator"};
         for (int index = 0; index < labels.length; index++) {
-            resultLabels[index] = formLabel(labels[index]);
+            resultLabels[index] = detailLabel(labels[index]);
             resultValues[index] = new JLabel("-");
         }
         int[] detailIndexes = {1, 3, 5, 6, 8, 9};
@@ -1487,6 +1541,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         previewColumn.add(planDetailsCard);
 
         cliArea.setEditable(false);
+        ((DefaultCaret) cliArea.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
         cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
@@ -1524,6 +1579,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private static JTextArea notesArea(int rows, java.awt.Color color) {
         JTextArea area = new JTextArea(rows, 20);
         area.setEditable(false);
+        ((DefaultCaret) area.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setFont(UIManager.getFont("TextArea.font"));
@@ -2410,13 +2466,14 @@ public final class WorkloadDesignerDialog extends JDialog {
                     UiTokens.SPACE_2, UiTokens.SPACE_3));
             title.setText(label);
             value.setEditable(false);
+            ((DefaultCaret) value.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
             value.setLineWrap(true);
             value.setWrapStyleWord(true);
             value.setOpaque(false);
             value.setFocusable(false);
             value.setBorder(BorderFactory.createEmptyBorder());
-            add(title, BorderLayout.NORTH);
             add(value, BorderLayout.CENTER);
+            add(title, BorderLayout.SOUTH);
             refreshFonts();
         }
 
@@ -2427,9 +2484,13 @@ public final class WorkloadDesignerDialog extends JDialog {
         private void refreshFonts() {
             Font labelFont = UIManager.getFont("Label.font");
             title.setFont(UiTokens.caption(labelFont));
-            title.setForeground(ThemeColors.secondaryText());
+            title.setForeground(ThemeColors.secondaryText(ThemeColors.surface()));
             value.setFont(UiTokens.title(labelFont));
             value.setForeground(ThemeColors.foreground());
+            value.setEditable(false);
+            value.setOpaque(false);
+            value.setFocusable(false);
+            value.setBorder(BorderFactory.createEmptyBorder());
         }
 
         @Override

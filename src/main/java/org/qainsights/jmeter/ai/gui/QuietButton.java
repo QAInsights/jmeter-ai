@@ -169,7 +169,7 @@ class QuietButton extends JButton {
             return null;
         }
         if (!isEnabled()) {
-            return disabledBackground(fill);
+            return kind == Kind.PRIMARY ? ThemeColors.elevatedSurface() : disabledBackground(fill);
         }
         if (model.isPressed()) {
             return ThemeColors.blend(ThemeColors.foreground(), fill, 0.10f);
@@ -186,7 +186,7 @@ class QuietButton extends JButton {
     private Color foregroundFor() {
         if (!isEnabled()) {
             if (kind == Kind.PRIMARY) {
-                return ThemeColors.secondaryText(disabledBackground(ThemeColors.accent()));
+                return ThemeColors.secondaryText(ThemeColors.elevatedSurface());
             }
             return ThemeColors.secondaryText();
         }

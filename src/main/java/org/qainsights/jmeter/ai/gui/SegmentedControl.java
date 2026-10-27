@@ -7,6 +7,7 @@ import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.KeyboardFocusManager;
+import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeListener;
@@ -34,22 +35,36 @@ final class SegmentedControl<T> extends JComponent {
     private final Function<T, String> labeler;
     private final Function<T, Icon> iconer;
     private final List<SegmentButton> buttons = new ArrayList<>();
-    private final WrapLayout wrapLayout = new WrapLayout(FlowLayout.LEFT, UiTokens.SPACE_1, UiTokens.SPACE_1);
+    private final WrapLayout wrapLayout;
     private final PropertyChangeListener focusListener = event -> repaint();
+    private final int horizontalPadding;
+    private final int verticalPadding;
 
     SegmentedControl(JComboBox<T> combo, Function<T, String> labeler) {
-        this(combo, labeler, ignored -> null);
+        this(combo, labeler, ignored -> null, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1);
     }
 
     SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, Function<T, Icon> iconer) {
+        this(combo, labeler, iconer, FlowLayout.LEFT, UiTokens.SPACE_3, UiTokens.SPACE_1);
+    }
+
+    SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, int alignment,
+                     int horizontalPadding, int verticalPadding) {
+        this(combo, labeler, ignored -> null, alignment, horizontalPadding, verticalPadding);
+    }
+
+    private SegmentedControl(JComboBox<T> combo, Function<T, String> labeler, Function<T, Icon> iconer,
+                             int alignment, int horizontalPadding, int verticalPadding) {
         this.combo = Objects.requireNonNull(combo);
         this.labeler = Objects.requireNonNull(labeler);
         this.iconer = Objects.requireNonNull(iconer);
+        this.horizontalPadding = horizontalPadding;
+        this.verticalPadding = verticalPadding;
+        wrapLayout = new WrapLayout(alignment, UiTokens.SPACE_1, UiTokens.SPACE_1);
         setLayout(wrapLayout);
         setOpaque(false);
         setFocusable(true);
-        setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1, UiTokens.SPACE_1,
-                UiTokens.SPACE_1, UiTokens.SPACE_1));
+        setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         for (int index = 0; index < combo.getItemCount(); index++) {
             T item = combo.getItemAt(index);
             SegmentButton button = new SegmentButton(item);
@@ -79,7 +94,7 @@ final class SegmentedControl<T> extends JComponent {
     void refreshFonts() {
         java.awt.Font base = UIManager.getFont("Button.font");
         for (SegmentButton button : buttons) {
-            button.setFont(UiTokens.body(base));
+            button.setFont(UiTokens.caption(base));
         }
         revalidate();
         repaint();
@@ -126,10 +141,9 @@ final class SegmentedControl<T> extends JComponent {
             g.setColor(ThemeColors.surface());
             g.fillRoundRect(0, 0, width, height, UiTokens.RADIUS_MEDIUM * 2,
                     UiTokens.RADIUS_MEDIUM * 2);
-            g.setColor(isFocusWithin() ? ThemeColors.focusRing() : ThemeColors.separator());
-            g.setStroke(new BasicStroke(isFocusWithin() ? 1.6f : 1f));
-            g.drawRoundRect(isFocusWithin() ? 1 : 0, isFocusWithin() ? 1 : 0,
-                    width - (isFocusWithin() ? 2 : 0), height - (isFocusWithin() ? 2 : 0),
+            g.setColor(ThemeColors.separator());
+            g.setStroke(new BasicStroke(1f));
+            g.drawRoundRect(0, 0, width, height,
                     UiTokens.RADIUS_MEDIUM * 2, UiTokens.RADIUS_MEDIUM * 2);
         } finally {
             g.dispose();
@@ -170,12 +184,6 @@ final class SegmentedControl<T> extends JComponent {
         }
     }
 
-    private boolean isFocusWithin() {
-        Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
-        return focusOwner != null
-                && (focusOwner == this || javax.swing.SwingUtilities.isDescendingFrom(focusOwner, this));
-    }
-
     private final class SegmentButton extends JButton {
         private final T item;
         private boolean selectedValue;
@@ -185,13 +193,15 @@ final class SegmentedControl<T> extends JComponent {
             this.item = item;
             setHorizontalTextPosition(SwingConstants.RIGHT);
             setIconTextGap(UiTokens.SPACE_1);
+            setMargin(new Insets(0, 0, 0, 0));
             setContentAreaFilled(false);
             setBorderPainted(false);
             setFocusPainted(false);
             setOpaque(false);
             setFocusable(true);
             setRolloverEnabled(true);
-            setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+            setBorder(BorderFactory.createEmptyBorder(
+                    verticalPadding, horizontalPadding, verticalPadding, horizontalPadding));
             setForeground(ThemeColors.secondaryText());
             getAccessibleContext().setAccessibleName(labeler.apply(item));
             addActionListener(event -> combo.setSelectedItem(item));
@@ -223,6 +233,12 @@ final class SegmentedControl<T> extends JComponent {
                         g.drawRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
                                 UiTokens.RADIUS_SMALL * 2);
                     }
+                }
+                if (isFocusOwner()) {
+                    g.setColor(ThemeColors.focusRing());
+                    g.setStroke(new BasicStroke(1.6f));
+                    g.drawRoundRect(1, 1, Math.max(0, width - 2), Math.max(0, height - 2),
+                            UiTokens.RADIUS_SMALL * 2, UiTokens.RADIUS_SMALL * 2);
                 }
                 setForeground(selectedValue ? ThemeColors.foreground() : ThemeColors.secondaryText());
             } finally {

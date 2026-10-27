@@ -77,8 +77,11 @@ class WorkloadDesignerDialogTest {
     void formFieldAndKpiColumnsRespondToTheirWidthThresholds() {
         assertEquals(1, WorkloadDesignerDialog.fieldsPerRow(419));
         assertEquals(2, WorkloadDesignerDialog.fieldsPerRow(420));
-        assertEquals(2, WorkloadDesignerDialog.kpiColumns(519));
-        assertEquals(4, WorkloadDesignerDialog.kpiColumns(520));
+        assertEquals(1, WorkloadDesignerDialog.targetFieldsPerRow(500, 300, 220, false));
+        assertEquals(2, WorkloadDesignerDialog.targetFieldsPerRow(600, 300, 220, false));
+        assertEquals(1, WorkloadDesignerDialog.targetFieldsPerRow(600, 300, 220, true));
+        assertEquals(2, WorkloadDesignerDialog.kpiColumns(599));
+        assertEquals(4, WorkloadDesignerDialog.kpiColumns(600));
     }
 
     @Test
