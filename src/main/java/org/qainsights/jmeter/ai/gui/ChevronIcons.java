@@ -22,6 +22,14 @@ final class ChevronIcons {
 
     /** A small downward-pointing chevron. */
     static Icon down(int size) {
+        return chevron(size, false);
+    }
+
+    static Icon up(int size) {
+        return chevron(size, true);
+    }
+
+    private static Icon chevron(int size, boolean up) {
         return new Icon() {
             @Override
             public int getIconWidth() {
@@ -43,9 +51,9 @@ final class ChevronIcons {
                     g2.setStroke(new BasicStroke(Math.max(1.2f, size / 8f),
                             BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                     GeneralPath chevron = new GeneralPath();
-                    chevron.moveTo(x + 0.2 * size, y + 0.35 * size);
-                    chevron.lineTo(x + 0.5 * size, y + 0.68 * size);
-                    chevron.lineTo(x + 0.8 * size, y + 0.35 * size);
+                    chevron.moveTo(x + 0.2 * size, y + (up ? 0.65 : 0.35) * size);
+                    chevron.lineTo(x + 0.5 * size, y + (up ? 0.32 : 0.68) * size);
+                    chevron.lineTo(x + 0.8 * size, y + (up ? 0.65 : 0.35) * size);
                     g2.draw(chevron);
                 } finally {
                     g2.dispose();

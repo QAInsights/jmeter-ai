@@ -5,11 +5,13 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GradientPaint;
 import java.awt.RenderingHints;
 import java.awt.geom.Path2D;
 import java.util.List;
 import javax.accessibility.AccessibleContext;
 import javax.swing.JComponent;
+import javax.swing.UIManager;
 
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 
@@ -18,9 +20,8 @@ public final class LoadShapeChart extends JComponent {
     private WorkloadPlan plan;
 
     public LoadShapeChart() {
-        setOpaque(true);
-        setBackground(ThemeColors.canvas());
-        setPreferredSize(new java.awt.Dimension(420, 230));
+        setOpaque(false);
+        setPreferredSize(new java.awt.Dimension(420, 210));
         getAccessibleContext().setAccessibleName("Workload thread ramp and sample-rate chart");
     }
 
@@ -45,18 +46,16 @@ public final class LoadShapeChart extends JComponent {
         super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         try {
-            g.setColor(getBackground());
-            g.fillRect(0, 0, getWidth(), getHeight());
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g.setFont(UIManager.getFont("Label.font"));
             int left = 54;
             int right = getWidth() - 62;
-            int top = 36;
-            int bottom = getHeight() - 38;
+            int top = 18;
+            int bottom = getHeight() - 30;
             if (right <= left || bottom <= top) {
                 return;
             }
-            drawLegend(g, left, right);
             drawAxes(g, left, right, top, bottom);
             if (plan != null) {
                 drawLoad(g, left, right, top, bottom);
@@ -70,31 +69,8 @@ public final class LoadShapeChart extends JComponent {
         }
     }
 
-    private void drawLegend(Graphics2D g, int left, int right) {
-        g.setFont(getFont());
-        FontMetrics metrics = g.getFontMetrics();
-        int baseline = 17;
-        g.setColor(ThemeColors.secondaryText());
-        drawLegendItem(g, left, baseline, ThemeColors.accent(), false, "Threads");
-        String rateLabel = "Samples/s";
-        int rateX = right - metrics.stringWidth(rateLabel) - 22;
-        drawLegendItem(g, rateX, baseline, ThemeColors.info(), true, rateLabel);
-    }
-
-    private static void drawLegendItem(Graphics2D g, int x, int baseline, Color color,
-                                       boolean dashed, String label) {
-        g.setColor(color);
-        g.setStroke(dashed
-                ? new BasicStroke(1.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{5, 4}, 0)
-                : new BasicStroke(2f));
-        g.drawLine(x, baseline - 4, x + 14, baseline - 4);
-        g.setStroke(new BasicStroke(1f));
-        g.setColor(ThemeColors.secondaryText());
-        g.drawString(label, x + 19, baseline);
-    }
-
     private void drawAxes(Graphics2D g, int left, int right, int top, int bottom) {
-        g.setFont(getFont());
+        g.setFont(UIManager.getFont("Label.font"));
         FontMetrics metrics = g.getFontMetrics();
         g.setColor(ThemeColors.secondaryText());
         double maxThreads = plan == null ? 0 : WorkloadChartModel.threadAxisMaximum(plan);
@@ -135,12 +111,15 @@ public final class LoadShapeChart extends JComponent {
         area.lineTo(right, threadPeakY);
         area.lineTo(right, bottom);
         area.closePath();
-        Color fill = new Color(ThemeColors.accentSoft().getRed(), ThemeColors.accentSoft().getGreen(),
-                ThemeColors.accentSoft().getBlue(), 190);
-        g.setColor(fill);
+        Color fillStart = new Color(ThemeColors.accent().getRed(), ThemeColors.accent().getGreen(),
+                ThemeColors.accent().getBlue(), 100);
+        Color fillEnd = new Color(ThemeColors.accent().getRed(), ThemeColors.accent().getGreen(),
+                ThemeColors.accent().getBlue(), 8);
+        g.setPaint(new GradientPaint(0, (float) threadPeakY, fillStart,
+                0, bottom, fillEnd));
         g.fill(area);
         g.setColor(ThemeColors.accent());
-        g.setStroke(new BasicStroke(2f));
+        g.setStroke(new BasicStroke(2.2f));
         int rampPixelX = (int) Math.round(rampX);
         int threadPeakPixelY = (int) Math.round(threadPeakY);
         g.drawLine(left, bottom, rampPixelX, threadPeakPixelY);
@@ -170,6 +149,7 @@ public final class LoadShapeChart extends JComponent {
         double maxThreads = WorkloadChartModel.threadAxisMaximum(plan);
         double maxRps = WorkloadChartModel.sampleRateAxisMaximum(plan);
         Path2D threadPath = new Path2D.Double();
+        Path2D threadArea = new Path2D.Double();
         Path2D ratePath = new Path2D.Double();
         for (int index = 0; index <= 120; index++) {
             double elapsed = total * index / 120.0;
@@ -179,14 +159,25 @@ public final class LoadShapeChart extends JComponent {
             double rateY = bottom - height * point.requestsPerSecond() / maxRps;
             if (index == 0) {
                 threadPath.moveTo(x, threadY);
+                threadArea.moveTo(x, bottom);
+                threadArea.lineTo(x, threadY);
                 ratePath.moveTo(x, rateY);
             } else {
                 threadPath.lineTo(x, threadY);
+                threadArea.lineTo(x, threadY);
                 ratePath.lineTo(x, rateY);
             }
         }
+        threadArea.lineTo(right, bottom);
+        threadArea.closePath();
+        Color fillStart = new Color(ThemeColors.accent().getRed(), ThemeColors.accent().getGreen(),
+                ThemeColors.accent().getBlue(), 100);
+        Color fillEnd = new Color(ThemeColors.accent().getRed(), ThemeColors.accent().getGreen(),
+                ThemeColors.accent().getBlue(), 8);
+        g.setPaint(new GradientPaint(0, top, fillStart, 0, bottom, fillEnd));
+        g.fill(threadArea);
         g.setColor(ThemeColors.accent());
-        g.setStroke(new BasicStroke(2f));
+        g.setStroke(new BasicStroke(2.2f));
         g.draw(threadPath);
         g.setColor(ThemeColors.info());
         g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL,
@@ -195,7 +186,7 @@ public final class LoadShapeChart extends JComponent {
     }
 
     private void drawTimeTicks(Graphics2D g, int left, int right, int bottom) {
-        g.setFont(getFont());
+        g.setFont(UIManager.getFont("Label.font"));
         g.setColor(ThemeColors.secondaryText());
         List<Long> ticks = WorkloadChartModel.timeTicks(plan.durationSeconds());
         for (long seconds : ticks) {

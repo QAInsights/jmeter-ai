@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
@@ -11,6 +12,8 @@ import java.awt.GraphicsConfiguration;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
@@ -24,6 +27,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +57,7 @@ import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
+import javax.swing.Icon;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
@@ -97,6 +102,10 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final Preferences preferences;
     private final FormPanel form = new FormPanel();
     private final List<FormRow> formRows = new ArrayList<>();
+    private final List<SectionCard> formCards = new ArrayList<>();
+    private final Map<SectionCard, List<FormRow>> rowsByCard = new LinkedHashMap<>();
+    private final Map<JTextField, FieldShell> fieldShells = new IdentityHashMap<>();
+    private final Map<SectionCard, Integer> cardRowColumns = new IdentityHashMap<>();
     private final FormRow capRow;
     private final FormRow messagesPerSampleRow;
     private final FormRow hostsRow;
@@ -110,13 +119,13 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final JComboBox<WorkloadShape> shapeCombo = new JComboBox<>(WorkloadShape.values());
     private final JComboBox<WorkloadInputs.TargetType> targetCombo =
             new JComboBox<>(WorkloadInputs.TargetType.values());
-    private final JTextField target = new JTextField();
-    private final JTextField cap = new JTextField();
-    private final JTextField response = new JTextField();
-    private final JTextField think = new JTextField();
-    private final JTextField ramp = new JTextField();
+    private final PlaceholderTextField target = new PlaceholderTextField();
+    private final PlaceholderTextField cap = new PlaceholderTextField();
+    private final PlaceholderTextField response = new PlaceholderTextField();
+    private final PlaceholderTextField think = new PlaceholderTextField();
+    private final PlaceholderTextField ramp = new PlaceholderTextField();
     private final JComboBox<String> rampUnit = new JComboBox<>(new String[]{"s", "min", "h"});
-    private final JTextField hold = new JTextField();
+    private final PlaceholderTextField hold = new PlaceholderTextField();
     private final JComboBox<String> holdUnit = new JComboBox<>(new String[]{"s", "min", "h"});
     private final PlaceholderTextField stepStart = new PlaceholderTextField();
     private final PlaceholderTextField stepEnd = new PlaceholderTextField();
@@ -144,40 +153,77 @@ public final class WorkloadDesignerDialog extends JDialog {
     };
     private final JTable customStagesTable = new JTable(customStageModel);
     private JScrollPane customStagesScroll;
-    private final JTextField agents = new JTextField();
-    private final JTextField generatorHosts = new JTextField();
-    private final JTextField maxThreadsPerGenerator = new JTextField();
-    private final JTextField generatorVcpus = new JTextField();
-    private final JTextField generatorRamGb = new JTextField();
+    private final PlaceholderTextField agents = new PlaceholderTextField();
+    private final PlaceholderTextField generatorHosts = new PlaceholderTextField();
+    private final PlaceholderTextField maxThreadsPerGenerator = new PlaceholderTextField();
+    private final PlaceholderTextField generatorVcpus = new PlaceholderTextField();
+    private final PlaceholderTextField generatorRamGb = new PlaceholderTextField();
     private final PlaceholderTextField samplesPerVcpu = new PlaceholderTextField();
     private final JTextField messagesPerSample = new JTextField("1");
-    private final JTextField prefix = new JTextField();
+    private final PlaceholderTextField prefix = new PlaceholderTextField();
     private final LoadShapeChart chart = new LoadShapeChart();
     private final JLabel errorLabel = new JLabel(" ");
     private final JLabel[] resultValues = new JLabel[10];
+    private final JLabel[] resultLabels = new JLabel[10];
     private final JTextArea warningsArea = notesArea(2, ThemeColors.warning());
     private final JTextArea assumptionsArea = notesArea(2, ThemeColors.info());
     private final JTextArea infoArea = notesArea(2, ThemeColors.info());
     private final JTextArea parsedArea = notesArea(2, ThemeColors.secondaryText());
+    private final Callout warningsCallout = new Callout(warningsArea, Callout.Tone.WARNING);
+    private final Callout assumptionsCallout = new Callout(assumptionsArea, Callout.Tone.INFO);
+    private final Callout infoCallout = new Callout(infoArea, Callout.Tone.INFO);
+    private final Callout parsedCallout = new Callout(parsedArea, Callout.Tone.SECONDARY);
     private JPanel notes;
     private JPanel columns;
-    private JScrollPane previewScroll;
+    private JPanel preview;
+    private JScrollPane bodyScroll;
     private final JTextArea cliArea = new JTextArea(4, 24);
-    private final JButton applyButton = new JButton("Apply to Thread Group");
-    private final JButton copyButton = new JButton("Copy");
+    private final QuietButton applyButton =
+            new QuietButton("Apply to Thread Group", QuietButton.Kind.PRIMARY);
+    private final QuietButton copyButton =
+            new QuietButton("Copy", QuietButton.Kind.OUTLINED).compact();
     private final JComboBox<CommandShell> shellCombo = new JComboBox<>(CommandShell.values());
-    private final JButton askAiButton = new JButton("Ask AI");
-    private final JButton copySuggestionButton = new JButton("Copy");
+    private final QuietButton askAiButton = new QuietButton("Ask AI", QuietButton.Kind.TONAL);
+    private final QuietButton copySuggestionButton =
+            new QuietButton("Copy", QuietButton.Kind.OUTLINED).compact();
     private final JLabel hostsSourceLabel = createHostsSourceLabel();
     private JLabel titleLabel;
     private JLabel captionLabel;
-    private final JPanel hostsFieldPanel = new JPanel(new BorderLayout());
+    private JLabel threadLegendLabel;
+    private JLabel rateLegendLabel;
     private final JPanel aiPanel = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_1));
+    private final SectionCard aiCard = new SectionCard("Ask AI");
+    private final SectionCard targetCard = new SectionCard("Target");
+    private final SectionCard shapeCard = new SectionCard("Shape settings");
+    private final SectionCard timingCard = new SectionCard("Timing", "Blank fields use the defaults shown");
+    private final SectionCard generatorsCard = new SectionCard("Load generators");
+    private final SectionCard advancedCard = new SectionCard("Advanced");
+    private final SectionCard loadShapeCard = new SectionCard("Load shape");
+    private final SectionCard planDetailsCard = new SectionCard("Plan details");
+    private final SectionCard cliCard = new SectionCard("Command line");
     private final PlaceholderTextArea aiGoal = new PlaceholderTextArea(3, 30);
     private final JLabel aiErrorLabel = new JLabel(" ");
     private final JPanel aiSuggestionPanel = new JPanel();
     private final JTextArea aiSuggestionText = notesArea(3, ThemeColors.info());
+    private final Callout aiSuggestionCallout = new Callout(aiSuggestionPanel, Callout.Tone.INFO);
     private final Function<String, String> aiCall;
+    private final List<SectionCard> previewCards = new ArrayList<>();
+    private final List<FieldShell> fieldShellList = new ArrayList<>();
+    private final List<Callout> callouts = new ArrayList<>();
+    private final KpiTile[] kpiTiles = new KpiTile[4];
+    private JPanel kpiGrid;
+    private JPanel detailsGrid;
+    private JPanel commandCodeBlock;
+    private SegmentedControl<WorkloadShape> shapeControl;
+    private SegmentedControl<CommandShell> shellControl;
+    private SegmentedControl<String> rampUnitControl;
+    private SegmentedControl<String> holdUnitControl;
+    private JLabel targetSuffixLabel;
+    private FieldShell targetValueShell;
+    private FieldShell rampDownShell;
+    private JButton advancedChevron;
+    private boolean advancedExpanded;
+    private boolean refreshingFormRows;
     private WorkloadAiAssistant.Suggestion latestSuggestion;
     private SwingWorker<WorkloadAiAssistant.Suggestion, Void> aiWorker;
     private long aiRequestId;
@@ -216,33 +262,44 @@ public final class WorkloadDesignerDialog extends JDialog {
         this.aiCall = aiCall;
         this.preferences = preferences;
         shellCombo.setSelectedItem(CommandShell.forOsName(System.getProperty("os.name")));
+        target.setPlaceholder("100");
         maxThreadsPerGenerator.setToolTipText(
                 "From a calibration run on one generator at under 80% CPU");
-        samplesPerVcpu.setPlaceholder("Default: 250 samples/s per vCPU");
-        stepStart.setPlaceholder("Default: 100");
-        stepEnd.setPlaceholder("Default: 500");
-        stepSize.setPlaceholder("Default: 100");
-        stepDuration.setPlaceholder("Default: 300");
-        spikeBaseline.setPlaceholder("Default: 100");
-        spikePeak.setPlaceholder("Default: 500");
-        spikeWarmup.setPlaceholder("Default: 60");
-        spikeDuration.setPlaceholder("Default: 60");
-        spikeRecovery.setPlaceholder("Default: 60");
-        stressStart.setPlaceholder("Default: 100");
-        stressCeiling.setPlaceholder("Default: 1000");
-        stressStep.setPlaceholder("Default: 100");
-        stressDuration.setPlaceholder("Default: 120");
-        rampDown.setPlaceholder("Default: 120");
+        response.setPlaceholder("500");
+        think.setPlaceholder("0");
+        ramp.setPlaceholder("10% of hold");
+        hold.setPlaceholder("10");
+        agents.setPlaceholder("1");
+        generatorVcpus.setPlaceholder("4");
+        generatorRamGb.setPlaceholder("8");
+        generatorHosts.setPlaceholder("gen1, gen2 (blank runs locally)");
+        maxThreadsPerGenerator.setPlaceholder("From a calibration run");
+        samplesPerVcpu.setPlaceholder("250");
+        stepStart.setPlaceholder("100");
+        stepEnd.setPlaceholder("500");
+        stepSize.setPlaceholder("100");
+        stepDuration.setPlaceholder("300");
+        stepRamp.setPlaceholder("10");
+        spikeBaseline.setPlaceholder("100");
+        spikePeak.setPlaceholder("500");
+        spikeWarmup.setPlaceholder("60");
+        spikeDuration.setPlaceholder("60");
+        spikeRecovery.setPlaceholder("60");
+        stressStart.setPlaceholder("100");
+        stressCeiling.setPlaceholder("1000");
+        stressStep.setPlaceholder("100");
+        stressDuration.setPlaceholder("120");
+        rampDown.setPlaceholder("120");
         hostsSourceLabel.setForeground(ThemeColors.secondaryText());
         hostsSourceLabel.setFont(UiTokens.caption(hostsSourceLabel.getFont()));
-        hostsFieldPanel.setOpaque(false);
-        hostsFieldPanel.add(generatorHosts, BorderLayout.CENTER);
-        hostsFieldPanel.add(hostsSourceLabel, BorderLayout.SOUTH);
         aiPanel.setOpaque(false);
         aiSuggestionPanel.setOpaque(false);
-        capRow = new FormRow(new JLabel("<html>Cap at samples<br>per second</html>"), cap);
-        messagesPerSampleRow = new FormRow(new JLabel("Messages per sample"), messagesPerSample);
-        hostsRow = new FormRow(new JLabel("Generator hosts"), hostsFieldPanel);
+        capRow = new FormRow(formLabel("Cap at samples/s"),
+                createFieldShell(cap, "samples/s"), targetCard, false);
+        messagesPerSampleRow = new FormRow(formLabel("Messages per sample"),
+                createFieldShell(messagesPerSample, (JComponent) null), targetCard, false);
+        hostsRow = new FormRow(formLabel("Generator hosts"),
+                createFieldShell(generatorHosts, (JComponent) null), generatorsCard, true);
         buildAiPanel();
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -292,36 +349,68 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private JPanel buildContent() {
-        JPanel root = new JPanel(new BorderLayout(UiTokens.SPACE_3, UiTokens.SPACE_3));
-        root.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_4, UiTokens.SPACE_4,
-                UiTokens.SPACE_3, UiTokens.SPACE_4));
+        JPanel root = new JPanel(new BorderLayout(0, UiTokens.SPACE_3));
+        root.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_4, UiTokens.SPACE_6,
+                UiTokens.SPACE_3, UiTokens.SPACE_6));
+        root.setOpaque(true);
         root.setBackground(ThemeColors.canvas());
-        JPanel header = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+        JPanel north = new JPanel();
+        north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
+        north.setOpaque(false);
+        JPanel header = new JPanel(new BorderLayout(UiTokens.SPACE_3, 0));
         header.setOpaque(false);
+        JLabel headerIcon = new JLabel(WorkloadDesignerMenuItem.getLoadIcon(32));
+        headerIcon.setPreferredSize(new Dimension(40, 40));
+        header.add(headerIcon, BorderLayout.WEST);
+        JPanel headerText = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+        headerText.setOpaque(false);
         titleLabel = new JLabel("Workload Designer");
         titleLabel.setFont(UiTokens.title(titleLabel.getFont()));
-        captionLabel = new JLabel("<html>Little's Law: threads ≈ samples per second × (response time + think time), "
-                + "sized with 1.5× headroom.<br>Values are written as ${__P()} properties so CI can override them.</html>");
+        captionLabel = new JLabel("<html>Threads, pacing and generators from a target load. "
+                + "Values become ${__P()} properties, so CI can override them.</html>");
         captionLabel.setFont(UiTokens.caption(captionLabel.getFont()));
         captionLabel.setForeground(ThemeColors.secondaryText());
-        header.add(titleLabel, BorderLayout.NORTH);
-        header.add(captionLabel, BorderLayout.CENTER);
-        root.add(header, BorderLayout.NORTH);
-        columns = new JPanel(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+        captionLabel.setToolTipText("Little's Law: threads ≈ samples per second × "
+                + "(response time + think time), sized with 1.5× headroom.");
+        headerText.add(titleLabel, BorderLayout.NORTH);
+        headerText.add(captionLabel, BorderLayout.CENTER);
+        header.add(headerText, BorderLayout.CENTER);
+        north.add(header);
+        north.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_3));
+        shapeControl = new SegmentedControl<>(shapeCombo, WorkloadShape::toString,
+                WorkloadDesignerDialog::shapeIcon);
+        north.add(shapeControl);
+        root.add(north, BorderLayout.NORTH);
+        columns = new ScrollablePanel();
+        columns.setLayout(new GridLayout(1, 2, UiTokens.SPACE_4, 0));
         columns.setOpaque(false);
-        columns.add(scrollColumn(buildForm()));
-        previewScroll = scrollColumn(buildPreview());
-        previewScroll.getViewport().addComponentListener(new ComponentAdapter() {
+        buildForm();
+        preview = buildPreview();
+        columns.add(form);
+        columns.add(preview);
+        bodyScroll = new JScrollPane(columns);
+        bodyScroll.setBorder(null);
+        bodyScroll.setOpaque(false);
+        bodyScroll.setBackground(ThemeColors.canvas());
+        bodyScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        bodyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        bodyScroll.getVerticalScrollBar().setUnitIncrement(16);
+        bodyScroll.getViewport().setBackground(ThemeColors.canvas());
+        bodyScroll.getViewport().setOpaque(true);
+        bodyScroll.getViewport().addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent event) {
+                updateColumnsLayout();
                 fitChartToPreviewWidth();
+                updateKpiLayout();
             }
         });
-        columns.add(previewScroll);
-        root.add(columns, BorderLayout.CENTER);
-        JPanel footer = new JPanel(new BorderLayout());
+        root.add(bodyScroll, BorderLayout.CENTER);
+        JPanel footer = new FooterPanel(new BorderLayout());
+        footer.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_3, 0, 0, 0));
         footer.setOpaque(false);
         errorLabel.setForeground(ThemeColors.error());
+        errorLabel.setVisible(false);
         footer.add(errorLabel, BorderLayout.CENTER);
         JPanel leftButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         leftButtons.setOpaque(false);
@@ -333,7 +422,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         footer.add(leftButtons, BorderLayout.WEST);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_2, 0));
         buttons.setOpaque(false);
-        JButton cancel = new JButton("Cancel");
+        QuietButton cancel = new QuietButton("Cancel", QuietButton.Kind.GHOST);
         cancel.addActionListener(event -> cancel());
         applyButton.addActionListener(event -> apply());
         buttons.add(cancel);
@@ -341,18 +430,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         footer.add(buttons, BorderLayout.EAST);
         root.add(footer, BorderLayout.SOUTH);
         return root;
-    }
-
-    private static JScrollPane scrollColumn(Component content) {
-        JScrollPane scrollPane = new JScrollPane(content);
-        scrollPane.setBorder(null);
-        scrollPane.setOpaque(false);
-        scrollPane.setBackground(ThemeColors.canvas());
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.getViewport().setBackground(ThemeColors.canvas());
-        scrollPane.getViewport().setOpaque(true);
-        return scrollPane;
     }
 
     static Dimension sizeWithinScreen(Dimension preferred, Rectangle bounds, Insets insets) {
@@ -476,6 +553,60 @@ public final class WorkloadDesignerDialog extends JDialog {
         captionLabel.setFont(UiTokens.caption(labelFont));
         hostsSourceLabel.setFont(UiTokens.caption(labelFont));
         aiGoal.setFont(new JTextField().getFont());
+        JTextField inputStyle = new JTextField();
+        aiGoal.setForeground(inputStyle.getForeground());
+        aiGoal.setBackground(inputStyle.getBackground());
+        aiGoal.setCaretColor(inputStyle.getCaretColor());
+        aiGoal.setSelectionColor(inputStyle.getSelectionColor());
+        aiGoal.setOpaque(inputStyle.isOpaque());
+        if (threadLegendLabel != null) {
+            threadLegendLabel.setFont(UiTokens.caption(labelFont));
+            rateLegendLabel.setFont(UiTokens.caption(labelFont));
+            threadLegendLabel.setForeground(ThemeColors.secondaryText());
+            rateLegendLabel.setForeground(ThemeColors.secondaryText());
+        }
+        for (FormRow row : formRows) {
+            row.label().setFont(UiTokens.label(labelFont));
+            row.label().setForeground(ThemeColors.secondaryText());
+        }
+        for (JLabel label : resultLabels) {
+            if (label != null) {
+                label.setFont(UiTokens.caption(labelFont));
+                label.setForeground(ThemeColors.secondaryText());
+            }
+        }
+        for (SectionCard card : formCards) {
+            card.refreshFonts();
+        }
+        aiCard.refreshFonts();
+        for (SectionCard card : previewCards) {
+            card.refreshFonts();
+        }
+        for (FieldShell shell : fieldShellList) {
+            shell.refreshTheme();
+        }
+        for (Callout callout : callouts) {
+            callout.refreshTheme();
+        }
+        if (shapeControl != null) {
+            shapeControl.refreshTheme();
+        }
+        if (rampUnitControl != null) {
+            rampUnitControl.refreshTheme();
+            holdUnitControl.refreshTheme();
+        }
+        if (shellControl != null) {
+            shellControl.refreshTheme();
+        }
+        if (targetSuffixLabel != null) {
+            targetSuffixLabel.setFont(UiTokens.label(labelFont));
+            targetSuffixLabel.setForeground(ThemeColors.secondaryText());
+        }
+        for (KpiTile tile : kpiTiles) {
+            if (tile != null) {
+                tile.refreshFonts();
+            }
+        }
         for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea, aiSuggestionText)) {
             area.setFont(textAreaFont);
         }
@@ -483,61 +614,103 @@ public final class WorkloadDesignerDialog extends JDialog {
             updateNotesRows(area);
         }
         cliArea.setFont(cliFont(textAreaFont));
+        cliArea.setForeground(ThemeColors.foreground());
+        if (resultValues[9] != null) {
+            resultValues[9].setFont(cliFont(textAreaFont));
+        }
         chart.setFont(labelFont);
-        customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 4);
+        customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 10);
+        customStagesTable.getTableHeader().setFont(UiTokens.label(labelFont));
+        customStagesTable.setBackground(ThemeColors.elevatedSurface());
+        customStagesTable.setForeground(ThemeColors.foreground());
+        customStagesTable.getTableHeader().setBackground(ThemeColors.elevatedSurface());
+        customStagesTable.getTableHeader().setForeground(ThemeColors.secondaryText());
         sizeCustomTable();
+        updateCustomTableHeight();
+        refreshStatusTheme();
+        rebuildFormRows();
+        updateColumnsLayout();
         chart.repaint();
         revalidate();
         repaint();
     }
 
+    private void refreshStatusTheme() {
+        if (errorLabel.getIcon() instanceof StatusDotIcon statusIcon) {
+            errorLabel.setForeground(statusIcon.ready ? ThemeColors.success() : ThemeColors.error());
+        }
+        aiErrorLabel.setForeground(ThemeColors.error());
+    }
+
     private void updateColumnsLayout() {
-        if (columns == null) {
+        if (columns == null || preview == null) {
             return;
         }
         boolean stack = getWidth() < 900;
-        if (stackedColumns != stack) {
+        int expectedComponents = stack ? 3 : 2;
+        if (stackedColumns != stack || columns.getComponentCount() != expectedComponents) {
             stackedColumns = stack;
             columns.setLayout(stack
-                    ? new GridLayout(2, 1, UiTokens.SPACE_3, 0)
+                    ? new BoxLayout(columns, BoxLayout.Y_AXIS)
                     : new GridLayout(1, 2, UiTokens.SPACE_4, 0));
+            columns.removeAll();
+            if (stack) {
+                form.setAlignmentX(Component.LEFT_ALIGNMENT);
+                preview.setAlignmentX(Component.LEFT_ALIGNMENT);
+                columns.add(form);
+                columns.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_4));
+                columns.add(preview);
+            } else {
+                columns.add(form);
+                columns.add(preview);
+            }
             columns.revalidate();
+            columns.repaint();
         }
     }
 
     private void fitChartToPreviewWidth() {
-        if (previewScroll == null) {
+        if (loadShapeCard == null || chart == null) {
             return;
         }
-        int viewportWidth = previewScroll.getViewport().getWidth();
-        if (viewportWidth < 1) {
+        int width = loadShapeCard.body().getWidth();
+        if (width < 1) {
             return;
         }
         Dimension preferred = chart.getPreferredSize();
-        int width = Math.min(420, viewportWidth);
-        if (preferred.width != width) {
-            chart.setPreferredSize(new Dimension(width, preferred.height));
+        if (preferred.width != width || preferred.height != 210) {
+            chart.setPreferredSize(new Dimension(width, 210));
             chart.revalidate();
         }
     }
 
     private JPanel buildForm() {
+        form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
+        form.setOpaque(false);
+        aiCard.body().add(aiPanel, BorderLayout.CENTER);
+        aiCard.setVisible(false);
+        form.add(aiCard);
+
+        registerFormCard(targetCard);
+        form.add(targetCard);
         groupCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(value == null ? "" : value.getName()));
         for (JMeterTreeNode node : preparation.threadGroups()) {
             groupCombo.addItem(node);
         }
         groupCombo.setSelectedItem(preparation.selectedGroup());
-        addFormRow("Thread Group", groupCombo);
-        addFormRow("Shape", shapeCombo);
-        addFormRow("Target type", targetCombo);
-        targetRow = addFormRow("Target value", target);
-        formRows.add(messagesPerSampleRow);
+        targetSuffixLabel = formLabel("samples/s");
+        addFormRow(targetCard, "Thread Group", groupCombo, true);
+        addFormRow(targetCard, "Target type", targetCombo);
+        targetRow = addFormRow(targetCard, "Target value",
+                createFieldShell(target, targetSuffixLabel));
+        rowsByCard.get(targetCard).add(capRow);
+        rowsByCard.get(targetCard).add(messagesPerSampleRow);
         formRows.add(capRow);
-        addFormRow("<html>Average response time<br>(ms, default 500)</html>", response);
-        addFormRow("<html>Think time per sample<br>(ms, default 0)</html>", think);
-        rampRow = addFormRow("<html>Ramp-up<br>(default 10% of hold)</html>", withUnit(ramp, rampUnit));
-        holdRow = addFormRow("<html>Hold<br>(default 10 min)</html>", withUnit(hold, holdUnit));
+        formRows.add(messagesPerSampleRow);
+
+        registerFormCard(shapeCard);
+        form.add(shapeCard);
         addShapeFormRow(WorkloadShape.STEP, "Start target", stepStart);
         addShapeFormRow(WorkloadShape.STEP, "End target", stepEnd);
         addShapeFormRow(WorkloadShape.STEP, "Step size", stepSize);
@@ -556,16 +729,55 @@ public final class WorkloadDesignerDialog extends JDialog {
         JPanel rampDownOptions = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         rampDownOptions.setOpaque(false);
         rampDownOptions.add(rampDownEnabled, BorderLayout.WEST);
-        rampDownOptions.add(rampDown, BorderLayout.CENTER);
-        rampDownRow = addFormRow("Ramp down (s)", rampDownOptions);
-        arrivalsRow = addFormRow("Arrivals", arrivalModeCombo);
+        rampDownShell = createFieldShell(rampDown, (JComponent) null);
+        rampDownOptions.add(rampDownShell, BorderLayout.CENTER);
+        rampDownRow = addFormRow(shapeCard, "Ramp down (s)", rampDownOptions);
+        arrivalsRow = addFormRow(shapeCard, "Arrivals", arrivalModeCombo);
+
+        registerFormCard(timingCard);
+        form.add(timingCard);
+        addFormRow(timingCard, "Average response time", fieldShell(response, "ms"));
+        addFormRow(timingCard, "Think time per sample", fieldShell(think, "ms"));
+        rampUnitControl = new SegmentedControl<>(rampUnit, Function.identity());
+        holdUnitControl = new SegmentedControl<>(holdUnit, Function.identity());
+        rampRow = addFormRow(timingCard, "Ramp-up", fieldShell(ramp, rampUnitControl));
+        holdRow = addFormRow(timingCard, "Hold", fieldShell(hold, holdUnitControl));
+
+        generatorsCard.setHeaderTrailing(hostsSourceLabel);
+        registerFormCard(generatorsCard);
+        form.add(generatorsCard);
+        rowsByCard.get(generatorsCard).add(hostsRow);
         formRows.add(hostsRow);
-        addFormRow("Generator vCPUs", generatorVcpus);
-        addFormRow("Generator RAM (GB)", generatorRamGb);
-        addFormRow("<html>Measured max threads per<br>generator (optional)</html>", maxThreadsPerGenerator);
-        addFormRow("<html>Load generators<br>(default 1)</html>", agents);
-        addFormRow("Samples/s per vCPU", samplesPerVcpu);
-        addFormRow("Property prefix", prefix);
+        addFormRow(generatorsCard, "vCPUs per generator", fieldShell(generatorVcpus));
+        addFormRow(generatorsCard, "RAM per generator", fieldShell(generatorRamGb, "GB"));
+        addFormRow(generatorsCard, "Measured max threads (optional)",
+                fieldShell(maxThreadsPerGenerator), true);
+        addFormRow(generatorsCard, "Generators", fieldShell(agents));
+
+        registerFormCard(advancedCard);
+        form.add(advancedCard);
+        addFormRow(advancedCard, "Samples/s per vCPU", fieldShell(samplesPerVcpu, "samples/s"));
+        addFormRow(advancedCard, "Property prefix", fieldShell(prefix));
+        advancedChevron = new JButton();
+        advancedChevron.setIcon(ChevronIcons.down(14));
+        advancedChevron.setFocusable(false);
+        advancedChevron.setContentAreaFilled(false);
+        advancedChevron.setBorder(BorderFactory.createEmptyBorder(0, UiTokens.SPACE_1, 0, 0));
+        advancedChevron.setToolTipText("Show advanced settings");
+        advancedChevron.addActionListener(event -> toggleAdvanced());
+        advancedCard.setHeaderTrailing(advancedChevron);
+        advancedCard.titleLabel().setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        advancedCard.titleLabel().addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent event) {
+                toggleAdvanced();
+            }
+        });
+        advancedCard.body().setVisible(false);
+        for (FormRow row : rowsByCard.get(advancedCard)) {
+            row.label().setVisible(false);
+            row.field().setVisible(false);
+        }
         targetCombo.setRenderer((list, value, index, selected, focus) ->
                 new JLabel(targetName(value)));
         shapeCombo.addActionListener(event -> {
@@ -575,26 +787,106 @@ public final class WorkloadDesignerDialog extends JDialog {
         });
         updateCustomTableHeader();
         updateShapeRows();
+        updateTargetSuffix();
         rebuildFormRows();
         return form;
     }
 
-    private FormRow addShapeFormRow(WorkloadShape shape, String label, JComponent field) {
-        FormRow row = new FormRow(new JLabel(label), field);
+    private void registerFormCard(SectionCard card) {
+        formCards.add(card);
+        rowsByCard.put(card, new ArrayList<>());
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.body().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                int columns = fieldsPerRow(card.body().getWidth());
+                if (!Integer.valueOf(columns).equals(cardRowColumns.get(card))) {
+                    rebuildFormRows();
+                }
+            }
+        });
+    }
+
+    private FormRow addFormRow(SectionCard card, String label, JComponent field) {
+        return addFormRow(card, label, field, false);
+    }
+
+    private FormRow addFormRow(SectionCard card, String label, JComponent field, boolean fullWidth) {
+        JComponent value = field instanceof JTextField textField
+                ? createFieldShell(textField, (JComponent) null) : field;
+        FormRow row = new FormRow(formLabel(label), value, card, fullWidth);
+        rowsByCard.get(card).add(row);
         formRows.add(row);
+        return row;
+    }
+
+    private FormRow addShapeFormRow(WorkloadShape shape, String label, JComponent field) {
+        FormRow row = addFormRow(shapeCard, label, field,
+                field instanceof JPanel && shape == WorkloadShape.CUSTOM);
         shapeRows.computeIfAbsent(shape, ignored -> new ArrayList<>()).add(row);
         return row;
+    }
+
+    private JLabel formLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(UiTokens.label(UIManager.getFont("Label.font")));
+        label.setForeground(ThemeColors.secondaryText());
+        return label;
+    }
+
+    private FieldShell createFieldShell(JTextField field, String suffix) {
+        return createFieldShell(field, suffix == null ? null : suffixLabel(suffix));
+    }
+
+    private FieldShell createFieldShell(JTextField field, JComponent trailing) {
+        FieldShell shell = new FieldShell(field, trailing);
+        fieldShells.put(field, shell);
+        fieldShellList.add(shell);
+        return shell;
+    }
+
+    private FieldShell fieldShell(JTextField field) {
+        return createFieldShell(field, (JComponent) null);
+    }
+
+    private FieldShell fieldShell(JTextField field, String suffix) {
+        return createFieldShell(field, suffix);
+    }
+
+    private FieldShell fieldShell(JTextField field, SegmentedControl<String> units) {
+        FieldShell shell = createFieldShell(field, (JComponent) units);
+        return shell;
+    }
+
+    private JLabel suffixLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(UiTokens.caption(UIManager.getFont("Label.font")));
+        label.setForeground(ThemeColors.secondaryText());
+        return label;
     }
 
     private JPanel customShapePanel() {
         JPanel panel = new JPanel(new BorderLayout(UiTokens.SPACE_1, UiTokens.SPACE_1));
         panel.setOpaque(false);
+        customStagesTable.setShowGrid(false);
+        customStagesTable.setIntercellSpacing(new Dimension(0, 0));
+        customStagesTable.setRowHeight(customStagesTable.getFontMetrics(customStagesTable.getFont()).getHeight() + 10);
+        customStagesTable.setFillsViewportHeight(true);
+        customStagesTable.setBackground(ThemeColors.elevatedSurface());
+        customStagesTable.setForeground(ThemeColors.foreground());
+        customStagesTable.getTableHeader().setFont(UiTokens.label(UIManager.getFont("Label.font")));
+        customStagesTable.getTableHeader().setBackground(ThemeColors.elevatedSurface());
+        customStagesTable.getTableHeader().setForeground(ThemeColors.secondaryText());
         customStagesScroll = new JScrollPane(customStagesTable);
+        customStagesScroll.setBorder(null);
+        customStagesScroll.setOpaque(false);
+        customStagesScroll.getViewport().setOpaque(false);
+        customStagesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         panel.add(customStagesScroll, BorderLayout.CENTER);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
         buttons.setOpaque(false);
-        JButton add = new JButton("Add stage");
-        JButton remove = new JButton("Remove");
+        QuietButton add = new QuietButton("Add stage", QuietButton.Kind.OUTLINED).compact();
+        QuietButton remove = new QuietButton("Remove", QuietButton.Kind.OUTLINED).compact();
         add.addActionListener(event -> {
             if (customStageModel.getRowCount() < MAX_CUSTOM_ROWS) {
                 customStageModel.addRow(new Object[]{"200", "10", "60"});
@@ -672,6 +964,9 @@ public final class WorkloadDesignerDialog extends JDialog {
             rampDownRow.field().setVisible(openModel);
         }
         rampDown.setEnabled(rampDownEnabled.isSelected());
+        if (rampDownShell != null) {
+            rampDownShell.setEnabled(rampDownEnabled.isSelected());
+        }
         if (arrivalsRow != null) {
             arrivalsRow.label().setVisible(openModel);
             arrivalsRow.field().setVisible(openModel);
@@ -682,6 +977,31 @@ public final class WorkloadDesignerDialog extends JDialog {
             holdRow.label().setVisible(!openModel);
             holdRow.field().setVisible(!openModel);
         }
+        shapeCard.setVisible(openModel);
+        shapeCard.setTitle(shape == null ? "Shape settings" : shape + " settings");
+        if (advancedChevron != null) {
+            advancedChevron.setIcon(advancedExpanded ? ChevronIcons.up(14) : ChevronIcons.down(14));
+            advancedChevron.setToolTipText(advancedExpanded ? "Hide advanced settings" : "Show advanced settings");
+        }
+    }
+
+    private void toggleAdvanced() {
+        advancedExpanded = !advancedExpanded;
+        rebuildFormRows();
+    }
+
+    private void updateTargetSuffix() {
+        if (targetSuffixLabel == null) {
+            return;
+        }
+        WorkloadInputs.TargetType type = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
+        String suffix = switch (type) {
+            case REQUEST_RATE -> "samples/s";
+            case ITERATION_RATE -> "iterations/s";
+            case MESSAGE_RATE -> "messages/s";
+            case USERS -> "users";
+        };
+        targetSuffixLabel.setText(suffix);
     }
 
     static boolean isShapeRowVisible(WorkloadShape rowShape, WorkloadShape selectedShape) {
@@ -735,22 +1055,26 @@ public final class WorkloadDesignerDialog extends JDialog {
         aiGoal.setCaretColor(inputStyle.getCaretColor());
         aiGoal.setSelectionColor(inputStyle.getSelectionColor());
         aiGoal.setMargin(inputStyle.getMargin());
-        aiGoal.setBorder(inputStyle.getBorder());
+        aiGoal.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
+                UiTokens.SPACE_2, UiTokens.SPACE_3));
         aiGoal.setOpaque(inputStyle.isOpaque());
         aiGoal.setPlaceholder(
                 "e.g. Black Friday peak, 2x last year's 120k orders/hour, checkout in 1 of 10 visits");
         JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         content.setOpaque(false);
-        content.setBorder(BorderFactory.createTitledBorder("Describe the goal"));
+        JLabel goalLabel = formLabel("Describe the goal");
+        content.add(goalLabel, BorderLayout.NORTH);
         JScrollPane goalScroll = new JScrollPane(aiGoal);
-        goalScroll.setBorder(BorderFactory.createEmptyBorder());
+        goalScroll.setBorder(null);
         goalScroll.setOpaque(false);
         goalScroll.getViewport().setOpaque(false);
-        content.add(goalScroll, BorderLayout.CENTER);
+        FieldShell goalShell = new FieldShell(goalScroll, (JComponent) null, 88);
+        content.add(goalShell, BorderLayout.CENTER);
+        fieldShellList.add(goalShell);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
         actions.setOpaque(false);
-        JButton run = new JButton("Run");
-        JButton close = new JButton("Close");
+        QuietButton run = new QuietButton("Run", QuietButton.Kind.PRIMARY);
+        QuietButton close = new QuietButton("Close", QuietButton.Kind.GHOST);
         run.addActionListener(event -> runAi(run));
         close.addActionListener(event -> closeAiPanel(run));
         actions.add(aiErrorLabel);
@@ -768,6 +1092,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         aiSuggestionText.setRows(3);
         JScrollPane suggestionScroll = new JScrollPane(aiSuggestionText);
         suggestionScroll.setBorder(null);
+        suggestionScroll.setOpaque(false);
+        suggestionScroll.getViewport().setOpaque(false);
         suggestionScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         aiSuggestionPanel.add(suggestionScroll, BorderLayout.CENTER);
         copySuggestionButton.addActionListener(event -> copySuggestionSummary());
@@ -998,126 +1324,201 @@ public final class WorkloadDesignerDialog extends JDialog {
         showAiSuggestion(suggestion);
     }
 
-    private FormRow addFormRow(String label, JComponent field) {
-        FormRow row = new FormRow(new JLabel(label), field);
-        formRows.add(row);
-        return row;
+    private void rebuildFormRows() {
+        if (refreshingFormRows) {
+            return;
+        }
+        refreshingFormRows = true;
+        try {
+            aiCard.setVisible(aiPanelVisible);
+            for (SectionCard card : formCards) {
+                JPanel body = card.body();
+                body.removeAll();
+                body.setLayout(new GridBagLayout());
+                int columns = fieldsPerRow(body.getWidth());
+                cardRowColumns.put(card, columns);
+                int rowIndex = 0;
+                int columnIndex = 0;
+                for (FormRow row : rowsByCard.get(card)) {
+                    if ((row == capRow && !capRowVisible)
+                            || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)
+                            || card == advancedCard && !advancedExpanded
+                            || !row.label().isVisible() || !row.field().isVisible()) {
+                        continue;
+                    }
+                    JPanel cell = new JPanel(new BorderLayout(0, UiTokens.SPACE_1));
+                    cell.setOpaque(false);
+                    cell.add(row.label(), BorderLayout.NORTH);
+                    cell.add(row.field(), BorderLayout.CENTER);
+                    GridBagConstraints constraints = new GridBagConstraints();
+                    constraints.gridx = columnIndex;
+                    constraints.gridy = rowIndex;
+                    constraints.gridwidth = row.fullWidth() || columns == 1 ? columns : 1;
+                    constraints.weightx = 1;
+                    constraints.anchor = GridBagConstraints.NORTHWEST;
+                    constraints.fill = GridBagConstraints.HORIZONTAL;
+                    constraints.insets = new Insets(0, 0, UiTokens.SPACE_3,
+                            constraints.gridwidth == 1 && columnIndex == 0 ? UiTokens.SPACE_3 : 0);
+                    body.add(cell, constraints);
+                    if (row.fullWidth() || columns == 1 || columnIndex + 1 >= columns) {
+                        rowIndex++;
+                        columnIndex = 0;
+                    } else {
+                        columnIndex++;
+                    }
+                }
+                card.body().setVisible(card != advancedCard || advancedExpanded);
+                body.revalidate();
+                body.repaint();
+            }
+            form.revalidate();
+            form.repaint();
+            if (columns != null) {
+                columns.revalidate();
+            }
+        } finally {
+            refreshingFormRows = false;
+        }
     }
 
-    private void rebuildFormRows() {
-        form.removeAll();
-        int gridy = 0;
-        if (aiPanelVisible) {
-            GridBagConstraints panelConstraints = new GridBagConstraints();
-            panelConstraints.gridx = 0;
-            panelConstraints.gridy = gridy++;
-            panelConstraints.gridwidth = 2;
-            panelConstraints.weightx = 1;
-            panelConstraints.fill = GridBagConstraints.HORIZONTAL;
-            panelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_2, 0);
-            form.add(aiPanel, panelConstraints);
-        }
-        for (FormRow row : formRows) {
-            if ((row == capRow && !capRowVisible)
-                    || (row == messagesPerSampleRow && !messagesPerSampleRowVisible)
-                    || !row.label().isVisible() || !row.field().isVisible()) {
-                continue;
-            }
-            GridBagConstraints labelConstraints = new GridBagConstraints();
-            labelConstraints.gridx = 0;
-            labelConstraints.gridy = gridy;
-            labelConstraints.anchor = GridBagConstraints.LINE_START;
-            labelConstraints.fill = GridBagConstraints.HORIZONTAL;
-            labelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, UiTokens.SPACE_2);
-            form.add(row.label(), labelConstraints);
+    static int fieldsPerRow(int cardContentWidth) {
+        return cardContentWidth < 420 ? 1 : 2;
+    }
 
-            GridBagConstraints fieldConstraints = new GridBagConstraints();
-            fieldConstraints.gridx = 1;
-            fieldConstraints.gridy = gridy++;
-            fieldConstraints.weightx = 1;
-            fieldConstraints.anchor = GridBagConstraints.LINE_START;
-            fieldConstraints.fill = GridBagConstraints.HORIZONTAL;
-            fieldConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
-            form.add(row.field(), fieldConstraints);
+    static int kpiColumns(int cardWidth) {
+        return cardWidth < 520 ? 2 : 4;
+    }
+
+    private void updateKpiLayout() {
+        if (kpiGrid == null) {
+            return;
         }
-        GridBagConstraints filler = new GridBagConstraints();
-        filler.gridx = 0;
-        filler.gridy = gridy;
-        filler.gridwidth = 2;
-        filler.weightx = 1;
-        filler.weighty = 1;
-        filler.fill = GridBagConstraints.VERTICAL;
-        JPanel fillerPanel = new JPanel();
-        fillerPanel.setOpaque(false);
-        form.add(fillerPanel, filler);
-        form.revalidate();
-        form.repaint();
+        int cardWidth = loadShapeCard == null ? kpiGrid.getWidth() : loadShapeCard.getWidth();
+        int columns = kpiColumns(cardWidth);
+        if (kpiGrid.getLayout() instanceof GridLayout layout && layout.getColumns() != columns) {
+            kpiGrid.setLayout(new GridLayout(0, columns, UiTokens.SPACE_2, UiTokens.SPACE_2));
+            kpiGrid.revalidate();
+        }
     }
 
     private JPanel buildPreview() {
-        JPanel preview = new ScrollablePanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
-        preview.setOpaque(false);
-        preview.add(chart, BorderLayout.NORTH);
-        JPanel lower = new JPanel(new BorderLayout(UiTokens.SPACE_2, UiTokens.SPACE_2));
-        lower.setOpaque(false);
-        JPanel grid = new JPanel(new GridBagLayout());
-        grid.setOpaque(false);
+        JPanel previewColumn = new JPanel();
+        previewColumn.setLayout(new BoxLayout(previewColumn, BoxLayout.Y_AXIS));
+        previewColumn.setOpaque(false);
+        previewColumn.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel legend = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_2, 0));
+        legend.setOpaque(false);
+        threadLegendLabel = new JLabel("Threads", new LegendIcon(false), JLabel.LEADING);
+        rateLegendLabel = new JLabel("Samples/s", new LegendIcon(true), JLabel.LEADING);
+        for (JLabel label : List.of(threadLegendLabel, rateLegendLabel)) {
+            label.setFont(UiTokens.caption(UIManager.getFont("Label.font")));
+            label.setForeground(ThemeColors.secondaryText());
+        }
+        legend.add(threadLegendLabel);
+        legend.add(rateLegendLabel);
+        loadShapeCard.setHeaderTrailing(legend);
+        loadShapeCard.body().setLayout(new BorderLayout(0, UiTokens.SPACE_2));
+        chart.setOpaque(false);
+        chart.setPreferredSize(new Dimension(420, 210));
+        loadShapeCard.body().add(chart, BorderLayout.CENTER);
+        kpiGrid = new JPanel(new GridLayout(1, 4, UiTokens.SPACE_2, UiTokens.SPACE_2));
+        kpiGrid.setOpaque(false);
+        int[] kpiResultIndexes = {0, 2, 4, 7};
+        String[] kpiNames = {"Threads", "Samples / second", "Total duration", "Generators needed"};
+        for (int index = 0; index < kpiTiles.length; index++) {
+            kpiTiles[index] = new KpiTile(kpiNames[index]);
+            kpiGrid.add(kpiTiles[index]);
+        }
+        kpiGrid.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                updateKpiLayout();
+            }
+        });
+        loadShapeCard.body().add(kpiGrid, BorderLayout.SOUTH);
+        previewCards.add(loadShapeCard);
+        previewColumn.add(loadShapeCard);
+
+        JPanel detailsBody = new JPanel(new BorderLayout(0, UiTokens.SPACE_2));
+        detailsBody.setOpaque(false);
+        detailsGrid = new JPanel(new GridBagLayout());
+        detailsGrid.setOpaque(false);
         String[] labels = {"Threads", "Samples / iteration", "Samples / second",
                 "Throughput samples / min", "Total duration", "Per agent",
                 "Sampler mix", "Generators needed", "Capacity per generator", "Heap per generator"};
         for (int index = 0; index < labels.length; index++) {
+            resultLabels[index] = formLabel(labels[index]);
+            resultValues[index] = new JLabel("-");
+        }
+        int[] detailIndexes = {1, 3, 5, 6, 8, 9};
+        for (int row = 0; row < detailIndexes.length; row++) {
+            int index = detailIndexes[row];
             GridBagConstraints labelConstraints = new GridBagConstraints();
             labelConstraints.gridx = 0;
-            labelConstraints.gridy = index;
+            labelConstraints.gridy = row;
             labelConstraints.anchor = GridBagConstraints.NORTHWEST;
-            labelConstraints.fill = GridBagConstraints.HORIZONTAL;
-            labelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, UiTokens.SPACE_2);
-            grid.add(new JLabel(labels[index]), labelConstraints);
-            resultValues[index] = new JLabel("-");
+            labelConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, UiTokens.SPACE_3);
+            detailsGrid.add(resultLabels[index], labelConstraints);
             GridBagConstraints valueConstraints = new GridBagConstraints();
             valueConstraints.gridx = 1;
-            valueConstraints.gridy = index;
+            valueConstraints.gridy = row;
             valueConstraints.weightx = 1;
             valueConstraints.anchor = GridBagConstraints.NORTHWEST;
             valueConstraints.fill = GridBagConstraints.HORIZONTAL;
             valueConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
-            grid.add(resultValues[index], valueConstraints);
+            if (index == 9) {
+                resultValues[index].setFont(cliFont(UIManager.getFont("TextArea.font")));
+            }
+            detailsGrid.add(resultValues[index], valueConstraints);
         }
-        lower.add(grid, BorderLayout.NORTH);
-        notes = new ScrollablePanel(new GridBagLayout());
-        JScrollPane notesScroll = new JScrollPane(notes);
-        notesScroll.setBorder(BorderFactory.createTitledBorder("Notes"));
-        notesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        lower.add(notesScroll, BorderLayout.CENTER);
+        detailsBody.add(detailsGrid, BorderLayout.NORTH);
+        notes = new JPanel();
+        notes.setLayout(new BoxLayout(notes, BoxLayout.Y_AXIS));
+        notes.setOpaque(false);
+        for (Callout callout : List.of(warningsCallout, assumptionsCallout, infoCallout, parsedCallout,
+                aiSuggestionCallout)) {
+            callout.setAlignmentX(Component.LEFT_ALIGNMENT);
+            callouts.add(callout);
+        }
+        detailsBody.add(notes, BorderLayout.CENTER);
+        planDetailsCard.body().add(detailsBody, BorderLayout.CENTER);
+        previewCards.add(planDetailsCard);
+        previewColumn.add(planDetailsCard);
+
         cliArea.setEditable(false);
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
         cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
-        cliArea.setBackground(ThemeColors.codeBackground());
+        cliArea.setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
+                UiTokens.SPACE_2, UiTokens.SPACE_3));
+        cliArea.setOpaque(false);
         cliArea.setForeground(ThemeColors.foreground());
-        JPanel cliPanel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
+        cliArea.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                updateCommandRows();
+            }
+        });
+        shellControl = new SegmentedControl<>(shellCombo, CommandShell::displayName);
+        JPanel cliPanel = new JPanel(new BorderLayout(0, UiTokens.SPACE_2));
         cliPanel.setOpaque(false);
-        cliPanel.setBorder(BorderFactory.createTitledBorder("Command line"));
-        JPanel shellRow = new JPanel(new FlowLayout(FlowLayout.LEFT, UiTokens.SPACE_1, 0));
-        shellRow.setOpaque(false);
-        shellRow.add(new JLabel("Shell"));
-        shellRow.add(shellCombo);
-        cliPanel.add(shellRow, BorderLayout.NORTH);
-        cliPanel.add(new JScrollPane(cliArea), BorderLayout.CENTER);
+        cliPanel.add(shellControl, BorderLayout.NORTH);
+        commandCodeBlock = new CodeBlockPanel();
+        JPanel copyRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        copyRow.setOpaque(false);
+        copyRow.add(copyButton);
+        commandCodeBlock.add(copyRow, BorderLayout.NORTH);
+        commandCodeBlock.add(cliArea, BorderLayout.CENTER);
+        cliPanel.add(commandCodeBlock, BorderLayout.CENTER);
         copyButton.addActionListener(event -> copyCommand());
-        cliPanel.add(copyButton, BorderLayout.EAST);
-        lower.add(cliPanel, BorderLayout.SOUTH);
-        preview.add(lower, BorderLayout.CENTER);
-        return preview;
-    }
-
-    private static JPanel withUnit(JTextField field, JComboBox<String> unit) {
-        unit.setPrototypeDisplayValue("min");
-        JPanel panel = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
-        panel.setOpaque(false);
-        panel.add(field, BorderLayout.CENTER);
-        panel.add(unit, BorderLayout.EAST);
-        return panel;
+        cliCard.body().add(cliPanel, BorderLayout.CENTER);
+        previewCards.add(cliCard);
+        previewColumn.add(cliCard);
+        for (SectionCard card : previewCards) {
+            card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }
+        return previewColumn;
     }
 
     private static JTextArea notesArea(int rows, java.awt.Color color) {
@@ -1160,6 +1561,24 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (area.getRows() != desiredRows) {
             area.setRows(desiredRows);
             area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
+        }
+    }
+
+    private void updateCommandRows() {
+        int availableWidth = cliArea.getWidth() - cliArea.getInsets().left - cliArea.getInsets().right;
+        int charactersPerLine = 78;
+        if (availableWidth > 0) {
+            int characterWidth = Math.max(1, cliArea.getFontMetrics(cliArea.getFont()).charWidth('m'));
+            charactersPerLine = Math.max(18, availableWidth / characterWidth);
+        }
+        int rows = 0;
+        for (String line : cliArea.getText().split("\n", -1)) {
+            rows += Math.max(1, (line.length() + charactersPerLine - 1) / charactersPerLine);
+        }
+        int desiredRows = Math.min(8, Math.max(3, rows));
+        if (cliArea.getRows() != desiredRows) {
+            cliArea.setRows(desiredRows);
+            cliArea.setMaximumSize(new Dimension(Integer.MAX_VALUE, cliArea.getPreferredSize().height));
         }
     }
 
@@ -1221,6 +1640,10 @@ public final class WorkloadDesignerDialog extends JDialog {
             agents.setText(Integer.toString(spec.agents()));
         }
         prefix.setText(LoadCommandHandler.prefixFor(preparation.selectedGroup(), preparation.eligibleCount()));
+        String defaultPrefix = LoadCommandHandler.prefixFor(
+                preparation.selectedGroup(), preparation.eligibleCount());
+        advancedExpanded = !samplesPerVcpu.getText().isBlank()
+                || !prefix.getText().equals(defaultPrefix);
     }
 
     private void installListeners() {
@@ -1241,6 +1664,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         customStageModel.addTableModelListener(event -> updatePreview());
         rampDownEnabled.addActionListener(event -> {
             rampDown.setEnabled(rampDownEnabled.isSelected());
+            if (rampDownShell != null) {
+                rampDownShell.setEnabled(rampDownEnabled.isSelected());
+            }
             updatePreview();
         });
         arrivalModeCombo.addActionListener(event -> updatePreview());
@@ -1264,12 +1690,14 @@ public final class WorkloadDesignerDialog extends JDialog {
                 if (hostsFromPropertiesVisible) {
                     hostsFromPropertiesVisible = false;
                     hostsSourceLabel.setVisible(false);
-                    hostsFieldPanel.revalidate();
+                    generatorsCard.revalidate();
+                    generatorsCard.repaint();
                 }
             }
         });
         targetCombo.addActionListener(event -> {
             updateCustomTableHeader();
+            updateTargetSuffix();
             updateTargetRows();
             updatePreview();
         });
@@ -1305,14 +1733,14 @@ public final class WorkloadDesignerDialog extends JDialog {
         int defaultSamplesPerVcpu = (int) (scriptHeavy
                 ? WorkloadCalculator.DEFAULT_SAMPLES_PER_VCPU / 2
                 : WorkloadCalculator.DEFAULT_SAMPLES_PER_VCPU);
-        samplesPerVcpu.setPlaceholder("Default: " + defaultSamplesPerVcpu + " samples/s/vCPU");
+        samplesPerVcpu.setPlaceholder(Integer.toString(defaultSamplesPerVcpu));
         samplesPerVcpu.setToolTipText("Default: " + defaultSamplesPerVcpu + " samples/s per vCPU");
         long stepDurationSeconds = parseLong(stepDuration.getText()) == null
                 ? 300 : parseLong(stepDuration.getText());
-        stepRamp.setPlaceholder("Default: " + Math.min(10, stepDurationSeconds / 5));
+        stepRamp.setPlaceholder(Long.toString(Math.min(10, stepDurationSeconds / 5)));
         String hostText = generatorHosts.getText().trim();
         boolean hostsSet = !hostText.isEmpty();
-        agents.setEnabled(!hostsSet);
+        setFormFieldEnabled(agents, !hostsSet);
         if (hostsSet) {
             int hostCount = hostText.split(",", -1).length;
             String countText = Integer.toString(hostCount);
@@ -1349,8 +1777,12 @@ public final class WorkloadDesignerDialog extends JDialog {
             evaluation = new WorkloadFormState.Evaluation(null, shapeError);
         }
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
-        errorLabel.setText(error == null || error.isBlank() ? " " : error);
         applyButton.setEnabled(canApply(samplers, evaluation));
+        if (advancedError(error) && !advancedExpanded) {
+            advancedExpanded = true;
+            rebuildFormRows();
+        }
+        showStatus(error, canApply(samplers, evaluation));
         WorkloadPlan plan = evaluation.plan();
         chart.setPlan(plan);
         if (plan != null) {
@@ -1385,48 +1817,80 @@ public final class WorkloadDesignerDialog extends JDialog {
             setNotesText(assumptionsArea, "");
             setNotesText(infoArea, infoNotes(List.of(), preparation.redirectNote()));
         }
+        updateCommandRows();
         warningsArea.setVisible(!warningsArea.getText().isBlank());
         assumptionsArea.setVisible(!assumptionsArea.getText().isBlank());
         infoArea.setVisible(!infoArea.getText().isBlank());
         setNotesText(parsedArea, parsedNotes(preparation.spec()));
         parsedArea.setVisible(!parsedArea.getText().isBlank());
         notes.removeAll();
-        int noteRow = 0;
-        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea)) {
-            if (area.isVisible()) {
-                area.setAlignmentX(Component.LEFT_ALIGNMENT);
-                GridBagConstraints noteConstraints = new GridBagConstraints();
-                noteConstraints.gridx = 0;
-                noteConstraints.gridy = noteRow++;
-                noteConstraints.weightx = 1;
-                noteConstraints.anchor = GridBagConstraints.NORTHWEST;
-                noteConstraints.fill = GridBagConstraints.HORIZONTAL;
-                noteConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
-                notes.add(area, noteConstraints);
+        List<Callout> noteCallouts = List.of(warningsCallout, assumptionsCallout, infoCallout, parsedCallout);
+        for (int index = 0; index < noteCallouts.size(); index++) {
+            Callout callout = noteCallouts.get(index);
+            JTextArea area = List.of(warningsArea, assumptionsArea, infoArea, parsedArea).get(index);
+            callout.setVisible(!area.getText().isBlank());
+            if (callout.isVisible()) {
+                callout.refreshTheme();
+                notes.add(callout);
+                notes.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_2));
             }
         }
         aiSuggestionPanel.setVisible(latestSuggestion != null);
         if (latestSuggestion != null) {
-            GridBagConstraints suggestionConstraints = new GridBagConstraints();
-            suggestionConstraints.gridx = 0;
-            suggestionConstraints.gridy = noteRow++;
-            suggestionConstraints.weightx = 1;
-            suggestionConstraints.anchor = GridBagConstraints.NORTHWEST;
-            suggestionConstraints.fill = GridBagConstraints.HORIZONTAL;
-            suggestionConstraints.insets = new Insets(0, 0, UiTokens.SPACE_1, 0);
-            notes.add(aiSuggestionPanel, suggestionConstraints);
+            aiSuggestionCallout.setVisible(true);
+            aiSuggestionCallout.refreshTheme();
+            notes.add(aiSuggestionCallout);
         }
-        GridBagConstraints notesFillerConstraints = new GridBagConstraints();
-        notesFillerConstraints.gridx = 0;
-        notesFillerConstraints.gridy = noteRow;
-        notesFillerConstraints.weightx = 1;
-        notesFillerConstraints.weighty = 1;
-        notesFillerConstraints.fill = GridBagConstraints.VERTICAL;
-        JPanel notesFiller = new JPanel();
-        notesFiller.setOpaque(false);
-        notes.add(notesFiller, notesFillerConstraints);
         notes.revalidate();
         notes.repaint();
+        syncKpiTiles();
+        fitChartToPreviewWidth();
+        updateKpiLayout();
+    }
+
+    private void setFormFieldEnabled(JTextField field, boolean enabled) {
+        field.setEnabled(enabled);
+        FieldShell shell = fieldShells.get(field);
+        if (shell != null) {
+            shell.setEnabled(enabled);
+        }
+    }
+
+    private void showStatus(String error, boolean applicable) {
+        if (error != null && !error.isBlank()) {
+            errorLabel.setText(error);
+            errorLabel.setForeground(ThemeColors.error());
+            errorLabel.setIcon(new StatusDotIcon(false));
+            errorLabel.setVisible(true);
+        } else if (applicable) {
+            errorLabel.setText("Ready to apply");
+            errorLabel.setForeground(ThemeColors.success());
+            errorLabel.setIcon(new StatusDotIcon(true));
+            errorLabel.setVisible(true);
+        } else {
+            errorLabel.setText(" ");
+            errorLabel.setIcon(null);
+            errorLabel.setVisible(false);
+        }
+    }
+
+    private static boolean advancedError(String error) {
+        if (error == null) {
+            return false;
+        }
+        String normalized = error.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("prefix")
+                || normalized.contains("sample") && normalized.contains("vcpu");
+    }
+
+    private void syncKpiTiles() {
+        if (kpiTiles[0] == null) {
+            return;
+        }
+        int[] indexes = {0, 2, 4, 7};
+        for (int index = 0; index < indexes.length; index++) {
+            kpiTiles[index].setValue(resultValues[indexes[index]].getText());
+        }
     }
 
     private void updateTargetRows() {
@@ -1642,7 +2106,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             return;
         }
         if (!stopEditingAndRecompute(customStagesTable, this::updatePreview)) {
-            errorLabel.setText("Finish editing the Custom stages before applying.");
+            showStatus("Finish editing the Custom stages before applying.", false);
             return;
         }
         if (evaluation == null || !evaluation.valid()) {
@@ -1816,7 +2280,219 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private record FormRow(JComponent label, JComponent field) {
+    private static Icon shapeIcon(WorkloadShape shape) {
+        return new Icon() {
+            @Override
+            public int getIconWidth() {
+                return 16;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 12;
+            }
+
+            @Override
+            public void paintIcon(Component component, Graphics graphics, int x, int y) {
+                Graphics2D g = (Graphics2D) graphics.create();
+                try {
+                    g.setColor(component != null && component.isEnabled()
+                            ? component.getForeground() : ThemeColors.secondaryText());
+                    g.setStroke(new java.awt.BasicStroke(1.5f));
+                    java.awt.geom.Path2D path = new java.awt.geom.Path2D.Double();
+                    switch (shape) {
+                        case LOAD, ENDURANCE -> {
+                            path.moveTo(x, y + 11);
+                            path.lineTo(x + 4, y + 2);
+                            path.lineTo(x + 16, y + 2);
+                        }
+                        case STEP, STRESS -> {
+                            path.moveTo(x, y + 10);
+                            path.lineTo(x + 4, y + 10);
+                            path.lineTo(x + 4, y + 7);
+                            path.lineTo(x + 8, y + 7);
+                            path.lineTo(x + 8, y + 4);
+                            path.lineTo(x + 12, y + 4);
+                            path.lineTo(x + 12, y + 1);
+                            path.lineTo(x + 16, y + 1);
+                        }
+                        case SPIKE -> {
+                            path.moveTo(x, y + 8);
+                            path.lineTo(x + 5, y + 8);
+                            path.lineTo(x + 8, y + 1);
+                            path.lineTo(x + 11, y + 8);
+                            path.lineTo(x + 16, y + 8);
+                        }
+                        case CUSTOM -> {
+                            path.moveTo(x, y + 9);
+                            path.lineTo(x + 4, y + 3);
+                            path.lineTo(x + 8, y + 7);
+                            path.lineTo(x + 12, y + 1);
+                            path.lineTo(x + 16, y + 5);
+                        }
+                    }
+                    g.draw(path);
+                } finally {
+                    g.dispose();
+                }
+            }
+        };
+    }
+
+    private record FormRow(JComponent label, JComponent field, SectionCard card, boolean fullWidth) {
+    }
+
+    private static final class LegendIcon implements Icon {
+        private final boolean dashed;
+
+        private LegendIcon(boolean dashed) {
+            this.dashed = dashed;
+        }
+
+        @Override
+        public int getIconWidth() {
+            return 18;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 12;
+        }
+
+        @Override
+        public void paintIcon(Component component, Graphics graphics, int x, int y) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            try {
+                g.setColor(dashed ? ThemeColors.info() : ThemeColors.accent());
+                g.setStroke(dashed
+                        ? new java.awt.BasicStroke(1.6f, java.awt.BasicStroke.CAP_BUTT,
+                        java.awt.BasicStroke.JOIN_BEVEL, 0, new float[]{4, 3}, 0)
+                        : new java.awt.BasicStroke(2.2f));
+                g.drawLine(x + 1, y + 6, x + 17, y + 6);
+            } finally {
+                g.dispose();
+            }
+        }
+    }
+
+    private static final class StatusDotIcon implements Icon {
+        private final boolean ready;
+
+        private StatusDotIcon(boolean ready) {
+            this.ready = ready;
+        }
+
+        @Override
+        public int getIconWidth() {
+            return 10;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 10;
+        }
+
+        @Override
+        public void paintIcon(Component component, Graphics graphics, int x, int y) {
+            graphics.setColor(ready ? ThemeColors.success() : ThemeColors.error());
+            graphics.fillOval(x + 2, y + 2, 6, 6);
+        }
+    }
+
+    private static final class KpiTile extends JPanel {
+        private final JLabel title = new JLabel();
+        private final JTextArea value = new JTextArea(1, 8);
+
+        private KpiTile(String label) {
+            super(new BorderLayout(0, UiTokens.SPACE_1));
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_2, UiTokens.SPACE_3,
+                    UiTokens.SPACE_2, UiTokens.SPACE_3));
+            title.setText(label);
+            value.setEditable(false);
+            value.setLineWrap(true);
+            value.setWrapStyleWord(true);
+            value.setOpaque(false);
+            value.setFocusable(false);
+            value.setBorder(BorderFactory.createEmptyBorder());
+            add(title, BorderLayout.NORTH);
+            add(value, BorderLayout.CENTER);
+            refreshFonts();
+        }
+
+        private void setValue(String text) {
+            value.setText(text == null ? "-" : text);
+        }
+
+        private void refreshFonts() {
+            Font labelFont = UIManager.getFont("Label.font");
+            title.setFont(UiTokens.caption(labelFont));
+            title.setForeground(ThemeColors.secondaryText());
+            value.setFont(UiTokens.title(labelFont));
+            value.setForeground(ThemeColors.foreground());
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D g = (Graphics2D) graphics.create();
+            try {
+                g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                int width = getWidth() - 1;
+                int height = getHeight() - 1;
+                g.setColor(ThemeColors.surface());
+                g.fillRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
+                        UiTokens.RADIUS_SMALL * 2);
+                g.setColor(ThemeColors.separator());
+                g.drawRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
+                        UiTokens.RADIUS_SMALL * 2);
+            } finally {
+                g.dispose();
+            }
+        }
+    }
+
+    private static final class CodeBlockPanel extends JPanel {
+        private CodeBlockPanel() {
+            super(new BorderLayout());
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(UiTokens.SPACE_1,
+                    UiTokens.SPACE_2, UiTokens.SPACE_2, UiTokens.SPACE_2));
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D g = (Graphics2D) graphics.create();
+            try {
+                g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                int width = getWidth() - 1;
+                int height = getHeight() - 1;
+                g.setColor(ThemeColors.codeBackground());
+                g.fillRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
+                        UiTokens.RADIUS_SMALL * 2);
+                g.setColor(ThemeColors.separator());
+                g.drawRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
+                        UiTokens.RADIUS_SMALL * 2);
+            } finally {
+                g.dispose();
+            }
+        }
+    }
+
+    private static final class FooterPanel extends JPanel {
+        private FooterPanel(java.awt.LayoutManager layout) {
+            super(layout);
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            graphics.setColor(ThemeColors.separator());
+            graphics.drawLine(0, 0, getWidth(), 0);
+        }
     }
 
     private static final class FormPanel extends JPanel implements Scrollable {

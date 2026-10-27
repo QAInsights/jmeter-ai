@@ -74,6 +74,14 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void formFieldAndKpiColumnsRespondToTheirWidthThresholds() {
+        assertEquals(1, WorkloadDesignerDialog.fieldsPerRow(419));
+        assertEquals(2, WorkloadDesignerDialog.fieldsPerRow(420));
+        assertEquals(2, WorkloadDesignerDialog.kpiColumns(519));
+        assertEquals(4, WorkloadDesignerDialog.kpiColumns(520));
+    }
+
+    @Test
     void selectsCoreOpenModelForShapedWorkloadsAndStandardGroupsForLoadAndEndurance() {
         assertFalse(WorkloadShape.LOAD.usesOpenModelThreadGroup());
         assertFalse(WorkloadShape.ENDURANCE.usesOpenModelThreadGroup());

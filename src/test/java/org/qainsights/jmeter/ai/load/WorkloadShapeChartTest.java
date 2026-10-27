@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.load;
 
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.AlphaComposite;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
@@ -62,6 +63,9 @@ class WorkloadShapeChartTest {
     private static void paint(LoadShapeChart chart, BufferedImage image) {
         Graphics2D graphics = image.createGraphics();
         try {
+            graphics.setComposite(AlphaComposite.Clear);
+            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+            graphics.setComposite(AlphaComposite.SrcOver);
             chart.paint(graphics);
         } finally {
             graphics.dispose();
