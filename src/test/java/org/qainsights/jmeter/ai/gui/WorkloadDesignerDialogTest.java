@@ -138,6 +138,16 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void makesTextAreasTransparentForTheirParentSurface() {
+        JTextArea area = new JTextArea();
+
+        WorkloadDesignerDialog.makeTextAreaTransparent(area);
+
+        assertFalse(area.isOpaque());
+        assertEquals(0, area.getBackground().getAlpha());
+    }
+
+    @Test
     void selectsCoreOpenModelForShapedWorkloadsAndStandardGroupsForLoadAndEndurance() {
         assertFalse(WorkloadShape.LOAD.usesOpenModelThreadGroup());
         assertFalse(WorkloadShape.ENDURANCE.usesOpenModelThreadGroup());

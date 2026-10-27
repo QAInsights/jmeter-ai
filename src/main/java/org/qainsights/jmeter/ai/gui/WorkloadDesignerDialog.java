@@ -568,6 +568,10 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void refreshLookAndFeel() {
         SwingUtilities.updateComponentTreeUI(this);
         installZoomBindings();
+        for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea,
+                aiSuggestionText, cliArea)) {
+            makeTextAreaTransparent(area);
+        }
         Font labelFont = UIManager.getFont("Label.font");
         if (labelFont == null) {
             labelFont = new JLabel().getFont();
@@ -1639,7 +1643,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
         cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
-        cliArea.setOpaque(false);
+        makeTextAreaTransparent(cliArea);
         cliArea.setForeground(ThemeColors.foreground());
         cliArea.addComponentListener(new ComponentAdapter() {
             @Override
@@ -1670,12 +1674,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         area.setWrapStyleWord(true);
         area.setFont(UIManager.getFont("TextArea.font"));
         area.setForeground(color);
-        area.setBackground(ThemeColors.canvas());
-        area.setOpaque(false);
+        makeTextAreaTransparent(area);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
         area.setAlignmentY(Component.TOP_ALIGNMENT);
         area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
         return area;
+    }
+
+    static void makeTextAreaTransparent(JTextArea area) {
+        area.setOpaque(false);
+        area.setBackground(new java.awt.Color(0, 0, 0, 0));
     }
 
     private static Font cliFont(Font textAreaFont) {
@@ -2561,7 +2569,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             ((DefaultCaret) value.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
             value.setLineWrap(true);
             value.setWrapStyleWord(true);
-            value.setOpaque(false);
             value.setFocusable(false);
             value.setBorder(BorderFactory.createEmptyBorder());
             add(value, BorderLayout.CENTER);
@@ -2590,7 +2597,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             value.setFont(UiTokens.title(labelFont));
             value.setForeground(ThemeColors.foreground());
             value.setEditable(false);
-            value.setOpaque(false);
+            makeTextAreaTransparent(value);
             value.setFocusable(false);
             value.setBorder(BorderFactory.createEmptyBorder());
         }
