@@ -27,6 +27,9 @@ public class InputBoxIntellisense {
     /** Command that switches the popup into prompt-picker mode once followed by a space. */
     static final String PROMPTS_COMMAND = "@prompts";
 
+    record Insertion(String text, int caret) {
+    }
+
     private final JTextArea textArea;
     private final CommandIntellisenseProvider intellisenseProvider;
     private final IntellisensePopup intellisensePopup;
@@ -47,6 +50,7 @@ public class InputBoxIntellisense {
      * intercepted by the intellisense popup.
      */
     private volatile boolean imeComposing = false;
+    private Runnable submitAction;
 
     /**
      * Creates a new InputBoxIntellisense for the specified text area.
@@ -73,6 +77,10 @@ public class InputBoxIntellisense {
                 () -> javax.swing.SwingUtilities.invokeLater(this::refreshPromptPicker)
             );
         }
+    }
+
+    public void setSubmitAction(Runnable submitAction) {
+        this.submitAction = submitAction;
     }
 
     /**
@@ -123,11 +131,34 @@ public class InputBoxIntellisense {
                 return false;
             }
             switch (e.getKeyCode()) {
-                case KeyEvent.VK_ENTER, KeyEvent.VK_TAB -> {
-                    insertSelectedCommand();
-                    // re-evaluate: "@prompts " drops straight into the
-                    // picker, anything else leaves no @ token and hides it
-                    updateIntellisense();
+                case KeyEvent.VK_ENTER -> {
+                    if (isCompleteCommand(textArea.getText(), textArea.getCaretPosition(),
+                            intellisensePopup.getSelectedValue())) {
+                        intellisensePopup.hide();
+                        if (e.getComponent() == textArea) {
+                            return false;
+                        }
+                        if (e.isShiftDown()) {
+                            return false;
+                        }
+                        if (submitAction != null) {
+                            submitAction.run();
+                        }
+                        return true;
+                    }
+                    if (insertSelectedCommand()) {
+                        updateIntellisense();
+                    } else {
+                        intellisensePopup.hide();
+                    }
+                    return true;
+                }
+                case KeyEvent.VK_TAB -> {
+                    if (insertSelectedCommand()) {
+                        updateIntellisense();
+                    } else {
+                        intellisensePopup.hide();
+                    }
                     return true;
                 }
                 case KeyEvent.VK_DOWN -> {
@@ -186,6 +217,61 @@ public class InputBoxIntellisense {
         );
     }
 
+    static Insertion insert(String text, int caret, String insertion) {
+        return insert(text, caret, insertion, true);
+    }
+
+    static Insertion insert(String text, int caret, String insertion, boolean commandPick) {
+        if (text == null) {
+            text = "";
+        }
+        int position = Math.max(0, Math.min(caret, text.length()));
+        int atIdx = text.lastIndexOf("@", position - 1);
+        if (atIdx < 0 || insertion == null) {
+            return new Insertion(text, position);
+        }
+
+        String before = text.substring(0, atIdx);
+        int replacementEnd = position;
+        while (replacementEnd < text.length()
+                && !Character.isWhitespace(text.charAt(replacementEnd))) {
+            replacementEnd++;
+        }
+        String after = text.substring(replacementEnd);
+        String inserted = insertion;
+        if (commandPick) {
+            inserted = inserted.stripTrailing();
+            if (after.isEmpty() || !Character.isWhitespace(after.charAt(0))) {
+                inserted += " ";
+            }
+        }
+        int insertedCaret = before.length() + inserted.length();
+        if (commandPick && !after.isEmpty() && Character.isWhitespace(after.charAt(0))) {
+            insertedCaret++;
+        }
+        return new Insertion(before + inserted + after, insertedCaret);
+    }
+
+    static boolean isCompleteCommand(String text, int caret, String selected) {
+        if (text == null || selected == null || caret <= 0 || caret > text.length()) {
+            return false;
+        }
+        if (caret < text.length() && !Character.isWhitespace(text.charAt(caret))) {
+            return false;
+        }
+        int atIdx = text.lastIndexOf("@", caret - 1);
+        if (atIdx < 0 || (atIdx > 0 && Character.isLetterOrDigit(text.charAt(atIdx - 1)))) {
+            return false;
+        }
+        String token = text.substring(atIdx, caret);
+        return !PROMPTS_COMMAND.equals(selected)
+                && !token.startsWith(PROMPTS_COMMAND + " ") && token.equals(selected);
+    }
+
+    static boolean shouldRefreshAfterPick(String selected) {
+        return PROMPTS_COMMAND.equals(selected);
+    }
+
     /**
      * Sets up mouse listeners for the intellisense popup.
      */
@@ -195,8 +281,11 @@ public class InputBoxIntellisense {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 1) {
-                        insertSelectedCommand();
-                        intellisensePopup.hide();
+                        if (insertSelectedCommand()) {
+                            updateIntellisense();
+                        } else {
+                            intellisensePopup.hide();
+                        }
                     }
                 }
             }
@@ -410,24 +499,25 @@ public class InputBoxIntellisense {
     /**
      * Inserts the currently selected command from the intellisense popup into the text area.
      */
-    private void insertSelectedCommand() {
-        String selected = insertionFor(intellisensePopup.getSelectedValue());
+    private boolean insertSelectedCommand() {
+        String selectedValue = intellisensePopup.getSelectedValue();
+        boolean refresh = promptMatches.isEmpty() && shouldRefreshAfterPick(selectedValue);
+        String selected = insertionFor(selectedValue);
         if (selected != null) {
             Telemetry.record(TelemetryFeature.INTELLISENSE_PICK);
             try {
-                int pos = textArea.getCaretPosition();
                 String text = textArea.getText();
-                int atIdx = text.lastIndexOf("@", pos - 1);
-                if (atIdx >= 0) {
-                    String before = text.substring(0, atIdx);
-                    String after = text.substring(pos);
-                    textArea.setText(before + selected + after);
-                    textArea.setCaretPosition((before + selected).length());
-                    exitPromptMode();
+                Insertion inserted = insert(text, textArea.getCaretPosition(),
+                        selected, promptMatches.isEmpty());
+                if (!inserted.text().equals(text)) {
+                    textArea.setText(inserted.text());
                 }
+                textArea.setCaretPosition(inserted.caret());
+                exitPromptMode();
             } catch (Exception ex) {
                 // fallback: do nothing
             }
         }
+        return refresh;
     }
 }
