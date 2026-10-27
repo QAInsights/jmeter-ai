@@ -615,6 +615,7 @@ public class AiChatPanel
         
         InputBoxIntellisense intellisense = new InputBoxIntellisense(messageField);
         intellisense.setPromptLibrary(promptLibrary());
+        intellisense.setSubmitAction(this::sendMessage);
 
         // -----------------------------------------------------------------------
         // IME (Input Method Editor) awareness – fixes Chinese / Japanese / Korean

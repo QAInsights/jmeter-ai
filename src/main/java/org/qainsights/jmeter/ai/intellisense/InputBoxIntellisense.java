@@ -50,6 +50,7 @@ public class InputBoxIntellisense {
      * intercepted by the intellisense popup.
      */
     private volatile boolean imeComposing = false;
+    private Runnable submitAction;
 
     /**
      * Creates a new InputBoxIntellisense for the specified text area.
@@ -76,6 +77,10 @@ public class InputBoxIntellisense {
                 () -> javax.swing.SwingUtilities.invokeLater(this::refreshPromptPicker)
             );
         }
+    }
+
+    public void setSubmitAction(Runnable submitAction) {
+        this.submitAction = submitAction;
     }
 
     /**
@@ -130,17 +135,27 @@ public class InputBoxIntellisense {
                     if (isCompleteCommand(textArea.getText(), textArea.getCaretPosition(),
                             intellisensePopup.getSelectedValue())) {
                         intellisensePopup.hide();
-                        return false;
+                        if (e.getComponent() == textArea) {
+                            return false;
+                        }
+                        if (submitAction != null) {
+                            submitAction.run();
+                        }
+                        return true;
                     }
-                    insertSelectedCommand();
-                    updateIntellisense();
+                    if (insertSelectedCommand()) {
+                        updateIntellisense();
+                    } else {
+                        intellisensePopup.hide();
+                    }
                     return true;
                 }
                 case KeyEvent.VK_TAB -> {
-                    insertSelectedCommand();
-                    // re-evaluate: "@prompts " drops straight into the
-                    // picker, anything else leaves no @ token and hides it
-                    updateIntellisense();
+                    if (insertSelectedCommand()) {
+                        updateIntellisense();
+                    } else {
+                        intellisensePopup.hide();
+                    }
                     return true;
                 }
                 case KeyEvent.VK_DOWN -> {
@@ -242,6 +257,10 @@ public class InputBoxIntellisense {
                 && !token.startsWith(PROMPTS_COMMAND + " ") && token.equals(selected);
     }
 
+    static boolean shouldRefreshAfterPick(String selected) {
+        return PROMPTS_COMMAND.equals(selected);
+    }
+
     /**
      * Sets up mouse listeners for the intellisense popup.
      */
@@ -251,8 +270,11 @@ public class InputBoxIntellisense {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 1) {
-                        insertSelectedCommand();
-                        updateIntellisense();
+                        if (insertSelectedCommand()) {
+                            updateIntellisense();
+                        } else {
+                            intellisensePopup.hide();
+                        }
                     }
                 }
             }
@@ -466,8 +488,10 @@ public class InputBoxIntellisense {
     /**
      * Inserts the currently selected command from the intellisense popup into the text area.
      */
-    private void insertSelectedCommand() {
-        String selected = insertionFor(intellisensePopup.getSelectedValue());
+    private boolean insertSelectedCommand() {
+        String selectedValue = intellisensePopup.getSelectedValue();
+        boolean refresh = promptMatches.isEmpty() && shouldRefreshAfterPick(selectedValue);
+        String selected = insertionFor(selectedValue);
         if (selected != null) {
             Telemetry.record(TelemetryFeature.INTELLISENSE_PICK);
             try {
@@ -483,5 +507,6 @@ public class InputBoxIntellisense {
                 // fallback: do nothing
             }
         }
+        return refresh;
     }
 }

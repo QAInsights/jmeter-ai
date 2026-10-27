@@ -113,6 +113,13 @@ public class InputBoxIntellisenseTest {
     }
 
     @Test
+    void refreshesSuggestionsOnlyAfterPickingPromptsCommand() {
+        assertTrue(InputBoxIntellisense.shouldRefreshAfterPick("@prompts"));
+        assertFalse(InputBoxIntellisense.shouldRefreshAfterPick("@load"));
+        assertFalse(InputBoxIntellisense.shouldRefreshAfterPick("Run @load"));
+    }
+
+    @Test
     void completedCommandPrefixHasNoSuggestions() {
         assertTrue(new CommandIntellisenseProvider().getSuggestions("@load ").isEmpty());
     }
