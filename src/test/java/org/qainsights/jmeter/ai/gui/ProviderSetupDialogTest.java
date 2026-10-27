@@ -984,7 +984,7 @@ class ProviderSetupDialogTest {
 
         QuietButton disabledPrimary = new QuietButton("Use Apple on-device", QuietButton.Kind.PRIMARY);
         disabledPrimary.setEnabled(false);
-        Color disabledBackground = ThemeColors.blend(ThemeColors.accent(), ThemeColors.canvas(), 0.42f);
+        Color disabledBackground = ThemeColors.elevatedSurface();
         double buttonContrast = ThemeColors.contrastRatio(disabledPrimary.getForeground(), disabledBackground);
         assertTrue(buttonContrast >= 3.0, "Disabled primary text contrast ratio was " + buttonContrast);
     }
