@@ -570,7 +570,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         installZoomBindings();
         for (JTextArea area : List.of(warningsArea, assumptionsArea, infoArea, parsedArea,
                 aiSuggestionText, cliArea)) {
-            makeTextAreaTransparent(area);
+            styleReadOnlyArea(area);
         }
         Font labelFont = UIManager.getFont("Label.font");
         if (labelFont == null) {
@@ -696,13 +696,9 @@ public final class WorkloadDesignerDialog extends JDialog {
                     : new GridBagLayout());
             columns.removeAll();
             if (stack) {
-                rebuildCardStack(form, formCards, 0, formCardGaps);
-                rebuildCardStack(preview, previewCards, 0, previewCardGaps);
-                form.setAlignmentX(Component.LEFT_ALIGNMENT);
-                preview.setAlignmentX(Component.LEFT_ALIGNMENT);
-                columns.add(form);
-                columns.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_4));
-                columns.add(preview);
+                rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
+                rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
+                addStackedColumns(columns, form, preview);
             } else {
                 rebuildCardStack(form, formCards, UiTokens.SPACE_3, formCardGaps);
                 rebuildCardStack(preview, previewCards, UiTokens.SPACE_3, previewCardGaps);
@@ -738,8 +734,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         return constraints;
     }
 
-    private static void rebuildCardStack(JPanel column, List<SectionCard> cards, int gap,
-                                         List<Component> gaps) {
+    static void addStackedColumns(JPanel columns, JPanel form, JPanel preview) {
+        form.setAlignmentX(Component.LEFT_ALIGNMENT);
+        preview.setAlignmentX(Component.LEFT_ALIGNMENT);
+        columns.add(form);
+        columns.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_4));
+        columns.add(preview);
+    }
+
+    static void rebuildCardStack(JPanel column, List<SectionCard> cards, int gap,
+                                 List<Component> gaps) {
         column.removeAll();
         gaps.clear();
         SectionCard previous = null;
@@ -763,10 +767,14 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         SectionCard previousVisible = null;
         for (int index = 0; index < gaps.size(); index++) {
+            SectionCard previous = cards.get(index);
             SectionCard current = cards.get(index + 1);
+            if (previous.isVisible()) {
+                previousVisible = previous;
+            }
             gaps.get(index).setVisible(previousVisible != null && current.isVisible());
-            if (cards.get(index).isVisible()) {
-                previousVisible = cards.get(index);
+            if (current.isVisible()) {
+                previousVisible = current;
             }
         }
     }
@@ -1168,7 +1176,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         aiGoal.setOpaque(inputStyle.isOpaque());
         aiGoal.setPlaceholder(
                 "e.g. Black Friday peak, 2x last year's 120k orders/hour, checkout in 1 of 10 visits");
-        ((DefaultCaret) aiSuggestionText.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
+        styleReadOnlyArea(aiSuggestionText);
         JPanel content = new JPanel(new BorderLayout(UiTokens.SPACE_1, 0));
         content.setOpaque(false);
         JLabel goalLabel = formLabel("Describe the goal");
@@ -1499,7 +1507,8 @@ public final class WorkloadDesignerDialog extends JDialog {
             constraints.anchor = GridBagConstraints.NORTHWEST;
             constraints.fill = GridBagConstraints.HORIZONTAL;
             constraints.insets = new Insets(0, 0, UiTokens.SPACE_3,
-                    constraints.gridwidth == 1 && columnIndex == 0 ? UiTokens.SPACE_3 : 0);
+                    columns > 1 && constraints.gridwidth == 1 && columnIndex == 0
+                            ? UiTokens.SPACE_3 : 0);
             body.add(cell, constraints);
             if (row.fullWidth() || columns == 1 || columnIndex + 1 >= columns) {
                 rowIndex++;
@@ -1654,11 +1663,10 @@ public final class WorkloadDesignerDialog extends JDialog {
         previewCards.add(planDetailsCard);
 
         cliArea.setEditable(false);
-        ((DefaultCaret) cliArea.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
         cliArea.setFont(cliFont(UIManager.getFont("TextArea.font")));
-        makeTextAreaTransparent(cliArea);
+        styleReadOnlyArea(cliArea);
         cliArea.setForeground(ThemeColors.foreground());
         cliArea.addComponentListener(new ComponentAdapter() {
             @Override
@@ -1684,19 +1692,19 @@ public final class WorkloadDesignerDialog extends JDialog {
     private static JTextArea notesArea(int rows, java.awt.Color color) {
         JTextArea area = new JTextArea(rows, 20);
         area.setEditable(false);
-        ((DefaultCaret) area.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setFont(UIManager.getFont("TextArea.font"));
         area.setForeground(color);
-        makeTextAreaTransparent(area);
+        styleReadOnlyArea(area);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
         area.setAlignmentY(Component.TOP_ALIGNMENT);
         area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
         return area;
     }
 
-    static void makeTextAreaTransparent(JTextArea area) {
+    static void styleReadOnlyArea(JTextArea area) {
+        ((DefaultCaret) area.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         area.setOpaque(false);
         area.setBackground(new java.awt.Color(0, 0, 0, 0));
     }
@@ -2581,7 +2589,6 @@ public final class WorkloadDesignerDialog extends JDialog {
                     UiTokens.SPACE_2, UiTokens.SPACE_3));
             title.setText(label);
             value.setEditable(false);
-            ((DefaultCaret) value.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
             value.setLineWrap(true);
             value.setWrapStyleWord(true);
             value.setFocusable(false);
@@ -2612,7 +2619,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             value.setFont(UiTokens.title(labelFont));
             value.setForeground(ThemeColors.foreground());
             value.setEditable(false);
-            makeTextAreaTransparent(value);
+            styleReadOnlyArea(value);
             value.setFocusable(false);
             value.setBorder(BorderFactory.createEmptyBorder());
         }

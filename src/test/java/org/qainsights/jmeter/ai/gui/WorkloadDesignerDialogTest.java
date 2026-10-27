@@ -1,13 +1,17 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.prefs.Preferences;
 
+import javax.swing.BoxLayout;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -31,6 +36,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.DefaultCaret;
 
 import org.apache.jmeter.gui.action.ActionNames;
 import org.junit.jupiter.api.Test;
@@ -145,10 +151,13 @@ class WorkloadDesignerDialogTest {
     void makesTextAreasTransparentForTheirParentSurface() {
         JTextArea area = new JTextArea();
 
-        WorkloadDesignerDialog.makeTextAreaTransparent(area);
+        area.updateUI();
+        WorkloadDesignerDialog.styleReadOnlyArea(area);
 
         assertFalse(area.isOpaque());
         assertEquals(0, area.getBackground().getAlpha());
+        assertEquals(DefaultCaret.NEVER_UPDATE,
+                ((DefaultCaret) area.getCaret()).getUpdatePolicy());
     }
 
     @Test
@@ -168,6 +177,8 @@ class WorkloadDesignerDialogTest {
         assertEquals(2, advancedCard.body().getComponentCount());
         assertTrue(samplesLabel.getParent() != null);
         assertTrue(prefixLabel.getParent() != null);
+        GridBagLayout layout = (GridBagLayout) advancedCard.body().getLayout();
+        assertEquals(0, layout.getConstraints(advancedCard.body().getComponent(0)).insets.right);
     }
 
     @Test
@@ -183,6 +194,35 @@ class WorkloadDesignerDialogTest {
 
         assertEquals(0, targetCard.body().getComponentCount());
         assertSame(aiPanel, aiCard.body().getComponent(0));
+    }
+
+    @Test
+    void stackedCardGroupsUseSpaceThreeGaps() {
+        JPanel column = new JPanel();
+        List<SectionCard> cards = List.of(new SectionCard("First"), new SectionCard("Second"));
+        List<Component> gaps = new ArrayList<>();
+
+        WorkloadDesignerDialog.rebuildCardStack(column, cards, UiTokens.SPACE_3, gaps);
+
+        assertEquals(3, column.getComponentCount());
+        Component gap = column.getComponent(1);
+        assertTrue(gap.isVisible());
+        assertEquals(UiTokens.SPACE_3, gap.getPreferredSize().height);
+    }
+
+    @Test
+    void stackedFormAndPreviewColumnsKeepTheirGap() {
+        JPanel columns = new JPanel();
+        columns.setLayout(new BoxLayout(columns, BoxLayout.Y_AXIS));
+        JPanel form = new JPanel();
+        JPanel preview = new JPanel();
+
+        WorkloadDesignerDialog.addStackedColumns(columns, form, preview);
+
+        assertEquals(3, columns.getComponentCount());
+        assertSame(form, columns.getComponent(0));
+        assertEquals(UiTokens.SPACE_4, columns.getComponent(1).getPreferredSize().height);
+        assertSame(preview, columns.getComponent(2));
     }
 
     @Test
