@@ -1,10 +1,23 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.GraphicsEnvironment;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -12,35 +25,50 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.prefs.Preferences;
 
+import javax.swing.BoxLayout;
 import javax.swing.DefaultCellEditor;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.DefaultCaret;
 
 import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
+import org.qainsights.jmeter.ai.load.LoadCommandHandler;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadParser;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
+import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class WorkloadDesignerDialogTest {
 
@@ -49,6 +77,17 @@ class WorkloadDesignerDialogTest {
         JLabel label = WorkloadDesignerDialog.createHostsSourceLabel();
 
         assertFalse(label.isVisible());
+    }
+
+    @Test
+    void wrapsKpiTitlesWhenTheyExceedTheAvailableWidth() {
+        FontMetrics metrics = new JLabel().getFontMetrics(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+
+        assertEquals("<html>Generators<br>needed</html>",
+                WorkloadDesignerDialog.wrapKpiTitle("Generators needed", metrics,
+                        metrics.stringWidth("Generators")));
+        assertEquals("Threads", WorkloadDesignerDialog.wrapKpiTitle("Threads", metrics,
+                metrics.stringWidth("Generators")));
     }
 
     @Test
@@ -71,6 +110,404 @@ class WorkloadDesignerDialogTest {
 
         assertEquals("60", value.getText());
         assertEquals("min", unit.getSelectedItem());
+    }
+
+    @Test
+    void formFieldAndKpiColumnsRespondToTheirWidthThresholds() {
+        assertEquals(1, WorkloadDesignerDialog.fieldsPerRow(419));
+        assertEquals(2, WorkloadDesignerDialog.fieldsPerRow(420));
+        assertEquals(1, WorkloadDesignerDialog.targetFieldsPerRow(500, 300, 220, false));
+        assertEquals(2, WorkloadDesignerDialog.targetFieldsPerRow(600, 300, 220, false));
+        assertEquals(1, WorkloadDesignerDialog.targetFieldsPerRow(600, 300, 220, true));
+        assertEquals(2, WorkloadDesignerDialog.kpiColumns(599));
+        assertEquals(4, WorkloadDesignerDialog.kpiColumns(600));
+    }
+
+    @Test
+    void wideColumnConstraintsKeepColumnsTopAlignedWithoutStretchingTheirContents() {
+        javax.swing.JPanel columns = new javax.swing.JPanel(new java.awt.GridBagLayout());
+        javax.swing.JPanel form = new javax.swing.JPanel();
+        javax.swing.JPanel preview = new javax.swing.JPanel();
+        form.setPreferredSize(new Dimension(100, 80));
+        preview.setPreferredSize(new Dimension(100, 160));
+        columns.add(form, WorkloadDesignerDialog.wideColumnConstraints(0, 12));
+        columns.add(preview, WorkloadDesignerDialog.wideColumnConstraints(1, 0));
+        columns.add(new javax.swing.JPanel(), WorkloadDesignerDialog.wideColumnFillerConstraints());
+
+        columns.setSize(300, 400);
+        columns.doLayout();
+
+        assertEquals(0, form.getY());
+        assertEquals(80, form.getHeight());
+        assertEquals(0, preview.getY());
+        assertEquals(160, preview.getHeight());
+    }
+
+    @Test
+    void commandBlockOverlaysCopyAtTopRightAndReservesTextSpace() {
+        JTextArea text = new JTextArea(3, 20);
+        JButton copy = new JButton("Copy");
+        WorkloadDesignerDialog.CodeBlockPanel block =
+                new WorkloadDesignerDialog.CodeBlockPanel(text, copy);
+        block.setSize(420, 100);
+
+        block.doLayout();
+
+        Insets blockInsets = block.getInsets();
+        assertEquals(blockInsets.top, copy.getY());
+        assertEquals(block.getWidth() - blockInsets.right, copy.getX() + copy.getWidth());
+        assertTrue(text.getX() + text.getWidth() - text.getInsets().right + UiTokens.SPACE_2
+                <= copy.getX());
+    }
+
+    @Test
+    void dialogControlsKeepTheirPreferredHeightsAcrossResizeAndRefresh() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/layout-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.setSize(1140, 840);
+                    dialog.addNotify();
+                    layoutDialog(dialog);
+
+                    dialogField(dialog, "askAiButton", JButton.class).doClick(0);
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.CUSTOM);
+                    JButton addStage = findButton(dialog, "Add stage");
+                    assertTrue(addStage != null, "Custom stage controls should be visible");
+                    addStage.doClick(0);
+                    addStage.doClick(0);
+                    addStage.doClick(0);
+
+                    JTextArea command = dialogField(dialog, "cliArea", JTextArea.class);
+                    command.setText(String.join("\n", List.of(
+                            "stage 1 --target 100 --ramp 10 --hold 60",
+                            "stage 2 --target 200 --ramp 10 --hold 60",
+                            "stage 3 --target 300 --ramp 10 --hold 60",
+                            "stage 4 --target 400 --ramp 10 --hold 60",
+                            "stage 5 --target 500 --ramp 10 --hold 60",
+                            "stage 6 --target 600 --ramp 10 --hold 60",
+                            "stage 7 --target 700 --ramp 10 --hold 60",
+                            "stage 8 --target 800 --ramp 10 --hold 60",
+                            "stage 9 --target 900 --ramp 10 --hold 60",
+                            "stage 10 --target 1000 --ramp 10 --hold 60")));
+                    WorkloadDesignerDialog.updateCommandRows(command);
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840");
+
+                    dialog.setSize(640, 840);
+                    invokePrivate(dialog, "updateColumnsLayout");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "640x840");
+
+                    dialog.setSize(1140, 840);
+                    invokePrivate(dialog, "updateColumnsLayout");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840 after resize");
+
+                    invokePrivate(dialog, "refreshLookAndFeel");
+                    layoutDialog(dialog);
+                    assertDialogControlHeights(dialog, "1140x840 after refresh");
+
+                    JTextArea goal = dialogField(dialog, "aiGoal", JTextArea.class);
+                    Object textUi = goal.getUI();
+                    Method zoomRefresh = WorkloadDesignerDialog.class.getDeclaredMethod(
+                            "refreshLookAndFeel", boolean.class);
+                    zoomRefresh.setAccessible(true);
+                    zoomRefresh.invoke(dialog, false);
+                    assertTrue(textUi == goal.getUI(),
+                            "Zoom styling refresh should not reinstall the text UI");
+
+                    Map<String, Font> originalFonts = new LinkedHashMap<>();
+                    for (String key : List.of("Label.font", "TextField.font", "TextArea.font",
+                            "Button.font", "ComboBox.font", "Table.font")) {
+                        Font font = UIManager.getFont(key);
+                        if (font != null) {
+                            originalFonts.put(key, font);
+                            UIManager.put(key, font.deriveFont(font.getSize2D() * 1.1f));
+                        }
+                    }
+                    try {
+                        dialog.setSize(1700, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        invokePrivate(dialog, "refreshLookAndFeel");
+                        layoutDialog(dialog);
+                        assertDialogControlHeights(dialog, "1700x840 after zoom");
+
+                        dialog.setSize(1140, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertDialogControlHeights(dialog, "1140x840 after zoom and resize");
+                        assertWideColumnSizing(dialog, "1140x840 after zoom and resize");
+
+                        dialog.setSize(900, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertTrue(dialogField(dialog, "columns", JPanel.class)
+                                .getLayout() instanceof GridBagLayout,
+                                "900 px should retain the two-column layout");
+                        assertDialogControlHeights(dialog, "900x840");
+
+                        dialog.setSize(899, 840);
+                        invokePrivate(dialog, "updateColumnsLayout");
+                        layoutDialog(dialog);
+                        assertTrue(dialogField(dialog, "columns", JPanel.class)
+                                .getLayout() instanceof BoxLayout,
+                                "899 px should switch to the stacked layout");
+                        assertDialogControlHeights(dialog, "899x840");
+                    } finally {
+                        originalFonts.forEach(UIManager::put);
+                        invokePrivate(dialog, "refreshLookAndFeel");
+                    }
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Dialog layout reproduction failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    private static <T> T dialogField(WorkloadDesignerDialog dialog, String name, Class<T> type)
+            throws ReflectiveOperationException {
+        Field field = WorkloadDesignerDialog.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return type.cast(field.get(dialog));
+    }
+
+    private static void invokePrivate(WorkloadDesignerDialog dialog, String name)
+            throws ReflectiveOperationException {
+        Method method = WorkloadDesignerDialog.class.getDeclaredMethod(name);
+        method.setAccessible(true);
+        method.invoke(dialog);
+    }
+
+    private static JButton findButton(Container container, String text) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JButton button && text.equals(button.getText())) {
+                return button;
+            }
+            if (component instanceof Container child) {
+                JButton match = findButton(child, text);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void assertWideColumnSizing(WorkloadDesignerDialog dialog, String stage)
+            throws ReflectiveOperationException {
+        JPanel columns = dialogField(dialog, "columns", JPanel.class);
+        JPanel form = dialogField(dialog, "form", JPanel.class);
+        JScrollPane bodyScroll = dialogField(dialog, "bodyScroll", JScrollPane.class);
+        JComponent chart = dialogField(dialog, "chart", JComponent.class);
+        int contentWidth = bodyScroll.getViewport().getExtentSize().width;
+        JLabel threadGroupLabel = findLabel(form, "Thread Group");
+
+        assertTrue(columns.getPreferredSize().width <= contentWidth,
+                stage + " preferred body width exceeds viewport: " + columns.getPreferredSize()
+                        + " vs " + contentWidth);
+        assertTrue(chart.getPreferredSize().width <= contentWidth,
+                stage + " chart preferred width exceeds viewport: " + chart.getPreferredSize()
+                        + " vs " + contentWidth);
+        assertTrue(form.getWidth() >= Math.ceil(contentWidth * 0.4),
+                stage + " form width is below 40%: " + form.getWidth() + " / " + contentWidth);
+        assertTrue(threadGroupLabel != null
+                        && threadGroupLabel.getWidth() >= threadGroupLabel.getPreferredSize().width,
+                stage + " Thread Group label is clipped: " + threadGroupLabel);
+    }
+
+    private static JLabel findLabel(Container container, String text) {
+        for (Component component : container.getComponents()) {
+            if (component instanceof JLabel label && text.equals(label.getText())) {
+                return label;
+            }
+            if (component instanceof Container child) {
+                JLabel match = findLabel(child, text);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void layoutDialog(WorkloadDesignerDialog dialog) {
+        for (int i = 0; i < 3; i++) {
+            dialog.validate();
+            layoutRecursively(dialog);
+        }
+    }
+
+    private static void layoutRecursively(Container container) {
+        container.doLayout();
+        for (Component component : container.getComponents()) {
+            if (component instanceof Container child) {
+                layoutRecursively(child);
+            }
+        }
+    }
+
+    private static void assertDialogControlHeights(WorkloadDesignerDialog dialog, String stage)
+            throws ReflectiveOperationException {
+        JTextArea goal = dialogField(dialog, "aiGoal", JTextArea.class);
+        JTextArea command = dialogField(dialog, "cliArea", JTextArea.class);
+        JTable stages = dialogField(dialog, "customStagesTable", JTable.class);
+        FieldShell goalShell = (FieldShell) SwingUtilities.getAncestorOfClass(FieldShell.class, goal);
+        JScrollPane goalScroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, goal);
+        WorkloadDesignerDialog.CodeBlockPanel codeBlock =
+                (WorkloadDesignerDialog.CodeBlockPanel) SwingUtilities.getAncestorOfClass(
+                        WorkloadDesignerDialog.CodeBlockPanel.class, command);
+        JScrollPane stagesScroll = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, stages);
+        String metrics = "goal shell " + componentSizes(goalShell)
+                + "; command block " + componentSizes(codeBlock)
+                + "; command area " + componentSizes(command)
+                + "; custom table scroll " + componentSizes(stagesScroll);
+
+        assertTrue(goalShell.getHeight() >= goalShell.getPreferredSize().height,
+                stage + " goal shell is compressed: " + metrics);
+        assertEquals(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER, goalScroll.getHorizontalScrollBarPolicy(),
+                stage + " goal scroll policy: " + metrics);
+        assertTrue(command.getRows() >= 10, stage + " command rows: " + metrics);
+        assertTrue(codeBlock.getHeight() >= codeBlock.getPreferredSize().height,
+                stage + " command block is compressed: " + metrics);
+        assertTrue(command.getHeight() >= command.getPreferredSize().height,
+                stage + " command area is compressed: " + metrics);
+        assertTrue(stagesScroll.getHeight() >= stagesScroll.getPreferredSize().height,
+                stage + " custom table is compressed: " + metrics);
+        assertTrue(stagesScroll.getPreferredSize().width <= stagesScroll.getWidth(),
+                stage + " custom table preferred width exceeds its available width: " + metrics);
+        Container stagesBody = stagesScroll.getParent();
+        assertTrue(stagesBody.getPreferredSize().width <= stagesBody.getWidth(),
+                stage + " custom table body preferred width exceeds its available width: " + metrics);
+    }
+
+    private static String componentSizes(Component component) {
+        StringBuilder sizes = new StringBuilder();
+        for (Component current = component; current != null; current = current.getParent()) {
+            if (!sizes.isEmpty()) {
+                sizes.append(" <- ");
+            }
+            sizes.append(current.getClass().getSimpleName())
+                    .append("{bounds=").append(current.getBounds())
+                    .append(", pref=").append(current.getPreferredSize())
+                    .append(", min=").append(current.getMinimumSize());
+            if (current instanceof Container container && container.getLayout() != null) {
+                sizes.append(", layout=").append(container.getLayout().getClass().getSimpleName());
+            }
+            sizes.append('}');
+        }
+        return sizes.toString();
+    }
+
+    @Test
+    void makesTextAreasTransparentForTheirParentSurface() {
+        JTextArea area = new JTextArea();
+
+        area.updateUI();
+        WorkloadDesignerDialog.styleReadOnlyArea(area);
+
+        assertFalse(area.isOpaque());
+        assertEquals(0, area.getBackground().getAlpha());
+        assertEquals(DefaultCaret.NEVER_UPDATE,
+                ((DefaultCaret) area.getCaret()).getUpdatePolicy());
+    }
+
+    @Test
+    void expandedAdvancedCardContainsBothRows() {
+        SectionCard advancedCard = new SectionCard("Advanced");
+        JLabel samplesLabel = new JLabel("Samples/s per vCPU");
+        JPanel samplesField = new JPanel();
+        JLabel prefixLabel = new JLabel("Property prefix");
+        JPanel prefixField = new JPanel();
+        List<WorkloadDesignerDialog.FormRow> rows = List.of(
+                new WorkloadDesignerDialog.FormRow(samplesLabel, samplesField, advancedCard, false),
+                new WorkloadDesignerDialog.FormRow(prefixLabel, prefixField, advancedCard, false));
+
+        WorkloadDesignerDialog.populateFormCardBody(
+                advancedCard, rows, 1, advancedCard, true, null, false, null, false);
+
+        assertEquals(2, advancedCard.body().getComponentCount());
+        assertTrue(samplesLabel.getParent() != null);
+        assertTrue(prefixLabel.getParent() != null);
+        GridBagLayout layout = (GridBagLayout) advancedCard.body().getLayout();
+        assertEquals(0, layout.getConstraints(advancedCard.body().getComponent(0)).insets.right);
+    }
+
+    @Test
+    void keepsAiPanelAttachedWhenRebuildingFormCardBodies() {
+        SectionCard aiCard = new SectionCard("Ask AI");
+        JPanel aiPanel = new JPanel();
+        aiCard.body().add(aiPanel, BorderLayout.CENTER);
+        SectionCard targetCard = new SectionCard("Target");
+        targetCard.body().add(new JPanel(), BorderLayout.CENTER);
+
+        WorkloadDesignerDialog.clearFormCardBody(targetCard, aiCard);
+        WorkloadDesignerDialog.clearFormCardBody(aiCard, aiCard);
+
+        assertEquals(0, targetCard.body().getComponentCount());
+        assertSame(aiPanel, aiCard.body().getComponent(0));
+    }
+
+    @Test
+    void stackedCardGroupsUseSpaceThreeGaps() {
+        JPanel column = new JPanel();
+        List<SectionCard> cards = List.of(new SectionCard("First"), new SectionCard("Second"));
+        List<Component> gaps = new ArrayList<>();
+
+        WorkloadDesignerDialog.rebuildCardStack(column, cards, UiTokens.SPACE_3, gaps);
+
+        assertEquals(3, column.getComponentCount());
+        Component gap = column.getComponent(1);
+        assertTrue(gap.isVisible());
+        assertEquals(UiTokens.SPACE_3, gap.getPreferredSize().height);
+    }
+
+    @Test
+    void stackedFormAndPreviewColumnsKeepTheirGap() {
+        JPanel columns = new JPanel();
+        columns.setLayout(new BoxLayout(columns, BoxLayout.Y_AXIS));
+        JPanel form = new JPanel();
+        JPanel preview = new JPanel();
+
+        WorkloadDesignerDialog.addStackedColumns(columns, form, preview);
+
+        assertEquals(3, columns.getComponentCount());
+        assertSame(form, columns.getComponent(0));
+        assertEquals(UiTokens.SPACE_4, columns.getComponent(1).getPreferredSize().height);
+        assertSame(preview, columns.getComponent(2));
+    }
+
+    @Test
+    void commandPreviewCanGrowBeyondEightRows() {
+        JTextArea cliArea = new JTextArea();
+        cliArea.setText(String.join("\n", List.of(
+                "stage 1", "stage 2", "stage 3", "stage 4", "stage 5", "stage 6",
+                "stage 7", "stage 8", "stage 9", "stage 10", "stage 11", "stage 12")));
+        cliArea.setSize(500, 300);
+
+        WorkloadDesignerDialog.updateCommandRows(cliArea);
+
+        assertTrue(cliArea.getRows() > 8);
     }
 
     @Test

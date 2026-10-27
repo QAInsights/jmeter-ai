@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.load;
 
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.AlphaComposite;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
@@ -35,6 +36,20 @@ class WorkloadShapeChartTest {
     }
 
     @Test
+    void preferredHeightScalesWithTheChartFont() {
+        LoadShapeChart chart = new LoadShapeChart();
+        chart.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+
+        assertEquals(210, chart.getPreferredSize().height);
+        assertEquals(210, chart.getMinimumSize().height);
+
+        chart.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
+
+        assertEquals(280, chart.getPreferredSize().height);
+        assertEquals(280, chart.getMinimumSize().height);
+    }
+
+    @Test
     void modelPreviewFollowsPiecewiseOpenModelStages() {
         WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.ITERATION_RATE, 1, null, 1000L, 0L,
@@ -62,6 +77,9 @@ class WorkloadShapeChartTest {
     private static void paint(LoadShapeChart chart, BufferedImage image) {
         Graphics2D graphics = image.createGraphics();
         try {
+            graphics.setComposite(AlphaComposite.Clear);
+            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+            graphics.setComposite(AlphaComposite.SrcOver);
             chart.paint(graphics);
         } finally {
             graphics.dispose();
