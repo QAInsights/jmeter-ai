@@ -46,6 +46,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.DefaultCellEditor;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -164,6 +165,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     };
     private final JTable customStagesTable = new JTable(customStageModel);
     private JScrollPane customStagesScroll;
+    private FieldShell customStagesShell;
     private final PlaceholderTextField agents = new PlaceholderTextField();
     private final PlaceholderTextField generatorHosts = new PlaceholderTextField();
     private final PlaceholderTextField maxThreadsPerGenerator = new PlaceholderTextField();
@@ -321,6 +323,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 createFieldShell(messagesPerSample, (JComponent) null), targetCard, false);
         hostsRow = new FormRow(formLabel("Generator hosts"),
                 createFieldShell(generatorHosts, (JComponent) null), generatorsCard, true);
+        installInputFilters();
         buildAiPanel();
         setContentPane(buildContent());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -470,6 +473,33 @@ public final class WorkloadDesignerDialog extends JDialog {
         footer.add(buttons, BorderLayout.EAST);
         root.add(footer, BorderLayout.SOUTH);
         return root;
+    }
+
+    private void installInputFilters() {
+        for (JTextField field : List.of(target, cap, ramp, hold, stepStart, stepEnd, stepSize,
+                spikeBaseline, spikePeak, stressStart, stressCeiling, stressStep)) {
+            NumericDocumentFilter.install(field, NumericDocumentFilter.Mode.DECIMAL);
+        }
+        for (JTextField field : List.of(response, think, stepDuration, stepRamp, spikeWarmup,
+                spikeDuration, spikeRecovery, stressDuration, rampDown, agents,
+                maxThreadsPerGenerator, generatorVcpus, generatorRamGb, samplesPerVcpu,
+                messagesPerSample)) {
+            NumericDocumentFilter.install(field, NumericDocumentFilter.Mode.WHOLE);
+        }
+        TextLengthDocumentFilter.install(prefix, 64);
+        TextLengthDocumentFilter.install(aiGoal, 1_000);
+        customStagesTable.getColumnModel().getColumn(0)
+                .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.DECIMAL)));
+        for (int column = 1; column < 3; column++) {
+            customStagesTable.getColumnModel().getColumn(column)
+                    .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.WHOLE)));
+        }
+    }
+
+    private static JTextField numericEditor(NumericDocumentFilter.Mode mode) {
+        JTextField field = new JTextField();
+        NumericDocumentFilter.install(field, mode);
+        return field;
     }
 
     static Dimension sizeWithinScreen(Dimension preferred, Rectangle bounds, Insets insets) {
@@ -999,7 +1029,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         customStagesScroll.setOpaque(false);
         customStagesScroll.getViewport().setOpaque(false);
         customStagesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        panel.add(customStagesScroll, BorderLayout.CENTER);
+        customStagesShell = new FieldShell(customStagesScroll, (JComponent) null, 180);
+        fieldShellList.add(customStagesShell);
+        panel.add(customStagesShell, BorderLayout.CENTER);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, UiTokens.SPACE_1, 0));
         buttons.setOpaque(false);
         QuietButton add = new QuietButton("Add stage", QuietButton.Kind.OUTLINED).compact();
@@ -1374,16 +1406,19 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void showAiSuggestion(WorkloadAiAssistant.Suggestion suggestion) {
         latestSuggestion = suggestion;
         targetCombo.setSelectedItem(suggestion.targetType());
-        target.setText(WorkloadCalculatorFormat.format(suggestion.targetValue()));
+        target.setText(NumericDocumentFilter.format(
+                suggestion.targetValue(), NumericDocumentFilter.Mode.DECIMAL));
         if (suggestion.rateCap() != null) {
-            cap.setText(WorkloadCalculatorFormat.format(suggestion.rateCap()));
+            cap.setText(NumericDocumentFilter.format(
+                    suggestion.rateCap(), NumericDocumentFilter.Mode.DECIMAL));
         }
         setSuggestedLong(response, suggestion.responseMs());
         setSuggestedLong(think, suggestion.thinkMs());
         setSuggestedDuration(ramp, rampUnit, suggestion.rampSeconds());
         setSuggestedDuration(hold, holdUnit, suggestion.holdSeconds());
         if (suggestion.samplesPerVcpu() != null) {
-            samplesPerVcpu.setText(WorkloadCalculatorFormat.format(suggestion.samplesPerVcpu()));
+            samplesPerVcpu.setText(NumericDocumentFilter.format(
+                    suggestion.samplesPerVcpu(), NumericDocumentFilter.Mode.WHOLE));
         }
         StringBuilder text = new StringBuilder(suggestion.summary());
         appendSuggestionSection(text, "Reasoning", suggestion.reasoning());
@@ -1404,7 +1439,8 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void setSuggestedLong(JTextField field, Double value) {
         if (value != null) {
-            field.setText(Long.toString(Math.round(value)));
+            field.setText(NumericDocumentFilter.format(
+                    Math.round(value), NumericDocumentFilter.Mode.WHOLE));
         }
     }
 
@@ -1759,29 +1795,32 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private void prefill(WorkloadSpec spec) {
         WorkloadInputs.TargetType type = WorkloadInputs.TargetType.REQUEST_RATE;
-        String amount = "";
+        Double amount = null;
         if (spec.users() != null) {
             type = WorkloadInputs.TargetType.USERS;
-            amount = Integer.toString(spec.users());
+            amount = spec.users().doubleValue();
             if (spec.requestsPerSecond() != null) {
-                cap.setText(WorkloadCalculatorFormat.format(spec.requestsPerSecond()));
+                cap.setText(NumericDocumentFilter.format(
+                        spec.requestsPerSecond(), NumericDocumentFilter.Mode.DECIMAL));
             }
         } else if (spec.requestsPerSecond() != null) {
-            amount = WorkloadCalculatorFormat.format(spec.requestsPerSecond());
+            amount = spec.requestsPerSecond();
         } else if (spec.iterationsPerSecond() != null) {
             type = WorkloadInputs.TargetType.ITERATION_RATE;
-            amount = WorkloadCalculatorFormat.format(spec.iterationsPerSecond());
+            amount = spec.iterationsPerSecond();
         } else if (spec.messagesPerSecond() != null) {
             type = WorkloadInputs.TargetType.MESSAGE_RATE;
-            amount = WorkloadCalculatorFormat.format(spec.messagesPerSecond());
+            amount = spec.messagesPerSecond();
         }
         targetCombo.setSelectedItem(type);
-        target.setText(amount);
+        setDouble(target, amount);
         if (spec.generatorVcpus() != null) {
-            generatorVcpus.setText(Integer.toString(spec.generatorVcpus()));
+            generatorVcpus.setText(NumericDocumentFilter.format(
+                    spec.generatorVcpus().longValue(), NumericDocumentFilter.Mode.WHOLE));
         }
         if (spec.generatorRamGb() != null) {
-            generatorRamGb.setText(WorkloadCalculatorFormat.format(spec.generatorRamGb()));
+            generatorRamGb.setText(NumericDocumentFilter.format(
+                    spec.generatorRamGb(), NumericDocumentFilter.Mode.WHOLE));
         }
         if (!preparation.generatorHosts().isEmpty()) {
             generatorHosts.setText(String.join(",", preparation.generatorHosts()));
@@ -1812,7 +1851,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         setLong(rampDown, config.rampDownSeconds());
         arrivalModeCombo.setSelectedItem(config.arrivalMode());
         if (spec.agents() != null) {
-            agents.setText(Integer.toString(spec.agents()));
+            agents.setText(NumericDocumentFilter.format(
+                    spec.agents().longValue(), NumericDocumentFilter.Mode.WHOLE));
         }
         prefix.setText(LoadCommandHandler.prefixFor(preparation.selectedGroup(), preparation.eligibleCount()));
         String defaultPrefix = LoadCommandHandler.prefixFor(
@@ -1920,7 +1960,8 @@ public final class WorkloadDesignerDialog extends JDialog {
             int hostCount = hostText.split(",", -1).length;
             String countText = Integer.toString(hostCount);
             if (!agents.getText().equals(countText)) {
-                agents.setText(countText);
+                agents.setText(NumericDocumentFilter.format(
+                        hostCount, NumericDocumentFilter.Mode.WHOLE));
             }
         }
         WorkloadFormState.Context context = new WorkloadFormState.Context(hostText,
@@ -1930,10 +1971,11 @@ public final class WorkloadDesignerDialog extends JDialog {
                 scriptHeavy);
         WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
         String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
+        updateDerivedShapePlaceholders(targetType);
         evaluation = null;
-        String shapeError = shapeInputError();
+        ShapeInputError shapeError = shapeInputError();
         if (shapeError == null && shapeCombo.getSelectedItem() == WorkloadShape.CUSTOM) {
-            shapeError = customConversionInputError(targetType, messagesPerSample.getText(),
+            shapeError = customConversionInputErrorWithField(targetType, messagesPerSample.getText(),
                     response.getText(), think.getText());
         }
         WorkloadShapeConfig shapeConfig = null;
@@ -1943,11 +1985,12 @@ public final class WorkloadDesignerDialog extends JDialog {
             } catch (InvalidWorkloadValueException e) {
                 evaluation = new WorkloadFormState.Evaluation(null, e.getMessage(), e.field());
             } catch (IllegalArgumentException | ArithmeticException e) {
-                shapeError = customConversionFailureField(targetType);
+                shapeError = new ShapeInputError(customConversionFailureField(targetType),
+                        customConversionFailureMessage(targetType));
             }
         }
         if (shapeError != null) {
-            evaluation = new WorkloadFormState.Evaluation(null, shapeError, shapeErrorField(shapeError));
+            evaluation = new WorkloadFormState.Evaluation(null, shapeError.message(), shapeError.field());
         } else if (evaluation == null) {
             evaluation = WorkloadFormState.evaluate(targetType,
                     target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
@@ -2076,57 +2119,20 @@ public final class WorkloadDesignerDialog extends JDialog {
                 || field == WorkloadField.RAM || field == WorkloadField.MAX_THREADS_PER_GENERATOR;
     }
 
-    private WorkloadField shapeErrorField(String error) {
-        if (error == null) {
-            return null;
-        }
-        if (error.startsWith("Ramp down")) {
-            return WorkloadField.RAMP_DOWN;
-        }
-        if (error.startsWith("Messages per sample")) {
-            return WorkloadField.MESSAGES_PER_SAMPLE;
-        }
-        if (error.startsWith("Response time")) {
-            return WorkloadField.RESPONSE;
-        }
-        if (error.startsWith("Think time")) {
-            return WorkloadField.THINK;
-        }
-        return switch ((WorkloadShape) shapeCombo.getSelectedItem()) {
-            case STEP -> error.startsWith("Step start") ? WorkloadField.SHAPE_START
-                    : error.startsWith("Step end") ? WorkloadField.SHAPE_END
-                    : error.startsWith("Step size") ? WorkloadField.SHAPE_STEP
-                    : error.startsWith("Step duration") ? WorkloadField.SHAPE_STEP_DURATION
-                    : error.startsWith("Ramp per step") ? WorkloadField.SHAPE_STEP_RAMP
-                    : null;
-            case STRESS -> error.startsWith("Stress start") ? WorkloadField.SHAPE_START
-                    : error.startsWith("Stress ceiling") ? WorkloadField.SHAPE_END
-                    : error.startsWith("Stress step size") ? WorkloadField.SHAPE_STEP
-                    : error.startsWith("Stress step duration") ? WorkloadField.SHAPE_STEP_DURATION
-                    : null;
-            case SPIKE -> error.startsWith("Spike baseline") ? WorkloadField.SPIKE_BASELINE
-                    : error.startsWith("Spike peak") ? WorkloadField.SPIKE_PEAK
-                    : error.startsWith("Warm-up hold") ? WorkloadField.SPIKE_WARMUP
-                    : error.startsWith("Spike duration") ? WorkloadField.SPIKE_DURATION
-                    : error.startsWith("Recovery hold") ? WorkloadField.SPIKE_RECOVERY
-                    : null;
-            case CUSTOM -> error.startsWith("Custom") ? WorkloadField.CUSTOM_STAGES : null;
-            default -> null;
-        };
-    }
-
     private FieldShell shellFor(WorkloadField field) {
         if (field == null) {
             return null;
         }
         JTextField input = switch (field) {
             case TARGET -> target;
+            case PREFIX -> prefix;
             case RATE_CAP -> cap;
             case RESPONSE -> response;
             case THINK -> think;
             case RAMP -> ramp;
             case HOLD -> hold;
             case AGENTS -> agents;
+            case GENERATOR_HOSTS -> generatorHosts;
             case MESSAGES_PER_SAMPLE -> messagesPerSample;
             case MAX_THREADS_PER_GENERATOR -> maxThreadsPerGenerator;
             case VCPUS -> generatorVcpus;
@@ -2149,6 +2155,9 @@ public final class WorkloadDesignerDialog extends JDialog {
             case SPIKE_RECOVERY -> spikeRecovery;
             default -> null;
         };
+        if (field == WorkloadField.CUSTOM_STAGES) {
+            return customStagesShell;
+        }
         return input == null ? null : fieldShells.get(input);
     }
 
@@ -2172,57 +2181,83 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
-    private String shapeInputError() {
+    private ShapeInputError shapeInputError() {
         WorkloadShape shape = (WorkloadShape) shapeCombo.getSelectedItem();
-        List<String> errors = new ArrayList<>();
+        List<ShapeInputError> errors = new ArrayList<>();
         if (shape.usesOpenModelThreadGroup()) {
-            errors.add(rampDownFieldError(rampDownEnabled.isSelected(), rampDown.getText()));
+            addShapeFieldError(errors, rampDownEnabled.isSelected() ? rampDown.getText() : "",
+                    "Ramp down", true, WorkloadField.RAMP_DOWN);
         }
         switch (shape) {
             case STEP -> {
-                addShapeFieldError(errors, stepStart.getText(), "Step start target", false);
-                addShapeFieldError(errors, stepEnd.getText(), "Step end target", false);
-                addShapeFieldError(errors, stepSize.getText(), "Step size", false);
-                addShapeFieldError(errors, stepDuration.getText(), "Step duration", true);
-                addShapeFieldError(errors, stepRamp.getText(), "Ramp per step", true);
+                addShapeFieldError(errors, stepStart.getText(), "Step start target", false, WorkloadField.SHAPE_START);
+                addShapeFieldError(errors, stepEnd.getText(), "Step end target", false, WorkloadField.SHAPE_END);
+                addShapeFieldError(errors, stepSize.getText(), "Step size", false, WorkloadField.SHAPE_STEP);
+                addShapeFieldError(errors, stepDuration.getText(), "Step duration", true,
+                        WorkloadField.SHAPE_STEP_DURATION);
+                addShapeFieldError(errors, stepRamp.getText(), "Ramp per step", true,
+                        WorkloadField.SHAPE_STEP_RAMP);
             }
             case SPIKE -> {
-                addShapeFieldError(errors, spikeBaseline.getText(), "Spike baseline", false);
-                addShapeFieldError(errors, spikePeak.getText(), "Spike peak", false);
-                addShapeFieldError(errors, spikeWarmup.getText(), "Warm-up hold", true);
-                addShapeFieldError(errors, spikeDuration.getText(), "Spike duration", true);
-                addShapeFieldError(errors, spikeRecovery.getText(), "Recovery hold", true);
+                addShapeFieldError(errors, spikeBaseline.getText(), "Spike baseline", false,
+                        WorkloadField.SPIKE_BASELINE);
+                addShapeFieldError(errors, spikePeak.getText(), "Spike peak", false, WorkloadField.SPIKE_PEAK);
+                addShapeFieldError(errors, spikeWarmup.getText(), "Warm-up hold", true, WorkloadField.SPIKE_WARMUP);
+                addShapeFieldError(errors, spikeDuration.getText(), "Spike duration", true,
+                        WorkloadField.SPIKE_DURATION);
+                addShapeFieldError(errors, spikeRecovery.getText(), "Recovery hold", true,
+                        WorkloadField.SPIKE_RECOVERY);
             }
             case STRESS -> {
-                addShapeFieldError(errors, stressStart.getText(), "Stress start target", false);
-                addShapeFieldError(errors, stressCeiling.getText(), "Stress ceiling", false);
-                addShapeFieldError(errors, stressStep.getText(), "Stress step size", false);
-                addShapeFieldError(errors, stressDuration.getText(), "Stress step duration", true);
+                addShapeFieldError(errors, stressStart.getText(), "Stress start target", false,
+                        WorkloadField.SHAPE_START);
+                addShapeFieldError(errors, stressCeiling.getText(), "Stress ceiling", false,
+                        WorkloadField.SHAPE_END);
+                addShapeFieldError(errors, stressStep.getText(), "Stress step size", false,
+                        WorkloadField.SHAPE_STEP);
+                addShapeFieldError(errors, stressDuration.getText(), "Stress step duration", true,
+                        WorkloadField.SHAPE_STEP_DURATION);
             }
             case CUSTOM -> {
                 if (!customRowCountWithinLimit(customStageModel.getRowCount())) {
-                    errors.add("Custom shapes require between 1 and 10 rows.");
+                    errors.add(new ShapeInputError(
+                            WorkloadField.CUSTOM_STAGES, "Custom shapes require between 1 and 10 rows."));
                 } else {
                     for (int row = 0; row < customStageModel.getRowCount(); row++) {
                         int stage = row + 1;
                         addShapeFieldError(errors, customCellText(row, 0),
-                                "Custom stage " + stage + " target", false);
+                                "Custom stage " + stage + " target", false, WorkloadField.CUSTOM_STAGES);
                         addShapeFieldError(errors, customCellText(row, 1),
-                                "Custom stage " + stage + " ramp", true);
+                                "Custom stage " + stage + " ramp", true, WorkloadField.CUSTOM_STAGES);
                         addShapeFieldError(errors, customCellText(row, 2),
-                                "Custom stage " + stage + " hold", true);
+                                "Custom stage " + stage + " hold", true, WorkloadField.CUSTOM_STAGES);
                     }
                 }
             }
             default -> {
             }
         }
-        for (String error : errors) {
+        for (ShapeInputError error : errors) {
             if (error != null) {
                 return error;
             }
         }
         return null;
+    }
+
+    private void updateDerivedShapePlaceholders(WorkloadInputs.TargetType targetType) {
+        double stepStartValue = fieldDouble(stepStart, 100);
+        double stepSizeValue = fieldDouble(stepSize, 100);
+        double stressStartValue = fieldDouble(stressStart, 100);
+        double stressStepValue = fieldDouble(stressStep, 100);
+        double baselineValue = fieldDouble(spikeBaseline, 100);
+        stepEnd.setPlaceholder(NumericDocumentFilter.format(WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STEP, stepStartValue, stepSizeValue, targetType), NumericDocumentFilter.Mode.DECIMAL));
+        stressCeiling.setPlaceholder(NumericDocumentFilter.format(WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STRESS, stressStartValue, stressStepValue, targetType),
+                NumericDocumentFilter.Mode.DECIMAL));
+        spikePeak.setPlaceholder(NumericDocumentFilter.format(WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.SPIKE, baselineValue, null, targetType), NumericDocumentFilter.Mode.DECIMAL));
     }
 
     private String customCellText(int row, int column) {
@@ -2232,6 +2267,17 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void addShapeFieldError(List<String> errors, String value, String label, boolean wholeNumber) {
         errors.add(shapeFieldError(value, label, wholeNumber));
+    }
+
+    private static void addShapeFieldError(List<ShapeInputError> errors, String value, String label,
+                                           boolean wholeNumber, WorkloadField field) {
+        String message = shapeFieldError(value, label, wholeNumber);
+        if (message != null) {
+            errors.add(new ShapeInputError(field, message));
+        }
+    }
+
+    private record ShapeInputError(WorkloadField field, String message) {
     }
 
     static String shapeFieldError(String value, String label, boolean wholeNumber) {
@@ -2247,7 +2293,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         Double parsed = parseDouble(value);
         if (parsed == null) {
-            return label + " must be a number.";
+            return value.trim().equals(".") ? "Enter a number." : label + " must be a number.";
         }
         return parsed < 0 ? label + " cannot be negative." : null;
     }
@@ -2258,26 +2304,41 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     static String customConversionInputError(WorkloadInputs.TargetType targetType, String messagesPerSampleText,
                                              String responseText, String thinkText) {
+        ShapeInputError error = customConversionInputErrorWithField(
+                targetType, messagesPerSampleText, responseText, thinkText);
+        return error == null ? null : error.message();
+    }
+
+    private static ShapeInputError customConversionInputErrorWithField(
+            WorkloadInputs.TargetType targetType, String messagesPerSampleText,
+            String responseText, String thinkText) {
         if (targetType == WorkloadInputs.TargetType.MESSAGE_RATE && !messagesPerSampleText.isBlank()) {
             Double messagesPerSample = parseDouble(messagesPerSampleText);
             if (messagesPerSample == null) {
-                return "Messages per sample must be a number.";
+                return new ShapeInputError(WorkloadField.MESSAGES_PER_SAMPLE,
+                        "Messages per sample must be a number.");
             }
             if (messagesPerSample <= 0) {
-                return "Messages per sample must be greater than zero.";
+                return new ShapeInputError(WorkloadField.MESSAGES_PER_SAMPLE,
+                        "Messages per sample must be at least 1.");
+            }
+            if (messagesPerSample != Math.floor(messagesPerSample)) {
+                return new ShapeInputError(WorkloadField.MESSAGES_PER_SAMPLE,
+                        "Messages per sample must be a whole number.");
             }
         }
         if (targetType == WorkloadInputs.TargetType.USERS) {
             Long response = optionalLong(responseText, 500L);
             Long thinkTime = optionalLong(thinkText, 0L);
             if (response == null) {
-                return "Response time must be a whole number.";
+                return new ShapeInputError(WorkloadField.RESPONSE, "Response time must be a whole number.");
             }
             if (thinkTime == null) {
-                return "Think time must be a whole number.";
+                return new ShapeInputError(WorkloadField.THINK, "Think time must be a whole number.");
             }
             if (response + thinkTime <= 0) {
-                return "Response time and think time must total more than zero.";
+                return new ShapeInputError(WorkloadField.RESPONSE,
+                        "Response time and think time must total more than zero.");
             }
         }
         return null;
@@ -2287,14 +2348,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         return text == null || text.isBlank() ? fallback : parseLong(text);
     }
 
-    private String customConversionFailureField(WorkloadInputs.TargetType targetType) {
-        if (targetType == WorkloadInputs.TargetType.MESSAGE_RATE) {
-            return "Messages per sample must be greater than zero.";
-        }
-        if (targetType == WorkloadInputs.TargetType.USERS) {
-            return "Response time and think time must total more than zero.";
-        }
-        return "Custom stage target could not be converted.";
+    private WorkloadField customConversionFailureField(WorkloadInputs.TargetType targetType) {
+        return targetType == WorkloadInputs.TargetType.MESSAGE_RATE
+                ? WorkloadField.MESSAGES_PER_SAMPLE : targetType == WorkloadInputs.TargetType.USERS
+                ? WorkloadField.RESPONSE : WorkloadField.CUSTOM_STAGES;
+    }
+
+    private String customConversionFailureMessage(WorkloadInputs.TargetType targetType) {
+        return targetType == WorkloadInputs.TargetType.MESSAGE_RATE
+                ? "Messages per sample must be at least 1." : targetType == WorkloadInputs.TargetType.USERS
+                ? "Response time and think time must total more than zero."
+                : "Custom stage target could not be converted.";
     }
 
     static boolean canApply(int samplerCount, WorkloadFormState.Evaluation evaluation) {
@@ -2331,6 +2395,11 @@ public final class WorkloadDesignerDialog extends JDialog {
                             WorkloadLimits.maxMessage("Custom stage " + (row + 1) + " target",
                                     targetLimit, targetUnit));
                 }
+                if (targetType == WorkloadInputs.TargetType.USERS
+                        && rawTarget.stripTrailingZeros().scale() > 0) {
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            "Custom stage " + (row + 1) + " target must be a whole number of users.");
+                }
                 if (rawRamp.compareTo(BigDecimal.valueOf(WorkloadLimits.MAX_DURATION_SECONDS)) > 0) {
                     throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
                             WorkloadLimits.durationLimitMessage("Custom stage " + (row + 1) + " ramp"));
@@ -2362,13 +2431,15 @@ public final class WorkloadDesignerDialog extends JDialog {
                 previous = rate;
             }
         }
-        return new WorkloadShapeConfig(shape,
-                fieldDouble(shape == WorkloadShape.STRESS ? stressStart : stepStart, 100),
+        double start = fieldDouble(shape == WorkloadShape.STRESS ? stressStart : stepStart, 100);
+        double step = fieldDouble(shape == WorkloadShape.STRESS ? stressStep : stepSize, 100);
+        double baseline = fieldDouble(spikeBaseline, 100);
+        return new WorkloadShapeConfig(shape, start,
                 fieldDouble(shape == WorkloadShape.STRESS ? stressCeiling : stepEnd,
-                        shape == WorkloadShape.STRESS ? 1000 : 500),
-                fieldDouble(shape == WorkloadShape.STRESS ? stressStep : stepSize, 100),
-                fieldLong(shape == WorkloadShape.STRESS ? stressDuration : stepDuration),
-                fieldLong(stepRamp), fieldDouble(spikeBaseline, 100), fieldDouble(spikePeak, 500),
+                        WorkloadShapeConfig.defaultEnd(shape, start, step, targetType)),
+                step, fieldLong(shape == WorkloadShape.STRESS ? stressDuration : stepDuration),
+                fieldLong(stepRamp), baseline, fieldDouble(spikePeak,
+                        WorkloadShapeConfig.defaultEnd(WorkloadShape.SPIKE, baseline, null, targetType)),
                 fieldLong(spikeWarmup), fieldLong(spikeDuration), fieldLong(spikeRecovery),
                 customStages, rampDownSeconds, (ArrivalMode) arrivalModeCombo.getSelectedItem());
     }
@@ -2498,13 +2569,13 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void setLong(JTextField field, Long value) {
         if (value != null) {
-            field.setText(Long.toString(value));
+            field.setText(NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.WHOLE));
         }
     }
 
     private static void setDouble(JTextField field, Double value) {
         if (value != null) {
-            field.setText(Double.toString(value));
+            field.setText(NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.DECIMAL));
         }
     }
 
@@ -2526,7 +2597,8 @@ public final class WorkloadDesignerDialog extends JDialog {
                 default -> 1;
             };
             if (seconds % multiplier == 0) {
-                field.setText(Long.toString(seconds / multiplier));
+                field.setText(NumericDocumentFilter.format(
+                        seconds / multiplier, NumericDocumentFilter.Mode.WHOLE));
                 unit.setSelectedItem(candidate);
                 return;
             }

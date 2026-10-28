@@ -19,6 +19,10 @@ final class PlaceholderTextField extends JTextField {
         repaint();
     }
 
+    String placeholder() {
+        return placeholder;
+    }
+
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
