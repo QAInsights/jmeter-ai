@@ -405,6 +405,23 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void acceptsOneHundredStressLevelsAndRejectsOneHundredOne() {
+        WorkloadShapeConfig oneHundredLevels = new WorkloadShapeConfig(WorkloadShape.STRESS,
+                0.0, 100.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM);
+        assertEquals(101, shaped(oneHundredLevels).stages().size());
+
+        WorkloadShapeConfig oneHundredOneLevels = new WorkloadShapeConfig(WorkloadShape.STRESS,
+                0.0, 101.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM);
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(oneHundredOneLevels));
+        assertEquals(WorkloadField.SHAPE_STEP, error.field());
+        assertEquals("A stress shape can contain at most 100 levels. "
+                + "Increase Stress step size or lower Stress ceiling.", error.getMessage());
+    }
+
+    @Test
     void distributesOpenModelRatesPerGeneratorAndDefaultsEnduranceToFourHours() {
         WorkloadPlan distributed = shaped(new WorkloadShapeConfig(WorkloadShape.CUSTOM,
                 null, null, null, null, null, null, null, null, null, null,

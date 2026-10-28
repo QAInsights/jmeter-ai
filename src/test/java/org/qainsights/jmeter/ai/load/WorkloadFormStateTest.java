@@ -177,6 +177,29 @@ class WorkloadFormStateTest {
     }
 
     @Test
+    void rejectsGeneratorResourceUpperBounds() {
+        WorkloadFormState.Context vcpuContext = new WorkloadFormState.Context(
+                "", "", "", java.util.List.of(), java.util.List.of(), "1025", "", "", false);
+        WorkloadFormState.Evaluation vcpus = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", vcpuContext);
+        assertEquals(WorkloadField.VCPUS, vcpus.field());
+        assertTrue(vcpus.error().contains("at most 1,024"));
+
+        WorkloadFormState.Context threadContext = new WorkloadFormState.Context(
+                "", "100001", "", java.util.List.of(), java.util.List.of());
+        WorkloadFormState.Evaluation maxThreads = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", threadContext);
+        assertEquals(WorkloadField.MAX_THREADS_PER_GENERATOR, maxThreads.field());
+        assertTrue(maxThreads.error().contains("at most 100,000"));
+
+        WorkloadFormState.Evaluation generators = evaluate("100", "1001", "", "", "", "");
+        assertEquals(WorkloadField.AGENTS, generators.field());
+        assertTrue(generators.error().contains("at most 1,000"));
+    }
+
+    @Test
     void rejectsPlansLongerThanSevenDays() {
         WorkloadFormState.Evaluation load = WorkloadFormState.evaluate(
                 WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "96", "h",
@@ -192,6 +215,7 @@ class WorkloadFormStateTest {
                 WorkloadInputs.TargetType.REQUEST_RATE, "1", "", "500", "0", "", "s",
                 "", "min", "1", 1, "load", "plan.jmx", WorkloadFormState.Context.empty(), custom);
         assertEquals(WorkloadField.CUSTOM_STAGES, openModel.field());
+        assertTrue(openModel.error().contains("Total test length can be at most 7 days (this plan is 8 d)."));
     }
 
     private static WorkloadFormState.Evaluation evaluate(String target, String agents,
