@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkloadShapeChartTest {
 
@@ -47,6 +49,21 @@ class WorkloadShapeChartTest {
 
         assertEquals(280, chart.getPreferredSize().height);
         assertEquals(280, chart.getMinimumSize().height);
+    }
+
+    @Test
+    void emptyMessageUsesExplicitErrorState() {
+        LoadShapeChart chart = new LoadShapeChart();
+
+        chart.setPlan(null, "Enter a target to preview the load shape", false);
+
+        assertEquals("Enter a target to preview the load shape", chart.emptyMessage());
+        assertFalse(chart.emptyMessageIsError());
+
+        chart.setPlan(null, "Invalid target", true);
+
+        assertEquals("Invalid target", chart.emptyMessage());
+        assertTrue(chart.emptyMessageIsError());
     }
 
     @Test

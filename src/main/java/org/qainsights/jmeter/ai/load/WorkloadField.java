@@ -1,0 +1,31 @@
+package org.qainsights.jmeter.ai.load;
+
+public enum WorkloadField {
+    TARGET,
+    PREFIX,
+    RATE_CAP,
+    RESPONSE,
+    THINK,
+    RAMP,
+    HOLD,
+    AGENTS,
+    GENERATOR_HOSTS,
+    THREAD_GROUP,
+    MESSAGES_PER_SAMPLE,
+    MAX_THREADS_PER_GENERATOR,
+    VCPUS,
+    RAM,
+    SAMPLES_PER_VCPU,
+    SHAPE_START,
+    SHAPE_END,
+    SHAPE_STEP,
+    SHAPE_STEP_DURATION,
+    SHAPE_STEP_RAMP,
+    SPIKE_BASELINE,
+    SPIKE_PEAK,
+    SPIKE_WARMUP,
+    SPIKE_DURATION,
+    SPIKE_RECOVERY,
+    RAMP_DOWN,
+    CUSTOM_STAGES
+}

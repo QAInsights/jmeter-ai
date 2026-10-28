@@ -32,6 +32,7 @@ final class FieldShell extends JPanel {
     private final int controlHeight;
     private final PropertyChangeListener focusListener = event -> refreshFocus();
     private boolean focused;
+    private boolean invalid;
 
     FieldShell(JComponent control) {
         this(control, null, UiTokens.CONTROL_HEIGHT);
@@ -123,6 +124,13 @@ final class FieldShell extends JPanel {
         refreshFocus();
     }
 
+    void setInvalid(boolean invalid) {
+        if (this.invalid != invalid) {
+            this.invalid = invalid;
+            repaint();
+        }
+    }
+
     @Override
     public Dimension getPreferredSize() {
         Dimension preferred = super.getPreferredSize();
@@ -179,10 +187,12 @@ final class FieldShell extends JPanel {
             g.setColor(background);
             g.fillRoundRect(0, 0, width, height, UiTokens.RADIUS_SMALL * 2,
                     UiTokens.RADIUS_SMALL * 2);
-            g.setColor(focused ? ThemeColors.focusRing() : ThemeColors.separator());
-            g.setStroke(new BasicStroke(focused ? 1.6f : 1f));
-            g.drawRoundRect(focused ? 1 : 0, focused ? 1 : 0,
-                    width - (focused ? 2 : 0), height - (focused ? 2 : 0),
+            boolean highlighted = invalid || focused;
+            g.setColor(invalid ? ThemeColors.error()
+                    : focused ? ThemeColors.focusRing() : ThemeColors.separator());
+            g.setStroke(new BasicStroke(highlighted ? 1.6f : 1f));
+            g.drawRoundRect(highlighted ? 1 : 0, highlighted ? 1 : 0,
+                    width - (highlighted ? 2 : 0), height - (highlighted ? 2 : 0),
                     UiTokens.RADIUS_SMALL * 2, UiTokens.RADIUS_SMALL * 2);
         } finally {
             g.dispose();

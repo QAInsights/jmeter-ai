@@ -53,14 +53,17 @@ import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
+import org.qainsights.jmeter.ai.load.LoadShapeChart;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
+import org.qainsights.jmeter.ai.load.WorkloadField;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadParser;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
+import org.qainsights.jmeter.ai.load.WorkloadSpec;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -110,6 +113,72 @@ class WorkloadDesignerDialogTest {
 
         assertEquals("60", value.getText());
         assertEquals("min", unit.getSelectedItem());
+    }
+
+    @Test
+    void derivesBlankShapeUpperPlaceholdersFromTheCurrentInputs() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/shapes-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.setSize(1140, 840);
+                    dialog.addNotify();
+
+                    JComboBox<WorkloadShape> shape = dialogField(dialog, "shapeCombo", JComboBox.class);
+                    shape.setSelectedItem(WorkloadShape.STEP);
+                    dialogField(dialog, "stepStart", JTextField.class).setText("1000");
+                    dialogField(dialog, "stepSize", JTextField.class).setText("");
+                    dialogField(dialog, "stepEnd", JTextField.class).setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals("1400", dialogField(dialog, "stepEnd", PlaceholderTextField.class).placeholder());
+                    assertTrue(dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).valid());
+
+                    shape.setSelectedItem(WorkloadShape.STRESS);
+                    dialogField(dialog, "stressStart", JTextField.class).setText("2000");
+                    dialogField(dialog, "stressStep", JTextField.class).setText("");
+                    dialogField(dialog, "stressCeiling", JTextField.class).setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals("2900",
+                            dialogField(dialog, "stressCeiling", PlaceholderTextField.class).placeholder());
+
+                    shape.setSelectedItem(WorkloadShape.SPIKE);
+                    dialogField(dialog, "spikeBaseline", JTextField.class).setText("300");
+                    dialogField(dialog, "spikePeak", JTextField.class).setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals("1500",
+                            dialogField(dialog, "spikePeak", PlaceholderTextField.class).placeholder());
+
+                    shape.setSelectedItem(WorkloadShape.STEP);
+                    dialogField(dialog, "stepStart", JTextField.class).setText("");
+                    dialogField(dialog, "stepSize", JTextField.class).setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals("500", dialogField(dialog, "stepEnd", PlaceholderTextField.class).placeholder());
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Shape placeholder defaults failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
     }
 
     @Test
@@ -173,6 +242,8 @@ class WorkloadDesignerDialogTest {
                 try {
                     JMeterTreeNode group =
                             new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
                     LoadCommandHandler.Preparation preparation =
                             new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
                                     List.of(group), group, 1, null, "plan.jmx");
@@ -180,6 +251,25 @@ class WorkloadDesignerDialogTest {
                     dialog.setSize(1140, 840);
                     dialog.addNotify();
                     layoutDialog(dialog);
+
+                    dialogField(dialog, "shapeCombo", JComboBox.class)
+                            .setSelectedItem(WorkloadShape.LOAD);
+                    JTextField target = dialogField(dialog, "target", JTextField.class);
+                    target.setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    FieldShell targetShell =
+                            dialogField(dialog, "targetValueShell", FieldShell.class);
+                    Field invalidField = FieldShell.class.getDeclaredField("invalid");
+                    invalidField.setAccessible(true);
+                    assertFalse(invalidField.getBoolean(targetShell));
+                    LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
+                    Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
+                    emptyMessage.setAccessible(true);
+                    Field emptyMessageIsError =
+                            LoadShapeChart.class.getDeclaredField("emptyMessageIsError");
+                    emptyMessageIsError.setAccessible(true);
+                    assertEquals("Enter a target to preview the load shape", emptyMessage.get(chart));
+                    assertFalse(emptyMessageIsError.getBoolean(chart));
 
                     dialogField(dialog, "askAiButton", JButton.class).doClick(0);
                     dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.CUSTOM);
@@ -220,6 +310,9 @@ class WorkloadDesignerDialogTest {
                     assertDialogControlHeights(dialog, "1140x840 after refresh");
 
                     JTextArea goal = dialogField(dialog, "aiGoal", JTextArea.class);
+                    goal.setText("g".repeat(1_000));
+                    goal.getDocument().insertString(goal.getDocument().getLength(), "x", null);
+                    assertEquals(1_000, goal.getText().length());
                     Object textUi = goal.getUI();
                     Method zoomRefresh = WorkloadDesignerDialog.class.getDeclaredMethod(
                             "refreshLookAndFeel", boolean.class);
@@ -253,6 +346,9 @@ class WorkloadDesignerDialogTest {
                         dialog.setSize(900, 840);
                         invokePrivate(dialog, "updateColumnsLayout");
                         layoutDialog(dialog);
+                        WorkloadDesignerDialog.updateCommandRows(
+                                dialogField(dialog, "cliArea", JTextArea.class));
+                        layoutDialog(dialog);
                         assertTrue(dialogField(dialog, "columns", JPanel.class)
                                 .getLayout() instanceof GridBagLayout,
                                 "900 px should retain the two-column layout");
@@ -265,6 +361,62 @@ class WorkloadDesignerDialogTest {
                                 .getLayout() instanceof BoxLayout,
                                 "899 px should switch to the stacked layout");
                         assertDialogControlHeights(dialog, "899x840");
+
+                        dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
+                        invokePrivate(dialog, "updatePreview");
+                        target.setText("9999999999");
+                        invokePrivate(dialog, "updatePreview");
+                        assertTrue(invalidField.getBoolean(targetShell));
+                        assertFalse(dialogField(dialog, "applyButton", JButton.class).isEnabled());
+                        Field plan = LoadShapeChart.class.getDeclaredField("plan");
+                        plan.setAccessible(true);
+                        String error = dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error();
+                        assertEquals(error, emptyMessage.get(chart));
+                        assertTrue(emptyMessageIsError.getBoolean(chart));
+                        assertNull(plan.get(chart));
+
+                        target.setText("100");
+                        invokePrivate(dialog, "updatePreview");
+                        assertFalse(invalidField.getBoolean(targetShell));
+                        assertFalse(emptyMessageIsError.getBoolean(chart));
+                        assertTrue(dialogField(dialog, "applyButton", JButton.class).isEnabled());
+                        assertTrue(plan.get(chart) != null);
+
+                        dialog.showAiSuggestionForRender(new org.qainsights.jmeter.ai.load.WorkloadAiAssistant.Suggestion(
+                                WorkloadInputs.TargetType.REQUEST_RATE, 1.0E7, null, 500.0, 0.0,
+                                0.0, 60.0, null, "Large target", List.of(), List.of()));
+                        assertEquals("10000000", target.getText());
+                        target.setText("100");
+
+                        JComboBox shapeCombo = dialogField(dialog, "shapeCombo", JComboBox.class);
+                        shapeCombo.setSelectedItem(WorkloadShape.STEP);
+                        JTextField start = dialogField(dialog, "stepStart", JTextField.class);
+                        JTextField end = dialogField(dialog, "stepEnd", JTextField.class);
+                        start.setText("1000");
+                        end.setText("500");
+                        invokePrivate(dialog, "updatePreview");
+                        WorkloadFormState.Evaluation endEvaluation =
+                                dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class);
+                        FieldShell endShell = (FieldShell) ((Map<?, ?>) dialogField(
+                                dialog, "fieldShells", Map.class)).get(end);
+                        assertEquals(WorkloadField.SHAPE_END, endEvaluation.field());
+                        assertTrue(invalidField.getBoolean(endShell));
+                        assertEquals(endEvaluation.error(), emptyMessage.get(chart));
+                        assertTrue(emptyMessageIsError.getBoolean(chart));
+
+                        dialogField(dialog, "shapeCombo", JComboBox.class)
+                                .setSelectedItem(WorkloadShape.CUSTOM);
+                        invokePrivate(dialog, "updatePreview");
+                        JTable stages = dialogField(dialog, "customStagesTable", JTable.class);
+                        stages.setValueAt("999999999999999999999", 0, 0);
+                        invokePrivate(dialog, "updatePreview");
+                        WorkloadFormState.Evaluation customEvaluation =
+                                dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class);
+                        assertEquals(WorkloadField.CUSTOM_STAGES, customEvaluation.field());
+                        assertTrue(customEvaluation.error().contains("Custom stage 1 target"));
+                        assertTrue(customEvaluation.error().contains("1,000,000 samples/s"));
+                        assertTrue(invalidField.getBoolean(
+                                dialogField(dialog, "customStagesShell", FieldShell.class)));
                     } finally {
                         originalFonts.forEach(UIManager::put);
                         invokePrivate(dialog, "refreshLookAndFeel");
@@ -454,6 +606,73 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void onlyAdvancedFieldErrorsExpandTheAdvancedCard() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/advanced-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.setSize(1140, 840);
+                    dialog.addNotify();
+
+                    SectionCard advancedCard = dialogField(dialog, "advancedCard", SectionCard.class);
+                    JTextField target = dialogField(dialog, "target", JTextField.class);
+                    JTextField ram = dialogField(dialog, "generatorRamGb", JTextField.class);
+                    JTextField samples = dialogField(dialog, "samplesPerVcpu", JTextField.class);
+                    Map<?, ?> fieldShells = dialogField(dialog, "fieldShells", Map.class);
+                    FieldShell ramShell = (FieldShell) fieldShells.get(ram);
+                    FieldShell samplesShell = (FieldShell) fieldShells.get(samples);
+                    Field invalidField = FieldShell.class.getDeclaredField("invalid");
+                    invalidField.setAccessible(true);
+
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
+                    target.setText("100");
+                    invokePrivate(dialog, "updatePreview");
+                    assertFalse(advancedCard.body().isVisible());
+
+                    ram.setText("4097");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals(WorkloadField.RAM,
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).field());
+                    assertFalse(advancedCard.body().isVisible());
+                    assertTrue(invalidField.getBoolean(ramShell));
+
+                    ram.setText("4");
+                    samples.setText("0");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals(WorkloadField.SAMPLES_PER_VCPU,
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).field());
+                    assertTrue(advancedCard.body().isVisible());
+                    assertTrue(invalidField.getBoolean(samplesShell));
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Advanced field expansion failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    @Test
     void keepsAiPanelAttachedWhenRebuildingFormCardBodies() {
         SectionCard aiCard = new SectionCard("Ask AI");
         JPanel aiPanel = new JPanel();
@@ -579,7 +798,7 @@ class WorkloadDesignerDialogTest {
         String error = WorkloadDesignerDialog.customConversionInputError(
                 WorkloadInputs.TargetType.MESSAGE_RATE, "0", "500", "0");
 
-        assertEquals("Messages per sample must be greater than zero.", error);
+        assertEquals("Messages per sample must be at least 1.", error);
         assertFalse(WorkloadDesignerDialog.canApply(1, new WorkloadFormState.Evaluation(null, error)));
     }
 
@@ -779,6 +998,142 @@ class WorkloadDesignerDialogTest {
                 WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.ITERATION_RATE));
         assertEquals("Target (users)",
                 WorkloadDesignerDialog.customTargetHeader(WorkloadInputs.TargetType.USERS));
+    }
+
+    @Test
+    void customStageNumericEditorsSurviveTargetTypeHeaderRebuilds() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/custom-editors-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.addNotify();
+
+                    JTable table = dialogField(dialog, "customStagesTable", JTable.class);
+                    JComboBox<?> targetType = dialogField(dialog, "targetCombo", JComboBox.class);
+                    assertEquals("Target (samples/s)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+
+                    assertTrue(table.editCellAt(0, 0));
+                    ((JTextField) table.getEditorComponent()).setText("321");
+                    targetType.setSelectedItem(WorkloadInputs.TargetType.USERS);
+                    assertFalse(table.isEditing(), "Target type changes should finish active cell editing");
+                    assertEquals("321", table.getValueAt(0, 0));
+                    assertEquals("Target (users)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+
+                    targetType.setSelectedItem(WorkloadInputs.TargetType.REQUEST_RATE);
+                    assertEquals("Target (samples/s)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Custom stage editor rebuild failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    @Test
+    void oversizedPrefilledAndSuggestedTargetsRemainVisibleForLimitErrors() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/oversized-target-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    WorkloadSpec spec = WorkloadParser.parse("@load 10000000000000 rps");
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, spec, List.of(group), group, 1,
+                                    null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.addNotify();
+
+                    assertOversizedTargetError(dialog);
+                    dialog.showAiSuggestionForRender(
+                            new org.qainsights.jmeter.ai.load.WorkloadAiAssistant.Suggestion(
+                                    WorkloadInputs.TargetType.REQUEST_RATE, 10_000_000_000_000d,
+                                    null, 500.0, 0.0, 0.0, 60.0, null,
+                                    "Oversized target", List.of(), List.of()));
+                    assertOversizedTargetError(dialog);
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Oversized target prefill was not preserved", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    private static void assertOversizedTargetError(WorkloadDesignerDialog dialog) throws Exception {
+        JTextField target = dialogField(dialog, "target", JTextField.class);
+        assertEquals("10000000000000", target.getText());
+
+        FieldShell targetShell = dialogField(dialog, "targetValueShell", FieldShell.class);
+        Field invalid = FieldShell.class.getDeclaredField("invalid");
+        invalid.setAccessible(true);
+        assertTrue(invalid.getBoolean(targetShell));
+
+        String error = dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error();
+        assertTrue(error.contains("at most 1,000,000"), error);
+        assertTrue(dialogField(dialog, "errorLabel", JLabel.class).getText().contains("at most 1,000,000"));
+
+        LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
+        Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
+        emptyMessage.setAccessible(true);
+        assertEquals(error, emptyMessage.get(chart));
+    }
+
+    private static void assertCustomStageEditorFilters(JTable table) throws Exception {
+        JTextField target = customStageEditorField(table, 0);
+        target.setText("5");
+        target.getDocument().insertString(target.getDocument().getLength(), "a", null);
+        assertEquals("5", target.getText());
+
+        for (int column = 1; column < 3; column++) {
+            JTextField duration = customStageEditorField(table, column);
+            duration.setText("");
+            duration.getDocument().insertString(0, ".", null);
+            assertEquals("", duration.getText());
+        }
+    }
+
+    private static JTextField customStageEditorField(JTable table, int column) {
+        Object editor = table.getColumnModel().getColumn(column).getCellEditor();
+        assertTrue(editor instanceof DefaultCellEditor,
+                "Custom stage column " + column + " should use a numeric text editor");
+        return (JTextField) ((DefaultCellEditor) editor).getComponent();
     }
 
     @Test

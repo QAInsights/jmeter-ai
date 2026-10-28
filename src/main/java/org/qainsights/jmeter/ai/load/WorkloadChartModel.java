@@ -60,7 +60,8 @@ public final class WorkloadChartModel {
 
     public static double maximumRequestsPerSecond(WorkloadPlan plan) {
         if (plan.shapeConfig().shape().usesOpenModelThreadGroup()) {
-            return plan.stages().stream().mapToDouble(WorkloadStage::toRate).max().orElse(0)
+            return plan.stages().stream()
+                    .mapToDouble(stage -> Math.max(stage.fromRate(), stage.toRate())).max().orElse(0)
                     * plan.samplersPerIteration();
         }
         return at(plan, plan.durationSeconds()).requestsPerSecond();
