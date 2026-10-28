@@ -1000,6 +1000,79 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void customStageNumericEditorsSurviveTargetTypeHeaderRebuilds() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/custom-editors-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.addNotify();
+
+                    JTable table = dialogField(dialog, "customStagesTable", JTable.class);
+                    JComboBox<?> targetType = dialogField(dialog, "targetCombo", JComboBox.class);
+                    assertEquals("Target (samples/s)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+
+                    assertTrue(table.editCellAt(0, 0));
+                    ((JTextField) table.getEditorComponent()).setText("321");
+                    targetType.setSelectedItem(WorkloadInputs.TargetType.USERS);
+                    assertFalse(table.isEditing(), "Target type changes should finish active cell editing");
+                    assertEquals("321", table.getValueAt(0, 0));
+                    assertEquals("Target (users)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+
+                    targetType.setSelectedItem(WorkloadInputs.TargetType.REQUEST_RATE);
+                    assertEquals("Target (samples/s)", table.getColumnModel().getColumn(0).getHeaderValue());
+                    assertCustomStageEditorFilters(table);
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Custom stage editor rebuild failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    private static void assertCustomStageEditorFilters(JTable table) throws Exception {
+        JTextField target = customStageEditorField(table, 0);
+        target.setText("5");
+        target.getDocument().insertString(target.getDocument().getLength(), "a", null);
+        assertEquals("5", target.getText());
+
+        for (int column = 1; column < 3; column++) {
+            JTextField duration = customStageEditorField(table, column);
+            duration.setText("");
+            duration.getDocument().insertString(0, ".", null);
+            assertEquals("", duration.getText());
+        }
+    }
+
+    private static JTextField customStageEditorField(JTable table, int column) {
+        Object editor = table.getColumnModel().getColumn(column).getCellEditor();
+        assertTrue(editor instanceof DefaultCellEditor,
+                "Custom stage column " + column + " should use a numeric text editor");
+        return (JTextField) ((DefaultCellEditor) editor).getComponent();
+    }
+
+    @Test
     void typingGeneratorHostsDefersAndCoalescesPreviewChanges() throws Exception {
         JTextField hosts = new JTextField();
         JTextField agents = new JTextField();

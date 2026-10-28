@@ -64,6 +64,7 @@ import javax.swing.Icon;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellEditor;
 import javax.swing.text.DefaultCaret;
 
 import org.apache.jmeter.gui.GuiPackage;
@@ -488,12 +489,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         TextLengthDocumentFilter.install(prefix, 64);
         TextLengthDocumentFilter.install(aiGoal, 1_000);
-        customStagesTable.getColumnModel().getColumn(0)
-                .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.DECIMAL)));
-        for (int column = 1; column < 3; column++) {
-            customStagesTable.getColumnModel().getColumn(column)
-                    .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.WHOLE)));
-        }
     }
 
     private static JTextField numericEditor(NumericDocumentFilter.Mode mode) {
@@ -1060,8 +1055,28 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private void updateCustomTableHeader() {
         WorkloadInputs.TargetType type = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
+        if (customStagesTable.isEditing()) {
+            TableCellEditor editor = customStagesTable.getCellEditor();
+            if (editor == null || !editor.stopCellEditing()) {
+                if (editor != null) {
+                    editor.cancelCellEditing();
+                } else {
+                    customStagesTable.removeEditor();
+                }
+            }
+        }
         customStageModel.setColumnIdentifiers(new Object[]{customTargetHeader(type), "Ramp (s)", "Hold (s)"});
         sizeCustomTable();
+        installCustomStageEditors();
+    }
+
+    private void installCustomStageEditors() {
+        customStagesTable.getColumnModel().getColumn(0)
+                .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.DECIMAL)));
+        for (int column = 1; column < 3; column++) {
+            customStagesTable.getColumnModel().getColumn(column)
+                    .setCellEditor(new DefaultCellEditor(numericEditor(NumericDocumentFilter.Mode.WHOLE)));
+        }
     }
 
     private void sizeCustomTable() {
