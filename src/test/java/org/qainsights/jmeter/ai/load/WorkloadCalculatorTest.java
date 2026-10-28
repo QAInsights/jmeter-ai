@@ -444,6 +444,54 @@ class WorkloadCalculatorTest {
         assertEquals(WorkloadLimits.threadCountLimitMessage(1_050_000), error.getMessage());
     }
 
+    @Test
+    void customRequestRateStageEnforcesItsTargetLimit() {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 1_000_001, 10)), null, ArrivalMode.RANDOM);
+
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(config));
+
+        assertEquals(WorkloadField.CUSTOM_STAGES, error.field());
+        assertEquals(WorkloadLimits.targetLimitMessage("Custom stage target",
+                WorkloadInputs.TargetType.REQUEST_RATE), error.getMessage());
+    }
+
+    @Test
+    void customStageStartRateIsIncludedWhenSizingThreads() {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(1_200_000, 2, 10)), null, ArrivalMode.RANDOM);
+        WorkloadInputs inputs = new WorkloadInputs(
+                WorkloadInputs.TargetType.USERS, 1, null, 500L, 100L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false, config);
+
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> WorkloadCalculator.calculate(inputs));
+
+        assertEquals(WorkloadField.TARGET, error.field());
+        assertEquals(WorkloadLimits.threadCountLimitMessage(1_080_000), error.getMessage());
+    }
+
+    @Test
+    void customUserStageStartRateSetsThePlanAndChartMaximum() {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(600_000, 2, 10)), null, ArrivalMode.RANDOM);
+        WorkloadInputs inputs = new WorkloadInputs(
+                WorkloadInputs.TargetType.USERS, 1, null, 500L, 500L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false, config);
+
+        WorkloadPlan plan = WorkloadCalculator.calculate(inputs);
+
+        assertEquals(900_000, plan.threads());
+        assertEquals(600_000.0, plan.targetRequestsPerSecond());
+        assertEquals(600_000.0, WorkloadChartModel.maximumRequestsPerSecond(plan));
+    }
+
     private static WorkloadPlan customUserPlan(double targetUsers, double iterationRate) {
         WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
                 null, null, null, null, null, null, null, null, null, null,

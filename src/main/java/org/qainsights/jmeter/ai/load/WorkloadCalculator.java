@@ -87,7 +87,8 @@ public final class WorkloadCalculator {
             case USERS -> inputs.targetValue() / secondsPerRequest;
         };
         double peakIterationRate = openModel
-                ? stages.stream().mapToDouble(WorkloadStage::toRate).max().orElseThrow() : 0;
+                ? stages.stream().mapToDouble(stage -> Math.max(stage.fromRate(), stage.toRate()))
+                        .max().orElseThrow() : 0;
         if (openModel) {
             rps = peakIterationRate * inputs.samplersPerIteration();
         }
@@ -491,11 +492,19 @@ public final class WorkloadCalculator {
                     throw new IllegalArgumentException("Custom shapes allow at most 10 rows (up to "
                             + maxTotalStages + " stages including ramps).");
                 }
+                double limitIterations = convertTargetToIterations(WorkloadLimits.maxTarget(inputs.targetType()),
+                        inputs.targetType(), inputs.samplersPerIteration(),
+                        inputs.messagesPerSample() == null ? 1 : inputs.messagesPerSample(),
+                        responseMillis, thinkMillis);
                 for (WorkloadStage stage : config.customStages()) {
                     if (!Double.isFinite(stage.fromRate()) || stage.fromRate() < 0
                             || !Double.isFinite(stage.toRate()) || stage.toRate() < 0) {
                         throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
                                 "Custom stage target could not be converted.");
+                    }
+                    if (Math.max(stage.fromRate(), stage.toRate()) > limitIterations * (1 + 1e-9)) {
+                        throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                                WorkloadLimits.targetLimitMessage("Custom stage target", inputs.targetType()));
                     }
                     validateDuration(stage.seconds(), "Custom stage duration", WorkloadField.CUSTOM_STAGES);
                     addRampStage(stages, stage.fromRate(), stage.toRate(), stage.seconds(), notes);
@@ -525,17 +534,24 @@ public final class WorkloadCalculator {
         if (!Double.isFinite(target) || target < 0 || samplersPerIteration < 1) {
             throw new IllegalArgumentException("Enter a valid workload target.");
         }
+        if (targetType == USERS) {
+            double iterationSeconds = samplersPerIteration * (responseMillis + thinkMillis) / 1000.0;
+            if (iterationSeconds <= 0) {
+                throw new IllegalArgumentException("Average response time must be greater than zero.");
+            }
+        }
+        return convertTargetToIterations(target, targetType, samplersPerIteration,
+                messagesPerSample, responseMillis, thinkMillis);
+    }
+
+    private static double convertTargetToIterations(double target, WorkloadInputs.TargetType targetType,
+                                                    int samplersPerIteration, double messagesPerSample,
+                                                    long responseMillis, long thinkMillis) {
         return switch (targetType) {
             case REQUEST_RATE -> target / samplersPerIteration;
             case MESSAGE_RATE -> target / (messagesPerSample * samplersPerIteration);
             case ITERATION_RATE -> target;
-            case USERS -> {
-                double iterationSeconds = samplersPerIteration * (responseMillis + thinkMillis) / 1000.0;
-                if (iterationSeconds <= 0) {
-                    throw new IllegalArgumentException("Average response time must be greater than zero.");
-                }
-                yield target / iterationSeconds;
-            }
+            case USERS -> target / (samplersPerIteration * (responseMillis + thinkMillis) / 1000.0);
         };
     }
 
