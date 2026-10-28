@@ -24,6 +24,7 @@ public final class LoadShapeChart extends JComponent {
 
     private WorkloadPlan plan;
     private String emptyMessage = "Enter a target to preview the load shape";
+    private boolean emptyMessageIsError;
 
     public LoadShapeChart() {
         setOpaque(false);
@@ -43,14 +44,27 @@ public final class LoadShapeChart extends JComponent {
     }
 
     public void setPlan(WorkloadPlan plan) {
-        setPlan(plan, null);
+        setPlan(plan, null, false);
     }
 
     public void setPlan(WorkloadPlan plan, String emptyMessage) {
+        setPlan(plan, emptyMessage, emptyMessage != null && !emptyMessage.isBlank());
+    }
+
+    public void setPlan(WorkloadPlan plan, String emptyMessage, boolean error) {
         this.plan = plan;
         this.emptyMessage = emptyMessage == null || emptyMessage.isBlank()
                 ? "Enter a target to preview the load shape" : emptyMessage;
+        this.emptyMessageIsError = error;
         repaint();
+    }
+
+    String emptyMessage() {
+        return emptyMessage;
+    }
+
+    boolean emptyMessageIsError() {
+        return emptyMessageIsError;
     }
 
     static int preferredHeightForFont(Font font) {
@@ -89,8 +103,7 @@ public final class LoadShapeChart extends JComponent {
                 drawLoad(g, left, right, top, bottom);
                 drawTimeTicks(g, left, right, bottom);
             } else {
-                g.setColor(emptyMessage.equals("Enter a target to preview the load shape")
-                        ? ThemeColors.secondaryText() : ThemeColors.error());
+                g.setColor(emptyMessageIsError ? ThemeColors.error() : ThemeColors.secondaryText());
                 int textY = top + 28;
                 java.awt.FontMetrics metrics = g.getFontMetrics();
                 StringBuilder line = new StringBuilder();

@@ -185,6 +185,25 @@ class WorkloadDesignerDialogTest {
                     dialog.addNotify();
                     layoutDialog(dialog);
 
+                    dialogField(dialog, "shapeCombo", JComboBox.class)
+                            .setSelectedItem(WorkloadShape.LOAD);
+                    JTextField target = dialogField(dialog, "target", JTextField.class);
+                    target.setText("");
+                    invokePrivate(dialog, "updatePreview");
+                    FieldShell targetShell =
+                            dialogField(dialog, "targetValueShell", FieldShell.class);
+                    Field invalidField = FieldShell.class.getDeclaredField("invalid");
+                    invalidField.setAccessible(true);
+                    assertFalse(invalidField.getBoolean(targetShell));
+                    LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
+                    Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
+                    emptyMessage.setAccessible(true);
+                    Field emptyMessageIsError =
+                            LoadShapeChart.class.getDeclaredField("emptyMessageIsError");
+                    emptyMessageIsError.setAccessible(true);
+                    assertEquals("Enter a target to preview the load shape", emptyMessage.get(chart));
+                    assertFalse(emptyMessageIsError.getBoolean(chart));
+
                     dialogField(dialog, "askAiButton", JButton.class).doClick(0);
                     dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.CUSTOM);
                     JButton addStage = findButton(dialog, "Add stage");
@@ -275,27 +294,21 @@ class WorkloadDesignerDialogTest {
 
                         dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
                         invokePrivate(dialog, "updatePreview");
-                        JTextField target = dialogField(dialog, "target", JTextField.class);
                         target.setText("9999999999");
                         invokePrivate(dialog, "updatePreview");
-                        FieldShell targetShell =
-                                dialogField(dialog, "targetValueShell", FieldShell.class);
-                        Field invalidField = FieldShell.class.getDeclaredField("invalid");
-                        invalidField.setAccessible(true);
                         assertTrue(invalidField.getBoolean(targetShell));
                         assertFalse(dialogField(dialog, "applyButton", JButton.class).isEnabled());
-                        LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
-                        Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
-                        emptyMessage.setAccessible(true);
                         Field plan = LoadShapeChart.class.getDeclaredField("plan");
                         plan.setAccessible(true);
                         String error = dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error();
                         assertEquals(error, emptyMessage.get(chart));
+                        assertTrue(emptyMessageIsError.getBoolean(chart));
                         assertNull(plan.get(chart));
 
                         target.setText("100");
                         invokePrivate(dialog, "updatePreview");
                         assertFalse(invalidField.getBoolean(targetShell));
+                        assertFalse(emptyMessageIsError.getBoolean(chart));
                         assertTrue(dialogField(dialog, "applyButton", JButton.class).isEnabled());
                         assertTrue(plan.get(chart) != null);
 

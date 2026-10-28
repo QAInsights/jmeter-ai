@@ -1955,8 +1955,12 @@ public final class WorkloadDesignerDialog extends JDialog {
                     agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context, shapeConfig);
         }
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
+        WorkloadShape selectedShape = (WorkloadShape) shapeCombo.getSelectedItem();
+        boolean blankTargetError = evaluation.field() == WorkloadField.TARGET
+                && target.getText().isBlank()
+                && (selectedShape == null || !selectedShape.usesOpenModelThreadGroup());
         fieldShellList.forEach(shell -> shell.setInvalid(false));
-        FieldShell invalidShell = shellFor(evaluation.field());
+        FieldShell invalidShell = blankTargetError ? null : shellFor(evaluation.field());
         if (invalidShell != null) {
             invalidShell.setInvalid(true);
         }
@@ -1967,7 +1971,8 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
         showStatus(error, canApply(samplers, evaluation));
         WorkloadPlan plan = evaluation.plan();
-        chart.setPlan(plan, plan == null && error != null && !error.isBlank() ? error : null);
+        boolean chartError = plan == null && !blankTargetError && error != null && !error.isBlank();
+        chart.setPlan(plan, chartError ? error : null, chartError);
         if (plan != null) {
             resultValues[0].setText(Integer.toString(plan.threads()));
             resultValues[1].setText(Integer.toString(plan.samplersPerIteration()));
