@@ -63,6 +63,7 @@ import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadParser;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
+import org.qainsights.jmeter.ai.load.WorkloadSpec;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1049,6 +1050,69 @@ class WorkloadDesignerDialogTest {
         } finally {
             preferences.removeNode();
         }
+    }
+
+    @Test
+    void oversizedPrefilledAndSuggestedTargetsRemainVisibleForLimitErrors() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/oversized-target-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    WorkloadSpec spec = WorkloadParser.parse("@load 10000000000000 rps");
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, spec, List.of(group), group, 1,
+                                    null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.addNotify();
+
+                    assertOversizedTargetError(dialog);
+                    dialog.showAiSuggestionForRender(
+                            new org.qainsights.jmeter.ai.load.WorkloadAiAssistant.Suggestion(
+                                    WorkloadInputs.TargetType.REQUEST_RATE, 10_000_000_000_000d,
+                                    null, 500.0, 0.0, 0.0, 60.0, null,
+                                    "Oversized target", List.of(), List.of()));
+                    assertOversizedTargetError(dialog);
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Oversized target prefill was not preserved", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    private static void assertOversizedTargetError(WorkloadDesignerDialog dialog) throws Exception {
+        JTextField target = dialogField(dialog, "target", JTextField.class);
+        assertEquals("10000000000000", target.getText());
+
+        FieldShell targetShell = dialogField(dialog, "targetValueShell", FieldShell.class);
+        Field invalid = FieldShell.class.getDeclaredField("invalid");
+        invalid.setAccessible(true);
+        assertTrue(invalid.getBoolean(targetShell));
+
+        String error = dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error();
+        assertTrue(error.contains("at most 1,000,000"), error);
+        assertTrue(dialogField(dialog, "errorLabel", JLabel.class).getText().contains("at most 1,000,000"));
+
+        LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
+        Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
+        emptyMessage.setAccessible(true);
+        assertEquals(error, emptyMessage.get(chart));
     }
 
     private static void assertCustomStageEditorFilters(JTable table) throws Exception {

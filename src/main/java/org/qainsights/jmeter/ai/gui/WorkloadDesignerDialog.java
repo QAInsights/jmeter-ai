@@ -1421,10 +1421,10 @@ public final class WorkloadDesignerDialog extends JDialog {
     private void showAiSuggestion(WorkloadAiAssistant.Suggestion suggestion) {
         latestSuggestion = suggestion;
         targetCombo.setSelectedItem(suggestion.targetType());
-        target.setText(NumericDocumentFilter.format(
+        NumericDocumentFilter.setTextUnbounded(target, NumericDocumentFilter.format(
                 suggestion.targetValue(), NumericDocumentFilter.Mode.DECIMAL));
         if (suggestion.rateCap() != null) {
-            cap.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(cap, NumericDocumentFilter.format(
                     suggestion.rateCap(), NumericDocumentFilter.Mode.DECIMAL));
         }
         setSuggestedLong(response, suggestion.responseMs());
@@ -1432,7 +1432,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         setSuggestedDuration(ramp, rampUnit, suggestion.rampSeconds());
         setSuggestedDuration(hold, holdUnit, suggestion.holdSeconds());
         if (suggestion.samplesPerVcpu() != null) {
-            samplesPerVcpu.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(samplesPerVcpu, NumericDocumentFilter.format(
                     suggestion.samplesPerVcpu(), NumericDocumentFilter.Mode.WHOLE));
         }
         StringBuilder text = new StringBuilder(suggestion.summary());
@@ -1454,7 +1454,7 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void setSuggestedLong(JTextField field, Double value) {
         if (value != null) {
-            field.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(field, NumericDocumentFilter.format(
                     Math.round(value), NumericDocumentFilter.Mode.WHOLE));
         }
     }
@@ -1815,7 +1815,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             type = WorkloadInputs.TargetType.USERS;
             amount = spec.users().doubleValue();
             if (spec.requestsPerSecond() != null) {
-                cap.setText(NumericDocumentFilter.format(
+                NumericDocumentFilter.setTextUnbounded(cap, NumericDocumentFilter.format(
                         spec.requestsPerSecond(), NumericDocumentFilter.Mode.DECIMAL));
             }
         } else if (spec.requestsPerSecond() != null) {
@@ -1830,11 +1830,11 @@ public final class WorkloadDesignerDialog extends JDialog {
         targetCombo.setSelectedItem(type);
         setDouble(target, amount);
         if (spec.generatorVcpus() != null) {
-            generatorVcpus.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(generatorVcpus, NumericDocumentFilter.format(
                     spec.generatorVcpus().longValue(), NumericDocumentFilter.Mode.WHOLE));
         }
         if (spec.generatorRamGb() != null) {
-            generatorRamGb.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(generatorRamGb, NumericDocumentFilter.format(
                     spec.generatorRamGb(), NumericDocumentFilter.Mode.WHOLE));
         }
         if (!preparation.generatorHosts().isEmpty()) {
@@ -1866,7 +1866,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         setLong(rampDown, config.rampDownSeconds());
         arrivalModeCombo.setSelectedItem(config.arrivalMode());
         if (spec.agents() != null) {
-            agents.setText(NumericDocumentFilter.format(
+            NumericDocumentFilter.setTextUnbounded(agents, NumericDocumentFilter.format(
                     spec.agents().longValue(), NumericDocumentFilter.Mode.WHOLE));
         }
         prefix.setText(LoadCommandHandler.prefixFor(preparation.selectedGroup(), preparation.eligibleCount()));
@@ -1975,7 +1975,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             int hostCount = hostText.split(",", -1).length;
             String countText = Integer.toString(hostCount);
             if (!agents.getText().equals(countText)) {
-                agents.setText(NumericDocumentFilter.format(
+                NumericDocumentFilter.setTextUnbounded(agents, NumericDocumentFilter.format(
                         hostCount, NumericDocumentFilter.Mode.WHOLE));
             }
         }
@@ -2582,13 +2582,15 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     private static void setLong(JTextField field, Long value) {
         if (value != null) {
-            field.setText(NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.WHOLE));
+            NumericDocumentFilter.setTextUnbounded(field,
+                    NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.WHOLE));
         }
     }
 
     private static void setDouble(JTextField field, Double value) {
         if (value != null) {
-            field.setText(NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.DECIMAL));
+            NumericDocumentFilter.setTextUnbounded(field,
+                    NumericDocumentFilter.format(value, NumericDocumentFilter.Mode.DECIMAL));
         }
     }
 
@@ -2610,7 +2612,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 default -> 1;
             };
             if (seconds % multiplier == 0) {
-                field.setText(NumericDocumentFilter.format(
+                NumericDocumentFilter.setTextUnbounded(field, NumericDocumentFilter.format(
                         seconds / multiplier, NumericDocumentFilter.Mode.WHOLE));
                 unit.setSelectedItem(candidate);
                 return;

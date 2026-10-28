@@ -17,6 +17,7 @@ public final class NumericDocumentFilter extends DocumentFilter {
 
     private final JTextComponent component;
     private final Mode mode;
+    private boolean bypassLength;
 
     public NumericDocumentFilter(JTextComponent component, Mode mode) {
         this.component = component;
@@ -26,6 +27,25 @@ public final class NumericDocumentFilter extends DocumentFilter {
     public static void install(JTextComponent component, Mode mode) {
         if (component.getDocument() instanceof AbstractDocument document) {
             document.setDocumentFilter(new NumericDocumentFilter(component, mode));
+        }
+    }
+
+    public static void setTextUnbounded(JTextComponent component, String text) {
+        if (component.getDocument() instanceof AbstractDocument document
+                && document.getDocumentFilter() instanceof NumericDocumentFilter filter) {
+            filter.bypassLength = true;
+            try {
+                String value = text == null ? "" : text;
+                if (filter.valid(value, true)) {
+                    component.setText(text);
+                } else {
+                    filter.provideErrorFeedback();
+                }
+            } finally {
+                filter.bypassLength = false;
+            }
+        } else {
+            component.setText(text);
         }
     }
 
@@ -61,15 +81,15 @@ public final class NumericDocumentFilter extends DocumentFilter {
         String inserted = text == null ? "" : text;
         String candidate = current.substring(0, offset) + inserted
                 + current.substring(offset + length);
-        if (valid(candidate)) {
+        if (valid(candidate, bypassLength || inserted.isEmpty())) {
             bypass.replace(offset, length, inserted, attributes);
         } else {
             provideErrorFeedback();
         }
     }
 
-    private boolean valid(String value) {
-        if (value.length() > MAX_LENGTH) {
+    private boolean valid(String value, boolean allowOverlength) {
+        if (!allowOverlength && value.length() > MAX_LENGTH) {
             return false;
         }
         boolean decimalPoint = false;
