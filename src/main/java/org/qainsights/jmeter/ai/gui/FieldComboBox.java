@@ -17,7 +17,6 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.ListCellRenderer;
-import javax.swing.JScrollPane;
 import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.plaf.basic.BasicComboBoxUI;
@@ -109,6 +108,37 @@ final class FieldComboUI extends BasicComboBoxUI {
         return new Rectangle(x, y, width, height);
     }
 
+    static Border popupBorder() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(ThemeColors.separator()),
+                BorderFactory.createEmptyBorder(UiTokens.SPACE_1, UiTokens.SPACE_1,
+                        UiTokens.SPACE_1, UiTokens.SPACE_1));
+    }
+
+    static int fixedCellHeightFor(JComboBox<?> combo) {
+        ListCellRenderer<?> renderer = combo.getRenderer();
+        if (renderer == null) {
+            renderer = new DefaultListCellRenderer();
+        }
+        int height = 0;
+        for (int index = 0; index < combo.getItemCount(); index++) {
+            Object value = combo.getItemAt(index);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Component cell = ((ListCellRenderer) renderer).getListCellRendererComponent(
+                    new JList<>(), value, index, false, false);
+            if (cell instanceof JComponent component) {
+                component.setFont(combo.getFont());
+            }
+            height = Math.max(height, cell.getPreferredSize().height);
+        }
+        return Math.max(1, height);
+    }
+
+    static int popupHeightFor(int itemCount, int maximumRowCount, int cellHeight, Insets insets) {
+        int rows = Math.min(Math.max(0, itemCount), Math.max(0, maximumRowCount));
+        return rows * cellHeight + insets.top + insets.bottom;
+    }
+
     private static final class FieldComboPopup extends BasicComboPopup {
 
         @SuppressWarnings({"rawtypes", "unchecked"})
@@ -116,33 +146,27 @@ final class FieldComboUI extends BasicComboBoxUI {
             super((JComboBox) comboBox);
             Color background = ThemeColors.elevatedSurface();
             setBackground(background);
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(ThemeColors.separator()),
-                    BorderFactory.createEmptyBorder(UiTokens.SPACE_1, UiTokens.SPACE_1,
-                            UiTokens.SPACE_1, UiTokens.SPACE_1)));
+            setBorder(popupBorder());
             list.setBackground(background);
             list.setForeground(ThemeColors.foreground());
             list.setSelectionBackground(ThemeColors.selectedBackground());
             list.setSelectionForeground(ThemeColors.foreground());
+            list.setBorder(null);
             scroller.setBorder(null);
+            scroller.setViewportBorder(null);
             scroller.setBackground(background);
             scroller.getViewport().setBackground(background);
-            ListCellRenderer<?> renderer = comboBox.getRenderer();
-            if (renderer == null) {
-                renderer = new DefaultListCellRenderer();
-            }
-            Object value = comboBox.getItemCount() == 0 ? null : comboBox.getItemAt(0);
-            @SuppressWarnings({"rawtypes", "unchecked"})
-            Component cell = ((ListCellRenderer) renderer)
-                    .getListCellRendererComponent(list, value, 0, false, false);
-            list.setFixedCellHeight(Math.max(1, cell.getPreferredSize().height));
         }
 
         @Override
         protected Rectangle computePopupBounds(int x, int y, int width, int height) {
+            int cellHeight = fixedCellHeightFor(comboBox);
+            list.setFixedCellHeight(cellHeight);
+            int popupHeight = popupHeightFor(comboBox.getItemCount(),
+                    comboBox.getMaximumRowCount(), cellHeight, getInsets());
             Rectangle requested = popupBoundsFor(comboBox, x, y, width, height);
             return super.computePopupBounds(
-                    requested.x, requested.y, requested.width, requested.height);
+                    requested.x, requested.y, requested.width, popupHeight);
         }
     }
 }

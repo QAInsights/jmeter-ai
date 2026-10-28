@@ -65,4 +65,20 @@ class FieldComboBoxTest {
         assertEquals(shell.getHeight() + UiTokens.SPACE_1, popup.y);
         assertEquals(shell.getWidth(), popup.width);
     }
+
+    @Test
+    void popupHeightFitsVisibleRowsAndPopupInsets() {
+        FieldComboBox<String> combo = new FieldComboBox<>(
+                new String[]{"one", "two", "three", "four"}, value -> value);
+        int cellHeight = FieldComboUI.fixedCellHeightFor(combo);
+        java.awt.Insets insets = FieldComboUI.popupBorder().getBorderInsets(null);
+
+        int popupHeight = FieldComboUI.popupHeightFor(
+                combo.getItemCount(), combo.getMaximumRowCount(), cellHeight, insets);
+
+        assertEquals(4 * cellHeight + insets.top + insets.bottom, popupHeight);
+
+        combo.setFont(combo.getFont().deriveFont(combo.getFont().getSize2D() * 1.5f));
+        assertTrue(FieldComboUI.fixedCellHeightFor(combo) > cellHeight);
+    }
 }
