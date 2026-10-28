@@ -13,6 +13,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorkloadCalculatorTest {
 
     @Test
+    void keepsBlankShapeDefaultsAndDerivesUpperTargets() {
+        assertEquals(500.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STEP, null, null, WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals(1000.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STRESS, null, null, WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals(500.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.SPIKE, null, null, WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals(1400.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STEP, 1000.0, 100.0, WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals(2900.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STRESS, 2000.0, 100.0, WorkloadInputs.TargetType.REQUEST_RATE));
+        assertEquals(1_000_000.0, WorkloadShapeConfig.defaultEnd(
+                WorkloadShape.STEP, 999_900.0, 100.0, WorkloadInputs.TargetType.USERS));
+    }
+
+    @Test
     void calculatesRateTargetUsingHeadroomAndParsesRequestedDefaults() {
         WorkloadSpec spec = WorkloadParser.parse("@load 200 rps, 10 min ramp-up, 1 hour soak");
         WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
@@ -330,7 +346,7 @@ class WorkloadCalculatorTest {
     @Test
     void openModelShapesSkipSteepRampWarningAndExplainPerGeneratorRates() {
         WorkloadPlan plan = shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
-                1.0, 3000.0, 3000.0, 10L, 1L, null, null, null, null, null,
+                1.0, 3000.0, 2999.0, 10L, 1L, null, null, null, null, null,
                 List.of(), null, ArrivalMode.EVEN), WorkloadInputs.TargetType.REQUEST_RATE, 3, 1, List.of());
 
         assertFalse(plan.warnings().stream().anyMatch(value -> value.contains("Steep ramp-up")));
@@ -347,6 +363,45 @@ class WorkloadCalculatorTest {
                 List.of(new WorkloadStage(0, 4, 10), new WorkloadStage(4, 0, 5)),
                 null, ArrivalMode.RANDOM), WorkloadInputs.TargetType.ITERATION_RATE, 2, 2, List.of());
         assertEquals(6, plan.threads());
+    }
+
+    @Test
+    void enforcesRateMinimumAndUsersWholeNumberTargets() {
+        InvalidWorkloadValueException tooSmall = assertThrows(InvalidWorkloadValueException.class,
+                () -> WorkloadCalculator.calculate(new WorkloadInputs(
+                        WorkloadInputs.TargetType.REQUEST_RATE, 0.0005, null,
+                        500L, 0L, 10L, 60L, 1, 1, "load", "plan.jmx")));
+        assertTrue(tooSmall.getMessage().contains("at least 0.001 samples/s"));
+        assertEquals(0.001, WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 0.001, null, 500L, 0L,
+                10L, 60L, 1, 1, "load", "plan.jmx")).targetRequestsPerSecond());
+
+        InvalidWorkloadValueException fractionalUsers = assertThrows(InvalidWorkloadValueException.class,
+                () -> WorkloadCalculator.calculate(new WorkloadInputs(
+                        WorkloadInputs.TargetType.USERS, 1.5, null, 500L, 0L,
+                        10L, 60L, 1, 1, "load", "plan.jmx")));
+        assertEquals(WorkloadField.TARGET, fractionalUsers.field());
+    }
+
+    @Test
+    void enforcesStepRangesAndOneHundredLevels() {
+        WorkloadShapeConfig equalEnd = new WorkloadShapeConfig(WorkloadShape.STEP,
+                1000.0, 1000.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM);
+        InvalidWorkloadValueException endError = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(equalEnd));
+        assertEquals(WorkloadField.SHAPE_END, endError.field());
+        assertTrue(endError.getMessage().contains("End target must be above Start target (1,000)."));
+
+        WorkloadShapeConfig tooManyStepLevels = new WorkloadShapeConfig(WorkloadShape.STEP,
+                0.0, 101.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM);
+        assertTrue(shaped(new WorkloadShapeConfig(WorkloadShape.STEP,
+                0.0, 100.0, 1.0, 10L, 0L, null, null, null, null, null,
+                List.of(), null, ArrivalMode.RANDOM)).stages().size() > 0);
+        InvalidWorkloadValueException levels = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(tooManyStepLevels));
+        assertTrue(levels.getMessage().contains("at most 100 levels"));
     }
 
     @Test

@@ -2,12 +2,15 @@ package org.qainsights.jmeter.ai.load;
 
 public enum WorkloadField {
     TARGET,
+    PREFIX,
     RATE_CAP,
     RESPONSE,
     THINK,
     RAMP,
     HOLD,
     AGENTS,
+    GENERATOR_HOSTS,
+    THREAD_GROUP,
     MESSAGES_PER_SAMPLE,
     MAX_THREADS_PER_GENERATOR,
     VCPUS,

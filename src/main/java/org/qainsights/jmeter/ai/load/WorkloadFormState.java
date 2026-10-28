@@ -45,9 +45,10 @@ public final class WorkloadFormState {
             Long holdSeconds = optionalDuration(hold, holdUnit, WorkloadField.HOLD, "Hold");
             Integer agentCount = optionalInteger(agents, "Load generators must be a whole number.",
                     WorkloadField.AGENTS, WorkloadLimits.MAX_GENERATORS, "Load generators", "");
-            Double messagesPerSample = targetType == WorkloadInputs.TargetType.MESSAGE_RATE
-                    ? optionalNumber(context.messagesPerSample(),
-                            "Messages per sample must be greater than zero.", WorkloadField.MESSAGES_PER_SAMPLE)
+            Integer messagesPerSample = targetType == WorkloadInputs.TargetType.MESSAGE_RATE
+                    ? optionalInteger(context.messagesPerSample(),
+                            "Messages per sample must be a whole number.", WorkloadField.MESSAGES_PER_SAMPLE,
+                            WorkloadLimits.MAX_MESSAGES_PER_SAMPLE, "Messages per sample", "")
                     : null;
             Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator(),
                     "Measured max threads per generator must be a whole number.",
@@ -59,10 +60,12 @@ public final class WorkloadFormState {
             if (generatorVcpus != null && generatorVcpus < 1) {
                 throw new InvalidWorkloadValueException(WorkloadField.VCPUS, "Generator vCPUs must be at least 1.");
             }
-            Double generatorRamGb = optionalNumber(context.generatorRamGb(),
-                    "Generator RAM must be greater than zero.", WorkloadField.RAM);
-            Double samplesPerVcpu = optionalNumber(context.samplesPerVcpu(),
-                    "Samples per vCPU must be greater than zero.", WorkloadField.SAMPLES_PER_VCPU);
+            Integer generatorRamGb = optionalInteger(context.generatorRamGb(),
+                    "Generator RAM must be a whole number of GB.", WorkloadField.RAM,
+                    WorkloadLimits.MAX_RAM_GB, "Generator RAM", "GB");
+            Integer samplesPerVcpu = optionalInteger(context.samplesPerVcpu(),
+                    "Samples per vCPU must be a whole number.", WorkloadField.SAMPLES_PER_VCPU,
+                    WorkloadLimits.MAX_SAMPLES_PER_VCPU, "Samples per vCPU", "samples/s");
             List<String> hosts = context.generatorHosts() == null || context.generatorHosts().isBlank()
                     ? List.of() : Arrays.stream(context.generatorHosts().split(",", -1))
                     .map(String::trim).toList();
@@ -70,7 +73,9 @@ public final class WorkloadFormState {
                     cap, responseMs, thinkMs, rampSeconds, holdSeconds, agentCount, samplerCount,
                     prefix, planFile, messagesPerSample == null ? 1.0 : messagesPerSample,
                     maxThreads, hosts, context.samplerClasses(), context.jdbcPools(),
-                    generatorVcpus, generatorRamGb, samplesPerVcpu, context.scriptHeavy(), shapeConfig));
+                    generatorVcpus, generatorRamGb == null ? null : generatorRamGb.doubleValue(),
+                    samplesPerVcpu == null ? null : samplesPerVcpu.doubleValue(),
+                    context.scriptHeavy(), shapeConfig));
             return new Evaluation(plan, "", null);
         } catch (IllegalArgumentException | ArithmeticException e) {
             WorkloadField field = e instanceof InvalidWorkloadValueException invalid ? invalid.field() : null;
@@ -85,12 +90,13 @@ public final class WorkloadFormState {
         }
         try {
             double parsed = Double.parseDouble(value.trim());
-            if (!Double.isFinite(parsed) || parsed <= 0) {
+            if (!Double.isFinite(parsed)) {
                 throw new InvalidWorkloadValueException(field, error);
             }
             return parsed;
         } catch (NumberFormatException e) {
-            throw new InvalidWorkloadValueException(field, error);
+            throw new InvalidWorkloadValueException(
+                    field, value.trim().equals(".") ? "Enter a number." : error);
         }
     }
 

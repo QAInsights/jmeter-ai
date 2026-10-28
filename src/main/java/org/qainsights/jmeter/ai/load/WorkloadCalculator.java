@@ -141,6 +141,16 @@ public final class WorkloadCalculator {
         long durationSeconds = openModel
                 ? stages.stream().map(WorkloadStage::seconds).reduce(0L, Math::addExact)
                 : Math.addExact(rampSeconds, holdSeconds);
+        if (durationSeconds > WorkloadLimits.MAX_DURATION_SECONDS) {
+            WorkloadField field = switch (inputs.shapeConfig().shape()) {
+                case LOAD, ENDURANCE -> WorkloadField.HOLD;
+                case STEP, STRESS -> WorkloadField.SHAPE_STEP_DURATION;
+                case SPIKE -> WorkloadField.SPIKE_DURATION;
+                case CUSTOM -> WorkloadField.CUSTOM_STAGES;
+            };
+            throw new InvalidWorkloadValueException(
+                    field, WorkloadLimits.totalDurationLimitMessage(durationSeconds));
+        }
         boolean distributed = agents > 1 || !hosts.isEmpty();
         Integer perAgentThreads = distributed ? (int) Math.ceil(threads / (double) agents) : null;
         Double perAgentRpm = distributed && rpm != null ? round2(rpm / agents) : null;
@@ -251,8 +261,12 @@ public final class WorkloadCalculator {
     private static void validate(WorkloadInputs inputs) {
         boolean openModel = inputs != null && inputs.shapeConfig().shape().usesOpenModelThreadGroup();
         if (inputs == null || inputs.targetType() == null
-                || !openModel && (!Double.isFinite(inputs.targetValue()) || inputs.targetValue() <= 0)) {
+                || !openModel && !Double.isFinite(inputs.targetValue())) {
             throw new InvalidWorkloadValueException(WorkloadField.TARGET, "Enter a positive target value.");
+        }
+        if (!openModel && inputs.targetValue() < WorkloadLimits.minTarget(inputs.targetType())) {
+            throw new InvalidWorkloadValueException(WorkloadField.TARGET,
+                    WorkloadLimits.minTargetMessage("Target value", inputs.targetType()));
         }
         if (!openModel && inputs.targetValue() > WorkloadLimits.maxTarget(inputs.targetType())) {
             throw new InvalidWorkloadValueException(WorkloadField.TARGET,
@@ -266,6 +280,10 @@ public final class WorkloadCalculator {
                 && (!Double.isFinite(inputs.rateCapRps()) || inputs.rateCapRps() <= 0)) {
             throw new InvalidWorkloadValueException(WorkloadField.RATE_CAP,
                     "Enter a positive samples-per-second cap.");
+        }
+        if (inputs.rateCapRps() != null && inputs.rateCapRps() < WorkloadLimits.MIN_RATE) {
+            throw new InvalidWorkloadValueException(WorkloadField.RATE_CAP,
+                    WorkloadLimits.minTargetMessage("Samples/s cap", WorkloadInputs.TargetType.REQUEST_RATE));
         }
         if (inputs.rateCapRps() != null && inputs.rateCapRps() > WorkloadLimits.MAX_RATE) {
             throw new InvalidWorkloadValueException(WorkloadField.RATE_CAP,
@@ -318,17 +336,23 @@ public final class WorkloadCalculator {
                     WorkloadLimits.maxMessage("Load generators", WorkloadLimits.MAX_GENERATORS, ""));
         }
         if (inputs.generatorHosts().size() > WorkloadLimits.MAX_GENERATORS) {
-            throw new InvalidWorkloadValueException(WorkloadField.AGENTS,
+            throw new InvalidWorkloadValueException(WorkloadField.GENERATOR_HOSTS,
                     WorkloadLimits.maxMessage("Load generators", WorkloadLimits.MAX_GENERATORS, ""));
         }
         if (inputs.samplersPerIteration() < 1) {
-            throw new IllegalArgumentException("Add at least one sampler to the Thread Group.");
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.THREAD_GROUP, "Add at least one sampler to the Thread Group.");
         }
         if (inputs.targetType() == MESSAGE_RATE
                 && (inputs.messagesPerSample() == null || !Double.isFinite(inputs.messagesPerSample())
                 || inputs.messagesPerSample() <= 0)) {
             throw new InvalidWorkloadValueException(WorkloadField.MESSAGES_PER_SAMPLE,
-                    "Messages per sample must be greater than zero.");
+                    "Messages per sample must be at least 1.");
+        }
+        if (inputs.targetType() == MESSAGE_RATE
+                && inputs.messagesPerSample() != Math.floor(inputs.messagesPerSample())) {
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.MESSAGES_PER_SAMPLE, "Messages per sample must be a whole number.");
         }
         if (inputs.targetType() == MESSAGE_RATE
                 && inputs.messagesPerSample() > WorkloadLimits.MAX_MESSAGES_PER_SAMPLE) {
@@ -355,19 +379,33 @@ public final class WorkloadCalculator {
                     WorkloadLimits.maxMessage("Generator vCPUs", WorkloadLimits.MAX_VCPUS, ""));
         }
         if (inputs.generatorRamGb() != null && (!Double.isFinite(inputs.generatorRamGb())
-                || inputs.generatorRamGb() <= 0
                 || inputs.generatorRamGb() * 1024 * 0.75 > Long.MAX_VALUE - 512)) {
             throw new InvalidWorkloadValueException(WorkloadField.RAM,
-                    "Generator RAM must be a positive, representable number of GB.");
+                    "Generator RAM must be a whole number of GB.");
+        }
+        if (inputs.generatorRamGb() != null && inputs.generatorRamGb() < 1) {
+            throw new InvalidWorkloadValueException(WorkloadField.RAM, "Generator RAM must be at least 1 GB.");
+        }
+        if (inputs.generatorRamGb() != null
+                && inputs.generatorRamGb() != Math.floor(inputs.generatorRamGb())) {
+            throw new InvalidWorkloadValueException(WorkloadField.RAM, "Generator RAM must be a whole number of GB.");
         }
         if (inputs.generatorRamGb() != null && inputs.generatorRamGb() > WorkloadLimits.MAX_RAM_GB) {
             throw new InvalidWorkloadValueException(WorkloadField.RAM,
                     WorkloadLimits.maxMessage("Generator RAM", WorkloadLimits.MAX_RAM_GB, "GB"));
         }
         if (inputs.samplesPerVcpu() != null && (!Double.isFinite(inputs.samplesPerVcpu())
-                || inputs.samplesPerVcpu() <= 0)) {
+                )) {
             throw new InvalidWorkloadValueException(WorkloadField.SAMPLES_PER_VCPU,
-                    "Samples per vCPU must be greater than zero.");
+                    "Samples per vCPU must be a whole number.");
+        }
+        if (inputs.samplesPerVcpu() != null && inputs.samplesPerVcpu() < 1) {
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.SAMPLES_PER_VCPU, "Samples per vCPU must be at least 1.");
+        }
+        if (inputs.samplesPerVcpu() != null && inputs.samplesPerVcpu() != Math.floor(inputs.samplesPerVcpu())) {
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.SAMPLES_PER_VCPU, "Samples per vCPU must be a whole number.");
         }
         if (inputs.samplesPerVcpu() != null
                 && inputs.samplesPerVcpu() > WorkloadLimits.MAX_SAMPLES_PER_VCPU) {
@@ -376,13 +414,23 @@ public final class WorkloadCalculator {
                             WorkloadLimits.MAX_SAMPLES_PER_VCPU, "samples/s"));
         }
         for (String host : inputs.generatorHosts()) {
-            if (!validGeneratorHost(host)) {
-                throw new IllegalArgumentException("Enter generator hosts using letters, numbers, dots, underscores, colons, or hyphens.");
+            if (host.length() > WorkloadLimits.MAX_HOST_LENGTH) {
+                throw new InvalidWorkloadValueException(WorkloadField.GENERATOR_HOSTS,
+                        "Generator host names can be at most 253 characters.");
             }
+            if (!validGeneratorHost(host)) {
+                throw new InvalidWorkloadValueException(WorkloadField.GENERATOR_HOSTS,
+                        "Enter generator hosts using letters, numbers, dots, underscores, colons, or hyphens.");
+            }
+        }
+        if (inputs.propertyPrefix() != null && inputs.propertyPrefix().length() > WorkloadLimits.MAX_PREFIX_LENGTH) {
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.PREFIX, "Property prefix can be at most 64 characters.");
         }
         if (inputs.propertyPrefix() != null && !inputs.propertyPrefix().isBlank()
                 && !VALID_PREFIX.matcher(inputs.propertyPrefix()).matches()) {
-            throw new IllegalArgumentException("Property prefix can use letters, numbers, dots, underscores, and hyphens only.");
+            throw new InvalidWorkloadValueException(
+                    WorkloadField.PREFIX, "Property prefix can use letters, numbers, dots, underscores, and hyphens only.");
         }
     }
 
@@ -405,21 +453,25 @@ public final class WorkloadCalculator {
                         WorkloadField.SHAPE_STEP_DURATION);
                 long ramp = nonNegativeDuration(config.rampSeconds(),
                         Math.min(10, hold / 5), "Step ramp", WorkloadField.SHAPE_STEP_RAMP);
-                if (end < start) {
+                if (config.endTarget() <= config.startTarget()) {
                     throw new InvalidWorkloadValueException(
-                            WorkloadField.SHAPE_END, "Step end must be at or above its start.");
+                            WorkloadField.SHAPE_END,
+                            WorkloadLimits.aboveStartMessage("End target", "Start target", config.startTarget()));
                 }
-                if (increment <= 0) {
+                if (config.stepTarget() > config.endTarget() - config.startTarget() + 1e-9) {
                     throw new InvalidWorkloadValueException(
-                            WorkloadField.SHAPE_STEP, "Step size must be greater than zero.");
+                            WorkloadField.SHAPE_STEP,
+                            WorkloadLimits.maximumStepMessage("Step size",
+                                    "End target minus Start target", config.endTarget() - config.startTarget()));
                 }
                 addRampStage(stages, 0, start, ramp, notes);
                 addStage(stages, start, start, hold);
                 double current = start;
                 for (int count = 0; current < end - 1e-9; count++) {
-                    if (count > 1000) {
+                    if (count >= WorkloadLimits.MAX_LEVELS) {
                         throw new InvalidWorkloadValueException(
-                                WorkloadField.SHAPE_STEP, "A step shape can contain at most 1000 levels.");
+                                WorkloadField.SHAPE_STEP, "A step shape can contain at most 100 levels. "
+                                        + "Increase Step size or lower End target.");
                     }
                     double next = Math.min(end, current + increment);
                     addRampStage(stages, current, next, ramp, notes);
@@ -440,7 +492,8 @@ public final class WorkloadCalculator {
                         WorkloadField.SPIKE_RECOVERY);
                 if (peak <= baseline) {
                     throw new InvalidWorkloadValueException(
-                            WorkloadField.SPIKE_PEAK, "Spike peak must be greater than its baseline.");
+                            WorkloadField.SPIKE_PEAK,
+                            WorkloadLimits.aboveStartMessage("Spike peak", "Baseline", config.baselineTarget()));
                 }
                 addStage(stages, 0, baseline, 5);
                 addStage(stages, baseline, baseline, warmup);
@@ -458,20 +511,26 @@ public final class WorkloadCalculator {
                         WorkloadField.SHAPE_STEP, "Stress step size");
                 long interval = positiveDuration(config.stepDurationSeconds(), 120,
                         "Stress step duration", WorkloadField.SHAPE_STEP_DURATION);
-                if (ceiling < start) {
+                if (config.endTarget() <= config.startTarget()) {
                     throw new InvalidWorkloadValueException(
-                            WorkloadField.SHAPE_END, "Stress ceiling must be at or above its start.");
+                            WorkloadField.SHAPE_END,
+                            WorkloadLimits.aboveStartMessage("Stress ceiling",
+                                    "Stress start", config.startTarget()));
                 }
-                if (increment <= 0) {
+                if (config.stepTarget() > config.endTarget() - config.startTarget() + 1e-9) {
                     throw new InvalidWorkloadValueException(
-                            WorkloadField.SHAPE_STEP, "Stress step size must be greater than zero.");
+                            WorkloadField.SHAPE_STEP,
+                            WorkloadLimits.maximumStepMessage("Stress step size",
+                                    "Stress ceiling minus Stress start",
+                                    config.endTarget() - config.startTarget()));
                 }
                 addStage(stages, 0, start, 10);
                 double current = start;
                 for (int count = 0; current < ceiling - 1e-9; count++) {
-                    if (count > 1000) {
+                    if (count >= WorkloadLimits.MAX_LEVELS) {
                         throw new InvalidWorkloadValueException(
-                                WorkloadField.SHAPE_STEP, "A stress shape can contain at most 1000 levels.");
+                                WorkloadField.SHAPE_STEP, "A stress shape can contain at most 100 levels. "
+                                        + "Increase Stress step size or lower Stress ceiling.");
                     }
                     double next = Math.min(ceiling, current + increment);
                     addStage(stages, current, next, interval);
@@ -484,12 +543,14 @@ public final class WorkloadCalculator {
             case CUSTOM -> {
                 int maxExpandedStages = config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 20 : 21;
                 if (config.customStages().isEmpty()) {
-                    throw new IllegalArgumentException("Custom shapes need at least 1 stage.");
+                    throw new InvalidWorkloadValueException(
+                            WorkloadField.CUSTOM_STAGES, "Custom shapes need at least 1 stage.");
                 }
                 if (config.customStages().size() > maxExpandedStages) {
                     int maxTotalStages = maxExpandedStages
                             + (config.rampDownSeconds() != null && config.rampDownSeconds() > 0 ? 1 : 0);
-                    throw new IllegalArgumentException("Custom shapes allow at most 10 rows (up to "
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            "Custom shapes allow at most 10 rows (up to "
                             + maxTotalStages + " stages including ramps).");
                 }
                 double limitIterations = convertTargetToIterations(WorkloadLimits.maxTarget(inputs.targetType()),
@@ -563,6 +624,16 @@ public final class WorkloadCalculator {
                                              WorkloadField field, String label) {
         if (target == null || !Double.isFinite(target) || target < 0) {
             throw new InvalidWorkloadValueException(field, "Enter a valid " + label.toLowerCase() + ".");
+        }
+        boolean zeroAllowed = field == WorkloadField.SHAPE_START
+                || field == WorkloadField.SPIKE_BASELINE || field == WorkloadField.CUSTOM_STAGES;
+        double minimum = zeroAllowed ? 0 : WorkloadLimits.minTarget(inputs.targetType());
+        if (target < minimum) {
+            throw new InvalidWorkloadValueException(field,
+                    WorkloadLimits.minTargetMessage(label, inputs.targetType()));
+        }
+        if (inputs.targetType() == USERS && target != Math.floor(target)) {
+            throw new InvalidWorkloadValueException(field, label + " must be a whole number of users.");
         }
         double max = inputs.targetType() == USERS
                 ? WorkloadLimits.MAX_USERS : WorkloadLimits.MAX_RATE;

@@ -113,6 +113,87 @@ class WorkloadFormStateTest {
         assertTrue(users.error().contains("1,000,000"));
     }
 
+    @Test
+    void validatesMinimumRatesWholeShapeUsersAndGeneratorResources() {
+        WorkloadFormState.Evaluation lowRate = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "0.0005", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx");
+        assertEquals(WorkloadField.TARGET, lowRate.field());
+        assertTrue(lowRate.error().contains("at least 0.001 samples/s"));
+        assertTrue(evaluate("0.001", "1", "", "", "", "").valid());
+
+        WorkloadFormState.Evaluation fractionalUsers = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.USERS, "1.5", "", "", "", "", "s", "",
+                "h", "1", 1, "load", "plan.jmx");
+        assertEquals(WorkloadField.TARGET, fractionalUsers.field());
+
+        WorkloadShapeConfig fractionalShape = new WorkloadShapeConfig(WorkloadShape.STEP,
+                10.5, 20.0, 1.0, 10L, 0L, null, null, null, null, null,
+                java.util.List.of(), null, ArrivalMode.RANDOM);
+        WorkloadFormState.Evaluation shapeUsers = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.USERS, "1", "", "", "", "", "s", "",
+                "h", "1", 1, "load", "plan.jmx", WorkloadFormState.Context.empty(), fractionalShape);
+        assertEquals(WorkloadField.SHAPE_START, shapeUsers.field());
+
+        WorkloadFormState.Context ramFraction = new WorkloadFormState.Context(
+                "", "", "", java.util.List.of(), java.util.List.of(), "", "1.5", "", false);
+        WorkloadFormState.Context zeroRam = new WorkloadFormState.Context(
+                "", "", "", java.util.List.of(), java.util.List.of(), "", "0", "", false);
+        assertEquals(WorkloadField.RAM, WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", ramFraction).field());
+        assertEquals(WorkloadField.RAM, WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", zeroRam).field());
+        WorkloadFormState.Context maxRam = new WorkloadFormState.Context(
+                "", "", "", java.util.List.of(), java.util.List.of(), "", "4096", "", false);
+        assertTrue(WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", maxRam).valid());
+    }
+
+    @Test
+    void capsPrefixHostsAndWholeNumberSamples() {
+        String longHost = "a".repeat(254);
+        WorkloadFormState.Context hostContext = new WorkloadFormState.Context(
+                longHost, "", "", java.util.List.of(), java.util.List.of());
+        WorkloadFormState.Evaluation host = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", hostContext);
+        assertEquals(WorkloadField.GENERATOR_HOSTS, host.field());
+        assertEquals("Generator host names can be at most 253 characters.", host.error());
+
+        WorkloadFormState.Evaluation prefix = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "x".repeat(65), "plan.jmx");
+        assertEquals(WorkloadField.PREFIX, prefix.field());
+
+        WorkloadFormState.Context fractionalSamples = new WorkloadFormState.Context(
+                "", "", "", java.util.List.of(), java.util.List.of(), "", "", "1.5", false);
+        WorkloadFormState.Evaluation samples = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", fractionalSamples);
+        assertEquals(WorkloadField.SAMPLES_PER_VCPU, samples.field());
+    }
+
+    @Test
+    void rejectsPlansLongerThanSevenDays() {
+        WorkloadFormState.Evaluation load = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "200", "", "", "", "96", "h",
+                "96", "h", "1", 1, "load", "plan.jmx");
+        assertEquals(WorkloadField.HOLD, load.field());
+        assertTrue(load.error().contains("Total test length can be at most 7 days"));
+
+        WorkloadShapeConfig custom = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                java.util.List.of(new WorkloadStage(1, 1, 345_600),
+                        new WorkloadStage(1, 1, 345_600)), null, ArrivalMode.RANDOM);
+        WorkloadFormState.Evaluation openModel = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.REQUEST_RATE, "1", "", "500", "0", "", "s",
+                "", "min", "1", 1, "load", "plan.jmx", WorkloadFormState.Context.empty(), custom);
+        assertEquals(WorkloadField.CUSTOM_STAGES, openModel.field());
+    }
+
     private static WorkloadFormState.Evaluation evaluate(String target, String agents,
                                                           String response, String ramp,
                                                           String hold, String cap) {
