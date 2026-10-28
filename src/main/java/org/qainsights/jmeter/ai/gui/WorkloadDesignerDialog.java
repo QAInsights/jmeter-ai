@@ -27,6 +27,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyChangeListener;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -78,6 +79,9 @@ import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadAiAssistant;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
+import org.qainsights.jmeter.ai.load.WorkloadField;
+import org.qainsights.jmeter.ai.load.InvalidWorkloadValueException;
+import org.qainsights.jmeter.ai.load.WorkloadLimits;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
@@ -120,10 +124,10 @@ public final class WorkloadDesignerDialog extends JDialog {
     private FormRow rampDownRow;
     private FormRow arrivalsRow;
     private final Map<WorkloadShape, List<FormRow>> shapeRows = new LinkedHashMap<>();
-    private final JComboBox<JMeterTreeNode> groupCombo = new JComboBox<>();
+    private final FieldComboBox<JMeterTreeNode> groupCombo = new FieldComboBox<>(JMeterTreeNode::getName);
     private final JComboBox<WorkloadShape> shapeCombo = new JComboBox<>(WorkloadShape.values());
-    private final JComboBox<WorkloadInputs.TargetType> targetCombo =
-            new JComboBox<>(WorkloadInputs.TargetType.values());
+    private final FieldComboBox<WorkloadInputs.TargetType> targetCombo =
+            new FieldComboBox<>(WorkloadInputs.TargetType.values(), WorkloadDesignerDialog::targetName);
     private final int initialTargetFontSize = targetCombo.getFont().getSize();
     private final PlaceholderTextField target = new PlaceholderTextField();
     private final PlaceholderTextField cap = new PlaceholderTextField();
@@ -149,7 +153,8 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final PlaceholderTextField stressDuration = new PlaceholderTextField();
     private final PlaceholderTextField rampDown = new PlaceholderTextField();
     private final JCheckBox rampDownEnabled = new JCheckBox("Enable");
-    private final JComboBox<ArrivalMode> arrivalModeCombo = new JComboBox<>(ArrivalMode.values());
+    private final FieldComboBox<ArrivalMode> arrivalModeCombo =
+            new FieldComboBox<>(ArrivalMode.values(), ArrivalMode::toString);
     private final DefaultTableModel customStageModel = new DefaultTableModel(
             new Object[][]{{"100", "10", "60"}}, new Object[]{"Target (samples/s)", "Ramp (s)", "Hold (s)"}) {
         @Override
@@ -802,8 +807,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         registerFormCard(aiCard);
 
         registerFormCard(targetCard);
-        groupCombo.setRenderer((list, value, index, selected, focus) ->
-                new JLabel(value == null ? "" : value.getName()));
         for (JMeterTreeNode node : preparation.threadGroups()) {
             groupCombo.addItem(node);
         }
@@ -881,8 +884,6 @@ public final class WorkloadDesignerDialog extends JDialog {
             }
         });
         advancedCard.body().setVisible(false);
-        targetCombo.setRenderer((list, value, index, selected, focus) ->
-                new JLabel(targetName(value)));
         shapeCombo.addActionListener(event -> {
             updateShapeRows();
             rebuildFormRows();
@@ -1929,6 +1930,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                 scriptHeavy);
         WorkloadInputs.TargetType targetType = (WorkloadInputs.TargetType) targetCombo.getSelectedItem();
         String rateCap = targetType == WorkloadInputs.TargetType.USERS ? cap.getText() : "";
+        evaluation = null;
         String shapeError = shapeInputError();
         if (shapeError == null && shapeCombo.getSelectedItem() == WorkloadShape.CUSTOM) {
             shapeError = customConversionInputError(targetType, messagesPerSample.getText(),
@@ -1938,27 +1940,34 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (shapeError == null) {
             try {
                 shapeConfig = shapeConfigForForm(targetType, samplers);
+            } catch (InvalidWorkloadValueException e) {
+                evaluation = new WorkloadFormState.Evaluation(null, e.getMessage(), e.field());
             } catch (IllegalArgumentException | ArithmeticException e) {
                 shapeError = customConversionFailureField(targetType);
             }
         }
-        if (shapeError == null) {
+        if (shapeError != null) {
+            evaluation = new WorkloadFormState.Evaluation(null, shapeError, shapeErrorField(shapeError));
+        } else if (evaluation == null) {
             evaluation = WorkloadFormState.evaluate(targetType,
                     target.getText(), rateCap, response.getText(), think.getText(), ramp.getText(),
                     (String) rampUnit.getSelectedItem(), hold.getText(), (String) holdUnit.getSelectedItem(),
                     agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context, shapeConfig);
-        } else {
-            evaluation = new WorkloadFormState.Evaluation(null, shapeError);
         }
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
+        fieldShellList.forEach(shell -> shell.setInvalid(false));
+        FieldShell invalidShell = shellFor(evaluation.field());
+        if (invalidShell != null) {
+            invalidShell.setInvalid(true);
+        }
         applyButton.setEnabled(canApply(samplers, evaluation));
-        if (advancedError(error) && !advancedExpanded) {
+        if ((advancedField(evaluation.field()) || advancedError(error)) && !advancedExpanded) {
             advancedExpanded = true;
             rebuildFormRows();
         }
         showStatus(error, canApply(samplers, evaluation));
         WorkloadPlan plan = evaluation.plan();
-        chart.setPlan(plan);
+        chart.setPlan(plan, plan == null && error != null && !error.isBlank() ? error : null);
         if (plan != null) {
             resultValues[0].setText(Integer.toString(plan.threads()));
             resultValues[1].setText(Integer.toString(plan.samplersPerIteration()));
@@ -2054,6 +2063,88 @@ public final class WorkloadDesignerDialog extends JDialog {
         String normalized = error.toLowerCase(java.util.Locale.ROOT);
         return normalized.contains("prefix")
                 || normalized.contains("sample") && normalized.contains("vcpu");
+    }
+
+    private boolean advancedField(WorkloadField field) {
+        return field == WorkloadField.SAMPLES_PER_VCPU || field == WorkloadField.RATE_CAP
+                || field == WorkloadField.MESSAGES_PER_SAMPLE || field == WorkloadField.VCPUS
+                || field == WorkloadField.RAM || field == WorkloadField.MAX_THREADS_PER_GENERATOR;
+    }
+
+    private WorkloadField shapeErrorField(String error) {
+        if (error == null) {
+            return null;
+        }
+        if (error.startsWith("Ramp down")) {
+            return WorkloadField.RAMP_DOWN;
+        }
+        if (error.startsWith("Messages per sample")) {
+            return WorkloadField.MESSAGES_PER_SAMPLE;
+        }
+        if (error.startsWith("Response time")) {
+            return WorkloadField.RESPONSE;
+        }
+        if (error.startsWith("Think time")) {
+            return WorkloadField.THINK;
+        }
+        return switch ((WorkloadShape) shapeCombo.getSelectedItem()) {
+            case STEP -> error.startsWith("Step start") ? WorkloadField.SHAPE_START
+                    : error.startsWith("Step end") ? WorkloadField.SHAPE_END
+                    : error.startsWith("Step size") ? WorkloadField.SHAPE_STEP
+                    : error.startsWith("Step duration") ? WorkloadField.SHAPE_STEP_DURATION
+                    : error.startsWith("Ramp per step") ? WorkloadField.SHAPE_STEP_RAMP
+                    : null;
+            case STRESS -> error.startsWith("Stress start") ? WorkloadField.SHAPE_START
+                    : error.startsWith("Stress ceiling") ? WorkloadField.SHAPE_END
+                    : error.startsWith("Stress step size") ? WorkloadField.SHAPE_STEP
+                    : error.startsWith("Stress step duration") ? WorkloadField.SHAPE_STEP_DURATION
+                    : null;
+            case SPIKE -> error.startsWith("Spike baseline") ? WorkloadField.SPIKE_BASELINE
+                    : error.startsWith("Spike peak") ? WorkloadField.SPIKE_PEAK
+                    : error.startsWith("Warm-up hold") ? WorkloadField.SPIKE_WARMUP
+                    : error.startsWith("Spike duration") ? WorkloadField.SPIKE_DURATION
+                    : error.startsWith("Recovery hold") ? WorkloadField.SPIKE_RECOVERY
+                    : null;
+            case CUSTOM -> error.startsWith("Custom") ? WorkloadField.CUSTOM_STAGES : null;
+            default -> null;
+        };
+    }
+
+    private FieldShell shellFor(WorkloadField field) {
+        if (field == null) {
+            return null;
+        }
+        JTextField input = switch (field) {
+            case TARGET -> target;
+            case RATE_CAP -> cap;
+            case RESPONSE -> response;
+            case THINK -> think;
+            case RAMP -> ramp;
+            case HOLD -> hold;
+            case AGENTS -> agents;
+            case MESSAGES_PER_SAMPLE -> messagesPerSample;
+            case MAX_THREADS_PER_GENERATOR -> maxThreadsPerGenerator;
+            case VCPUS -> generatorVcpus;
+            case RAM -> generatorRamGb;
+            case SAMPLES_PER_VCPU -> samplesPerVcpu;
+            case RAMP_DOWN -> rampDown;
+            case SHAPE_START -> shapeCombo.getSelectedItem() == WorkloadShape.STRESS
+                    ? stressStart : stepStart;
+            case SHAPE_END -> shapeCombo.getSelectedItem() == WorkloadShape.STRESS
+                    ? stressCeiling : stepEnd;
+            case SHAPE_STEP -> shapeCombo.getSelectedItem() == WorkloadShape.STRESS
+                    ? stressStep : stepSize;
+            case SHAPE_STEP_DURATION -> shapeCombo.getSelectedItem() == WorkloadShape.STRESS
+                    ? stressDuration : stepDuration;
+            case SHAPE_STEP_RAMP -> stepRamp;
+            case SPIKE_BASELINE -> spikeBaseline;
+            case SPIKE_PEAK -> spikePeak;
+            case SPIKE_WARMUP -> spikeWarmup;
+            case SPIKE_DURATION -> spikeDuration;
+            case SPIKE_RECOVERY -> spikeRecovery;
+            default -> null;
+        };
+        return input == null ? null : fieldShells.get(input);
     }
 
     private void syncKpiTiles() {
@@ -2221,10 +2312,39 @@ public final class WorkloadDesignerDialog extends JDialog {
                     ? 1 : parseDouble(messagesPerSample.getText());
             double previous = 0;
             for (int row = 0; row < customStageModel.getRowCount(); row++) {
-                Double targetValue = parseDouble(String.valueOf(customStageModel.getValueAt(row, 0)));
-                Long rowRamp = parseLong(String.valueOf(customStageModel.getValueAt(row, 1)));
-                Long rowHold = parseLong(String.valueOf(customStageModel.getValueAt(row, 2)));
-                if (targetValue == null || rowRamp == null || rowHold == null || rowRamp < 0 || rowHold <= 0) {
+                BigDecimal rawTarget = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 0)));
+                BigDecimal rawRamp = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 1)));
+                BigDecimal rawHold = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 2)));
+                if (rawTarget == null || rawRamp == null || rawHold == null) {
+                    customStages.clear();
+                    break;
+                }
+                long targetLimit = WorkloadLimits.maxTarget(targetType);
+                String targetUnit = WorkloadLimits.targetUnit(targetType);
+                if (rawTarget.compareTo(BigDecimal.valueOf(targetLimit)) > 0) {
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            WorkloadLimits.maxMessage("Custom stage " + (row + 1) + " target",
+                                    targetLimit, targetUnit));
+                }
+                if (rawRamp.compareTo(BigDecimal.valueOf(WorkloadLimits.MAX_DURATION_SECONDS)) > 0) {
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            WorkloadLimits.durationLimitMessage("Custom stage " + (row + 1) + " ramp"));
+                }
+                if (rawHold.compareTo(BigDecimal.valueOf(WorkloadLimits.MAX_DURATION_SECONDS)) > 0) {
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            WorkloadLimits.durationLimitMessage("Custom stage " + (row + 1) + " hold"));
+                }
+                double targetValue = rawTarget.doubleValue();
+                long rowRamp;
+                long rowHold;
+                try {
+                    rowRamp = rawRamp.longValueExact();
+                    rowHold = rawHold.longValueExact();
+                } catch (ArithmeticException e) {
+                    customStages.clear();
+                    break;
+                }
+                if (!Double.isFinite(targetValue) || rowRamp < 0 || rowHold <= 0) {
                     customStages.clear();
                     break;
                 }
@@ -2261,6 +2381,14 @@ public final class WorkloadDesignerDialog extends JDialog {
         try {
             double parsed = Double.parseDouble(value.trim());
             return Double.isFinite(parsed) ? parsed : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static BigDecimal parseBigDecimal(String value) {
+        try {
+            return new BigDecimal(value.trim());
         } catch (RuntimeException e) {
             return null;
         }

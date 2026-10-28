@@ -23,6 +23,7 @@ public final class LoadShapeChart extends JComponent {
     private static final float BASE_FONT_SIZE = 12f;
 
     private WorkloadPlan plan;
+    private String emptyMessage = "Enter a target to preview the load shape";
 
     public LoadShapeChart() {
         setOpaque(false);
@@ -42,7 +43,13 @@ public final class LoadShapeChart extends JComponent {
     }
 
     public void setPlan(WorkloadPlan plan) {
+        setPlan(plan, null);
+    }
+
+    public void setPlan(WorkloadPlan plan, String emptyMessage) {
         this.plan = plan;
+        this.emptyMessage = emptyMessage == null || emptyMessage.isBlank()
+                ? "Enter a target to preview the load shape" : emptyMessage;
         repaint();
     }
 
@@ -82,8 +89,28 @@ public final class LoadShapeChart extends JComponent {
                 drawLoad(g, left, right, top, bottom);
                 drawTimeTicks(g, left, right, bottom);
             } else {
-                g.setColor(ThemeColors.secondaryText());
-                g.drawString("Enter a target to preview the load shape", left + 12, top + 28);
+                g.setColor(emptyMessage.equals("Enter a target to preview the load shape")
+                        ? ThemeColors.secondaryText() : ThemeColors.error());
+                int textY = top + 28;
+                java.awt.FontMetrics metrics = g.getFontMetrics();
+                StringBuilder line = new StringBuilder();
+                for (String word : emptyMessage.split("\\s+")) {
+                    String candidate = line.isEmpty() ? word : line + " " + word;
+                    if (metrics.stringWidth(candidate) > right - left - 24 && !line.isEmpty()) {
+                        g.drawString(line.toString(), left + 12, textY);
+                        textY += metrics.getHeight();
+                        line.setLength(0);
+                        line.append(word);
+                    } else {
+                        if (!line.isEmpty()) {
+                            line.append(' ');
+                        }
+                        line.append(word);
+                    }
+                }
+                if (!line.isEmpty()) {
+                    g.drawString(line.toString(), left + 12, textY);
+                }
             }
         } finally {
             g.dispose();

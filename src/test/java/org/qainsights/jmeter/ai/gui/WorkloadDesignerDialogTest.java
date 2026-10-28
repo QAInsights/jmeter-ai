@@ -53,9 +53,11 @@ import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.load.ArrivalMode;
 import org.qainsights.jmeter.ai.load.CommandShell;
 import org.qainsights.jmeter.ai.load.LoadCommandHandler;
+import org.qainsights.jmeter.ai.load.LoadShapeChart;
 import org.qainsights.jmeter.ai.load.WorkloadApplier;
 import org.qainsights.jmeter.ai.load.WorkloadCalculator;
 import org.qainsights.jmeter.ai.load.WorkloadFormState;
+import org.qainsights.jmeter.ai.load.WorkloadField;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
 import org.qainsights.jmeter.ai.load.WorkloadParser;
@@ -173,6 +175,8 @@ class WorkloadDesignerDialogTest {
                 try {
                     JMeterTreeNode group =
                             new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
                     LoadCommandHandler.Preparation preparation =
                             new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
                                     List.of(group), group, 1, null, "plan.jmx");
@@ -253,6 +257,9 @@ class WorkloadDesignerDialogTest {
                         dialog.setSize(900, 840);
                         invokePrivate(dialog, "updateColumnsLayout");
                         layoutDialog(dialog);
+                        WorkloadDesignerDialog.updateCommandRows(
+                                dialogField(dialog, "cliArea", JTextArea.class));
+                        layoutDialog(dialog);
                         assertTrue(dialogField(dialog, "columns", JPanel.class)
                                 .getLayout() instanceof GridBagLayout,
                                 "900 px should retain the two-column layout");
@@ -265,6 +272,44 @@ class WorkloadDesignerDialogTest {
                                 .getLayout() instanceof BoxLayout,
                                 "899 px should switch to the stacked layout");
                         assertDialogControlHeights(dialog, "899x840");
+
+                        dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
+                        invokePrivate(dialog, "updatePreview");
+                        JTextField target = dialogField(dialog, "target", JTextField.class);
+                        target.setText("9999999999");
+                        invokePrivate(dialog, "updatePreview");
+                        FieldShell targetShell =
+                                dialogField(dialog, "targetValueShell", FieldShell.class);
+                        Field invalidField = FieldShell.class.getDeclaredField("invalid");
+                        invalidField.setAccessible(true);
+                        assertTrue(invalidField.getBoolean(targetShell));
+                        assertFalse(dialogField(dialog, "applyButton", JButton.class).isEnabled());
+                        LoadShapeChart chart = dialogField(dialog, "chart", LoadShapeChart.class);
+                        Field emptyMessage = LoadShapeChart.class.getDeclaredField("emptyMessage");
+                        emptyMessage.setAccessible(true);
+                        Field plan = LoadShapeChart.class.getDeclaredField("plan");
+                        plan.setAccessible(true);
+                        String error = dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error();
+                        assertEquals(error, emptyMessage.get(chart));
+                        assertNull(plan.get(chart));
+
+                        target.setText("100");
+                        invokePrivate(dialog, "updatePreview");
+                        assertFalse(invalidField.getBoolean(targetShell));
+                        assertTrue(dialogField(dialog, "applyButton", JButton.class).isEnabled());
+                        assertTrue(plan.get(chart) != null);
+
+                        dialogField(dialog, "shapeCombo", JComboBox.class)
+                                .setSelectedItem(WorkloadShape.CUSTOM);
+                        invokePrivate(dialog, "updatePreview");
+                        JTable stages = dialogField(dialog, "customStagesTable", JTable.class);
+                        stages.setValueAt("999999999999999999999", 0, 0);
+                        invokePrivate(dialog, "updatePreview");
+                        WorkloadFormState.Evaluation customEvaluation =
+                                dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class);
+                        assertEquals(WorkloadField.CUSTOM_STAGES, customEvaluation.field());
+                        assertTrue(customEvaluation.error().contains("Custom stage 1 target"));
+                        assertTrue(customEvaluation.error().contains("1,000,000 samples/s"));
                     } finally {
                         originalFonts.forEach(UIManager::put);
                         invokePrivate(dialog, "refreshLookAndFeel");
