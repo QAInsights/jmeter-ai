@@ -412,6 +412,30 @@ class WorkloadCalculatorTest {
         assertEquals("Custom shapes need at least 1 stage.", error.getMessage());
     }
 
+    @Test
+    void enforcesRateAndShapeTargetLimitsWithFieldTags() {
+        WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.REQUEST_RATE, 1_000_000, null, 500L, 0L,
+                60L, 600L, 1, 1, "load", "plan.jmx"));
+        assertEquals(750_000, plan.threads());
+
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.STEP,
+                100.0, 2_000_000.0, 100.0, 60L, 10L, null, null, null,
+                null, null, List.of(), null, ArrivalMode.RANDOM);
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(config));
+        assertEquals(WorkloadField.SHAPE_END, error.field());
+        assertTrue(error.getMessage().contains("1,000,000"));
+
+        WorkloadShapeConfig custom = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 1_000_001, 10)), null, ArrivalMode.RANDOM);
+        InvalidWorkloadValueException customError = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(custom));
+        assertEquals(WorkloadField.CUSTOM_STAGES, customError.field());
+        assertTrue(customError.getMessage().contains("1,000,000"));
+    }
+
     private static WorkloadPlan shaped(WorkloadShapeConfig config) {
         return shaped(config, WorkloadInputs.TargetType.REQUEST_RATE, 1, 1, List.of());
     }

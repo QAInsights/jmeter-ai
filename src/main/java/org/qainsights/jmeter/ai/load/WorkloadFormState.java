@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.load;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 
@@ -33,28 +35,34 @@ public final class WorkloadFormState {
                                       Context context, WorkloadShapeConfig shapeConfig) {
         try {
             double targetValue = shapeConfig.shape().usesOpenModelThreadGroup()
-                    ? 1 : requiredNumber(target, "Enter a positive target value.");
-            Double cap = optionalNumber(rateCap, "Enter a positive samples-per-second cap.");
-            Long responseMs = optionalLong(response, "Average response time must be a whole number of milliseconds.");
-            Long thinkMs = optionalLong(think, "Think time must be a whole number of milliseconds.");
-            Long rampSeconds = optionalDuration(ramp, rampUnit);
-            Long holdSeconds = optionalDuration(hold, holdUnit);
-            Integer agentCount = optionalInteger(agents, "Load generators must be a whole number.");
+                    ? 1 : requiredNumber(target, "Enter a positive target value.", WorkloadField.TARGET);
+            Double cap = optionalNumber(rateCap, "Enter a positive samples-per-second cap.", WorkloadField.RATE_CAP);
+            Long responseMs = optionalLong(response, "Average response time must be a whole number of milliseconds.",
+                    WorkloadField.RESPONSE, WorkloadLimits.MAX_MILLIS, "Average response time", "ms (1 h)");
+            Long thinkMs = optionalLong(think, "Think time must be a whole number of milliseconds.",
+                    WorkloadField.THINK, WorkloadLimits.MAX_MILLIS, "Think time", "ms (1 h)");
+            Long rampSeconds = optionalDuration(ramp, rampUnit, WorkloadField.RAMP, "Ramp-up");
+            Long holdSeconds = optionalDuration(hold, holdUnit, WorkloadField.HOLD, "Hold");
+            Integer agentCount = optionalInteger(agents, "Load generators must be a whole number.",
+                    WorkloadField.AGENTS, WorkloadLimits.MAX_GENERATORS, "Load generators", "");
             Double messagesPerSample = targetType == WorkloadInputs.TargetType.MESSAGE_RATE
                     ? optionalNumber(context.messagesPerSample(),
-                            "Messages per sample must be greater than zero.")
+                            "Messages per sample must be greater than zero.", WorkloadField.MESSAGES_PER_SAMPLE)
                     : null;
             Integer maxThreads = optionalInteger(context.maxThreadsPerGenerator(),
-                    "Measured max threads per generator must be a whole number.");
+                    "Measured max threads per generator must be a whole number.",
+                    WorkloadField.MAX_THREADS_PER_GENERATOR, WorkloadLimits.MAX_THREADS_PER_GENERATOR,
+                    "Max threads per generator", "threads");
             Integer generatorVcpus = optionalInteger(context.generatorVcpus(),
-                    "Generator vCPUs must be a whole number.");
+                    "Generator vCPUs must be a whole number.", WorkloadField.VCPUS,
+                    WorkloadLimits.MAX_VCPUS, "Generator vCPUs", "");
             if (generatorVcpus != null && generatorVcpus < 1) {
-                throw new IllegalArgumentException("Generator vCPUs must be at least 1.");
+                throw new InvalidWorkloadValueException(WorkloadField.VCPUS, "Generator vCPUs must be at least 1.");
             }
             Double generatorRamGb = optionalNumber(context.generatorRamGb(),
-                    "Generator RAM must be greater than zero.");
+                    "Generator RAM must be greater than zero.", WorkloadField.RAM);
             Double samplesPerVcpu = optionalNumber(context.samplesPerVcpu(),
-                    "Samples per vCPU must be greater than zero.");
+                    "Samples per vCPU must be greater than zero.", WorkloadField.SAMPLES_PER_VCPU);
             List<String> hosts = context.generatorHosts() == null || context.generatorHosts().isBlank()
                     ? List.of() : Arrays.stream(context.generatorHosts().split(",", -1))
                     .map(String::trim).toList();
@@ -63,70 +71,87 @@ public final class WorkloadFormState {
                     prefix, planFile, messagesPerSample == null ? 1.0 : messagesPerSample,
                     maxThreads, hosts, context.samplerClasses(), context.jdbcPools(),
                     generatorVcpus, generatorRamGb, samplesPerVcpu, context.scriptHeavy(), shapeConfig));
-            return new Evaluation(plan, "");
+            return new Evaluation(plan, "", null);
         } catch (IllegalArgumentException | ArithmeticException e) {
-            return new Evaluation(null, e.getMessage() == null ? "Check the workload values." : e.getMessage());
+            WorkloadField field = e instanceof InvalidWorkloadValueException invalid ? invalid.field() : null;
+            return new Evaluation(null,
+                    e.getMessage() == null ? "Check the workload values." : e.getMessage(), field);
         }
     }
 
-    private static double requiredNumber(String value, String error) {
+    private static double requiredNumber(String value, String error, WorkloadField field) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(error);
+            throw new InvalidWorkloadValueException(field, error);
         }
         try {
             double parsed = Double.parseDouble(value.trim());
             if (!Double.isFinite(parsed) || parsed <= 0) {
-                throw new IllegalArgumentException(error);
+                throw new InvalidWorkloadValueException(field, error);
             }
             return parsed;
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(error);
+            throw new InvalidWorkloadValueException(field, error);
         }
     }
 
-    private static Double optionalNumber(String value, String error) {
-        return value == null || value.isBlank() ? null : requiredNumber(value, error);
+    private static Double optionalNumber(String value, String error, WorkloadField field) {
+        return value == null || value.isBlank() ? null : requiredNumber(value, error, field);
     }
 
-    private static Long optionalLong(String value, String error) {
+    private static Long optionalLong(String value, String error, WorkloadField field,
+                                     long limit, String label, String unit) {
         if (value == null || value.isBlank()) {
             return null;
         }
         try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(error);
-        }
-    }
-
-    private static Integer optionalInteger(String value, String error) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(error);
-        }
-    }
-
-    private static Long optionalDuration(String value, String unit) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            double amount = Double.parseDouble(value.trim());
-            if (!Double.isFinite(amount) || amount < 0) {
-                throw new IllegalArgumentException("Ramp-up and hold values cannot be negative.");
+            BigInteger parsed = new BigDecimal(value.trim()).toBigIntegerExact();
+            if (parsed.compareTo(BigInteger.valueOf(limit)) > 0) {
+                throw new InvalidWorkloadValueException(field,
+                        WorkloadLimits.maxMessage(label, limit, unit));
             }
-            double multiplier = switch (unit) {
-                case "min" -> 60;
-                case "h" -> 3600;
-                default -> 1;
+            return parsed.longValueExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            throw new InvalidWorkloadValueException(field, error);
+        }
+    }
+
+    private static Integer optionalInteger(String value, String error, WorkloadField field,
+                                           int limit, String label, String unit) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            BigInteger parsed = new BigDecimal(value.trim()).toBigIntegerExact();
+            if (parsed.compareTo(BigInteger.valueOf(limit)) > 0) {
+                throw new InvalidWorkloadValueException(field, WorkloadLimits.maxMessage(label, limit, unit));
+            }
+            return parsed.intValueExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            throw new InvalidWorkloadValueException(field, error);
+        }
+    }
+
+    private static Long optionalDuration(String value, String unit, WorkloadField field, String label) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            BigDecimal amount = new BigDecimal(value.trim());
+            if (amount.signum() < 0) {
+                throw new InvalidWorkloadValueException(field, "Ramp-up and hold values cannot be negative.");
+            }
+            long multiplier = switch (unit) {
+                case "min" -> 60L;
+                case "h" -> 3600L;
+                default -> 1L;
             };
-            return (long) Math.ceil(amount * multiplier);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Enter a valid duration.");
+            BigDecimal seconds = amount.multiply(BigDecimal.valueOf(multiplier));
+            if (seconds.compareTo(BigDecimal.valueOf(WorkloadLimits.MAX_DURATION_SECONDS)) > 0) {
+                throw new InvalidWorkloadValueException(field, WorkloadLimits.durationLimitMessage(label));
+            }
+            return seconds.setScale(0, java.math.RoundingMode.CEILING).longValueExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            throw new InvalidWorkloadValueException(field, "Enter a valid duration.");
         }
     }
 
@@ -150,7 +175,11 @@ public final class WorkloadFormState {
         }
     }
 
-    public record Evaluation(WorkloadPlan plan, String error) {
+    public record Evaluation(WorkloadPlan plan, String error, WorkloadField field) {
+        public Evaluation(WorkloadPlan plan, String error) {
+            this(plan, error, null);
+        }
+
         public boolean valid() {
             return plan != null;
         }

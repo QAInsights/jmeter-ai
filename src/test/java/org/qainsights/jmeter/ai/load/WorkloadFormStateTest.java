@@ -78,4 +78,46 @@ class WorkloadFormStateTest {
             assertEquals("Generator vCPUs must be a whole number.", evaluation.error());
         }
     }
+
+    @Test
+    void tagsTargetAndGeneratorBoundsInsteadOfTreatingLongIntegersAsMalformed() {
+        WorkloadFormState.Evaluation target = evaluate("9999999999", "", "", "", "", "1");
+        assertFalse(target.valid());
+        assertEquals(WorkloadField.TARGET, target.field());
+        assertTrue(target.error().contains("1,000,000"));
+
+        WorkloadFormState.Evaluation agents = evaluate("100", "99999999999", "", "", "", "1");
+        assertFalse(agents.valid());
+        assertEquals(WorkloadField.AGENTS, agents.field());
+        assertTrue(agents.error().contains("at most 1,000"));
+        assertFalse(agents.error().contains("whole number"));
+    }
+
+    @Test
+    void tagsDurationAndResponseTimeBounds() {
+        WorkloadFormState.Evaluation hold = evaluate("100", "1", "", "", "192", "1");
+        assertEquals(WorkloadField.HOLD, hold.field());
+        assertTrue(hold.error().contains("7 days"));
+
+        WorkloadFormState.Evaluation response = evaluate("100", "1", "3600001", "", "", "1");
+        assertEquals(WorkloadField.RESPONSE, response.field());
+        assertTrue(response.error().contains("3,600,000"));
+    }
+
+    @Test
+    void tagsConcurrentUserLimit() {
+        WorkloadFormState.Evaluation users = WorkloadFormState.evaluate(
+                WorkloadInputs.TargetType.USERS, "1000001", "100", "", "", "", "s",
+                "", "h", "1", 1, "load", "plan.jmx");
+        assertEquals(WorkloadField.TARGET, users.field());
+        assertTrue(users.error().contains("1,000,000"));
+    }
+
+    private static WorkloadFormState.Evaluation evaluate(String target, String agents,
+                                                          String response, String ramp,
+                                                          String hold, String cap) {
+        return WorkloadFormState.evaluate(WorkloadInputs.TargetType.ITERATION_RATE,
+                target, cap, response, "", ramp, "s", hold, "h", agents, 1,
+                "load", "plan.jmx");
+    }
 }
