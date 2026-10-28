@@ -605,6 +605,73 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void onlyAdvancedFieldErrorsExpandTheAdvancedCard() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/advanced-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group =
+                            new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(
+                            new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation =
+                            new LoadCommandHandler.Preparation(null, WorkloadParser.parse("@load"),
+                                    List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    dialog.setSize(1140, 840);
+                    dialog.addNotify();
+
+                    SectionCard advancedCard = dialogField(dialog, "advancedCard", SectionCard.class);
+                    JTextField target = dialogField(dialog, "target", JTextField.class);
+                    JTextField ram = dialogField(dialog, "generatorRamGb", JTextField.class);
+                    JTextField samples = dialogField(dialog, "samplesPerVcpu", JTextField.class);
+                    Map<?, ?> fieldShells = dialogField(dialog, "fieldShells", Map.class);
+                    FieldShell ramShell = (FieldShell) fieldShells.get(ram);
+                    FieldShell samplesShell = (FieldShell) fieldShells.get(samples);
+                    Field invalidField = FieldShell.class.getDeclaredField("invalid");
+                    invalidField.setAccessible(true);
+
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
+                    target.setText("100");
+                    invokePrivate(dialog, "updatePreview");
+                    assertFalse(advancedCard.body().isVisible());
+
+                    ram.setText("4097");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals(WorkloadField.RAM,
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).field());
+                    assertFalse(advancedCard.body().isVisible());
+                    assertTrue(invalidField.getBoolean(ramShell));
+
+                    ram.setText("4");
+                    samples.setText("0");
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals(WorkloadField.SAMPLES_PER_VCPU,
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).field());
+                    assertTrue(advancedCard.body().isVisible());
+                    assertTrue(invalidField.getBoolean(samplesShell));
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Advanced field expansion failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    @Test
     void keepsAiPanelAttachedWhenRebuildingFormCardBodies() {
         SectionCard aiCard = new SectionCard("Ask AI");
         JPanel aiPanel = new JPanel();

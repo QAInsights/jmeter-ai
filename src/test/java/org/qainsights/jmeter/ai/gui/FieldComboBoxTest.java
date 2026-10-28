@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.awt.Font;
+
 import javax.swing.JList;
 import javax.swing.JLabel;
 
@@ -52,6 +54,24 @@ class FieldComboBoxTest {
     }
 
     @Test
+    void rendererUsesThePopupListsCurrentFont() {
+        FieldComboBox<String> combo = new FieldComboBox<>(
+                new String[]{"one"}, value -> value);
+        JList<String> list = new JList<>();
+        Font zoomedFont = combo.getFont().deriveFont(combo.getFont().getSize2D() * 2);
+        list.setFont(zoomedFont);
+
+        JLabel rendered = (JLabel) combo.getRenderer()
+                .getListCellRendererComponent(list, "one", 0, false, false);
+        assertEquals(zoomedFont, rendered.getFont());
+
+        JLabel withoutList = (JLabel) combo.getRenderer()
+                .getListCellRendererComponent(null, "one", 0, false, false);
+
+        assertEquals(combo.getFont(), withoutList.getFont());
+    }
+
+    @Test
     void alignsPopupWithItsFieldShell() {
         FieldComboBox<String> combo = new FieldComboBox<>(
                 new String[]{"one"}, value -> value);
@@ -80,5 +100,35 @@ class FieldComboBoxTest {
 
         combo.setFont(combo.getFont().deriveFont(combo.getFont().getSize2D() * 1.5f));
         assertTrue(FieldComboUI.fixedCellHeightFor(combo) > cellHeight);
+    }
+
+    @Test
+    void popupPreferredSizeIncludesInsetsOnceForListsBelowAndAboveMaximumRows() {
+        assertPopupPreferredSize(3, 5);
+        assertPopupPreferredSize(8, 5);
+    }
+
+    private static void assertPopupPreferredSize(int itemCount, int maximumRowCount) {
+        String[] items = new String[itemCount];
+        for (int index = 0; index < itemCount; index++) {
+            items[index] = "item " + index;
+        }
+        FieldComboBox<String> combo = new FieldComboBox<>(items, value -> value);
+        combo.setMaximumRowCount(maximumRowCount);
+        FieldShell shell = new FieldShell(combo);
+        shell.setSize(300, 40);
+        combo.setBounds(8, 0, 284, 32);
+        FieldComboUI.FieldComboPopup popup = new FieldComboUI.FieldComboPopup(combo);
+        java.awt.Insets insets = popup.getInsets();
+        int cellHeight = FieldComboUI.fixedCellHeightFor(combo);
+
+        java.awt.Rectangle bounds = popup.computePopupBounds(
+                0, combo.getHeight(), combo.getWidth(), 120);
+        popup.getComponent(0).setPreferredSize(bounds.getSize());
+        java.awt.Dimension popupSize = popup.getPreferredSize();
+
+        assertEquals(shell.getWidth(), popupSize.width);
+        assertEquals(Math.min(itemCount, maximumRowCount) * cellHeight + insets.top + insets.bottom,
+                popupSize.height);
     }
 }

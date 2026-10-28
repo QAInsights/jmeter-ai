@@ -49,7 +49,7 @@ public class FieldComboBox<T> extends JComboBox<T> {
         setBorder(BorderFactory.createEmptyBorder());
         setFont(UiTokens.body(UIManager.getFont("Label.font")));
         if (labeler != null) {
-            setRenderer(new FieldComboRenderer<>(labeler));
+            setRenderer(new FieldComboRenderer<>(labeler, this));
         }
     }
 }
@@ -139,10 +139,10 @@ final class FieldComboUI extends BasicComboBoxUI {
         return rows * cellHeight + insets.top + insets.bottom;
     }
 
-    private static final class FieldComboPopup extends BasicComboPopup {
+    static final class FieldComboPopup extends BasicComboPopup {
 
         @SuppressWarnings({"rawtypes", "unchecked"})
-        private FieldComboPopup(JComboBox<?> comboBox) {
+        FieldComboPopup(JComboBox<?> comboBox) {
             super((JComboBox) comboBox);
             Color background = ThemeColors.elevatedSurface();
             setBackground(background);
@@ -162,11 +162,14 @@ final class FieldComboUI extends BasicComboBoxUI {
         protected Rectangle computePopupBounds(int x, int y, int width, int height) {
             int cellHeight = fixedCellHeightFor(comboBox);
             list.setFixedCellHeight(cellHeight);
+            Insets insets = getInsets();
             int popupHeight = popupHeightFor(comboBox.getItemCount(),
-                    comboBox.getMaximumRowCount(), cellHeight, getInsets());
+                    comboBox.getMaximumRowCount(), cellHeight, insets);
             Rectangle requested = popupBoundsFor(comboBox, x, y, width, height);
             return super.computePopupBounds(
-                    requested.x, requested.y, requested.width, popupHeight);
+                    requested.x, requested.y,
+                    Math.max(0, requested.width - insets.left - insets.right),
+                    Math.max(0, popupHeight - insets.top - insets.bottom));
         }
     }
 }
@@ -174,28 +177,29 @@ final class FieldComboUI extends BasicComboBoxUI {
 final class FieldComboRenderer<T> extends DefaultListCellRenderer {
 
     private final Function<T, String> labeler;
-    private final Font font;
+    private final JComboBox<?> comboBox;
     private final Border rowPadding = BorderFactory.createEmptyBorder(
             UiTokens.SPACE_2, UiTokens.SPACE_3, UiTokens.SPACE_2, UiTokens.SPACE_3);
 
-    FieldComboRenderer(Function<T, String> labeler) {
+    FieldComboRenderer(Function<T, String> labeler, JComboBox<?> comboBox) {
         this.labeler = labeler;
-        font = UiTokens.body(UIManager.getFont("Label.font"));
+        this.comboBox = comboBox;
     }
 
     @Override
     public Component getListCellRendererComponent(
             JList<?> list, Object value, int index, boolean selected, boolean cellHasFocus) {
-        super.getListCellRendererComponent(list, value, index, selected, cellHasFocus);
+        super.getListCellRendererComponent(
+                list == null ? new JList<>() : list, value, index, selected, cellHasFocus);
         @SuppressWarnings("unchecked")
         T typedValue = (T) value;
         setText(value == null ? "" : Objects.toString(labeler.apply(typedValue), ""));
-        setFont(font);
+        setFont(list == null ? comboBox.getFont() : list.getFont());
         setBorder(index < 0 ? BorderFactory.createEmptyBorder() : rowPadding);
         setOpaque(index >= 0);
         if (index < 0) {
             setBackground(new Color(0, 0, 0, 0));
-            setForeground(list.isEnabled()
+            setForeground(list == null || list.isEnabled()
                     ? ThemeColors.foreground() : ThemeColors.secondaryText());
         } else {
             setBackground(selected ? ThemeColors.selectedBackground() : ThemeColors.elevatedSurface());

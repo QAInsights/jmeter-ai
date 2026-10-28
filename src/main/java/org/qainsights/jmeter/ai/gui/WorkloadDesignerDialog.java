@@ -2114,9 +2114,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private boolean advancedField(WorkloadField field) {
-        return field == WorkloadField.SAMPLES_PER_VCPU || field == WorkloadField.RATE_CAP
-                || field == WorkloadField.MESSAGES_PER_SAMPLE || field == WorkloadField.VCPUS
-                || field == WorkloadField.RAM || field == WorkloadField.MAX_THREADS_PER_GENERATOR;
+        return field == WorkloadField.SAMPLES_PER_VCPU || field == WorkloadField.PREFIX;
     }
 
     private FieldShell shellFor(WorkloadField field) {
