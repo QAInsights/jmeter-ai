@@ -426,14 +426,32 @@ class WorkloadCalculatorTest {
                 () -> shaped(config));
         assertEquals(WorkloadField.SHAPE_END, error.field());
         assertTrue(error.getMessage().contains("1,000,000"));
+    }
 
-        WorkloadShapeConfig custom = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+    @Test
+    void customUsersCanExceedTheIterationRateLimitWhenThreadsFit() {
+        WorkloadPlan plan = customUserPlan(600_000, 1_200_000);
+
+        assertEquals(900_000, plan.threads());
+    }
+
+    @Test
+    void customUsersStillEnforceTheThreadLimitAfterConversion() {
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> customUserPlan(700_000, 1_400_000));
+
+        assertEquals(WorkloadField.TARGET, error.field());
+        assertEquals(WorkloadLimits.threadCountLimitMessage(1_050_000), error.getMessage());
+    }
+
+    private static WorkloadPlan customUserPlan(double targetUsers, double iterationRate) {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
                 null, null, null, null, null, null, null, null, null, null,
-                List.of(new WorkloadStage(0, 1_000_001, 10)), null, ArrivalMode.RANDOM);
-        InvalidWorkloadValueException customError = assertThrows(InvalidWorkloadValueException.class,
-                () -> shaped(custom));
-        assertEquals(WorkloadField.CUSTOM_STAGES, customError.field());
-        assertTrue(customError.getMessage().contains("1,000,000"));
+                List.of(new WorkloadStage(0, iterationRate, 10)), null, ArrivalMode.RANDOM);
+        return WorkloadCalculator.calculate(new WorkloadInputs(
+                WorkloadInputs.TargetType.USERS, targetUsers, null, 500L, 0L,
+                10L, 20L, 1, 1, "load", "plan.jmx", 1.0, null,
+                List.of(), List.of(), List.of(), null, null, null, false, config));
     }
 
     private static WorkloadPlan shaped(WorkloadShapeConfig config) {

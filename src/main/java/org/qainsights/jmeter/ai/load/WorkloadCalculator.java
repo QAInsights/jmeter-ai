@@ -492,10 +492,10 @@ public final class WorkloadCalculator {
                             + maxTotalStages + " stages including ramps).");
                 }
                 for (WorkloadStage stage : config.customStages()) {
-                    if (stage.fromRate() > WorkloadLimits.MAX_RATE
-                            || stage.toRate() > WorkloadLimits.MAX_RATE) {
+                    if (!Double.isFinite(stage.fromRate()) || stage.fromRate() < 0
+                            || !Double.isFinite(stage.toRate()) || stage.toRate() < 0) {
                         throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
-                                WorkloadLimits.targetLimitMessage("Custom stage target", inputs.targetType()));
+                                "Custom stage target could not be converted.");
                     }
                     validateDuration(stage.seconds(), "Custom stage duration", WorkloadField.CUSTOM_STAGES);
                     addRampStage(stages, stage.fromRate(), stage.toRate(), stage.seconds(), notes);
