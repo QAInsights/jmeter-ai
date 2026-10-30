@@ -251,7 +251,8 @@ async function handlePostHogBackfill(request: Request, env: Env): Promise<Respon
 	if (!Number.isInteger(requestedLimit)) {
 		return badRequest("limit must be an integer");
 	}
-	const limit = Math.max(1, Math.min(100, requestedLimit));
+	// D1 allows at most 100 bound parameters; the feature query binds 2 plus one per install.
+	const limit = Math.max(1, Math.min(50, requestedLimit));
 	const cursor = url.searchParams.get("after");
 	let afterDay = "";
 	let afterInstallId = "";

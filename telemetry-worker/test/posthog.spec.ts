@@ -38,7 +38,7 @@ describe("posthogEvents", () => {
 				first_run: false,
 				day: "2026-10-30",
 				feature_total: 15,
-				feature_count: 3,
+				feature_count: 2,
 				$geoip_disable: true,
 				$lib: "feather-wand-telemetry-worker",
 				$set: {

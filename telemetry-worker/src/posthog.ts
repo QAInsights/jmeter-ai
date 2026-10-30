@@ -68,7 +68,7 @@ export async function posthogEvents(
 	}
 
 	const featureTotal = Object.values(features).reduce((sum, count) => sum + count, 0);
-	const featureCount = Object.keys(features).length;
+	const featureCount = Object.values(features).filter(count => count > 0).length;
 	const dailyFields = omitNullish({
 		plugin_version: ping.pluginVersion,
 		jmeter_version: ping.jmeterVersion,
