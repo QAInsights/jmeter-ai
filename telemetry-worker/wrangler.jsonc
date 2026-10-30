@@ -22,5 +22,9 @@
 				"period": 60
 			}
 		}
-	]
+	],
+	"vars": {
+		"POSTHOG_KEY": "phc_x2Njec7G4bZsgtRiDTuzj7xA2EBfzGTQEhe8L4hXVsmx",
+		"POSTHOG_HOST": "https://us.i.posthog.com"
+	}
 }

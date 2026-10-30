@@ -11,6 +11,8 @@ export default defineConfig(async () => {
 					bindings: {
 						TEST_MIGRATIONS: migrations,
 						STATS_TOKEN: "test-stats-token",
+						POSTHOG_KEY: "",
+						POSTHOG_HOST: "https://posthog.test.invalid",
 					},
 				},
 			}),
