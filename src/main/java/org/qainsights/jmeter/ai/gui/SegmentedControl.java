@@ -163,7 +163,7 @@ final class SegmentedControl<T> extends JComponent {
     }
 
     private void syncSelection() {
-        T selected = (T) combo.getSelectedItem();
+        Object selected = combo.getSelectedItem();
         for (SegmentButton button : buttons) {
             button.setSelectedValue(Objects.equals(button.item, selected));
         }

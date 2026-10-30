@@ -673,6 +673,95 @@ class WorkloadDesignerDialogTest {
     }
 
     @Test
+    void customRowsAndAiSuggestionsUpdateValidationAndVisibility() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        Preferences preferences = Preferences.userRoot()
+                .node("org/qainsights/jmeter/ai/gui/review-" + UUID.randomUUID());
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                WorkloadDesignerDialog dialog = null;
+                try {
+                    JMeterTreeNode group = new JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+                    group.add(new JMeterTreeNode(new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null));
+                    LoadCommandHandler.Preparation preparation = new LoadCommandHandler.Preparation(
+                            null, WorkloadParser.parse("@load"), List.of(group), group, 1, null, "plan.jmx");
+                    dialog = new WorkloadDesignerDialog(preparation, ignored -> { }, ignored -> "", preferences);
+                    java.beans.PropertyChangeListener listener = dialogField(
+                            dialog, "lookAndFeelListener", java.beans.PropertyChangeListener.class);
+                    assertFalse(List.of(UIManager.getPropertyChangeListeners()).contains(listener));
+                    dialog.addNotify();
+                    dialog.addNotify();
+                    assertEquals(1, List.of(UIManager.getPropertyChangeListeners()).stream()
+                            .filter(item -> item == listener).count());
+                    dialog.removeNotify();
+                    assertFalse(List.of(UIManager.getPropertyChangeListeners()).contains(listener));
+                    dialog.addNotify();
+
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.CUSTOM);
+                    JTable table = dialogField(dialog, "customStagesTable", JTable.class);
+                    DefaultTableModel model = (DefaultTableModel) table.getModel();
+                    model.addRow(new Object[]{"200", "10", "60"});
+                    Field invalid = FieldShell.class.getDeclaredField("invalid");
+                    invalid.setAccessible(true);
+                    for (int column = 0; column < 3; column++) {
+                        Object original = model.getValueAt(1, column);
+                        model.setValueAt("", 1, column);
+                        invokePrivate(dialog, "updatePreview");
+                        WorkloadFormState.Evaluation evaluation = dialogField(
+                                dialog, "evaluation", WorkloadFormState.Evaluation.class);
+                        assertEquals(WorkloadField.CUSTOM_STAGES, evaluation.field());
+                        assertTrue(evaluation.error().contains("Custom stage 2 "
+                                + List.of("target", "ramp", "hold").get(column)));
+                        assertTrue(invalid.getBoolean(dialogField(dialog, "customStagesShell", FieldShell.class)));
+                        model.setValueAt(original, 1, column);
+                    }
+                    model.setValueAt("0", 1, 2);
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals("Custom stage 2 hold must be greater than 0.",
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).error());
+                    model.removeRow(1);
+                    model.setValueAt("0", 0, 0);
+                    invokePrivate(dialog, "updatePreview");
+                    assertEquals(WorkloadField.CUSTOM_STAGES,
+                            dialogField(dialog, "evaluation", WorkloadFormState.Evaluation.class).field());
+                    assertTrue(invalid.getBoolean(dialogField(dialog, "customStagesShell", FieldShell.class)));
+
+                    dialogField(dialog, "shapeCombo", JComboBox.class).setSelectedItem(WorkloadShape.LOAD);
+                    for (String name : List.of("cap", "response", "think", "ramp", "hold", "samplesPerVcpu")) {
+                        dialogField(dialog, name, JTextField.class).setText("123");
+                    }
+                    dialog.showAiSuggestionForRender(new org.qainsights.jmeter.ai.load.WorkloadAiAssistant.Suggestion(
+                            WorkloadInputs.TargetType.USERS, 100, null, null, null, null, null, null,
+                            "Suggestion", List.of(), List.of()));
+                    for (String name : List.of("cap", "response", "think", "ramp", "hold", "samplesPerVcpu")) {
+                        assertEquals("", dialogField(dialog, name, JTextField.class).getText(), name);
+                    }
+                    SectionCard advanced = dialogField(dialog, "advancedCard", SectionCard.class);
+                    assertFalse(advanced.body().isVisible());
+                    dialog.showAiSuggestionForRender(new org.qainsights.jmeter.ai.load.WorkloadAiAssistant.Suggestion(
+                            WorkloadInputs.TargetType.USERS, 100, 50.0, 600.0, 100.0, 120.0, 600.0, 300.0,
+                            "Suggestion", List.of(), List.of()));
+                    assertTrue(advanced.body().isVisible());
+                    assertEquals("300", dialogField(dialog, "samplesPerVcpu", JTextField.class).getText());
+                    assertEquals("50", dialogField(dialog, "cap", JTextField.class).getText());
+                } catch (Throwable exception) {
+                    failure.set(exception);
+                } finally {
+                    if (dialog != null) {
+                        dialog.dispose();
+                    }
+                }
+            });
+            if (failure.get() != null) {
+                throw new AssertionError("Dialog review regression failed", failure.get());
+            }
+        } finally {
+            preferences.removeNode();
+        }
+    }
+
+    @Test
     void keepsAiPanelAttachedWhenRebuildingFormCardBodies() {
         SectionCard aiCard = new SectionCard("Ask AI");
         JPanel aiPanel = new JPanel();
@@ -727,6 +816,19 @@ class WorkloadDesignerDialogTest {
         WorkloadDesignerDialog.updateCommandRows(cliArea);
 
         assertTrue(cliArea.getRows() > 8);
+    }
+
+    @Test
+    void commandPreviewUpdatesMaximumHeightWhenRowsStayTheSame() {
+        JTextArea cliArea = new JTextArea("command");
+        WorkloadDesignerDialog.updateCommandRows(cliArea);
+        int rows = cliArea.getRows();
+        cliArea.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+
+        WorkloadDesignerDialog.updateCommandRows(cliArea);
+
+        assertEquals(rows, cliArea.getRows());
+        assertEquals(cliArea.getPreferredSize().height, cliArea.getMaximumSize().height);
     }
 
     @Test

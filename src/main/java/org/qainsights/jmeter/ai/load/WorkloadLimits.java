@@ -110,7 +110,9 @@ public final class WorkloadLimits {
         long minutes = (seconds % 3_600) / 60;
         long remainingSeconds = seconds % 60;
         if (days > 0) {
-            return days + " d" + (hours > 0 ? " " + hours + " h" : "");
+            return days + " d" + (hours > 0 ? " " + hours + " h" : "")
+                    + (minutes > 0 ? " " + minutes + " min" : "")
+                    + (remainingSeconds > 0 ? " " + remainingSeconds + " s" : "");
         }
         if (hours > 0) {
             return hours + " h" + (minutes > 0 ? " " + minutes + " min" : "");
