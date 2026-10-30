@@ -32,6 +32,8 @@ export interface PostHogEnv {
 export interface PostHogSendOptions {
 	fetcher?: typeof fetch;
 	onStatus?: (status: number) => void;
+	retries?: number;
+	sleep?: (milliseconds: number) => Promise<void>;
 }
 
 const POSTHOG_LIB = "feather-wand-telemetry-worker";
@@ -61,7 +63,8 @@ function baseProperties(): Record<string, unknown> {
 
 export async function posthogEvents(
 	ping: PingRecord,
-	features: Record<string, number>
+	features: Record<string, number>,
+	options?: { historical?: boolean }
 ): Promise<PostHogEvent[]> {
 	if (Object.keys(features).some(feature => (TEST_ONLY_FEATURES as readonly string[]).includes(feature))) {
 		return [];
@@ -104,8 +107,10 @@ export async function posthogEvents(
 		properties: {
 			...baseProperties(),
 			...dailyFields,
-			$set: personFields,
-			$set_once: { first_seen_day: ping.day },
+			...(options?.historical ? {} : {
+				$set: personFields,
+				$set_once: { first_seen_day: ping.day },
+			}),
 		},
 	}];
 
@@ -141,20 +146,37 @@ export async function sendToPostHog(
 	if (!key || events.length === 0) return true;
 
 	const host = (env.POSTHOG_HOST || "https://us.i.posthog.com").replace(/\/+$/, "");
-	try {
-		const response = await (options.fetcher ?? fetch)(`${host}/batch/`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ api_key: key, batch: events }),
-		});
-		options.onStatus?.(response.status);
-		if (!response.ok) {
-			console.warn(`PostHog batch request failed with status ${response.status}`);
+	const retries = Number.isFinite(options.retries) ? Math.max(0, Math.floor(options.retries ?? 0)) : 0;
+	const sleep = options.sleep ?? (milliseconds =>
+		new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
+
+	for (let attempt = 0; attempt <= retries; attempt++) {
+		try {
+			const response = await (options.fetcher ?? fetch)(`${host}/batch/`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ api_key: key, batch: events }),
+			});
+			options.onStatus?.(response.status);
+			if (response.ok) return true;
+			const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
+			if (!retryable || attempt === retries) {
+				console.warn(`PostHog batch request failed with status ${response.status}`);
+				return false;
+			}
+		} catch {
+			if (attempt === retries) {
+				console.warn("PostHog batch request failed");
+				return false;
+			}
+		}
+
+		try {
+			await sleep(attempt === 0 ? 1_000 : 3_000);
+		} catch {
+			console.warn("PostHog batch request failed");
 			return false;
 		}
-		return true;
-	} catch {
-		console.warn("PostHog batch request failed");
-		return false;
 	}
+	return false;
 }

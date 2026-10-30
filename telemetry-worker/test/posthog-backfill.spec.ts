@@ -74,6 +74,9 @@ describe("POST /v1/admin/posthog-backfill", () => {
 		const firstBatch = sentBatch(fetchSpy, 0);
 		expect(firstBatch.filter(event => event.event === "daily_ping").map(event => event.distinct_id))
 			.toEqual(["install-a", "install-b"]);
+		const dailyPing = firstBatch.find(event => event.event === "daily_ping");
+		expect(dailyPing?.properties).not.toHaveProperty("$set");
+		expect(dailyPing?.properties).not.toHaveProperty("$set_once");
 		expect(firstBatch.find(event => event.event === "feature_used" && event.distinct_id === "install-a")?.properties)
 			.toMatchObject({ feature: "chat_message", count: 2 });
 		expect(firstBatch.find(event => event.event === "feature_used" && event.distinct_id === "install-b")?.properties)

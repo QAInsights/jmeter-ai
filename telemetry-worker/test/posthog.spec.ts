@@ -89,6 +89,15 @@ describe("posthogEvents", () => {
 			expect(event.uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 		}
 	});
+
+	it("omits person updates from historical events without changing UUIDs", async () => {
+		const liveEvents = await posthogEvents(ping, { chat_message: 1 });
+		const historicalEvents = await posthogEvents(ping, { chat_message: 1 }, { historical: true });
+
+		expect(historicalEvents[0].properties).not.toHaveProperty("$set");
+		expect(historicalEvents[0].properties).not.toHaveProperty("$set_once");
+		expect(historicalEvents.map(event => event.uuid)).toEqual(liveEvents.map(event => event.uuid));
+	});
 });
 
 describe("sendToPostHog", () => {
@@ -123,6 +132,72 @@ describe("sendToPostHog", () => {
 		fetcher.mockRejectedValueOnce(new Error("network failed"));
 		expect(await sendToPostHog({ POSTHOG_KEY: "test-key" }, events, { fetcher })).toBe(false);
 		expect(warn).toHaveBeenCalledTimes(2);
+		warn.mockRestore();
+	});
+
+	it("retries a 503 once and succeeds on 200", async () => {
+		const events = await posthogEvents(ping, {});
+		const fetcher = vi.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 503 }))
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+		const sleep = vi.fn(async () => {});
+
+		expect(await sendToPostHog({ POSTHOG_KEY: "test-key" }, events, {
+			fetcher,
+			retries: 2,
+			sleep,
+		})).toBe(true);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(sleep.mock.calls).toEqual([[1_000]]);
+	});
+
+	it("stops after three 503 responses", async () => {
+		const events = await posthogEvents(ping, {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const fetcher = vi.fn(async () => new Response(null, { status: 503 }));
+		const sleep = vi.fn(async () => {});
+
+		expect(await sendToPostHog({ POSTHOG_KEY: "test-key" }, events, {
+			fetcher,
+			retries: 2,
+			sleep,
+		})).toBe(false);
+		expect(fetcher).toHaveBeenCalledTimes(3);
+		expect(sleep.mock.calls).toEqual([[1_000], [3_000]]);
+		warn.mockRestore();
+	});
+
+	it("does not retry a 400 response", async () => {
+		const events = await posthogEvents(ping, {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const fetcher = vi.fn(async () => new Response(null, { status: 400 }));
+		const sleep = vi.fn(async () => {});
+
+		expect(await sendToPostHog({ POSTHOG_KEY: "test-key" }, events, {
+			fetcher,
+			retries: 2,
+			sleep,
+		})).toBe(false);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(sleep).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("retries a network rejection and succeeds", async () => {
+		const events = await posthogEvents(ping, {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const fetcher = vi.fn()
+			.mockRejectedValueOnce(new Error("network failed"))
+			.mockResolvedValueOnce(new Response(null, { status: 200 }));
+		const sleep = vi.fn(async () => {});
+
+		expect(await sendToPostHog({ POSTHOG_KEY: "test-key" }, events, {
+			fetcher,
+			retries: 2,
+			sleep,
+		})).toBe(true);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(sleep.mock.calls).toEqual([[1_000]]);
 		warn.mockRestore();
 	});
 });

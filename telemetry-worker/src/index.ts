@@ -205,7 +205,7 @@ async function handlePing(request: Request, env: Env, ctx: ExecutionContext): Pr
 				agentEnabled: p.agentEnabled,
 				firstRun: p.firstRun,
 			}, p.features ?? {});
-			ctx.waitUntil(sendToPostHog(env, events));
+			ctx.waitUntil(sendToPostHog(env, events, { retries: 2 }));
 		} catch {
 			// Telemetry forwarding must never affect the accepted ping response.
 		}
@@ -311,7 +311,11 @@ async function handlePostHogBackfill(request: Request, env: Env): Promise<Respon
 			agentEnabled: row.agent_enabled === null ? undefined : row.agent_enabled === 1,
 			firstRun: row.first_run === null ? undefined : row.first_run === 1,
 		};
-		events.push(...await posthogEvents(ping, featuresByPair.get(`${row.install_id}|${row.day}`) ?? {}));
+		events.push(...await posthogEvents(
+			ping,
+			featuresByPair.get(`${row.install_id}|${row.day}`) ?? {},
+			{ historical: true }
+		));
 	}
 
 	let upstreamStatus: number | undefined;

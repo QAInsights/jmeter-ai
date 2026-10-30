@@ -74,6 +74,7 @@ done
 ```
 
 Event UUIDs are deterministic, so rerunning a backfill is safe and PostHog deduplicates the events.
+Backfilled events do not update person properties, so profiles keep the values from live pings.
 
 ## Viewing stats
 
