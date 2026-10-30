@@ -255,6 +255,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     private boolean completed;
     private boolean updatingPreview;
     private boolean stackedColumns;
+    private boolean lookAndFeelListenerRegistered;
     private WorkloadFormState.Evaluation evaluation;
     private final PropertyChangeListener lookAndFeelListener = event -> {
         if ("lookAndFeel".equals(event.getPropertyName())) {
@@ -377,7 +378,6 @@ public final class WorkloadDesignerDialog extends JDialog {
         prefill(preparation.spec());
         installListeners();
         updatePreview();
-        UIManager.addPropertyChangeListener(lookAndFeelListener);
     }
 
     private JPanel buildContent() {
@@ -578,9 +578,26 @@ public final class WorkloadDesignerDialog extends JDialog {
 
     @Override
     public void dispose() {
-        UIManager.removePropertyChangeListener(lookAndFeelListener);
         saveWindowSize(preferences, getSize());
         super.dispose();
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (!lookAndFeelListenerRegistered) {
+            UIManager.addPropertyChangeListener(lookAndFeelListener);
+            lookAndFeelListenerRegistered = true;
+        }
+    }
+
+    @Override
+    public void removeNotify() {
+        if (lookAndFeelListenerRegistered) {
+            UIManager.removePropertyChangeListener(lookAndFeelListener);
+            lookAndFeelListenerRegistered = false;
+        }
+        super.removeNotify();
     }
 
     private void installZoomBindings() {
@@ -1423,17 +1440,17 @@ public final class WorkloadDesignerDialog extends JDialog {
         targetCombo.setSelectedItem(suggestion.targetType());
         NumericDocumentFilter.setTextUnbounded(target, NumericDocumentFilter.format(
                 suggestion.targetValue(), NumericDocumentFilter.Mode.DECIMAL));
-        if (suggestion.rateCap() != null) {
-            NumericDocumentFilter.setTextUnbounded(cap, NumericDocumentFilter.format(
-                    suggestion.rateCap(), NumericDocumentFilter.Mode.DECIMAL));
-        }
+        NumericDocumentFilter.setTextUnbounded(cap, suggestion.rateCap() == null ? "" : NumericDocumentFilter.format(
+                suggestion.rateCap(), NumericDocumentFilter.Mode.DECIMAL));
         setSuggestedLong(response, suggestion.responseMs());
         setSuggestedLong(think, suggestion.thinkMs());
         setSuggestedDuration(ramp, rampUnit, suggestion.rampSeconds());
         setSuggestedDuration(hold, holdUnit, suggestion.holdSeconds());
-        if (suggestion.samplesPerVcpu() != null) {
-            NumericDocumentFilter.setTextUnbounded(samplesPerVcpu, NumericDocumentFilter.format(
-                    suggestion.samplesPerVcpu(), NumericDocumentFilter.Mode.WHOLE));
+        NumericDocumentFilter.setTextUnbounded(samplesPerVcpu, suggestion.samplesPerVcpu() == null ? ""
+                : NumericDocumentFilter.format(suggestion.samplesPerVcpu(), NumericDocumentFilter.Mode.WHOLE));
+        if (suggestion.samplesPerVcpu() != null && !advancedExpanded) {
+            advancedExpanded = true;
+            rebuildFormRows();
         }
         StringBuilder text = new StringBuilder(suggestion.summary());
         appendSuggestionSection(text, "Reasoning", suggestion.reasoning());
@@ -1456,12 +1473,16 @@ public final class WorkloadDesignerDialog extends JDialog {
         if (value != null) {
             NumericDocumentFilter.setTextUnbounded(field, NumericDocumentFilter.format(
                     Math.round(value), NumericDocumentFilter.Mode.WHOLE));
+        } else {
+            field.setText("");
         }
     }
 
     private static void setSuggestedDuration(JTextField field, JComboBox<String> unit, Double value) {
         if (value != null) {
             setDuration(field, unit, Math.round(value));
+        } else {
+            field.setText("");
         }
     }
 
@@ -1784,10 +1805,7 @@ public final class WorkloadDesignerDialog extends JDialog {
             rows += Math.max(1, (line.length() + charactersPerLine - 1) / charactersPerLine);
         }
         int desiredRows = Math.min(18, Math.max(2, rows));
-        if (area.getRows() != desiredRows) {
-            area.setRows(desiredRows);
-            area.setMaximumSize(new Dimension(Integer.MAX_VALUE, area.getPreferredSize().height));
-        }
+        updateTextAreaHeight(area, desiredRows);
     }
 
     static void updateCommandRows(JTextArea cliArea) {
@@ -1802,9 +1820,22 @@ public final class WorkloadDesignerDialog extends JDialog {
             rows += Math.max(1, (line.length() + charactersPerLine - 1) / charactersPerLine);
         }
         int desiredRows = Math.max(3, rows);
-        if (cliArea.getRows() != desiredRows) {
-            cliArea.setRows(desiredRows);
-            cliArea.setMaximumSize(new Dimension(Integer.MAX_VALUE, cliArea.getPreferredSize().height));
+        updateTextAreaHeight(cliArea, desiredRows);
+    }
+
+    private static void updateTextAreaHeight(JTextArea area, int desiredRows) {
+        boolean changed = false;
+        if (area.getRows() != desiredRows) {
+            area.setRows(desiredRows);
+            changed = true;
+        }
+        int preferredHeight = area.getPreferredSize().height;
+        if (area.getMaximumSize().height != preferredHeight) {
+            area.setMaximumSize(new Dimension(Integer.MAX_VALUE, preferredHeight));
+            changed = true;
+        }
+        if (changed) {
+            area.revalidate();
         }
     }
 
@@ -2394,13 +2425,16 @@ public final class WorkloadDesignerDialog extends JDialog {
                     ? 1 : parseDouble(messagesPerSample.getText());
             double previous = 0;
             for (int row = 0; row < customStageModel.getRowCount(); row++) {
-                BigDecimal rawTarget = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 0)));
-                BigDecimal rawRamp = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 1)));
-                BigDecimal rawHold = parseBigDecimal(String.valueOf(customStageModel.getValueAt(row, 2)));
-                if (rawTarget == null || rawRamp == null || rawHold == null) {
-                    customStages.clear();
-                    break;
+                String[] columns = {"target", "ramp", "hold"};
+                for (int column = 0; column < columns.length; column++) {
+                    if (customCellText(row, column).isBlank()) {
+                        throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                                "Custom stage " + (row + 1) + " " + columns[column] + " is required.");
+                    }
                 }
+                BigDecimal rawTarget = parseBigDecimal(customCellText(row, 0));
+                BigDecimal rawRamp = parseBigDecimal(customCellText(row, 1));
+                BigDecimal rawHold = parseBigDecimal(customCellText(row, 2));
                 long targetLimit = WorkloadLimits.maxTarget(targetType);
                 String targetUnit = WorkloadLimits.targetUnit(targetType);
                 if (rawTarget.compareTo(BigDecimal.valueOf(targetLimit)) > 0) {
@@ -2431,7 +2465,11 @@ public final class WorkloadDesignerDialog extends JDialog {
                     customStages.clear();
                     break;
                 }
-                if (!Double.isFinite(targetValue) || rowRamp < 0 || rowHold <= 0) {
+                if (rowHold <= 0) {
+                    throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                            "Custom stage " + (row + 1) + " hold must be greater than 0.");
+                }
+                if (!Double.isFinite(targetValue) || rowRamp < 0) {
                     customStages.clear();
                     break;
                 }

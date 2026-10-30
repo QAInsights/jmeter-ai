@@ -9,7 +9,8 @@ import java.util.Locale;
 /** Pure workload-series and time-axis calculations for the load-shape chart. */
 public final class WorkloadChartModel {
     private static final long[] TICK_STEPS_SECONDS = {
-            10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200
+            10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200,
+            14400, 21600, 43200, 86400, 172800
     };
     private static final double[] AXIS_INTERVAL_STEPS = {1, 2, 2.5, 5, 7.5, 10};
 

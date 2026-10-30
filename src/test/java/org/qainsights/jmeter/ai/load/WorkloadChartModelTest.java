@@ -80,6 +80,15 @@ class WorkloadChartModelTest {
         assertEquals("1:30", WorkloadChartModel.formatTime(90, 1800));
     }
 
+    @Test
+    void sevenDayPlanUsesFewReadableTimeTicks() {
+        long duration = 604_800;
+        List<Long> ticks = WorkloadChartModel.timeTicks(duration);
+        assertEquals(List.of(0L, 172_800L, 345_600L, 518_400L), ticks);
+        assertEquals(List.of("0:00", "48:00", "96:00", "144:00"), ticks.stream()
+                .map(tick -> WorkloadChartModel.formatTime(tick, duration)).toList());
+    }
+
     private static WorkloadPlan plan(WorkloadInputs.TargetType type, double target, Double cap,
                                     long response, long think, long ramp, long duration, int threads) {
         Double rps;

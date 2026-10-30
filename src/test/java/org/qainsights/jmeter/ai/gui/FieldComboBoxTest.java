@@ -103,6 +103,23 @@ class FieldComboBoxTest {
     }
 
     @Test
+    void popupHeightUsesOneProbeListWithTheComboFont() {
+        FieldComboBox<String> combo = new FieldComboBox<>(new String[]{"one", "two"}, value -> value);
+        JList<?>[] probe = new JList<?>[1];
+        combo.setRenderer((list, value, index, selected, focus) -> {
+            assertEquals(combo.getFont(), list.getFont());
+            if (probe[0] == null) {
+                probe[0] = list;
+            } else {
+                assertTrue(probe[0] == list);
+            }
+            return new JLabel(value);
+        });
+
+        assertTrue(FieldComboUI.fixedCellHeightFor(combo) > 0);
+    }
+
+    @Test
     void popupPreferredSizeIncludesInsetsOnceForListsBelowAndAboveMaximumRows() {
         assertPopupPreferredSize(3, 5);
         assertPopupPreferredSize(8, 5);

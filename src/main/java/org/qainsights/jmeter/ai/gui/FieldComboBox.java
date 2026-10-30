@@ -121,11 +121,13 @@ final class FieldComboUI extends BasicComboBoxUI {
             renderer = new DefaultListCellRenderer();
         }
         int height = 0;
+        JList<?> probeList = new JList<>();
+        probeList.setFont(combo.getFont());
         for (int index = 0; index < combo.getItemCount(); index++) {
             Object value = combo.getItemAt(index);
             @SuppressWarnings({"rawtypes", "unchecked"})
             Component cell = ((ListCellRenderer) renderer).getListCellRendererComponent(
-                    new JList<>(), value, index, false, false);
+                    probeList, value, index, false, false);
             if (cell instanceof JComponent component) {
                 component.setFont(combo.getFont());
             }

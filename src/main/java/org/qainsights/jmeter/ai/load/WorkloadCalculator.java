@@ -579,6 +579,10 @@ public final class WorkloadCalculator {
             stages.add(new WorkloadStage(lastRate, 0, config.rampDownSeconds()));
         }
         if (stages.stream().noneMatch(stage -> stage.toRate() > 0)) {
+            if (config.shape() == WorkloadShape.CUSTOM) {
+                throw new InvalidWorkloadValueException(WorkloadField.CUSTOM_STAGES,
+                        "Enter a positive workload rate.");
+            }
             throw new IllegalArgumentException("Enter a positive workload rate.");
         }
         double iterationSeconds = inputs.samplersPerIteration()

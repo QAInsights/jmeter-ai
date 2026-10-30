@@ -485,6 +485,18 @@ class WorkloadCalculatorTest {
     }
 
     @Test
+    void customShapeWithOnlyZeroRatesTagsTheCustomStagesField() {
+        WorkloadShapeConfig config = new WorkloadShapeConfig(WorkloadShape.CUSTOM,
+                null, null, null, null, null, null, null, null, null, null,
+                List.of(new WorkloadStage(0, 0, 60)), null, ArrivalMode.RANDOM);
+
+        InvalidWorkloadValueException error = assertThrows(InvalidWorkloadValueException.class,
+                () -> shaped(config));
+        assertEquals(WorkloadField.CUSTOM_STAGES, error.field());
+        assertEquals("Enter a positive workload rate.", error.getMessage());
+    }
+
+    @Test
     void enforcesRateAndShapeTargetLimitsWithFieldTags() {
         WorkloadPlan plan = WorkloadCalculator.calculate(new WorkloadInputs(
                 WorkloadInputs.TargetType.REQUEST_RATE, 1_000_000, null, 500L, 0L,
