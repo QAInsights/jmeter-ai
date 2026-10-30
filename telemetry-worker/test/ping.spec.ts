@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const UUID = "3f6b9f2e-9c1a-4d2b-8e5f-1a2b3c4d5e6f";
 
@@ -34,7 +34,12 @@ function postPing(body: unknown, headers: Record<string, string> = {}) {
 }
 
 beforeEach(async () => {
+	env.POSTHOG_KEY = "";
 	await env.DB.exec("DELETE FROM pings; DELETE FROM feature_counts;");
+});
+
+afterEach(() => {
+	vi.restoreAllMocks();
 });
 
 describe("POST /v1/ping", () => {
@@ -77,6 +82,44 @@ describe("POST /v1/ping", () => {
 			"SELECT SUM(count) AS n FROM feature_counts"
 		).first<{ n: number }>();
 		expect(feats!.n).toBe(15);
+	});
+
+	it("forwards only the first daily ping to PostHog", async () => {
+		env.POSTHOG_KEY = "test-posthog-key";
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
+
+		expect((await postPing(pingBody())).status).toBe(204);
+		await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+		const [url, init] = fetchSpy.mock.calls[0];
+		expect(String(url)).toBe("https://posthog.test.invalid/batch/");
+		const body = JSON.parse(String(init?.body));
+		expect(body.api_key).toBe("test-posthog-key");
+		expect(body.batch[0].distinct_id).toBe(UUID);
+
+		expect((await postPing(pingBody({ pluginVersion: "9.9.9" }))).status).toBe(204);
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not forward when PostHog is disabled", async () => {
+		env.POSTHOG_KEY = "";
+		const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+		expect((await postPing(pingBody())).status).toBe(204);
+		await new Promise(resolve => setTimeout(resolve, 10));
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it("keeps accepted ping writes when the PostHog request rejects", async () => {
+		env.POSTHOG_KEY = "test-posthog-key";
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network failed"));
+
+		expect((await postPing(pingBody())).status).toBe(204);
+		await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+		const ping = await env.DB.prepare("SELECT COUNT(*) AS n FROM pings").first<{ n: number }>();
+		const features = await env.DB.prepare("SELECT COUNT(*) AS n FROM feature_counts").first<{ n: number }>();
+		expect(ping?.n).toBe(1);
+		expect(features?.n).toBe(2);
 	});
 
 	it("skips zero-count features on the first ping", async () => {

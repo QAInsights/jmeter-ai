@@ -1,7 +1,12 @@
+import { posthogEvents, sendToPostHog, type PostHogEvent } from "./posthog";
+import { TEST_INSTALLS, TEST_ONLY_FEATURES } from "./test-installs";
+
 export interface Env {
 	DB: D1Database;
 	PING_LIMITER: RateLimit;
 	STATS_TOKEN?: string;
+	POSTHOG_KEY?: string;
+	POSTHOG_HOST?: string;
 }
 
 const MAX_BODY_BYTES = 8192;
@@ -122,7 +127,7 @@ function validate(body: unknown): Ping | Response {
 	return b as unknown as Ping;
 }
 
-async function handlePing(request: Request, env: Env): Promise<Response> {
+async function handlePing(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 	const { success } = await env.PING_LIMITER.limit({ key: ip });
 	if (!success) {
@@ -183,18 +188,149 @@ async function handlePing(request: Request, env: Env): Promise<Response> {
 			await env.DB.batch(stmts);
 		}
 	}
+	if (ins.meta.changes === 1) {
+		try {
+			const events = await posthogEvents({
+				installId: p.installId,
+				day,
+				ts,
+				pluginVersion: p.pluginVersion,
+				jmeterVersion: p.jmeterVersion,
+				javaVersion: p.javaVersion,
+				os: p.os,
+				arch: p.arch,
+				provider: p.provider,
+				judgmentProvider: p.judgmentProvider,
+				model: p.model,
+				agentEnabled: p.agentEnabled,
+				firstRun: p.firstRun,
+			}, p.features ?? {});
+			ctx.waitUntil(sendToPostHog(env, events));
+		} catch {
+			// Telemetry forwarding must never affect the accepted ping response.
+		}
+	}
 	return new Response(null, { status: 204 });
 }
 
 interface StatsRow { [k: string]: unknown }
 
+interface BackfillPingRow {
+	install_id: string;
+	day: string;
+	ts: number;
+	plugin_version: string | null;
+	jmeter_version: string | null;
+	java_version: string | null;
+	os: string | null;
+	arch: string | null;
+	provider: string | null;
+	judgment_provider: string | null;
+	model: string | null;
+	agent_enabled: number | null;
+	first_run: number | null;
+}
+
+interface BackfillFeatureRow {
+	install_id: string;
+	day: string;
+	feature: string;
+	count: number;
+}
+
+async function handlePostHogBackfill(request: Request, env: Env): Promise<Response> {
+	if (!(await tokenOk(request, env))) {
+		return json({ error: "unauthorized" }, 401);
+	}
+	if (!env.POSTHOG_KEY) {
+		return json({ error: "posthog disabled" }, 409);
+	}
+
+	const url = new URL(request.url);
+	const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
+	if (!Number.isInteger(requestedLimit)) {
+		return badRequest("limit must be an integer");
+	}
+	const limit = Math.max(1, Math.min(100, requestedLimit));
+	const cursor = url.searchParams.get("after");
+	let afterDay = "";
+	let afterInstallId = "";
+	if (cursor !== null && cursor !== "") {
+		const match = /^(\d{4}-\d{2}-\d{2})\|(.+)$/.exec(cursor);
+		if (!match) return badRequest("invalid after cursor");
+		afterDay = match[1];
+		afterInstallId = match[2];
+	}
+
+	const rows = (await env.DB.prepare(
+		`SELECT install_id, day, ts, plugin_version, jmeter_version, java_version, os, arch, provider,
+		        judgment_provider, model, agent_enabled, first_run
+		 FROM pings
+		 WHERE (day > ?1 OR (day = ?1 AND install_id > ?2))
+		   AND install_id NOT IN (${TEST_INSTALLS})
+		 ORDER BY day, install_id
+		 LIMIT ?3`
+	).bind(afterDay, afterInstallId, limit).all<BackfillPingRow>()).results;
+
+	if (rows.length === 0) {
+		return json({ pings: 0, events: 0, next: null });
+	}
+
+	const installIds = [...new Set(rows.map(row => row.install_id))];
+	const placeholders = installIds.map((_, index) => `?${index + 3}`).join(", ");
+	const featureRows = (await env.DB.prepare(
+		`SELECT install_id, day, feature, count FROM feature_counts
+		 WHERE day >= ?1 AND day <= ?2 AND install_id IN (${placeholders})`
+	).bind(rows[0].day, rows[rows.length - 1].day, ...installIds).all<BackfillFeatureRow>()).results;
+
+	const pagePairs = new Set(rows.map(row => `${row.install_id}|${row.day}`));
+	const featuresByPair = new Map<string, Record<string, number>>();
+	for (const featureRow of featureRows) {
+		const key = `${featureRow.install_id}|${featureRow.day}`;
+		if (!pagePairs.has(key)) continue;
+		const features = featuresByPair.get(key) ?? {};
+		features[featureRow.feature] = featureRow.count;
+		featuresByPair.set(key, features);
+	}
+
+	const events: PostHogEvent[] = [];
+	for (const row of rows) {
+		const ping = {
+			installId: row.install_id,
+			day: row.day,
+			ts: row.ts,
+			pluginVersion: row.plugin_version ?? undefined,
+			jmeterVersion: row.jmeter_version ?? undefined,
+			javaVersion: row.java_version ?? undefined,
+			os: row.os ?? undefined,
+			arch: row.arch ?? undefined,
+			provider: row.provider ?? undefined,
+			judgmentProvider: row.judgment_provider ?? undefined,
+			model: row.model ?? undefined,
+			agentEnabled: row.agent_enabled === null ? undefined : row.agent_enabled === 1,
+			firstRun: row.first_run === null ? undefined : row.first_run === 1,
+		};
+		events.push(...await posthogEvents(ping, featuresByPair.get(`${row.install_id}|${row.day}`) ?? {}));
+	}
+
+	let upstreamStatus: number | undefined;
+	const ok = await sendToPostHog(env, events, {
+		onStatus: status => { upstreamStatus = status; },
+	});
+	if (!ok) {
+		return json({ error: "PostHog batch request failed", status: upstreamStatus ?? null }, 502);
+	}
+
+	const last = rows[rows.length - 1];
+	const next = rows.length < limit ? null : `${last.day}|${last.install_id}`;
+	return json({ pings: rows.length, events: events.length, next });
+}
+
 /**
  * Tool names that exist only in the plugin's own unit tests. Every `mvn verify` JVM used to
  * send a ping with them, so installs that ever reported one are test runs, not users.
  */
-export const TEST_ONLY_FEATURES = ["tool_boom", "tool_nullish", "tool_echo"] as const;
-const TEST_INSTALLS = `SELECT install_id FROM feature_counts WHERE feature IN (${
-	TEST_ONLY_FEATURES.map(f => `'${f}'`).join(", ")})`;
+export { TEST_ONLY_FEATURES };
 const REAL = `install_id NOT IN (${TEST_INSTALLS})`;
 
 async function gatherStats(env: Env): Promise<Record<string, unknown>> {
@@ -519,10 +655,13 @@ ${table("Provider errors (30d)", ["provider", "error", "total", "installs"],
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 		if (url.pathname === "/v1/ping" && request.method === "POST") {
-			return handlePing(request, env);
+			return handlePing(request, env, ctx);
+		}
+		if (url.pathname === "/v1/admin/posthog-backfill" && request.method === "POST") {
+			return handlePostHogBackfill(request, env);
 		}
 		if (url.pathname === "/v1/stats" && request.method === "GET") {
 			if (!(await tokenOk(request, env))) {

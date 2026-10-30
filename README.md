@@ -1347,6 +1347,8 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
+The same ping fields are also forwarded from our server to PostHog's US cloud for product analytics, without an IP address or location, and turning telemetry off stops both.
+
 Counted features: panel opens, chat messages, agent runs, recording runs, `@this`, `@optimize`, `@lint`, `@wrap`, `@usage`, `@testplan`, `@sla`, `@fix`, Correlation Studio opens, AI terminal toggles, JSR223 refactors, MCP server starts (`mcp_server_start`) and MCP tool calls (`mcp_tool_call`). Additional counts cover provider families used for Chat and Agent messages, provider setup opens/tests/saves, model-picker actions, reasoning changes, attachments, exports, undo and redo, `@` suggestion picks, JSR223 formatting and try/catch, Extract This, correlation runs and applies, CLI launches, MCP setup copies, Donate clicks, and Make it pass outcomes, guard rollbacks, and round buckets. Only fixed counter names and counts are sent, never prompts, responses, plan content, hosts, or file paths.
 
 These counters are also sent, again as counts only:

@@ -48,6 +48,33 @@ npx wrangler deploy
 
 Older plugin versions keep working: new ping fields are optional and unknown fields are ignored.
 
+## PostHog
+
+Each newly accepted daily ping is forwarded to PostHog US as a `daily_ping` event, with one
+`feature_used` event for each positive feature count. The forwarded fields are the install ID,
+day, versions, OS, architecture, provider, decisions backend, model, agent-mode and first-run
+flags, and feature counts. No IP address or country/location is sent. An empty or missing
+`POSTHOG_KEY` disables forwarding. No D1 migration is needed; deploy the Worker with
+`npx wrangler deploy`.
+
+Historical pings can be replayed in pages using the stats bearer token. `jq` is required:
+
+```bash
+NEXT=""
+while :; do
+  RESPONSE=$(curl -s -X POST -H "Authorization: Bearer $STATS_TOKEN" \
+    "https://telemetry.jmeter.ai/v1/admin/posthog-backfill?limit=50&after=$NEXT")
+  if ! jq -e 'has("pings") and has("next")' >/dev/null <<<"$RESPONSE"; then
+    printf '%s\n' "$RESPONSE" >&2
+    exit 1
+  fi
+  NEXT=$(jq -r '.next' <<<"$RESPONSE")
+  [ "$NEXT" = "null" ] && break
+done
+```
+
+Event UUIDs are deterministic, so rerunning a backfill is safe and PostHog deduplicates the events.
+
 ## Viewing stats
 
 - JSON: `curl -H "Authorization: Bearer $STATS_TOKEN" https://telemetry.jmeter.ai/v1/stats`
