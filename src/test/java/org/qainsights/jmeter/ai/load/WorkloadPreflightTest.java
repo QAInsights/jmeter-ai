@@ -79,6 +79,14 @@ class WorkloadPreflightTest {
     }
 
     @Test
+    void warnsAboutBlankCsvEvenForRemoteGenerators() {
+        JMeterTreeNode group = node(new ThreadGroup());
+        group.add(csv(""));
+        assertTrue(check(group, 2).stream().anyMatch(f -> f.title().equals("CSV filename is blank")
+                && f.severity() == WorkloadPreflight.Severity.WARNING));
+    }
+
+    @Test
     void excludesOnlyDirectDesignerManagedTimers() {
         JMeterTreeNode group = node(new ThreadGroup());
         ConstantTimer managed = new ConstantTimer();

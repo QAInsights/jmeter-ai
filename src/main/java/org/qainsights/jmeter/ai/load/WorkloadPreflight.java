@@ -169,7 +169,10 @@ public final class WorkloadPreflight {
         }
         if (element instanceof CSVDataSet) {
             String filename = element.getPropertyAsString("filename");
-            if (distributed) {
+            if (filename.isBlank()) {
+                add(findings, node, Severity.WARNING, "CSV filename is blank",
+                        "Set a CSV filename before running the test.");
+            } else if (distributed) {
                 add(findings, node, Severity.NOT_VERIFIED, "CSV availability on generators is unknown",
                         "Verify this CSV's resolved path and read permissions on every remote generator. "
                                 + "Its presence or absence on this GUI machine does not verify remote availability.");
