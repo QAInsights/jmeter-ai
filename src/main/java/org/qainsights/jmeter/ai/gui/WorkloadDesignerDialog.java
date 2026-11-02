@@ -28,6 +28,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyChangeListener;
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -71,6 +72,9 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.action.ActionNames;
 import org.apache.jmeter.gui.action.ActionRouter;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.services.FileServer;
+import org.apache.jmeter.util.JMeterUtils;
+import javax.swing.tree.TreePath;
 import org.qainsights.jmeter.ai.gui.theme.ThemeColors;
 import org.qainsights.jmeter.ai.gui.theme.UiTokens;
 import org.qainsights.jmeter.ai.load.CommandShell;
@@ -86,6 +90,7 @@ import org.qainsights.jmeter.ai.load.InvalidWorkloadValueException;
 import org.qainsights.jmeter.ai.load.WorkloadLimits;
 import org.qainsights.jmeter.ai.load.WorkloadInputs;
 import org.qainsights.jmeter.ai.load.WorkloadPlan;
+import org.qainsights.jmeter.ai.load.WorkloadPreflight;
 import org.qainsights.jmeter.ai.load.WorkloadShape;
 import org.qainsights.jmeter.ai.load.WorkloadShapeConfig;
 import org.qainsights.jmeter.ai.load.WorkloadStage;
@@ -216,6 +221,9 @@ public final class WorkloadDesignerDialog extends JDialog {
     private final SectionCard advancedCard = new SectionCard("Advanced");
     private final SectionCard loadShapeCard = new SectionCard("Load shape");
     private final SectionCard planDetailsCard = new SectionCard("Plan details");
+    private final SectionCard preflightCard = new SectionCard("Workload Preflight");
+    private final WorkloadPreflightPanel preflightPanel = new WorkloadPreflightPanel(
+            this::preparePreflight, this::selectPreflightFinding);
     private final SectionCard cliCard = new SectionCard("Command line");
     private final PlaceholderTextArea aiGoal = new PlaceholderTextArea(3, 30);
     private final JLabel aiErrorLabel = new JLabel(" ");
@@ -676,6 +684,7 @@ public final class WorkloadDesignerDialog extends JDialog {
         for (SectionCard card : previewCards) {
             card.refreshFonts();
         }
+        preflightPanel.refreshTheme();
         for (FieldShell shell : fieldShellList) {
             shell.refreshTheme();
         }
@@ -1736,6 +1745,9 @@ public final class WorkloadDesignerDialog extends JDialog {
         planDetailsCard.body().add(detailsBody, BorderLayout.CENTER);
         previewCards.add(planDetailsCard);
 
+        preflightCard.body().add(preflightPanel, BorderLayout.CENTER);
+        previewCards.add(preflightCard);
+
         cliArea.setEditable(false);
         cliArea.setLineWrap(true);
         cliArea.setWrapStyleWord(true);
@@ -1987,6 +1999,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void updatePreviewContent() {
+        preflightPanel.invalidateResults();
         updateTargetRows();
         JMeterTreeNode node = (JMeterTreeNode) groupCombo.getSelectedItem();
         int samplers = WorkloadApplier.countEnabledSamplers(node);
@@ -2044,6 +2057,7 @@ public final class WorkloadDesignerDialog extends JDialog {
                     agents.getText(), samplers, prefix.getText(), preparation.planFileName(), context, shapeConfig);
         }
         String error = samplers == 0 ? LoadCommandHandler.NO_REQUESTS : evaluation.error();
+        preflightPanel.setAvailable(error.isBlank() && evaluation.valid());
         WorkloadShape selectedShape = (WorkloadShape) shapeCombo.getSelectedItem();
         boolean blankTargetError = evaluation.field() == WorkloadField.TARGET
                 && target.getText().isBlank()
@@ -2529,6 +2543,34 @@ public final class WorkloadDesignerDialog extends JDialog {
         }
     }
 
+    private WorkloadPreflight.Inspection preparePreflight() {
+        JMeterTreeNode group = (JMeterTreeNode) groupCombo.getSelectedItem();
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui != null) {
+            gui.updateCurrentNode();
+        }
+        if (preparation.model() == null || group == null
+                || group.getRoot() != preparation.model().getRoot()) {
+            throw new IllegalStateException("The Thread Group is no longer in the plan.");
+        }
+        return WorkloadPreflight.prepare(group, evaluation.plan(),
+                Path.of(FileServer.getFileServer().getBaseDir()), Path.of(System.getProperty("user.dir")),
+                JMeterUtils.getPropDefault("jmeter.save.saveservice.base_prefix", "~/"));
+    }
+
+    private void selectPreflightFinding(WorkloadPreflight.Finding finding) {
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui == null || preparation.model() == null
+                || finding.node().getRoot() != preparation.model().getRoot()) {
+            showStatus("This element is no longer available. Check plan again.", false);
+            return;
+        }
+        TreePath path = new TreePath(finding.node().getPath());
+        cancel();
+        gui.getTreeListener().getJTree().setSelectionPath(path);
+        gui.getTreeListener().getJTree().scrollPathToVisible(path);
+    }
+
     private void apply() {
         if (completed) {
             return;
@@ -2568,6 +2610,7 @@ public final class WorkloadDesignerDialog extends JDialog {
     }
 
     private void cancelAiWorker() {
+        preflightPanel.invalidateResults();
         aiRequestId = invalidateAiRequest(aiRequestId, aiWorker);
         aiWorker = null;
         aiRequestRunning = false;

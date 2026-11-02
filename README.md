@@ -682,6 +682,13 @@ User prompts live in `~/.jmeter-ai/prompts.json` (unencrypted, so do not save cr
 `@load` opens a local workload designer. It parses the command without an AI call or server connection, previews the thread ramp and steady hold, and applies reviewed values to an enabled Thread Group.
 Open it from the toolbar button or Run > Workload Designer..., or type `@load` in chat.
 
+Use **Workload Preflight > Check plan** to review enabled heavy results listeners, CSV availability,
+endurance EOF settings, and existing or inherited timers in the selected Thread Group's scope.
+Findings explain the risk; **Select in plan** closes the designer without applying workload changes
+and selects the affected element. Checks are read-only and require neither AI nor a test run.
+Remote generator readiness and dynamic CSV paths are marked **Not verified**, not passed.
+Local file checks do not read CSV contents. Findings are advisory and do not block Apply.
+
 - **Targets and inputs:** samples per second, including requests, queries and messages; `rps`, `tps`, `qps`, `requests per second`, `queries per second`, `transactions per second`, `msg/s` and `messages per second`; iterations or journeys per second, minute or hour; concurrent users or threads; response time, think time, ramp-up, hold duration, generator hosts and maximum threads per generator. Thousands separators and `k`/`m` suffixes are supported. Message targets also ask for messages per sample.
 - **Sizing:** for a sample-rate target, `threads ≈ samples/s × (response time + think time) × 1.5`. Iteration rates are multiplied by the number of enabled samplers in one iteration. The iteration estimate counts each enabled sampler once; If, Loop, Throughput and Transaction (parent sample) controllers change the actual number. A message target is converted to samples per second by dividing by messages per sample. User targets keep the requested thread count and can optionally be capped at a sample rate.
 - **Sampler mix and protocol notes:** the results show enabled HTTP, JDBC, JMS, SMTP, TCP, Kafka, JSR223 and other samplers. A small JDBC pool warns when its connection limit is lower than the threads assigned to that generator. Kafka and JMS notes explain that one sample may carry multiple messages and that a Constant Throughput Timer only approximates a producer's open-model fixed rate. SMTP notes recommend a sandbox server when mail rate limits may apply.
