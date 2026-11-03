@@ -1142,6 +1142,7 @@ public class AiChatPanel
         if (messageField.getText().isBlank()) {
             messageField.setText(displayed.prompt());
             messageField.setCaretPosition(messageField.getDocument().getLength());
+            Telemetry.record(TelemetryFeature.CHAT_STARTER_PICK);
         }
         messageField.requestFocusInWindow();
     }

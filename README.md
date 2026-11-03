@@ -1375,6 +1375,7 @@ These counters are also sent, again as counts only:
 | `msg_<provider>` and `agentrun_<provider>` | Chat messages and Agent runs grouped by provider family, using fixed provider labels such as `anthropic`, `openai`, `opencode`, or `claudecode`. These are counts, not model names. |
 | `agent_steps_1_5`, `agent_steps_6_15`, `agent_steps_16p` | Agent run size grouped into iteration buckets. |
 | `setup_open`, `setup_test_<option>_<outcome>`, `setup_save_<option>`, `welcome_no_provider` | Provider setup funnel counts. Options and outcomes come from fixed code enums. |
+| `chat_starter_pick` | A contextual suggestion successfully filled an empty composer. Showing or refreshing suggestions, and clicks blocked by an existing draft, do not count. No suggestion text or plan data is collected. In PostHog, filter `feature_used` by `feature = chat_starter_pick` and sum `count`; counts arrive with the daily ping, not per click. |
 | `decide_ok_<backend>`, `decide_fail_<backend>_<type>`, `decide_slow_<backend>` | Smart routing and triage Decisions call results, error category, and calls taking over two seconds. |
 | `picker_*` | Model picker opens, searches, pins, selections, and custom-id selections. |
 | `reasoning_set`, `attach_*`, `export_md`, `export_html`, `undo`, `redo`, `intellisense_pick`, `jsr223_trycatch`, `jsr223_format`, `extract_opened`, `correlation_run`, `correlation_apply` | UI action counts. |

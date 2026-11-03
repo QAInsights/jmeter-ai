@@ -106,27 +106,45 @@ class AiChatPanelTest {
     @Test
     void starterPrefillsWithoutSendingOrOverwritingADraft() throws Exception {
         AiChatPanel panel = new AiChatPanel();
-        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
-        field.setAccessible(true);
-        javax.swing.JTextArea input = (javax.swing.JTextArea) field.get(panel);
-        java.lang.reflect.Method use = AiChatPanel.class.getDeclaredMethod(
-                "useStarterSuggestion", ChatStarterSuggestion.class);
-        use.setAccessible(true);
-        java.util.List<ChatStarterSuggestion> suggestions = ChatStarterSuggestion.optionsFromTree(null, null);
-        for (ChatStarterSuggestion option : suggestions) {
+        try (MockedStatic<org.qainsights.jmeter.ai.telemetry.Telemetry> telemetry =
+                mockStatic(org.qainsights.jmeter.ai.telemetry.Telemetry.class)) {
+            java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
+            field.setAccessible(true);
+            javax.swing.JTextArea input = (javax.swing.JTextArea) field.get(panel);
+            java.lang.reflect.Method use = AiChatPanel.class.getDeclaredMethod(
+                    "useStarterSuggestion", ChatStarterSuggestion.class);
+            use.setAccessible(true);
+            java.util.List<ChatStarterSuggestion> suggestions = ChatStarterSuggestion.optionsFromTree(null, null);
+            for (ChatStarterSuggestion option : suggestions) {
+                input.setText("");
+                use.invoke(panel, option);
+                assertEquals(option.prompt(), input.getText());
+                assertTrue(panel.getConversationHistory().isEmpty());
+            }
+            telemetry.verify(() -> org.qainsights.jmeter.ai.telemetry.Telemetry.record(
+                    org.qainsights.jmeter.ai.telemetry.TelemetryFeature.CHAT_STARTER_PICK),
+                    org.mockito.Mockito.times(3));
+            telemetry.clearInvocations();
+            ChatStarterSuggestion suggestion = suggestions.get(0);
+            input.setText("My own draft");
+            use.invoke(panel, suggestion);
+            assertEquals("My own draft", input.getText());
             input.setText("");
-            use.invoke(panel, option);
-            assertEquals(option.prompt(), input.getText());
-            assertTrue(panel.getConversationHistory().isEmpty());
+            panel.setInputEnabled(false);
+            use.invoke(panel, suggestion);
+            assertEquals("", input.getText());
+            panel.setInputEnabled(true);
+            use.invoke(panel, new ChatStarterSuggestion("Stale", "No longer offered"));
+            assertEquals("", input.getText());
+            java.lang.reflect.Field transcriptField = AiChatPanel.class.getDeclaredField("transcript");
+            transcriptField.setAccessible(true);
+            ((TranscriptView) transcriptField.get(panel)).clearTranscript();
+            use.invoke(panel, suggestion);
+            assertEquals("", input.getText());
+            telemetry.verify(() -> org.qainsights.jmeter.ai.telemetry.Telemetry.record(
+                    org.qainsights.jmeter.ai.telemetry.TelemetryFeature.CHAT_STARTER_PICK),
+                    org.mockito.Mockito.never());
         }
-        ChatStarterSuggestion suggestion = suggestions.get(0);
-        input.setText("My own draft");
-        use.invoke(panel, suggestion);
-        assertEquals("My own draft", input.getText());
-        input.setText("");
-        panel.setInputEnabled(false);
-        use.invoke(panel, suggestion);
-        assertEquals("", input.getText());
     }
 
     @Test
