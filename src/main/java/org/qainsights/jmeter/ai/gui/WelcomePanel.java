@@ -27,11 +27,6 @@ final class WelcomePanel extends JPanel {
     private final JTextPane content;
     private final QuietButton connectButton;
     private final boolean compactSetup;
-    private final JPanel suggestionsPanel = new JPanel();
-    private final java.util.List<QuietButton> suggestionButtons = new java.util.ArrayList<>();
-    private java.util.List<ChatStarterSuggestion> suggestions = java.util.List.of();
-    private java.util.function.Consumer<ChatStarterSuggestion> acceptSuggestion;
-
     WelcomePanel(String markdown, Font font) {
         this(markdown, font, null);
     }
@@ -75,11 +70,6 @@ final class WelcomePanel extends JPanel {
         } else {
             connectButton = null;
         }
-        suggestionsPanel.setLayout(new BoxLayout(suggestionsPanel, BoxLayout.Y_AXIS));
-        suggestionsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        suggestionsPanel.setOpaque(false);
-        suggestionsPanel.setVisible(false);
-        body.add(suggestionsPanel);
 
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.gridx = 0;
@@ -116,61 +106,9 @@ final class WelcomePanel extends JPanel {
         return connectButton;
     }
 
-    java.util.List<QuietButton> suggestionButtons() {
-        return java.util.List.copyOf(suggestionButtons);
-    }
-
-    void setSuggestions(java.util.List<ChatStarterSuggestion> values,
-                       java.util.function.Consumer<ChatStarterSuggestion> accept) {
-        acceptSuggestion = accept;
-        java.util.List<ChatStarterSuggestion> visible = accept == null || connectButton != null
-                ? java.util.List.of() : java.util.List.copyOf(values);
-        if (suggestions.equals(visible)) {
-            return;
-        }
-        suggestions = visible;
-        suggestionsPanel.removeAll();
-        suggestionButtons.clear();
-        for (ChatStarterSuggestion value : visible) {
-            if (!suggestionButtons.isEmpty()) {
-                suggestionsPanel.add(javax.swing.Box.createVerticalStrut(UiTokens.SPACE_2));
-            }
-            QuietButton button = new QuietButton(value.label(), QuietButton.Kind.OUTLINED).bodyFont();
-            button.setFont(content.getFont());
-            button.setHorizontalAlignment(javax.swing.SwingConstants.LEFT);
-            button.setAlignmentX(Component.LEFT_ALIGNMENT);
-            button.setMargin(new Insets(UiTokens.SPACE_3, UiTokens.SPACE_4,
-                    UiTokens.SPACE_3, UiTokens.SPACE_4));
-            sizeSuggestion(button);
-            button.setToolTipText(value.prompt());
-            button.getAccessibleContext().setAccessibleDescription(
-                    "Fill the message box with: " + value.prompt());
-            button.addActionListener(event -> {
-                if (acceptSuggestion != null && suggestions.contains(value)) {
-                    acceptSuggestion.accept(value);
-                }
-            });
-            suggestionButtons.add(button);
-            suggestionsPanel.add(button);
-        }
-        suggestionsPanel.setVisible(!visible.isEmpty());
-        revalidate();
-        repaint();
-    }
-
-    private void sizeSuggestion(QuietButton button) {
-        int height = Math.max(UiTokens.SUGGESTION_ROW_HEIGHT, button.getPreferredSize().height);
-        button.setMinimumSize(new Dimension(0, height));
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
-    }
-
     void applyFont(Font font) {
         if (font != null) {
             content.setFont(font);
-            for (QuietButton button : suggestionButtons) {
-                button.setFont(font);
-                sizeSuggestion(button);
-            }
             revalidate();
         }
     }
@@ -210,7 +148,7 @@ final class WelcomePanel extends JPanel {
                     rootView.getPreferredSpan(javax.swing.text.View.Y_AXIS));
         }
         int measuredContentHeight = measuredHeight + contentInsets.top + contentInsets.bottom;
-        int height = compactSetup || suggestionsPanel.isVisible()
+        int height = compactSetup
                 ? Math.max(1, measuredContentHeight)
                 : Math.max(UiTokens.WELCOME_MIN_HEIGHT, measuredContentHeight + UiTokens.SPACE_8);
         content.setPreferredSize(new Dimension(resolvedWidth, height));

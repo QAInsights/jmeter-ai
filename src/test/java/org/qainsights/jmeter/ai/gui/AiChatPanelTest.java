@@ -82,6 +82,28 @@ class AiChatPanelTest {
     private boolean restoreSessions;
 
     @Test
+    void startersLiveOutsideTranscriptAndFollowWelcomeLifecycle() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        java.lang.reflect.Field startersField = AiChatPanel.class.getDeclaredField("starterSuggestions");
+        startersField.setAccessible(true);
+        ChatStartersPanel starters = (ChatStartersPanel) startersField.get(panel);
+        java.lang.reflect.Field transcriptField = AiChatPanel.class.getDeclaredField("transcript");
+        transcriptField.setAccessible(true);
+        TranscriptView transcript = (TranscriptView) transcriptField.get(panel);
+        assertTrue(starters.isVisible());
+        assertEquals(3, starters.suggestionButtons().size());
+        assertFalse(javax.swing.SwingUtilities.isDescendingFrom(starters, transcript));
+        transcript.clearTranscript();
+        assertFalse(starters.isVisible());
+        transcript.showWelcome("# Welcome");
+        assertTrue(starters.isVisible());
+        transcript.addSystemMessage("Conversation started", java.awt.Color.GRAY);
+        assertFalse(starters.isVisible());
+        transcript.showWelcome("# Welcome");
+        assertTrue(starters.isVisible());
+    }
+
+    @Test
     void starterPrefillsWithoutSendingOrOverwritingADraft() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");

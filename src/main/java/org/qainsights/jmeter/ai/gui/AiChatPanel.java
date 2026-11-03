@@ -106,6 +106,7 @@ public class AiChatPanel
     private javax.swing.tree.TreeModel starterModel;
     private final PropertyChangeListener starterTreeModelListener = event -> bindStarterModel();
     private boolean starterRefreshQueued;
+    private ChatStartersPanel starterSuggestions;
     private final javax.swing.event.TreeSelectionListener starterSelectionListener =
             event -> queueStarterRefresh();
     private final javax.swing.event.TreeModelListener starterModelListener = new javax.swing.event.TreeModelListener() {
@@ -435,6 +436,7 @@ public class AiChatPanel
         chatPanel.add(createHeaderPanel(), BorderLayout.NORTH);
 
         transcript = new TranscriptView(font);
+        transcript.addPropertyChangeListener("welcomeShowing", event -> refreshStarterSuggestion());
         baseChatFontSize = font.getSize2D();
         transcript.setBackground(ThemeColors.canvas());
         transcript.setOpaque(true);
@@ -562,7 +564,12 @@ public class AiChatPanel
                 .forNew(javax.swing.SwingUtilities.getWindowAncestor(this), promptLibrary(), body)
                 .setVisible(true));
 
-        bottomPanel.add(attachmentBar, BorderLayout.NORTH);
+        starterSuggestions = new ChatStartersPanel(font);
+        JPanel aboveComposer = new JPanel(new BorderLayout());
+        aboveComposer.setOpaque(false);
+        aboveComposer.add(starterSuggestions, BorderLayout.NORTH);
+        aboveComposer.add(attachmentBar, BorderLayout.SOUTH);
+        bottomPanel.add(aboveComposer, BorderLayout.NORTH);
         bottomPanel.add(createInputPanel(font), BorderLayout.CENTER);
         return bottomPanel;
     }
@@ -1117,8 +1124,9 @@ public class AiChatPanel
     }
 
     private void refreshStarterSuggestion() {
-        if (transcript.isWelcomeShowing()) {
-            transcript.setWelcomeSuggestions(providerStatus().isReady() ? currentStarterSuggestions() : List.of(),
+        if (starterSuggestions != null) {
+            starterSuggestions.setSuggestions(transcript.isWelcomeShowing() && providerStatus().isReady()
+                            ? currentStarterSuggestions() : List.of(),
                     this::useStarterSuggestion);
         }
     }
@@ -1631,6 +1639,7 @@ public class AiChatPanel
         Font currentChatFont = transcript.getFont();
         float newChatSize = baseChatFontSize * scale;
         transcript.applyFont(currentChatFont.deriveFont(newChatSize));
+        starterSuggestions.applyFont(currentChatFont.deriveFont(newChatSize));
 
         // Update message field font
         Font currentMessageFont = messageField.getFont();
@@ -1872,6 +1881,7 @@ public class AiChatPanel
             scrollPane.getViewport().setBackground(newBg);
         }
         transcript.refreshTheme();
+        starterSuggestions.applyTheme();
         transcript.repaint();
 
         // Re-theme the composer and its animated border so they never keep

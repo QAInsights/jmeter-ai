@@ -97,7 +97,7 @@ public class Constants {
             "Version: JMeter 5.6+ (Also support questions about older versions from 3.0+)";
 
     public static final String WELCOME_MESSAGE = "# Welcome to Feather Wand\n\n" +
-            "Start with your open test plan. Choose a suggestion below to fill the message box, " +
+            "Start with your open test plan. Choose a suggestion above the message box to fill it, " +
             "then press **Enter** to send, or ask your own question.\n\n" +
             "Type `@` for commands, including `@this` for the selected element " +
             "and `@testplan` for the whole plan.\n\n";
