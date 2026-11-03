@@ -22,6 +22,7 @@ class ChatStarterSuggestionTest {
         group.setName("Checkout");
         root.add(group);
         assertEquals("Add a request", ChatStarterSuggestion.optionsFromTree(root, null).get(0).label());
+        assertTrue(ChatStarterSuggestion.optionsFromTree(root, null).get(0).prompt().contains("Checkout"));
         assertOptions(root, group);
         group.add(node(new DebugSampler()));
         assertOptions(root, group);
@@ -42,6 +43,17 @@ class ChatStarterSuggestionTest {
             assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(option.prompt()));
         }
     }
+
+    @Test
+    void planWithOnlyDisabledGroupsFallsBackToPlanReview() {
+        JMeterTreeNode root = node(new TestPlan());
+        JMeterTreeNode group = node(new ThreadGroup());
+        root.add(group);
+        group.setEnabled(false);
+        assertEquals("Review this test plan", ChatStarterSuggestion.fromTree(root, null).label());
+        assertEquals("Review this test plan", ChatStarterSuggestion.fromTree(root, group).label());
+        assertOptions(root, null);
+    }
     @Test
     void creationDraftsBypassTheDirectElementCommandParser() {
         JMeterTreeNode root = node(new TestPlan());
@@ -49,6 +61,8 @@ class ChatStarterSuggestionTest {
                 ChatStarterSuggestion.fromTree(root, null).prompt()));
         JMeterTreeNode group = node(new ThreadGroup());
         root.add(group);
+        assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(
+                ChatStarterSuggestion.fromTree(root, group).prompt()));
         JMeterTreeNode sampler = node(new DebugSampler());
         group.add(sampler);
         assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(
