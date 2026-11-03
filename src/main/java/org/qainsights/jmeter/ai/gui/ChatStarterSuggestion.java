@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.util.function.Predicate;
+import java.util.List;
+import java.util.ArrayList;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.samplers.Sampler;
@@ -10,15 +12,55 @@ import org.apache.jmeter.threads.AbstractThreadGroup;
 record ChatStarterSuggestion(String label, String prompt) {
 
     static ChatStarterSuggestion fromTree(JMeterTreeNode root, JMeterTreeNode selected) {
+        return optionsFromTree(root, selected).get(0);
+    }
+
+    static List<ChatStarterSuggestion> optionsFromTree(JMeterTreeNode root, JMeterTreeNode selected) {
+        JMeterTreeNode group = findGroup(root, selected);
+        ChatStarterSuggestion primary = primary(root, group);
+        List<ChatStarterSuggestion> options = new ArrayList<>();
+        options.add(primary);
+        if (group != null && enabledInPlan(group) && group.getRoot() == root.getRoot()) {
+            String target = "the Thread Group \"" + group.getName() + "\"";
+            ChatStarterSuggestion review = reviewGroup(target);
+            if (!primary.equals(review)) {
+                options.add(review);
+            } else {
+                options.add(new ChatStarterSuggestion("Review response checks",
+                        "@testplan Review the assertions in " + target
+                                + " and suggest response checks for its samplers. Do not change the plan yet."));
+            }
+            options.add(new ChatStarterSuggestion("Plan the workload",
+                    "How should I size the workload for " + target
+                            + "? Ask me about the target rate, response time and duration before recommending settings."));
+        } else {
+            if (!primary.equals(reviewPlan())) {
+                options.add(reviewPlan());
+            } else {
+                options.add(new ChatStarterSuggestion("Design a test scenario",
+                        "How should I design a JMeter test scenario? Ask me about the protocol and user journey first."));
+            }
+            options.add(new ChatStarterSuggestion("Plan the workload",
+                    "How should I plan a JMeter workload? Ask me about the target rate, response time and duration first."));
+        }
+        return List.copyOf(options);
+    }
+
+    private static JMeterTreeNode findGroup(JMeterTreeNode root, JMeterTreeNode selected) {
         if (root == null) {
-            return reviewPlan();
+            return null;
         }
         JMeterTreeNode group = selected;
         while (group != null && !(group.getTestElement() instanceof AbstractThreadGroup)) {
             group = group.getParent() instanceof JMeterTreeNode parent ? parent : null;
         }
-        if (group == null) {
-            group = findEnabled(root, node -> node.getTestElement() instanceof AbstractThreadGroup);
+        return group == null
+                ? findEnabled(root, node -> node.getTestElement() instanceof AbstractThreadGroup) : group;
+    }
+
+    private static ChatStarterSuggestion primary(JMeterTreeNode root, JMeterTreeNode group) {
+        if (root == null) {
+            return reviewPlan();
         }
         if (group == null) {
             if (containsGroup(root)) {
@@ -40,6 +82,10 @@ record ChatStarterSuggestion(String label, String prompt) {
                     "How should I configure a CSV Data Set Config for " + target
                             + "? Ask me for the filename and variable names first.");
         }
+        return reviewGroup(target);
+    }
+
+    private static ChatStarterSuggestion reviewGroup(String target) {
         return new ChatStarterSuggestion("Review this Thread Group",
                 "@testplan Review " + target + " and suggest the next improvement. Do not change the plan yet.");
     }

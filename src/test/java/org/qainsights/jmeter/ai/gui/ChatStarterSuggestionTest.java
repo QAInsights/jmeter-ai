@@ -11,6 +11,38 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ChatStarterSuggestionTest {
     @Test
+    void offersThreeDistinctSafeDraftsForEachPlanState() {
+        JMeterTreeNode root = node(new TestPlan());
+        assertOptions(root, null);
+        assertOptions(null, null);
+        JMeterTreeNode disabled = node(new ThreadGroup());
+        disabled.setEnabled(false);
+        root.add(disabled);
+        JMeterTreeNode group = node(new ThreadGroup());
+        group.setName("Checkout");
+        root.add(group);
+        assertEquals("Add a request", ChatStarterSuggestion.optionsFromTree(root, null).get(0).label());
+        assertOptions(root, group);
+        group.add(node(new DebugSampler()));
+        assertOptions(root, group);
+        group.add(node(new CSVDataSet()));
+        java.util.List<ChatStarterSuggestion> options = ChatStarterSuggestion.optionsFromTree(root, group);
+        assertEquals(java.util.List.of("Review this Thread Group", "Review response checks", "Plan the workload"),
+                options.stream().map(ChatStarterSuggestion::label).toList());
+        assertTrue(options.stream().allMatch(option -> option.prompt().contains("Checkout")));
+        assertOptions(root, group);
+        assertOptions(root, disabled);
+    }
+
+    private void assertOptions(JMeterTreeNode root, JMeterTreeNode selected) {
+        java.util.List<ChatStarterSuggestion> options = ChatStarterSuggestion.optionsFromTree(root, selected);
+        assertEquals(3, options.size());
+        assertEquals(3, options.stream().map(ChatStarterSuggestion::label).distinct().count());
+        for (ChatStarterSuggestion option : options) {
+            assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(option.prompt()));
+        }
+    }
+    @Test
     void creationDraftsBypassTheDirectElementCommandParser() {
         JMeterTreeNode root = node(new TestPlan());
         assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(

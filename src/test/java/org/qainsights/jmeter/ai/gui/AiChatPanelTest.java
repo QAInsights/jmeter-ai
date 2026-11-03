@@ -90,10 +90,14 @@ class AiChatPanelTest {
         java.lang.reflect.Method use = AiChatPanel.class.getDeclaredMethod(
                 "useStarterSuggestion", ChatStarterSuggestion.class);
         use.setAccessible(true);
-        ChatStarterSuggestion suggestion = ChatStarterSuggestion.fromTree(null, null);
-        use.invoke(panel, suggestion);
-        assertEquals(suggestion.prompt(), input.getText());
-        assertTrue(panel.getConversationHistory().isEmpty());
+        java.util.List<ChatStarterSuggestion> suggestions = ChatStarterSuggestion.optionsFromTree(null, null);
+        for (ChatStarterSuggestion option : suggestions) {
+            input.setText("");
+            use.invoke(panel, option);
+            assertEquals(option.prompt(), input.getText());
+            assertTrue(panel.getConversationHistory().isEmpty());
+        }
+        ChatStarterSuggestion suggestion = suggestions.get(0);
         input.setText("My own draft");
         use.invoke(panel, suggestion);
         assertEquals("My own draft", input.getText());

@@ -117,7 +117,7 @@ See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest 
 
 You can connect a provider from the Feather Wand panel's ⋯ menu > Connect a provider and use it immediately in Chat and Agent Mode, without restarting JMeter. Smart routing and Apple on-device can also be configured in this dialog. The manual properties below remain documented. The JSR223 refactor menu picks up a new provider after a JMeter restart.
 
-An empty chat offers one starter from the open plan: create a Thread Group, add a request, add a CSV data set, or review an existing group. It follows the selected Thread Group (or the first enabled group when none is selected) and refreshes as the plan changes. Click it to fill the message box, review the draft, then press Enter to send. It never overwrites a draft, calls AI, or changes the plan on its own. Provider setup remains the first step when no provider is connected.
+An empty chat offers three contextual suggestions from the open plan. The first suggests creating a Thread Group, adding a request, adding a CSV data set, or reviewing an existing group. The other cards offer relevant plan review, response-check review, or workload-planning prompts. They follow the selected Thread Group (or the first enabled group when none is selected) and refresh as the plan changes. Click any card to fill the message box, review the draft, then press Enter to send. Clicking never overwrites a draft, calls AI, or changes the plan on its own. Provider setup remains the first step when no provider is connected.
 
 ```properties
 jmeter.ai.service.type=anthropic

@@ -73,10 +73,10 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         return welcomePanel != null;
     }
 
-    void setWelcomeSuggestion(ChatStarterSuggestion suggestion,
+    void setWelcomeSuggestions(List<ChatStarterSuggestion> suggestions,
                               Consumer<ChatStarterSuggestion> accept) {
         if (welcomePanel != null) {
-            welcomePanel.setSuggestion(suggestion, accept);
+            welcomePanel.setSuggestions(suggestions, accept);
         }
     }
 

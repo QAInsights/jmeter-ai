@@ -16,14 +16,24 @@ class WelcomePanelTest {
                 new java.util.concurrent.atomic.AtomicReference<>();
         ChatStarterSuggestion suggestion = new ChatStarterSuggestion("Add CSV", "Add a CSV data set");
         WelcomePanel panel = new WelcomePanel("# Welcome", new Font(Font.DIALOG, Font.PLAIN, 13));
-        panel.setSuggestion(suggestion, accepted::set);
-        org.junit.jupiter.api.Assertions.assertTrue(panel.suggestionButton().isVisible());
+        java.util.List<ChatStarterSuggestion> options = java.util.List.of(suggestion,
+                new ChatStarterSuggestion("Review", "Review my plan"),
+                new ChatStarterSuggestion("Size", "Size my workload"));
+        panel.setSuggestions(options, accepted::set);
+        assertEquals(3, panel.suggestionButtons().size());
         org.junit.jupiter.api.Assertions.assertNull(accepted.get());
-        panel.suggestionButton().doClick();
-        assertEquals(suggestion, accepted.get());
+        for (int index = 0; index < options.size(); index++) {
+            panel.suggestionButtons().get(index).doClick();
+            assertEquals(options.get(index), accepted.get());
+        }
+        panel.applyFont(new Font(Font.DIALOG, Font.PLAIN, 20));
+        org.junit.jupiter.api.Assertions.assertTrue(panel.suggestionButtons().stream()
+                .allMatch(button -> button.getMaximumSize().height >= button.getPreferredSize().height));
         WelcomePanel setup = new WelcomePanel("# Connect", panel.getFont(), () -> { });
-        setup.setSuggestion(suggestion, accepted::set);
-        org.junit.jupiter.api.Assertions.assertFalse(setup.suggestionButton().isVisible());
+        setup.setSuggestions(options, accepted::set);
+        org.junit.jupiter.api.Assertions.assertTrue(setup.suggestionButtons().isEmpty());
+        panel.setSuggestions(java.util.List.of(), accepted::set);
+        org.junit.jupiter.api.Assertions.assertTrue(panel.suggestionButtons().isEmpty());
     }
 
     @Test

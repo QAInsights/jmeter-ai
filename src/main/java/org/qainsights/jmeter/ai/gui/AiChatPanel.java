@@ -1109,16 +1109,16 @@ public class AiChatPanel
         });
     }
 
-    private ChatStarterSuggestion currentStarterSuggestion() {
+    private List<ChatStarterSuggestion> currentStarterSuggestions() {
         GuiPackage gui = GuiPackage.getInstance();
         JMeterTreeNode root = gui == null ? null : (JMeterTreeNode) gui.getTreeModel().getRoot();
         JMeterTreeNode selected = gui == null ? null : gui.getTreeListener().getCurrentNode();
-        return ChatStarterSuggestion.fromTree(root, selected);
+        return ChatStarterSuggestion.optionsFromTree(root, selected);
     }
 
     private void refreshStarterSuggestion() {
         if (transcript.isWelcomeShowing()) {
-            transcript.setWelcomeSuggestion(providerStatus().isReady() ? currentStarterSuggestion() : null,
+            transcript.setWelcomeSuggestions(providerStatus().isReady() ? currentStarterSuggestions() : List.of(),
                     this::useStarterSuggestion);
         }
     }
@@ -1127,13 +1127,12 @@ public class AiChatPanel
         if (!transcript.isWelcomeShowing() || !messageField.isEnabled()) {
             return;
         }
-        ChatStarterSuggestion current = currentStarterSuggestion();
-        if (!displayed.equals(current)) {
+        if (!currentStarterSuggestions().contains(displayed)) {
             refreshStarterSuggestion();
             return;
         }
         if (messageField.getText().isBlank()) {
-            messageField.setText(current.prompt());
+            messageField.setText(displayed.prompt());
             messageField.setCaretPosition(messageField.getDocument().getLength());
         }
         messageField.requestFocusInWindow();
