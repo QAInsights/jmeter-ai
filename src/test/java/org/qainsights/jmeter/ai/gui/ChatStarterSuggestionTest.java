@@ -11,6 +11,62 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ChatStarterSuggestionTest {
     @Test
+    void controllerCsvMustCoverEveryEnabledSamplerBeforeSuggestingReview() {
+        JMeterTreeNode root = node(new TestPlan());
+        JMeterTreeNode group = node(new ThreadGroup());
+        JMeterTreeNode controller = node(new org.apache.jmeter.control.GenericController());
+        root.add(group);
+        group.add(controller);
+        JMeterTreeNode csv = node(new CSVDataSet());
+        controller.add(csv);
+        controller.add(node(new DebugSampler()));
+        assertEquals("Review this Thread Group", ChatStarterSuggestion.fromTree(root, group).label());
+        csv.setEnabled(false);
+        assertEquals("Add a CSV data set", ChatStarterSuggestion.fromTree(root, group).label());
+        csv.setEnabled(true);
+        JMeterTreeNode uncovered = node(new DebugSampler());
+        group.add(uncovered);
+        assertEquals("Add a CSV data set", ChatStarterSuggestion.fromTree(root, group).label());
+        uncovered.setEnabled(false);
+        assertEquals("Review this Thread Group", ChatStarterSuggestion.fromTree(root, group).label());
+        controller.setEnabled(false);
+        uncovered.setEnabled(true);
+        assertEquals("Add a CSV data set", ChatStarterSuggestion.fromTree(root, group).label());
+    }
+
+    @Test
+    void duplicateGroupNamesGetDistinctTreePositionsInEveryPrompt() {
+        JMeterTreeNode root = node(new TestPlan());
+        JMeterTreeNode disabled = node(new ThreadGroup());
+        disabled.setEnabled(false);
+        root.add(disabled);
+        JMeterTreeNode first = node(new ThreadGroup());
+        JMeterTreeNode second = node(new ThreadGroup());
+        first.setName("Checkout");
+        second.setName("Checkout");
+        root.add(first);
+        root.add(second);
+        for (int state = 0; state < 3; state++) {
+            assertTrue(ChatStarterSuggestion.optionsFromTree(root, first).stream()
+                    .allMatch(option -> option.prompt().contains("Thread Group 2 in depth-first tree order")));
+            assertTrue(ChatStarterSuggestion.optionsFromTree(root, second).stream()
+                    .allMatch(option -> option.prompt().contains("Thread Group 3 in depth-first tree order")));
+            assertOptions(root, first);
+            assertOptions(root, second);
+            if (state == 0) {
+                first.add(node(new DebugSampler()));
+                second.add(node(new DebugSampler()));
+            } else if (state == 1) {
+                first.add(node(new CSVDataSet()));
+                second.add(node(new CSVDataSet()));
+            }
+        }
+        second.setName("Payment");
+        assertTrue(ChatStarterSuggestion.optionsFromTree(root, first).stream()
+                .noneMatch(option -> option.prompt().contains("depth-first tree order")));
+    }
+
+    @Test
     void offersThreeDistinctSafeDraftsForEachPlanState() {
         JMeterTreeNode root = node(new TestPlan());
         assertOptions(root, null);

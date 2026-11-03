@@ -21,7 +21,7 @@ record ChatStarterSuggestion(String label, String prompt) {
         List<ChatStarterSuggestion> options = new ArrayList<>();
         options.add(primary);
         if (group != null && enabledInPlan(group) && group.getRoot() == root.getRoot()) {
-            String target = "the Thread Group \"" + group.getName() + "\"";
+            String target = groupTarget(root, group);
             ChatStarterSuggestion review = reviewGroup(target);
             if (!primary.equals(review)) {
                 options.add(review);
@@ -72,12 +72,13 @@ record ChatStarterSuggestion(String label, String prompt) {
         if (!enabledInPlan(group) || group.getRoot() != root.getRoot()) {
             return reviewPlan();
         }
-        String target = "the Thread Group \"" + group.getName() + "\"";
+        String target = groupTarget(root, group);
         if (findEnabled(group, node -> node.getTestElement() instanceof Sampler) == null) {
             return new ChatStarterSuggestion("Add a request",
                     "Help me add a sampler to " + target + ". Ask me which protocol and endpoint to use.");
         }
-        if (!hasCsvInScope(group)) {
+        if (findEnabled(group, node -> node.getTestElement() instanceof Sampler
+                && !hasCsvInScope((JMeterTreeNode) node.getParent())) != null) {
             return new ChatStarterSuggestion("Add a CSV data set",
                     "How should I configure a CSV Data Set Config for " + target
                             + "? Ask me for the filename and variable names first.");
@@ -90,13 +91,28 @@ record ChatStarterSuggestion(String label, String prompt) {
                 "@testplan Review " + target + " and suggest the next improvement. Do not change the plan yet.");
     }
 
+    private static String groupTarget(JMeterTreeNode root, JMeterTreeNode group) {
+        String target = "the Thread Group \"" + group.getName() + "\"";
+        List<JMeterTreeNode> groups = new ArrayList<>();
+        for (var nodes = root.preorderEnumeration(); nodes.hasMoreElements();) {
+            JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
+            if (node.getTestElement() instanceof AbstractThreadGroup) {
+                groups.add(node);
+            }
+        }
+        long matches = groups.stream()
+                .filter(node -> enabledInPlan(node) && node.getName().equals(group.getName())).count();
+        return matches < 2 ? target : target + " (Thread Group " + (groups.indexOf(group) + 1)
+                + " in depth-first tree order, including disabled groups)";
+    }
+
     private static ChatStarterSuggestion reviewPlan() {
         return new ChatStarterSuggestion("Review this test plan",
                 "@testplan Explain this test plan and suggest the next improvement. Do not change it yet.");
     }
 
-    private static boolean hasCsvInScope(JMeterTreeNode group) {
-        for (javax.swing.tree.TreeNode ancestor = group; ancestor instanceof JMeterTreeNode parent;
+    private static boolean hasCsvInScope(JMeterTreeNode scope) {
+        for (javax.swing.tree.TreeNode ancestor = scope; ancestor instanceof JMeterTreeNode parent;
                 ancestor = parent.getParent()) {
             for (int index = 0; index < parent.getChildCount(); index++) {
                 JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
