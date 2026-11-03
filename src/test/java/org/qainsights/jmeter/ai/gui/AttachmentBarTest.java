@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -128,14 +130,22 @@ class AttachmentBarTest {
         File file = writeFile("async.txt", "async content");
         bar.addFileAsync(file);
 
-        // the read happens off-thread; the chip appears when the worker finishes
-        long deadline = System.currentTimeMillis() + 5000;
-        while (!bar.hasAttachments() && System.currentTimeMillis() < deadline) {
+        // the read happens off-thread; the chip appears when the worker finishes.
+        // SwingWorkers share a JVM-wide 10-thread pool, so under a full suite
+        // run the task may sit queued far longer than an isolated run allows.
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (!hasAttachmentsOnEdt() && System.currentTimeMillis() < deadline) {
             Thread.sleep(25);
         }
-        assertTrue(bar.hasAttachments(), "async attach must complete");
+        assertTrue(hasAttachmentsOnEdt(), "async attach must complete");
         assertEquals(1, registry.size());
         assertTrue(systemMessages.isEmpty());
+    }
+
+    private boolean hasAttachmentsOnEdt() throws Exception {
+        AtomicReference<Boolean> result = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> result.set(bar.hasAttachments()));
+        return result.get();
     }
 
     @Test

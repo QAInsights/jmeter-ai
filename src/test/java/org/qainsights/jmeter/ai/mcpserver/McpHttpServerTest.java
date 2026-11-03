@@ -165,7 +165,25 @@ class McpHttpServerTest {
         tools.release.countDown();
         assertEquals(200, run.get(10, TimeUnit.SECONDS).statusCode());
         CompletableFuture.allOf(flood.toArray(new CompletableFuture<?>[0])).get(60, TimeUnit.SECONDS);
-        assertEquals(200, send(post(INITIALIZE).header("Authorization", "Bearer " + TOKEN)).statusCode());
+        awaitAccepted();
+    }
+
+    /**
+     * The flood's client futures can all complete while the server's request
+     * queue is still draining; poll a normal request until the server accepts
+     * again rather than asserting on the first try.
+     */
+    private void awaitAccepted() throws Exception {
+        long deadline = System.currentTimeMillis() + 15_000;
+        int status;
+        do {
+            status = send(post(INITIALIZE).header("Authorization", "Bearer " + TOKEN)).statusCode();
+            if (status == 200) {
+                return;
+            }
+            Thread.sleep(100);
+        } while (System.currentTimeMillis() < deadline);
+        assertEquals(200, status);
     }
 
     @Test

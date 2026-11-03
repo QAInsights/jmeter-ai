@@ -1,7 +1,10 @@
 package org.qainsights.jmeter.ai.record;
 
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JLabel;
 import javax.swing.JToggleButton;
+import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -39,14 +42,27 @@ class RecordingControlPanelTest {
         SessionConfig config = new SessionConfig("Intent", "https://example.com", "chromium");
         controller.startSession(config, "testDir");
 
-        // Wait brief moment for SwingUtilities.invokeLater
-        Thread.sleep(100);
-        assertEquals("🟢 ARMED", statusLabel.getText());
+        // The label is updated via SwingUtilities.invokeLater
+        waitForLabelText(statusLabel, "🟢 ARMED");
 
         // Stop session to transition back to OFF
         controller.transitionTo(RecordingSessionState.OFF);
-        Thread.sleep(100);
-        assertEquals("🔴 OFF", statusLabel.getText());
+        waitForLabelText(statusLabel, "🔴 OFF");
+    }
+
+    private static void waitForLabelText(JLabel label, String expected) throws Exception {
+        // A congested EDT during a full suite run can delay the invokeLater
+        // update far beyond a fixed sleep; poll the text on the EDT instead.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (System.nanoTime() < deadline) {
+            AtomicReference<String> text = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> text.set(label.getText()));
+            if (expected.equals(text.get())) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        assertEquals(expected, label.getText());
     }
 
     @Test
