@@ -10,6 +10,20 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatStarterSuggestionTest {
+    @Test
+    void creationDraftsBypassTheDirectElementCommandParser() {
+        JMeterTreeNode root = node(new TestPlan());
+        assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(
+                ChatStarterSuggestion.fromTree(root, null).prompt()));
+        JMeterTreeNode group = node(new ThreadGroup());
+        root.add(group);
+        JMeterTreeNode sampler = node(new DebugSampler());
+        group.add(sampler);
+        assertNull(org.qainsights.jmeter.ai.utils.JMeterElementRequestHandler.processElementRequest(
+                ChatStarterSuggestion.fromTree(root, group).prompt()));
+        sampler.add(node(new CSVDataSet()));
+        assertEquals("Add a CSV data set", ChatStarterSuggestion.fromTree(root, group).label());
+    }
     private JMeterTreeNode node(TestElement element) {
         element.setEnabled(true);
         return new JMeterTreeNode(element, null);

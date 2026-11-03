@@ -25,7 +25,7 @@ record ChatStarterSuggestion(String label, String prompt) {
                 return reviewPlan();
             }
             return new ChatStarterSuggestion("Create a Thread Group",
-                    "Add a Thread Group to this test plan. Ask me about the workload before configuring it.");
+                    "How should I configure a new Thread Group for this test plan? Ask me about the workload first.");
         }
         if (!enabledInPlan(group) || group.getRoot() != root.getRoot()) {
             return reviewPlan();
@@ -37,8 +37,8 @@ record ChatStarterSuggestion(String label, String prompt) {
         }
         if (!hasCsvInScope(group)) {
             return new ChatStarterSuggestion("Add a CSV data set",
-                    "Add a CSV Data Set Config to " + target
-                            + ". Ask me for the filename and variable names before configuring it.");
+                    "How should I configure a CSV Data Set Config for " + target
+                            + "? Ask me for the filename and variable names first.");
         }
         return new ChatStarterSuggestion("Review this Thread Group",
                 "@testplan Review " + target + " and suggest the next improvement. Do not change the plan yet.");
@@ -50,10 +50,7 @@ record ChatStarterSuggestion(String label, String prompt) {
     }
 
     private static boolean hasCsvInScope(JMeterTreeNode group) {
-        if (findEnabled(group, node -> node.getTestElement() instanceof CSVDataSet) != null) {
-            return true;
-        }
-        for (var ancestor = group.getParent(); ancestor instanceof JMeterTreeNode parent;
+        for (javax.swing.tree.TreeNode ancestor = group; ancestor instanceof JMeterTreeNode parent;
                 ancestor = parent.getParent()) {
             for (int index = 0; index < parent.getChildCount(); index++) {
                 JMeterTreeNode child = (JMeterTreeNode) parent.getChildAt(index);
