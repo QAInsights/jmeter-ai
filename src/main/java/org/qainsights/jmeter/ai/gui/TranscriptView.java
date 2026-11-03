@@ -67,6 +67,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         welcomePanel = new WelcomePanel(markdown, baseFont, connect);
         welcomePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         insertBeforeGlue(welcomePanel);
+        firePropertyChange("welcomeShowing", false, true);
     }
 
     boolean isWelcomeShowing() {
@@ -79,6 +80,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
         }
         remove(welcomePanel);
         welcomePanel = null;
+        firePropertyChange("welcomeShowing", true, false);
         revalidate();
         repaint();
     }
@@ -346,7 +348,7 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
             thinkingCard = null;
         }
         streamingCard = null;
-        welcomePanel = null;
+        dismissWelcome();
         cards.clear();
         routeCards.clear();
         triageCards.clear();

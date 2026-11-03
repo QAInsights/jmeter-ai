@@ -9,6 +9,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class TelemetryCountersTest {
 
     @Test
+    void starterPicksUseOnlyAFixedCounter() {
+        TelemetryCounters counters = new TelemetryCounters();
+        counters.increment(TelemetryFeature.CHAT_STARTER_PICK);
+        counters.increment(TelemetryFeature.CHAT_STARTER_PICK);
+        assertEquals(Map.of("chat_starter_pick", 2), counters.snapshot());
+    }
+
+    @Test
     void incrementsAccumulate() {
         TelemetryCounters c = new TelemetryCounters();
         c.increment(TelemetryFeature.CHAT_MESSAGE);

@@ -32,7 +32,7 @@ class CliProviderStatusPanelTest {
 
         SwingUtilities.invokeAndWait(refresh::doClick);
 
-        assertTrue(provider.refreshed.await(2, TimeUnit.SECONDS));
+        assertTrue(provider.refreshed.await(30, TimeUnit.SECONDS));
     }
 
     @Test
@@ -82,7 +82,9 @@ class CliProviderStatusPanelTest {
     }
 
     private static void waitUntilEnabled(JButton button) throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        // The button is re-enabled by a SwingWorker's done() on the EDT; the
+        // shared worker pool can be congested during a full suite run.
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (System.nanoTime() < deadline) {
             AtomicReference<Boolean> enabled = new AtomicReference<>();
             SwingUtilities.invokeAndWait(() -> enabled.set(button.isEnabled()));

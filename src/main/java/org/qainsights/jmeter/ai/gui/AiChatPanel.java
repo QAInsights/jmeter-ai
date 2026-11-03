@@ -102,6 +102,19 @@ public class AiChatPanel
      */
     private org.qainsights.jmeter.ai.service.prompts.PromptLibrary promptLibrary;
     private JTextArea messageField;
+    private JTree starterTree;
+    private javax.swing.tree.TreeModel starterModel;
+    private final PropertyChangeListener starterTreeModelListener = event -> bindStarterModel();
+    private boolean starterRefreshQueued;
+    private ChatStartersPanel starterSuggestions;
+    private final javax.swing.event.TreeSelectionListener starterSelectionListener =
+            event -> queueStarterRefresh();
+    private final javax.swing.event.TreeModelListener starterModelListener = new javax.swing.event.TreeModelListener() {
+        public void treeNodesChanged(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeNodesInserted(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeNodesRemoved(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeStructureChanged(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+    };
     private InputOptionsRow inputOptionsRow;
     private InteractionModeSelector interactionModeSelector;
     private Runnable currentCancelHandle;
@@ -423,6 +436,7 @@ public class AiChatPanel
         chatPanel.add(createHeaderPanel(), BorderLayout.NORTH);
 
         transcript = new TranscriptView(font);
+        transcript.addPropertyChangeListener("welcomeShowing", event -> refreshStarterSuggestion());
         baseChatFontSize = font.getSize2D();
         transcript.setBackground(ThemeColors.canvas());
         transcript.setOpaque(true);
@@ -550,7 +564,12 @@ public class AiChatPanel
                 .forNew(javax.swing.SwingUtilities.getWindowAncestor(this), promptLibrary(), body)
                 .setVisible(true));
 
-        bottomPanel.add(attachmentBar, BorderLayout.NORTH);
+        starterSuggestions = new ChatStartersPanel(font);
+        JPanel aboveComposer = new JPanel(new BorderLayout());
+        aboveComposer.setOpaque(false);
+        aboveComposer.add(starterSuggestions, BorderLayout.NORTH);
+        aboveComposer.add(attachmentBar, BorderLayout.SOUTH);
+        bottomPanel.add(aboveComposer, BorderLayout.NORTH);
         bottomPanel.add(createInputPanel(font), BorderLayout.CENTER);
         return bottomPanel;
     }
@@ -1029,6 +1048,7 @@ public class AiChatPanel
                 Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
             }
             transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
+            refreshStarterSuggestion();
             WelcomeMessages.onShown(welcome);
             lastShownWelcome = welcome;
             lastWelcomeHasConnectButton = showConnect;
@@ -1042,9 +1062,89 @@ public class AiChatPanel
             Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
         }
         transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
+        refreshStarterSuggestion();
         WelcomeMessages.onShown(welcome);
         lastShownWelcome = welcome;
         lastWelcomeHasConnectButton = showConnect;
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui != null && starterTree == null) {
+            starterTree = gui.getTreeListener().getJTree();
+            if (starterTree != null) {
+                starterTree.addTreeSelectionListener(starterSelectionListener);
+                starterTree.addPropertyChangeListener("model", starterTreeModelListener);
+                bindStarterModel();
+            }
+        }
+        refreshStarterSuggestion();
+    }
+
+    @Override
+    public void removeNotify() {
+        if (starterTree != null) {
+            starterTree.removeTreeSelectionListener(starterSelectionListener);
+            starterTree.removePropertyChangeListener("model", starterTreeModelListener);
+            starterTree = null;
+        }
+        bindStarterModel();
+        super.removeNotify();
+    }
+
+    private void bindStarterModel() {
+        if (starterModel != null) {
+            starterModel.removeTreeModelListener(starterModelListener);
+        }
+        starterModel = starterTree == null ? null : starterTree.getModel();
+        if (starterModel != null) {
+            starterModel.addTreeModelListener(starterModelListener);
+        }
+        queueStarterRefresh();
+    }
+
+    private void queueStarterRefresh() {
+        if (starterRefreshQueued || !transcript.isWelcomeShowing()) {
+            return;
+        }
+        starterRefreshQueued = true;
+        SwingUtilities.invokeLater(() -> {
+            starterRefreshQueued = false;
+            refreshStarterSuggestion();
+        });
+    }
+
+    private List<ChatStarterSuggestion> currentStarterSuggestions() {
+        GuiPackage gui = GuiPackage.getInstance();
+        JMeterTreeNode root = gui == null ? null : (JMeterTreeNode) gui.getTreeModel().getRoot();
+        JMeterTreeNode selected = gui == null ? null : gui.getTreeListener().getCurrentNode();
+        return ChatStarterSuggestion.optionsFromTree(root, selected);
+    }
+
+    private void refreshStarterSuggestion() {
+        if (starterSuggestions != null) {
+            starterSuggestions.setSuggestions(transcript.isWelcomeShowing() && providerStatus().isReady()
+                            ? currentStarterSuggestions() : List.of(),
+                    this::useStarterSuggestion);
+        }
+    }
+
+    private void useStarterSuggestion(ChatStarterSuggestion displayed) {
+        if (!transcript.isWelcomeShowing() || !messageField.isEnabled()) {
+            return;
+        }
+        if (!currentStarterSuggestions().contains(displayed)) {
+            refreshStarterSuggestion();
+            return;
+        }
+        if (messageField.getText().isBlank()) {
+            messageField.setText(displayed.prompt());
+            messageField.setCaretPosition(messageField.getDocument().getLength());
+            Telemetry.record(TelemetryFeature.CHAT_STARTER_PICK);
+        }
+        messageField.requestFocusInWindow();
     }
 
     private void probeOllamaAvailability() {
@@ -1540,6 +1640,7 @@ public class AiChatPanel
         Font currentChatFont = transcript.getFont();
         float newChatSize = baseChatFontSize * scale;
         transcript.applyFont(currentChatFont.deriveFont(newChatSize));
+        starterSuggestions.applyFont(currentChatFont.deriveFont(newChatSize));
 
         // Update message field font
         Font currentMessageFont = messageField.getFont();
@@ -1781,6 +1882,7 @@ public class AiChatPanel
             scrollPane.getViewport().setBackground(newBg);
         }
         transcript.refreshTheme();
+        starterSuggestions.applyTheme();
         transcript.repaint();
 
         // Re-theme the composer and its animated border so they never keep

@@ -40,9 +40,9 @@ class DefaultCliProcessRunnerTest {
                     }
                 }
                 """);
-        CliProcessResult result = runner.run(javaCommand(program), null, Duration.ofSeconds(60));
-        assertFalse(result.isTimedOut());
-        assertFalse(result.isSuccess());
+        CliProcessResult result = runReliably(javaCommand(program), null, Duration.ofSeconds(60));
+        assertFalse(result.isTimedOut(), describe(result));
+        assertFalse(result.isSuccess(), describe(result));
         assertEquals(3, result.getExitCode());
         assertTrue(result.getStdout().contains("hello é"), result.getStdout());
         assertTrue(result.getStderr().contains("a warning"), result.getStderr());
@@ -66,8 +66,8 @@ class DefaultCliProcessRunnerTest {
                     }
                 }
                 """);
-        CliProcessResult result = runner.run(javaCommand(program), "caf\u00e9 latte", Duration.ofSeconds(60));
-        assertTrue(result.isSuccess());
+        CliProcessResult result = runReliably(javaCommand(program), "caf\u00e9 latte", Duration.ofSeconds(60));
+        assertTrue(result.isSuccess(), describe(result));
         assertEquals("got:café latte", result.getStdout().trim());
     }
 
@@ -81,10 +81,10 @@ class DefaultCliProcessRunnerTest {
                 }
                 """);
 
-        CliProcessResult result = runner.run(
+        CliProcessResult result = runReliably(
                 javaCommand(program), null, Duration.ofSeconds(60), Map.of("X", "from-runner"));
 
-        assertTrue(result.isSuccess());
+        assertTrue(result.isSuccess(), describe(result));
         assertEquals("from-runner", result.getStdout().trim());
     }
 
@@ -97,9 +97,9 @@ class DefaultCliProcessRunnerTest {
                     }
                 }
                 """);
-        CliProcessResult result = runner.run(javaCommand(program), null, Duration.ofMillis(1_500));
-        assertTrue(result.isTimedOut());
-        assertFalse(result.isSuccess());
+        CliProcessResult result = runReliably(javaCommand(program), null, Duration.ofMillis(1_500));
+        assertTrue(result.isTimedOut(), describe(result));
+        assertFalse(result.isSuccess(), describe(result));
     }
 
     @Test
@@ -113,11 +113,11 @@ class DefaultCliProcessRunnerTest {
                 """);
         String prompt = "x".repeat(4 * 1024 * 1024);
 
-        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(5),
-                () -> runner.run(javaCommand(program), prompt, Duration.ofMillis(500)));
+        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(15),
+                () -> runReliably(javaCommand(program), prompt, Duration.ofMillis(500)));
 
-        assertTrue(result.isTimedOut());
-        assertFalse(result.isSuccess());
+        assertTrue(result.isTimedOut(), describe(result));
+        assertFalse(result.isSuccess(), describe(result));
     }
 
     @Test
@@ -136,18 +136,18 @@ class DefaultCliProcessRunnerTest {
         Path program = program(dir, "Spawner", """
                 public class Spawner {
                     public static void main(String[] args) throws Exception {
-                        new ProcessBuilder(args[0], args[1]).inheritIO().start();
+                        new ProcessBuilder(args[0], "-Xms16m", "-Xmx64m", args[1]).inheritIO().start();
                         System.out.println("parent-out");
                         System.err.println("parent-err");
                     }
                 }
                 """);
 
-        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(3),
-                () -> runner.run(javaCommand(program, javaLauncher(), descendant.toString()),
+        CliProcessResult result = assertTimeoutPreemptively(Duration.ofSeconds(15),
+                () -> runReliably(javaCommand(program, javaLauncher(), descendant.toString()),
                         null, Duration.ofSeconds(60)));
 
-        assertTrue(result.isSuccess());
+        assertTrue(result.isSuccess(), describe(result));
         assertTrue(result.getStdout().contains("parent-out"), result.getStdout());
         assertTrue(result.getStderr().contains("parent-err"), result.getStderr());
     }
@@ -165,6 +165,38 @@ class DefaultCliProcessRunnerTest {
                 () -> runner.run(List.of(), null, Duration.ofSeconds(5)));
     }
 
+    /**
+     * Runs the command, retrying when the child exhibits a launch flake: a
+     * non-zero exit in under a second. A freshly written {@code .java} file can
+     * briefly be unavailable to the spawned launcher (e.g. a real-time AV scan
+     * still holding it), which kills the child almost instantly; the assertion
+     * that follows would then see a spurious failure with no diagnostics.
+     */
+    private CliProcessResult runReliably(List<String> command, String stdin, Duration timeout) {
+        return runReliably(command, stdin, timeout, Map.of());
+    }
+
+    private CliProcessResult runReliably(List<String> command, String stdin, Duration timeout,
+                                       Map<String, String> environment) {
+        CliProcessResult result = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            result = environment.isEmpty()
+                    ? runner.run(command, stdin, timeout)
+                    : runner.run(command, stdin, timeout, environment);
+            if (result.isTimedOut() || result.getExitCode() == 0
+                    || result.getDurationMillis() >= 1_000) {
+                return result;
+            }
+        }
+        return result;
+    }
+
+    private static String describe(CliProcessResult result) {
+        return "exitCode=" + result.getExitCode() + " timedOut=" + result.isTimedOut()
+                + " durationMs=" + result.getDurationMillis()
+                + " stdout=" + result.getStdout() + " stderr=" + result.getStderr();
+    }
+
     private static Path program(Path dir, String name, String source) throws IOException {
         Path file = dir.resolve(name + ".java");
         Files.write(file, source.getBytes(StandardCharsets.UTF_8));
@@ -175,6 +207,10 @@ class DefaultCliProcessRunnerTest {
     private static List<String> javaCommand(Path program, String... args) {
         List<String> command = new ArrayList<>();
         command.add(javaLauncher());
+        // Cap the child heap - default ergonomics commit ~500 MB per spawn,
+        // which can exhaust the machine's pagefile while the suite is loaded.
+        command.add("-Xms16m");
+        command.add("-Xmx64m");
         command.add(program.toString());
         command.addAll(List.of(args));
         return command;

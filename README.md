@@ -117,6 +117,8 @@ See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest 
 
 You can connect a provider from the Feather Wand panel's ⋯ menu > Connect a provider and use it immediately in Chat and Agent Mode, without restarting JMeter. Smart routing and Apple on-device can also be configured in this dialog. The manual properties below remain documented. The JSR223 refactor menu picks up a new provider after a JMeter restart.
 
+An empty chat offers three contextual suggestions from the open plan, in rounded-rectangle buttons just above the message box. The first suggests creating a Thread Group, adding a request, adding a CSV data set, or reviewing an existing group. CSV data under child controllers counts when it covers every enabled sampler. If the selected group is disabled, or the plan has groups but none are enabled, suggestions are plan-wide and the first option is **Review this test plan** instead. A plan without any Thread Groups offers **Create a Thread Group**. The other options offer relevant plan review, response-check review, or workload-planning prompts. For enabled selections, they follow the containing Thread Group; selections outside a group use the first enabled group. Duplicate enabled group names are disambiguated by tree position in the draft. Suggestions refresh as the plan changes. Click any option to fill the message box, review the draft, then press Enter to send. Clicking never overwrites a draft, calls AI, or changes the plan on its own. Suggestions disappear when the conversation starts and return on New Chat. Provider setup remains the first step when no provider is connected.
+
 ```properties
 jmeter.ai.service.type=anthropic
 anthropic.api.key=YOUR_ANTHROPIC_API_KEY
@@ -1373,6 +1375,7 @@ These counters are also sent, again as counts only:
 | `msg_<provider>` and `agentrun_<provider>` | Chat messages and Agent runs grouped by provider family, using fixed provider labels such as `anthropic`, `openai`, `opencode`, or `claudecode`. These are counts, not model names. |
 | `agent_steps_1_5`, `agent_steps_6_15`, `agent_steps_16p` | Agent run size grouped into iteration buckets. |
 | `setup_open`, `setup_test_<option>_<outcome>`, `setup_save_<option>`, `welcome_no_provider` | Provider setup funnel counts. Options and outcomes come from fixed code enums. |
+| `chat_starter_pick` | A contextual suggestion successfully filled an empty composer. Showing or refreshing suggestions, and clicks blocked by an existing draft, do not count. No suggestion text or plan data is collected. In PostHog, filter `feature_used` by `feature = chat_starter_pick` and sum `count`; counts arrive with the daily ping, not per click. |
 | `decide_ok_<backend>`, `decide_fail_<backend>_<type>`, `decide_slow_<backend>` | Smart routing and triage Decisions call results, error category, and calls taking over two seconds. |
 | `picker_*` | Model picker opens, searches, pins, selections, and custom-id selections. |
 | `reasoning_set`, `attach_*`, `export_md`, `export_html`, `undo`, `redo`, `intellisense_pick`, `jsr223_trycatch`, `jsr223_format`, `extract_opened`, `correlation_run`, `correlation_apply` | UI action counts. |

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class WelcomePanelTest {
 
+
     @Test
     void keepsWelcomeContentInADedicatedAccessibleSurface() {
         String markdown = "# Welcome to Feather Wand\n\nAsk about your test plan.";

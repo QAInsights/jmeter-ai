@@ -27,7 +27,6 @@ final class WelcomePanel extends JPanel {
     private final JTextPane content;
     private final QuietButton connectButton;
     private final boolean compactSetup;
-
     WelcomePanel(String markdown, Font font) {
         this(markdown, font, null);
     }
