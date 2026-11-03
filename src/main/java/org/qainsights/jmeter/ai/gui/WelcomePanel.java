@@ -27,6 +27,10 @@ final class WelcomePanel extends JPanel {
     private final JTextPane content;
     private final QuietButton connectButton;
     private final boolean compactSetup;
+    private final JPanel body;
+    private final QuietButton suggestionButton;
+    private ChatStarterSuggestion suggestion;
+    private java.util.function.Consumer<ChatStarterSuggestion> acceptSuggestion;
 
     WelcomePanel(String markdown, Font font) {
         this(markdown, font, null);
@@ -40,7 +44,7 @@ final class WelcomePanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(
                 UiTokens.SPACE_6, UiTokens.SPACE_4, UiTokens.SPACE_6, UiTokens.SPACE_4));
 
-        JPanel body = new JPanel();
+        body = new JPanel();
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
         body.setOpaque(false);
 
@@ -71,6 +75,15 @@ final class WelcomePanel extends JPanel {
         } else {
             connectButton = null;
         }
+        suggestionButton = new QuietButton("", QuietButton.Kind.TONAL);
+        suggestionButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        suggestionButton.setVisible(false);
+        suggestionButton.addActionListener(event -> {
+            if (suggestion != null && acceptSuggestion != null) {
+                acceptSuggestion.accept(suggestion);
+            }
+        });
+        body.add(suggestionButton);
 
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.gridx = 0;
@@ -107,9 +120,31 @@ final class WelcomePanel extends JPanel {
         return connectButton;
     }
 
+    QuietButton suggestionButton() {
+        return suggestionButton;
+    }
+
+    void setSuggestion(ChatStarterSuggestion value,
+                       java.util.function.Consumer<ChatStarterSuggestion> accept) {
+        suggestion = value;
+        acceptSuggestion = accept;
+        suggestionButton.setVisible(value != null && accept != null && connectButton == null);
+        if (value != null) {
+            suggestionButton.setText(value.label());
+            suggestionButton.setToolTipText(value.prompt());
+            suggestionButton.getAccessibleContext().setAccessibleDescription(
+                    "Fill the message box with: " + value.prompt());
+        }
+        revalidate();
+        repaint();
+    }
+
     void applyFont(Font font) {
         if (font != null) {
             content.setFont(font);
+            if (suggestionButton != null) {
+                suggestionButton.setFont(font);
+            }
             revalidate();
         }
     }
@@ -149,7 +184,7 @@ final class WelcomePanel extends JPanel {
                     rootView.getPreferredSpan(javax.swing.text.View.Y_AXIS));
         }
         int measuredContentHeight = measuredHeight + contentInsets.top + contentInsets.bottom;
-        int height = compactSetup
+        int height = compactSetup || suggestionButton.isVisible()
                 ? Math.max(1, measuredContentHeight)
                 : Math.max(UiTokens.WELCOME_MIN_HEIGHT, measuredContentHeight + UiTokens.SPACE_8);
         content.setPreferredSize(new Dimension(resolvedWidth, height));

@@ -82,6 +82,28 @@ class AiChatPanelTest {
     private boolean restoreSessions;
 
     @Test
+    void starterPrefillsWithoutSendingOrOverwritingADraft() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
+        field.setAccessible(true);
+        javax.swing.JTextArea input = (javax.swing.JTextArea) field.get(panel);
+        java.lang.reflect.Method use = AiChatPanel.class.getDeclaredMethod(
+                "useStarterSuggestion", ChatStarterSuggestion.class);
+        use.setAccessible(true);
+        ChatStarterSuggestion suggestion = ChatStarterSuggestion.fromTree(null, null);
+        use.invoke(panel, suggestion);
+        assertEquals(suggestion.prompt(), input.getText());
+        assertTrue(panel.getConversationHistory().isEmpty());
+        input.setText("My own draft");
+        use.invoke(panel, suggestion);
+        assertEquals("My own draft", input.getText());
+        input.setText("");
+        panel.setInputEnabled(false);
+        use.invoke(panel, suggestion);
+        assertEquals("", input.getText());
+    }
+
+    @Test
     void testConstructorAndBasicMethods() {
         AiChatPanel panel = new AiChatPanel();
 

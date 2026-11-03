@@ -11,6 +11,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class WelcomePanelTest {
 
     @Test
+    void starterFillsOnlyWhenClickedAndSetupKeepsItsOwnAction() {
+        java.util.concurrent.atomic.AtomicReference<ChatStarterSuggestion> accepted =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        ChatStarterSuggestion suggestion = new ChatStarterSuggestion("Add CSV", "Add a CSV data set");
+        WelcomePanel panel = new WelcomePanel("# Welcome", new Font(Font.DIALOG, Font.PLAIN, 13));
+        panel.setSuggestion(suggestion, accepted::set);
+        org.junit.jupiter.api.Assertions.assertTrue(panel.suggestionButton().isVisible());
+        org.junit.jupiter.api.Assertions.assertNull(accepted.get());
+        panel.suggestionButton().doClick();
+        assertEquals(suggestion, accepted.get());
+        WelcomePanel setup = new WelcomePanel("# Connect", panel.getFont(), () -> { });
+        setup.setSuggestion(suggestion, accepted::set);
+        org.junit.jupiter.api.Assertions.assertFalse(setup.suggestionButton().isVisible());
+    }
+
+    @Test
     void keepsWelcomeContentInADedicatedAccessibleSurface() {
         String markdown = "# Welcome to Feather Wand\n\nAsk about your test plan.";
         WelcomePanel panel = new WelcomePanel(

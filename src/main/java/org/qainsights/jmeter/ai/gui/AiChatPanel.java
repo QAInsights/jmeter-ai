@@ -102,6 +102,18 @@ public class AiChatPanel
      */
     private org.qainsights.jmeter.ai.service.prompts.PromptLibrary promptLibrary;
     private JTextArea messageField;
+    private JTree starterTree;
+    private javax.swing.tree.TreeModel starterModel;
+    private final PropertyChangeListener starterTreeModelListener = event -> bindStarterModel();
+    private boolean starterRefreshQueued;
+    private final javax.swing.event.TreeSelectionListener starterSelectionListener =
+            event -> queueStarterRefresh();
+    private final javax.swing.event.TreeModelListener starterModelListener = new javax.swing.event.TreeModelListener() {
+        public void treeNodesChanged(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeNodesInserted(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeNodesRemoved(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+        public void treeStructureChanged(javax.swing.event.TreeModelEvent event) { queueStarterRefresh(); }
+    };
     private InputOptionsRow inputOptionsRow;
     private InteractionModeSelector interactionModeSelector;
     private Runnable currentCancelHandle;
@@ -1029,6 +1041,7 @@ public class AiChatPanel
                 Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
             }
             transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
+            refreshStarterSuggestion();
             WelcomeMessages.onShown(welcome);
             lastShownWelcome = welcome;
             lastWelcomeHasConnectButton = showConnect;
@@ -1042,9 +1055,88 @@ public class AiChatPanel
             Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
         }
         transcript.showWelcome(welcome, showConnect ? this::openProviderSetup : null);
+        refreshStarterSuggestion();
         WelcomeMessages.onShown(welcome);
         lastShownWelcome = welcome;
         lastWelcomeHasConnectButton = showConnect;
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui != null && starterTree == null) {
+            starterTree = gui.getTreeListener().getJTree();
+            if (starterTree != null) {
+                starterTree.addTreeSelectionListener(starterSelectionListener);
+                starterTree.addPropertyChangeListener("model", starterTreeModelListener);
+                bindStarterModel();
+            }
+        }
+        refreshStarterSuggestion();
+    }
+
+    @Override
+    public void removeNotify() {
+        if (starterTree != null) {
+            starterTree.removeTreeSelectionListener(starterSelectionListener);
+            starterTree.removePropertyChangeListener("model", starterTreeModelListener);
+            starterTree = null;
+        }
+        bindStarterModel();
+        super.removeNotify();
+    }
+
+    private void bindStarterModel() {
+        if (starterModel != null) {
+            starterModel.removeTreeModelListener(starterModelListener);
+        }
+        starterModel = starterTree == null ? null : starterTree.getModel();
+        if (starterModel != null) {
+            starterModel.addTreeModelListener(starterModelListener);
+        }
+        queueStarterRefresh();
+    }
+
+    private void queueStarterRefresh() {
+        if (starterRefreshQueued || !transcript.isWelcomeShowing()) {
+            return;
+        }
+        starterRefreshQueued = true;
+        SwingUtilities.invokeLater(() -> {
+            starterRefreshQueued = false;
+            refreshStarterSuggestion();
+        });
+    }
+
+    private ChatStarterSuggestion currentStarterSuggestion() {
+        GuiPackage gui = GuiPackage.getInstance();
+        JMeterTreeNode root = gui == null ? null : (JMeterTreeNode) gui.getTreeModel().getRoot();
+        JMeterTreeNode selected = gui == null ? null : gui.getTreeListener().getCurrentNode();
+        return ChatStarterSuggestion.fromTree(root, selected);
+    }
+
+    private void refreshStarterSuggestion() {
+        if (transcript.isWelcomeShowing()) {
+            transcript.setWelcomeSuggestion(providerStatus().isReady() ? currentStarterSuggestion() : null,
+                    this::useStarterSuggestion);
+        }
+    }
+
+    private void useStarterSuggestion(ChatStarterSuggestion displayed) {
+        if (!transcript.isWelcomeShowing() || !messageField.isEnabled()) {
+            return;
+        }
+        ChatStarterSuggestion current = currentStarterSuggestion();
+        if (!displayed.equals(current)) {
+            refreshStarterSuggestion();
+            return;
+        }
+        if (messageField.getText().isBlank()) {
+            messageField.setText(current.prompt());
+            messageField.setCaretPosition(messageField.getDocument().getLength());
+        }
+        messageField.requestFocusInWindow();
     }
 
     private void probeOllamaAvailability() {

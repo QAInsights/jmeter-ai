@@ -97,15 +97,8 @@ public class Constants {
             "Version: JMeter 5.6+ (Also support questions about older versions from 3.0+)";
 
     public static final String WELCOME_MESSAGE = "# Welcome to Feather Wand\n\n" +
-            "Your AI assistant for Apache JMeter. Ask questions about your test plan, " +
-            "create or modify elements, and get optimization advice - right from this panel.\n\n" +
-            "**Try a command** (type `@` for suggestions):\n" +
-            "- `@this` - inspect the currently selected element\n" +
-            "- `@testplan` - ask questions about the whole test plan\n" +
-            "- `@optimize` - get optimization suggestions\n" +
-            "- `@lint` - rename elements with meaningful names\n" +
-            "- `@wrap` - group samplers under Transaction Controllers\n" +
-            "- `@sla` - add SLA assertions, e.g. `@sla under 800 ms and no 5xx`\n" +
-            "- `@usage` - view AI usage statistics\n\n" +
-            "Type a message below and press **Enter** to send. How can I help today?";
+            "Start with your open test plan. Choose the suggestion below to fill the message box, " +
+            "then press **Enter** to send, or ask your own question.\n\n" +
+            "Type `@` for commands, including `@this` for the selected element " +
+            "and `@testplan` for the whole plan.\n\n";
 }
