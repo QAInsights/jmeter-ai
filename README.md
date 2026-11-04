@@ -1345,7 +1345,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | Field | Example | Notes |
 | --- | --- | --- |
 | Install ID | `3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d` | Random UUID created once and stored in `~/.jmeter-ai/telemetry.json`. It is not derived from your machine, user name, or account. |
-| Plugin version | `3.9.0` | |
+| Plugin version | `4.0.0` | |
 | JMeter version | `5.6.3` | |
 | Java version | `17.0.12` | |
 | OS and CPU architecture | `Mac OS X`, `aarch64` | |
@@ -1395,7 +1395,7 @@ A complete ping looks like this:
 {
   "installId": "3f1c9a2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d",
   "event": "daily",
-  "pluginVersion": "3.9.0",
+  "pluginVersion": "4.0.0",
   "jmeterVersion": "5.6.3",
   "javaVersion": "17.0.12",
   "os": "Mac OS X",
