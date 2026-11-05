@@ -635,13 +635,18 @@ function adoptionCard(today: string, rows: StatsRow[]): string {
 	const series: Series[] = versions.map(v => ({ name: v, values: days.map(d => byDay.get(d)?.get(v) ?? 0) }));
 	const other = days.map(d => [...(byDay.get(d)?.entries() ?? [])]
 		.filter(([v]) => !versions.includes(v)).reduce((sum, [, n]) => sum + n, 0));
-	if (other.some(n => n > 0)) series.push({ name: "Other", values: other, cls: "x" });
+	const hasOther = other.some(n => n > 0);
+	if (hasOther) series.push({ name: "Other", values: other, cls: "x" });
 	const legend = `<div class="legend">${series.map((s, k) =>
 		`<span><i class="swatch s${s.cls ?? k}"></i>${esc(s.name)}</span>`).join("")}</div>`;
 	const chart = barChart(days, series, "Installs per day by plugin version");
-	const body = [...byDay.entries()].map(([d, m]) => [d, ...versions.map(v => m.get(v) ?? 0)]);
+	const body = [...byDay.entries()].map(([d, m]) => {
+		const row: unknown[] = [d, ...versions.map(v => m.get(v) ?? 0)];
+		if (hasOther) row.push([...m.entries()].filter(([v]) => !versions.includes(v)).reduce((sum, [, n]) => sum + n, 0));
+		return row;
+	});
 	return chartCard("Plugin version adoption (30d, installs per day)", `${versions.length} most common versions`,
-		chart, tableHtml(["Day", ...versions], body), legend);
+		chart, tableHtml(["Day", ...versions, ...(hasOther ? ["Other"] : [])], body), legend);
 }
 
 function kpi(label: string, value: number, foot: string): string {
