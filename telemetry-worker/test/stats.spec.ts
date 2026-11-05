@@ -147,6 +147,16 @@ describe("extended stats", () => {
 		expect(s.breakdowns.model).toContainEqual({ value: "gpt-4o-mini", installs: 1 });
 	});
 
+	it("adds an Other column to the adoption table beyond the six most common versions", async () => {
+		const versions = ["3.8.1", "3.8.2", "3.8.3", "3.8.4", "3.8.5", "3.8.6", "3.8.7"];
+		for (const [i, v] of versions.entries()) await insertPing(`v${i}`, day(0), { plugin_version: v });
+
+		const html = await (await stats(`/stats?token=${TOKEN}`)).text();
+
+		expect(html).toContain("<th>Other</th>");
+		expect(html).toContain(`<td>${day(0)}</td>${"<td>1</td>".repeat(7)}</tr>`);
+	});
+
 	it("groups errors, outcomes, tools and routing on the HTML page", async () => {
 		await insertPing("a", day(0));
 		await env.DB.prepare(
