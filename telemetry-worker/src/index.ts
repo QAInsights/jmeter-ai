@@ -1,4 +1,5 @@
 import { posthogEvents, sendToPostHog, type PostHogEvent } from "./posthog";
+import { FEATHER_WAND_ICON } from "./brand";
 import { TEST_INSTALLS, TEST_ONLY_FEATURES } from "./test-installs";
 
 export interface Env {
@@ -453,16 +454,46 @@ function esc(s: unknown): string {
 		.replaceAll('"', "&quot;");
 }
 
-function table(title: string, headers: string[], rows: unknown[][]): string {
+interface Html { html: string }
+
+function raw(html: string): Html {
+	return { html };
+}
+
+function fmt(n: number): string {
+	return Number.isInteger(n) ? n.toLocaleString("en-US") : String(n);
+}
+
+function cell(c: unknown): string {
+	if (c !== null && typeof c === "object" && "html" in c) return (c as Html).html;
+	return esc(typeof c === "number" ? fmt(c) : c);
+}
+
+/** Bare table; columns from `numFrom` (1-based) are right-aligned numbers. */
+function tableHtml(headers: string[], rows: unknown[][], numFrom = 2): string {
 	const head = headers.map(h => `<th>${esc(h)}</th>`).join("");
 	const body = rows.length === 0
-		? `<tr><td colspan="${headers.length}" class="empty">no data</td></tr>`
-		: rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
-	return `<h2>${esc(title)}</h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+		? `<tr><td colspan="${headers.length}" class="empty">No data in this window</td></tr>`
+		: rows.map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join("")}</tr>`).join("");
+	return `<table class="n${numFrom}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function table(title: string, headers: string[], rows: unknown[][],
+	opts: { numFrom?: number; note?: string; span2?: boolean } = {}): string {
+	const note = opts.note ? `<p class="card-note">${esc(opts.note)}</p>` : "";
+	return `<section class="card${opts.span2 ? " span2" : ""}"><h2>${esc(title)}</h2>${note}`
+		+ `<div class="table-wrap">${tableHtml(headers, rows, opts.numFrom)}</div></section>`;
 }
 
 function pct(part: number, whole: number): string {
 	return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "-";
+}
+
+/** Inline share bar with its percentage. */
+function share(part: number, whole: number): Html {
+	const p = whole > 0 ? Math.max(0, Math.min(1, part / whole)) : 0;
+	return raw(`<span class="share"><span class="track"><span class="fill" style="width:${(p * 100).toFixed(1)}%"></span></span>`
+		+ `<span class="pct">${Math.round(p * 100)}%</span></span>`);
 }
 
 /** Week-over-week change, e.g. "+120%"; "-" when there is no previous week to compare. */
@@ -470,6 +501,13 @@ function change(now: number, prev: number): string {
 	if (prev <= 0) return "-";
 	const p = Math.round(((now - prev) / prev) * 100);
 	return `${p > 0 ? "+" : ""}${p}%`;
+}
+
+function delta(now: number, prev: number): string {
+	const c = change(now, prev);
+	if (c === "-") return `<span class="muted">No previous week yet</span>`;
+	const dir = now > prev ? "up" : now < prev ? "down" : "flat";
+	return `<span class="delta ${dir}">${esc(c)}</span><span class="muted">vs previous 7 days</span>`;
 }
 
 function perInstall(r: StatsRow): string {
@@ -508,28 +546,232 @@ function parseDecisionKey(feature: string): [string, string, string] | null {
 	return [rest.slice(separator + 1), result, ""];
 }
 
-/** Pivot of installs per day (rows) and plugin version (columns, the 6 most common). */
-function adoptionTable(rows: StatsRow[]): string {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function shortDay(day: string): string {
+	const [, m, d] = day.split("-").map(Number);
+	return `${MONTHS[m - 1]} ${d}`;
+}
+
+/** The `n` UTC days ending at `today`, oldest first. */
+function lastDays(today: string, n: number): string[] {
+	const end = Date.parse(`${today}T00:00:00Z`);
+	return Array.from({ length: n }, (_, i) => new Date(end - (n - 1 - i) * 86400_000).toISOString().slice(0, 10));
+}
+
+/** Axis maximum and gridline step: a 1, 2 or 5 step giving at most 4 intervals. */
+function axis(max: number): { top: number; step: number } {
+	if (max <= 0) return { top: 4, step: 1 };
+	const rough = max / 4;
+	const mag = 10 ** Math.floor(Math.log10(rough));
+	const step = Math.max(1, [1, 2, 5, 10].map(m => m * mag).find(s => s >= rough) ?? 10 * mag);
+	return { top: step * Math.ceil(max / step), step };
+}
+
+/** `cls` picks the palette slot (s0 to s5, or sx for Other); defaults to the series index. */
+interface Series { name: string; values: number[]; cls?: string }
+
+/** Stacked daily bar chart. Bars stretch with the card; labels stay HTML so text never scales. */
+function barChart(days: string[], series: Series[], label: string): string {
+	const n = days.length;
+	const totals = days.map((_, i) => series.reduce((sum, s) => sum + s.values[i], 0));
+	const { top, step } = axis(Math.max(0, ...totals));
+	const y = (v: number) => 100 - (v / top) * 100;
+	const ticks: number[] = [];
+	for (let v = 0; v <= top; v += step) ticks.push(v);
+	const grid = ticks.map(v =>
+		`<line x1="0" x2="${n * 10}" y1="${y(v)}" y2="${y(v)}" class="${v === 0 ? "base" : "rule"}" vector-effect="non-scaling-stroke"/>`
+	).join("");
+	const bars = days.map((d, i) => {
+		let acc = 0;
+		const segs = series.map((s, k) => {
+			const v = s.values[i];
+			if (v <= 0) return "";
+			const rect = `<rect class="seg s${s.cls ?? k}" x="${i * 10 + 2}" y="${y(acc + v)}" width="6" height="${(v / top) * 100}"/>`;
+			acc += v;
+			return rect;
+		}).join("");
+		const detail = series.length > 1
+			? series.filter(s => s.values[i] > 0).map(s => `\n${s.name}: ${fmt(s.values[i])}`).join("")
+			: "";
+		return `<g class="bar"><title>${esc(`${shortDay(d)}: ${fmt(totals[i])}${detail}`)}</title>`
+			+ `<rect class="hit" x="${i * 10}" y="0" width="10" height="100"/>${segs}</g>`;
+	}).join("");
+	const yLabels = ticks.map(v => `<span style="bottom:${(v / top) * 100}%">${fmt(v)}</span>`).join("");
+	const xLabels = [0, Math.floor((n - 1) / 2), n - 1].map(i => `<span>${esc(shortDay(days[i]))}</span>`).join("");
+	return `<div class="chart" role="img" aria-label="${esc(label)}"><div class="y-axis">${yLabels}</div>`
+		+ `<svg viewBox="0 0 ${n * 10} 100" preserveAspectRatio="none" aria-hidden="true">${grid}${bars}</svg>`
+		+ `<div class="x-axis">${xLabels}</div></div>`;
+}
+
+function chartCard(title: string, meta: string, chart: string, details: string, legend = ""): string {
+	return `<section class="card wide"><div class="card-head"><h2>${esc(title)}</h2><span class="card-meta">${meta}</span></div>`
+		+ `${legend}${chart}<details><summary>Show the numbers</summary><div class="table-wrap">${details}</div></details></section>`;
+}
+
+function dailyCard(title: string, today: string, list: StatsRow[]): string {
+	const byDay = new Map(list.map(r => [String(r.day), Number(r.installs)]));
+	const days = lastDays(today, 30);
+	const values = days.map(d => byDay.get(d) ?? 0);
+	const total = values.reduce((a, b) => a + b, 0);
+	const meta = `Peak <b>${fmt(Math.max(0, ...values))}</b><span class="dot"></span>Daily average <b>${(total / days.length).toFixed(1)}</b>`;
+	return chartCard(title, meta, barChart(days, [{ name: "Installs", values }], title),
+		tableHtml(["Day", "Installs"], list.map(r => [r.day, r.installs])));
+}
+
+/** Installs per day stacked by plugin version (the 6 most common, the rest as Other), with the pivot table. */
+function adoptionCard(today: string, rows: StatsRow[]): string {
+	const version = (r: StatsRow) => String(r.version ?? "Not reported");
 	const totals = new Map<string, number>();
-	for (const r of rows) {
-		const v = String(r.version ?? "(none)");
-		totals.set(v, (totals.get(v) ?? 0) + Number(r.installs));
-	}
+	for (const r of rows) totals.set(version(r), (totals.get(version(r)) ?? 0) + Number(r.installs));
 	const versions = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
 	const byDay = new Map<string, Map<string, number>>();
 	for (const r of rows) {
 		const d = String(r.day);
 		if (!byDay.has(d)) byDay.set(d, new Map());
-		byDay.get(d)!.set(String(r.version ?? "(none)"), Number(r.installs));
+		byDay.get(d)!.set(version(r), Number(r.installs));
 	}
+	const days = lastDays(today, 30);
+	const series: Series[] = versions.map(v => ({ name: v, values: days.map(d => byDay.get(d)?.get(v) ?? 0) }));
+	const other = days.map(d => [...(byDay.get(d)?.entries() ?? [])]
+		.filter(([v]) => !versions.includes(v)).reduce((sum, [, n]) => sum + n, 0));
+	if (other.some(n => n > 0)) series.push({ name: "Other", values: other, cls: "x" });
+	const legend = `<div class="legend">${series.map((s, k) =>
+		`<span><i class="swatch s${s.cls ?? k}"></i>${esc(s.name)}</span>`).join("")}</div>`;
+	const chart = barChart(days, series, "Installs per day by plugin version");
 	const body = [...byDay.entries()].map(([d, m]) => [d, ...versions.map(v => m.get(v) ?? 0)]);
-	return table("Plugin version adoption (30d, installs per day)", ["day", ...versions], body);
+	return chartCard("Plugin version adoption (30d, installs per day)", `${versions.length} most common versions`,
+		chart, tableHtml(["Day", ...versions], body), legend);
 }
+
+function kpi(label: string, value: number, foot: string): string {
+	return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${fmt(value)}</div>`
+		+ `<div class="kpi-foot">${foot}</div></div>`;
+}
+
+function group(id: string, title: string, blurb: string, body: string): string {
+	return `<section class="group" id="${id}"><div class="group-head"><div class="group-title">${esc(title)}</div>`
+		+ `<p>${esc(blurb)}</p></div><div class="grid">${body}</div></section>`;
+}
+
+const STATS_CSS = `
+:root {
+	color-scheme: light dark;
+	--bg: #f6f7f9; --surface: #fff; --sunken: #f1f3f4; --line: #e3e5e8; --line-strong: #c9cdd2;
+	--text: #1f2328; --muted: #5f6368; --faint: #80868b;
+	--accent: #1a73e8; --track: #e8eaed; --up: #188038; --down: #c5221f;
+	--s0: #1a73e8; --s1: #12b5cb; --s2: #f29900; --s3: #9334e6; --s4: #1e8e3e; --s5: #e52592; --sx: #bdc1c6;
+	--shadow: 0 1px 2px rgba(60, 64, 67, .08), 0 1px 3px 1px rgba(60, 64, 67, .04);
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #111316; --surface: #1a1d21; --sunken: #202328; --line: #2c3036; --line-strong: #3c4148;
+		--text: #e8eaed; --muted: #a8adb3; --faint: #80868b;
+		--accent: #8ab4f8; --track: #2c3036; --up: #81c995; --down: #f28b82;
+		--s0: #8ab4f8; --s1: #78d9ec; --s2: #fdd663; --s3: #c58af9; --s4: #81c995; --s5: #ff8bcb; --sx: #5f6368;
+		--shadow: none;
+	}
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body {
+	margin: 0; background: var(--bg); color: var(--text);
+	font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	-webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+.top { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 64px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand img { width: 28px; height: 28px; display: block; }
+h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.sub { margin: 0; font-size: 12.5px; color: var(--muted); }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 999px; }
+nav a:hover { color: var(--text); background: var(--sunken); }
+nav a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main.wrap { padding-top: 40px; padding-bottom: 48px; }
+.group + .group { margin-top: 48px; }
+.group-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.group-title { font-size: 20px; font-weight: 600; letter-spacing: -.015em; }
+.group-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 16px; margin-bottom: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.kpi-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.kpi-value { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; margin: 6px 0 8px; }
+.kpi-foot { font-size: 12.5px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; min-height: 19px; }
+.muted { color: var(--muted); }
+.delta { font-weight: 600; }
+.delta.up { color: var(--up); }
+.delta.down { color: var(--down); }
+.delta.flat { color: var(--muted); }
+.note { margin: 0 0 16px; color: var(--muted); font-size: 12.5px; max-width: 90ch; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; grid-auto-flow: dense; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 0 6px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; padding-bottom: 12px; }
+@media (min-width: 900px) { .card.span2 { grid-column: span 2; } }
+.card h2 { margin: 0; padding: 0 18px; font-size: 14px; font-weight: 600; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 16px; flex-wrap: wrap; padding: 0 18px; }
+.card-head h2 { padding: 0; }
+.card-meta { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.card-meta b { color: var(--text); font-weight: 600; }
+.dot { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); }
+.card-note { margin: 4px 0 0; padding: 0 18px; color: var(--muted); font-size: 12.5px; }
+.table-wrap { margin-top: 10px; max-height: 420px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 500; font-size: 12px; text-align: left; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 12px; border-bottom: 1px solid var(--line); text-align: left; overflow-wrap: break-word; }
+td:first-child { min-width: 7.5em; }
+:is(th, td):first-child { padding-left: 18px; }
+:is(th, td):last-child { padding-right: 18px; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--sunken); }
+.n2 :is(th, td):nth-child(n+2), .n3 :is(th, td):nth-child(n+3), .n4 :is(th, td):nth-child(n+4) { text-align: right; white-space: nowrap; }
+td.empty { color: var(--faint); text-align: center !important; padding: 20px 18px; }
+.share { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.track { width: 56px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.pct { min-width: 34px; color: var(--muted); }
+.chart { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: 180px auto; column-gap: 8px; padding: 18px 18px 0 8px; }
+.y-axis { position: relative; font-size: 11px; color: var(--faint); }
+.y-axis span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
+.chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.chart .rule { stroke: var(--line); stroke-width: 1; }
+.chart .base { stroke: var(--line-strong); stroke-width: 1; }
+.chart .hit { fill: transparent; }
+.chart .bar:hover .hit { fill: var(--sunken); }
+.chart .bar:hover .seg { opacity: .85; }
+.x-axis { grid-column: 2; display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); padding-top: 8px; }
+.seg.s0 { fill: var(--s0); } .seg.s1 { fill: var(--s1); } .seg.s2 { fill: var(--s2); }
+.seg.s3 { fill: var(--s3); } .seg.s4 { fill: var(--s4); } .seg.s5 { fill: var(--s5); } .seg.sx { fill: var(--sx); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 18px 0; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.swatch.s0 { background: var(--s0); } .swatch.s1 { background: var(--s1); } .swatch.s2 { background: var(--s2); }
+.swatch.s3 { background: var(--s3); } .swatch.s4 { background: var(--s4); } .swatch.s5 { background: var(--s5); }
+.swatch.sx { background: var(--sx); }
+details { margin: 12px 18px 0; border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 500; width: fit-content; border-radius: 4px; }
+details .table-wrap { margin: 4px -18px 0; }
+.foot { color: var(--faint); font-size: 12px; margin-top: 40px; padding-bottom: 40px; }
+@media (max-width: 640px) {
+	.wrap { padding: 0 16px; }
+	.top { position: static; }
+	nav { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 12px 10px; }
+	.kpi { padding: 14px; }
+	.kpi-value { font-size: 26px; }
+}
+`;
 
 function statsPage(s: Record<string, unknown>): string {
 	const bd = s.breakdowns as Record<string, StatsRow[]>;
-	const rows = (r: StatsRow[]) => r.map(x => [x.value ?? "(none)", x.installs]);
-	const onOff = (r: StatsRow[]) => r.map(x => [x.value === 1 ? "on" : x.value === 0 ? "off" : "(none)", x.installs]);
+	const breakdown = (title: string, label: string, list: StatsRow[],
+		show: (v: unknown) => unknown = v => v ?? "Not reported", note?: string) => {
+		const sum = list.reduce((a, r) => a + Number(r.installs), 0);
+		return table(title, [label, "Installs", "Share"],
+			list.map(r => [show(r.value), r.installs, share(Number(r.installs), sum)]), { note });
+	};
+	const onOff = (v: unknown) => v === 1 ? "On" : v === 0 ? "Off" : "Not reported";
 	const features = s.features as StatsRow[];
 	const name = (r: StatsRow) => String(r.feature);
 	const errors = features.filter(r => parseErrorKey(name(r)) !== null);
@@ -589,73 +831,91 @@ function statsPage(s: Record<string, unknown>): string {
 	});
 	const usageRows = (list: StatsRow[], strip = "") =>
 		list.map(r => [name(r).slice(strip.length), r.total, r.installs, perInstall(r)]);
+	const usageHead = (first: string) => [first, "Total", "Installs", "Per install"];
 	const retention = s.retention as { days: number; cohort: number; retained: number }[];
 	const g = s.growth as { newThisWeek: number; newPrevWeek: number; wau: number; wauPrev: number };
 	const e = s.engagement as { messages: number; messagingInstalls: number; activeInstalls: number };
-	return `<!doctype html><html><head><meta charset="utf-8"><title>Feather Wand Telemetry</title>
-<style>
-body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
-h1 { font-size: 1.4rem; }
-h2 { font-size: 1.05rem; margin-top: 1.6rem; }
-.cards { display: flex; gap: 1rem; flex-wrap: wrap; }
-.card { border: 1px solid #ddd; border-radius: 8px; padding: 0.8rem 1.2rem; }
-.card .n { font-size: 1.6rem; font-weight: 600; }
-table { border-collapse: collapse; min-width: 20rem; }
-th, td { border: 1px solid #ddd; padding: 0.3rem 0.7rem; text-align: left; font-size: 0.9rem; }
-th { background: #f5f5f5; }
-.empty { color: #999; }
-.note { color: #666; font-size: 0.85rem; }
-</style></head><body>
-<h1>Feather Wand telemetry (${esc(s.today)} UTC)</h1>
-<div class="cards">
-<div class="card"><div class="n">${esc(s.dau)}</div>DAU</div>
-<div class="card"><div class="n">${esc(s.wau)}</div>WAU</div>
-<div class="card"><div class="n">${esc(s.mau)}</div>MAU</div>
-<div class="card"><div class="n">${esc(s.totalInstalls)}</div>Total installs</div>
+	const today = String(s.today);
+	const messagesPerActive = e.activeInstalls > 0 ? (e.messages / e.activeInstalls).toFixed(1) : "-";
+	const nav = [["overview", "Overview"], ["audience", "Audience"], ["setup", "Setup"], ["usage", "Usage"],
+		["agent", "Agent"], ["errors", "Errors"]].map(([id, label]) => `<a href="#${id}">${label}</a>`).join("");
+
+	const overview = `<div class="kpis">
+${kpi("Daily active", Number(s.dau), `<span class="muted">Installs active today</span>`)}
+${kpi("Weekly active", g.wau, delta(g.wau, g.wauPrev))}
+${kpi("Monthly active", Number(s.mau), `<span class="muted">${esc(pct(e.messagingInstalls, e.activeInstalls))} sent a message</span>`)}
+${kpi("New this week", g.newThisWeek, delta(g.newThisWeek, g.newPrevWeek))}
+${kpi("Messages, 30 days", e.messages, `<span class="muted">${esc(messagesPerActive)} per active install</span>`)}
+${kpi("Total installs", Number(s.totalInstalls), `<span class="muted">All time</span>`)}
 </div>
 <p class="note">Excludes ${esc(s.testInstalls)} installs that were the plugin's own test runs (installs that reported a test-only tool). Older test runs that pinged before reaching those tools can still be counted, so treat this as a lower bound.
-DAU, WAU and MAU count installs active today, in the last 7 days and in the last 30 days (UTC).</p>
-${table("Weekly growth (last 7 days vs the 7 before)", ["metric", "last 7 days", "previous 7 days", "change"], [
+DAU, WAU and MAU count installs active today, in the last 7 days and in the last 30 days (UTC).</p>`;
+
+	return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Feather Wand Telemetry</title>
+<link rel="icon" href="${FEATHER_WAND_ICON}">
+<style>${STATS_CSS}</style></head><body>
+<header class="top"><div class="wrap top-inner">
+<div class="brand"><img src="${FEATHER_WAND_ICON}" alt=""><div><h1>Feather Wand telemetry</h1>
+<p class="sub">${esc(today)} UTC<span aria-hidden="true"> · </span>Last 30 days unless a section says otherwise</p></div></div>
+<nav aria-label="Sections">${nav}</nav>
+</div></header>
+<main class="wrap">
+<section class="group" id="overview"><div class="group-head"><div class="group-title">Overview</div>
+<p>Active installs, growth and how much people use the plugin.</p></div>
+${overview}
+<div class="grid">
+${dailyCard("Daily active installs (30d)", today, s.dailyActive as StatsRow[])}
+${dailyCard("New installs (30d)", today, s.newInstalls as StatsRow[])}
+${table("Weekly growth (last 7 days vs the 7 before)", ["Metric", "Last 7 days", "7 before", "Change"], [
 		["New installs", g.newThisWeek, g.newPrevWeek, change(g.newThisWeek, g.newPrevWeek)],
 		["Active installs (WAU)", g.wau, g.wauPrev, change(g.wau, g.wauPrev)],
 	])}
-${table("Engagement (30d)", ["metric", "value"], [
+${table("Engagement (30d)", ["Metric", "Value"], [
 		["Messages sent (chat + agent)", e.messages],
 		["Installs that sent a message", `${e.messagingInstalls} of ${e.activeInstalls} (${pct(e.messagingInstalls, e.activeInstalls)})`],
-		["Messages per active install", e.activeInstalls > 0 ? (e.messages / e.activeInstalls).toFixed(1) : "-"],
+		["Messages per active install", messagesPerActive],
 		["Messages per messaging install", e.messagingInstalls > 0 ? (e.messages / e.messagingInstalls).toFixed(1) : "-"],
 	])}
-${table("Daily active installs (30d)", ["day", "installs"], (s.dailyActive as StatsRow[]).map(r => [r.day, r.installs]))}
-${table("New installs (30d)", ["day", "installs"], (s.newInstalls as StatsRow[]).map(r => [r.day, r.installs]))}
-${table("Plugin versions (30d)", ["version", "installs"], rows(bd.pluginVersion))}
-${table("JMeter versions (30d)", ["version", "installs"], rows(bd.jmeterVersion))}
-${table("OS (30d)", ["os", "installs"], rows(bd.os))}
-${table("JSR223 Refactor provider setting (30d)", ["provider setting", "installs"], rows(bd.provider))}
-<p class="note">This is the provider setting for JSR223 Refactor, not the chat provider.</p>
-${table("Countries (30d)", ["country", "installs"], rows(bd.country))}
-${table("Retention (all time)", ["came back after", "eligible installs", "returned", "rate"],
+${table("Retention (all time)", ["After", "Eligible", "Returned", "Rate"],
 		retention.map(r => [`${r.days} day${r.days === 1 ? "" : "s"}`, r.cohort, r.retained, pct(r.retained, r.cohort)]))}
-${adoptionTable(s.versionAdoption as StatsRow[])}
-${table("Java versions (30d)", ["version", "installs"], rows(bd.javaVersion))}
-${table("CPU architecture (30d)", ["arch", "installs"], rows(bd.arch))}
-${table("Agent Mode (30d)", ["agent mode", "installs"], onOff(bd.agentEnabled))}
-${table("Models (30d)", ["model", "installs"], rows(bd.model))}
-${table("Decisions backend (30d)", ["backend", "installs"], rows(bd.judgmentProvider))}
-${table("Feature usage (30d)", ["feature", "total", "installs", "per install"], usageRows(usage))}
-${table("Chat messages by provider (30d)", ["provider", "total", "installs", "per install"], usageRows(chatProviders, "msg_"))}
-${table("Agent runs by provider (30d)", ["provider", "total", "installs", "per install"], usageRows(agentProviders, "agentrun_"))}
-${table("Agent run size (30d)", ["size", "total", "installs", "per install"], usageRows(agentSizes, "agent_steps_"))}
-${table("Provider setup funnel (30d)", ["event", "option", "outcome", "total", "installs"], setupRows)}
-${table("Decisions calls (30d)", ["backend", "result", "error category", "total", "installs"], decisionRows)}
-${table("Model picker (30d)", ["action", "total", "installs", "per install"], usageRows(picker, "picker_"))}
-${table("Make it pass (30d)", ["event", "total", "installs", "per install"], usageRows(fixUsage, "fix_"))}
-${table("Workload Designer (30d)", ["event", "total", "installs", "per install"], usageRows(loadUsage, "load_"))}
-${table("Agent outcomes (30d)", ["outcome", "total", "installs", "per install"], usageRows(outcomes, "outcome_"))}
-${table("Agent tool calls (30d)", ["tool", "total", "installs", "per install"], usageRows(tools, "tool_"))}
-${table("Agent tool failures (30d)", ["tool", "failures", "installs", "of calls"], failureRows)}
-${table("Smart routing and triage (30d)", ["event", "total", "installs", "per install"], usageRows(judgment))}
-${table("Provider errors (30d)", ["provider", "error", "total", "installs"],
-		errors.map(r => { const [prov, cat] = parseErrorKey(name(r))!; return [prov, cat, r.total, r.installs]; }))}
+</div></section>
+${group("audience", "Audience", "Who runs Feather Wand, based on each install's latest ping.", `
+${adoptionCard(today, s.versionAdoption as StatsRow[])}
+${breakdown("Plugin versions (30d)", "Version", bd.pluginVersion)}
+${breakdown("JMeter versions (30d)", "Version", bd.jmeterVersion)}
+${breakdown("Java versions (30d)", "Version", bd.javaVersion)}
+${breakdown("OS (30d)", "OS", bd.os)}
+${breakdown("CPU architecture (30d)", "Architecture", bd.arch)}
+${breakdown("Countries (30d)", "Country", bd.country)}`)}
+${group("setup", "Setup", "Providers, models and modes each install is configured with.", `
+${breakdown("Agent Mode (30d)", "Agent Mode", bd.agentEnabled, onOff)}
+${breakdown("Models (30d)", "Model", bd.model)}
+${breakdown("Decisions backend (30d)", "Backend", bd.judgmentProvider)}
+${breakdown("JSR223 Refactor provider setting (30d)", "Provider setting", bd.provider, undefined,
+		"This is the provider setting for JSR223 Refactor, not the chat provider.")}
+${table("Provider setup funnel (30d)", ["Event", "Option", "Outcome", "Total", "Installs"], setupRows, { numFrom: 4, span2: true })}
+${table("Model picker (30d)", usageHead("Action"), usageRows(picker, "picker_"))}`)}
+${group("usage", "Usage", "Feature counters summed over the window.", `
+${table("Feature usage (30d)", usageHead("Feature"), usageRows(usage))}
+${table("Chat messages by provider (30d)", usageHead("Provider"), usageRows(chatProviders, "msg_"))}
+${table("Make it pass (30d)", usageHead("Event"), usageRows(fixUsage, "fix_"))}
+${table("Workload Designer (30d)", usageHead("Event"), usageRows(loadUsage, "load_"))}`)}
+${group("agent", "Agent", "Agent runs, tool calls and the routing decisions behind them.", `
+${table("Agent runs by provider (30d)", usageHead("Provider"), usageRows(agentProviders, "agentrun_"))}
+${table("Agent run size (30d)", usageHead("Size"), usageRows(agentSizes, "agent_steps_"))}
+${table("Agent outcomes (30d)", usageHead("Outcome"), usageRows(outcomes, "outcome_"))}
+${table("Agent tool calls (30d)", usageHead("Tool"), usageRows(tools, "tool_"))}
+${table("Smart routing and triage (30d)", usageHead("Event"), usageRows(judgment))}
+${table("Decisions calls (30d)", ["Backend", "Result", "Error category", "Total", "Installs"], decisionRows, { numFrom: 4, span2: true })}`)}
+${group("errors", "Errors", "Failures reported by providers and agent tools.", `
+${table("Provider errors (30d)", ["Provider", "Error", "Total", "Installs"],
+		errors.map(r => { const [prov, cat] = parseErrorKey(name(r))!; return [prov, cat, r.total, r.installs]; }), { numFrom: 3 })}
+${table("Agent tool failures (30d)", ["Tool", "Failures", "Installs", "Of calls"], failureRows)}`)}
+</main>
+<footer class="wrap foot">Installs are counted once per window. Totals add up every feature counter. All days are UTC.</footer>
 </body></html>`;
 }
 
