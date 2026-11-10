@@ -29,6 +29,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @Test
+    void httpUploadPathsMimeTypesAndParameterNamesAreNeverRewritten() {
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.setHTTPFiles(new org.apache.jmeter.protocol.http.util.HTTPFileArg[] {
+            new org.apache.jmeter.protocol.http.util.HTTPFileArg(
+                    "uploads/1234.csv", "upload_1234", "application/x-1234")
+        });
+        JMeterTreeNode scope = new JMeterTreeNode(http, null);
+        assertTrue(ParameterScanner.scan(scope).isEmpty());
+        http.addArgument("id", "1234");
+        List<ParameterScanner.Candidate> candidates = ParameterScanner.scan(scope);
+        assertEquals(1, candidates.size());
+        assertEquals(1, candidates.get(0).occurrences);
+        assertEquals(1, ParameterReplacement.replace(scope, candidates, true));
+        assertEquals("uploads/1234.csv", http.getHTTPFiles()[0].getPath());
+        assertEquals("upload_1234", http.getHTTPFiles()[0].getParamName());
+        assertEquals("application/x-1234", http.getHTTPFiles()[0].getMimeType());
+    }
+
+    @Test
     void userDefinedValuesAreNotOfferedOrReplacedButTheirNamesRemainReserved() {
         TestPlan plan = new TestPlan();
         Arguments planVariables = new Arguments();

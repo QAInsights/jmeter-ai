@@ -3,6 +3,8 @@ package org.qainsights.jmeter.ai.param;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.Argument;
 import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.protocol.http.util.HTTPFileArg;
+import org.apache.jmeter.protocol.http.util.HTTPFileArgs;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.StringProperty;
 
@@ -12,6 +14,10 @@ final class ParameterPropertyPolicy {
     private ParameterPropertyPolicy() {}
 
     static boolean skip(JMeterProperty property, boolean config) {
+        if (property.getObjectValue() instanceof HTTPFileArgs
+                || property.getObjectValue() instanceof HTTPFileArg) {
+            return true;
+        }
         if (property.getObjectValue() instanceof CSVDataSet) {
             return true;
         }
