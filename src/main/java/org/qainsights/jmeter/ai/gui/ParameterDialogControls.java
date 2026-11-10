@@ -19,4 +19,8 @@ public final class ParameterDialogControls {
     public static void parameterizationApplied() {
         AiMenuItem.parameterizationApplied();
     }
+
+    public static java.util.function.Function<String, String> sampleRowsAiCall() {
+        return AiMenuItem.sampleRowsAiCall();
+    }
 }

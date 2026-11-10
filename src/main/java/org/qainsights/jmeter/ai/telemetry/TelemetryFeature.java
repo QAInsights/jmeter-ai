@@ -58,6 +58,7 @@ public enum TelemetryFeature {
     EXTRACT_ADDED("extract_added"),
     PARAM_OPENED("param_opened"),
     PARAM_APPLIED("param_applied"),
+    PARAM_AI_USED("param_ai_used"),
     OUTCOME_CANCELLED("outcome_cancelled"),
     AGENT_STEPS_1_5("agent_steps_1_5"),
     AGENT_STEPS_6_15("agent_steps_6_15"),

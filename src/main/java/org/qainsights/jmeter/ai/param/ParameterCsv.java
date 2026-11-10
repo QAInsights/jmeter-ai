@@ -43,12 +43,23 @@ public final class ParameterCsv {
             List<String> existingNames,
             boolean existingHeader)
             throws IOException {
+        write(file, delimiter, names, values, existingNames, existingHeader, List.of());
+    }
+
+    static void write(Path file, char delimiter, List<String> names, List<String> values,
+            List<String> existingNames, boolean existingHeader, List<List<String>> samples)
+            throws IOException {
         if (names.isEmpty() || names.size() != values.size()) {
             throw new IllegalArgumentException(
                     "CSV requires equally sized, non-empty names and values.");
         }
         if (delimiter == '"' || delimiter == '\n' || delimiter == '\r') {
             throw new IllegalArgumentException("Invalid CSV delimiter.");
+        }
+        for (List<String> sample : samples) {
+            if (sample.size() != names.size() || sample.stream().anyMatch(java.util.Objects::isNull)) {
+                throw new IllegalArgumentException("Sample rows must match the selected columns.");
+            }
         }
         Path absolute = file.toAbsolutePath();
         Files.createDirectories(absolute.getParent());
@@ -58,10 +69,14 @@ public final class ParameterCsv {
                 if (existingNames.isEmpty()) {
                     row(writer, delimiter, names, List.of());
                     row(writer, delimiter, values, List.of());
+                    for (List<String> sample : samples) {
+                        row(writer, delimiter, sample, List.of());
+                    }
                 } else {
                     try (PushbackReader reader = new PushbackReader(
                             Files.newBufferedReader(absolute, StandardCharsets.UTF_8), 1)) {
                         Record first = record(reader);
+                        String ending = first == null || first.ending.isEmpty() ? "\n" : first.ending;
                         if (existingHeader) {
                             if (first == null || !fields(first, delimiter).equals(existingNames)) {
                                 throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
@@ -72,19 +87,32 @@ public final class ParameterCsv {
                             row(writer, delimiter, existingNames, names);
                         }
                         boolean hasData = false;
+                        List<String> defaults = List.of();
+                        String lastEnding = ending;
                         for (Record current = first; current != null; current = record(reader)) {
                             if (current.text.isEmpty()) {
                                 writer.write(current.ending);
                                 continue;
                             }
-                            if (fields(current, delimiter).size() != existingNames.size()) {
+                            List<String> currentFields = fields(current, delimiter);
+                            if (currentFields.size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
                             }
+                            if (!hasData) {
+                                defaults = currentFields;
+                            }
                             append(writer, current, delimiter, values);
+                            lastEnding = current.ending;
                             hasData = true;
                         }
                         if (!hasData) {
                             throw new IOException("Existing CSV needs at least one data row before appending columns.");
+                        }
+                        if (!samples.isEmpty() && lastEnding.isEmpty()) {
+                            writer.write(ending);
+                        }
+                        for (List<String> sample : samples) {
+                            row(writer, delimiter, defaults, sample, ending);
                         }
                     }
                 }
@@ -143,6 +171,11 @@ public final class ParameterCsv {
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
             List<String> appended) throws IOException {
+        row(writer, delimiter, first, appended, "\n");
+    }
+
+    private static void row(BufferedWriter writer, char delimiter, List<String> first,
+            List<String> appended, String ending) throws IOException {
         boolean separator = false;
         for (List<String> fields : List.of(first, appended)) {
             for (String value : fields) {
@@ -155,7 +188,7 @@ public final class ParameterCsv {
                 separator = true;
             }
         }
-        writer.write('\n');
+        writer.write(ending);
     }
 
     static void replaceFile(Path source, Path target) throws IOException {

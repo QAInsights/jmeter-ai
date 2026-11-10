@@ -36,6 +36,11 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingWorker;
+import java.util.function.Function;
+import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import javax.swing.table.DefaultTableModel;
 
 final class ParameterizeThisDialog extends JDialog {
@@ -51,11 +56,25 @@ final class ParameterizeThisDialog extends JDialog {
     private final JLabel error = new JLabel(" ");
     private final GuiPackage gui;
     private final JMeterTreeNode scope;
+    private final Function<String, String> aiCall;
+    private final JCheckBox askAi = new JCheckBox("Ask AI for sample rows");
+    private final JSpinner sampleCount = new JSpinner(new SpinnerNumberModel(10, 1, 500, 1));
+    private final JButton applyButton = ParameterDialogControls.button("Apply variables", true);
+    private final JButton cancelButton = ParameterDialogControls.button("Cancel", false);
+    private ParameterSampleRequest sampleRequest;
+    private volatile boolean closed;
+    private boolean committing;
 
     ParameterizeThisDialog(GuiPackage gui, JMeterTreeNode scope) {
+        this(gui, scope, ParameterDialogControls.sampleRowsAiCall());
+    }
+
+    ParameterizeThisDialog(GuiPackage gui, JMeterTreeNode scope, Function<String, String> aiCall) {
         super(gui.getMainFrame(), "Parameterize this", true);
         this.gui = gui;
         this.scope = scope;
+        this.aiCall = aiCall;
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         Telemetry.record(TelemetryFeature.PARAM_OPENED);
         candidates = ParameterScanner.scan(scope);
         rows =
@@ -91,13 +110,13 @@ final class ParameterizeThisDialog extends JDialog {
             filename.setText(Path.of(FileServer.getFileServer().getBaseDir())
                     .resolve(filename.getText()).toAbsolutePath().toString());
         }
-        JButton apply = ParameterDialogControls.button("Apply variables", true);
+        JButton apply = applyButton;
         apply.setEnabled(!candidates.isEmpty());
         apply.addActionListener(e -> apply());
-        JButton cancel = ParameterDialogControls.button("Cancel", false);
+        JButton cancel = cancelButton;
         cancel.addActionListener(e -> dispose());
         JPanel content = content(table, candidates.isEmpty(), filename, delimiter, sharing,
-                recycle, stop, error, apply, cancel);
+                recycle, stop, error, apply, cancel, sampleOptions());
         setContentPane(content);
         getRootPane().setDefaultButton(apply);
         pack();
@@ -112,6 +131,13 @@ final class ParameterizeThisDialog extends JDialog {
     static JPanel content(JTable table, boolean empty, JTextField filename, JTextField delimiter,
             JComboBox<String> sharing, JCheckBox recycle, JCheckBox stop, JLabel error,
             JButton apply, JButton cancel) {
+        return content(table, empty, filename, delimiter, sharing, recycle, stop, error,
+                apply, cancel, null);
+    }
+
+    static JPanel content(JTable table, boolean empty, JTextField filename, JTextField delimiter,
+            JComboBox<String> sharing, JCheckBox recycle, JCheckBox stop, JLabel error,
+            JButton apply, JButton cancel, JPanel sampleOptions) {
         JPanel content = new JPanel(new BorderLayout(0, UiTokens.SPACE_4));
         content.setBackground(ThemeColors.canvas());
         content.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
@@ -120,7 +146,7 @@ final class ParameterizeThisDialog extends JDialog {
         JPanel header =
                 column(
                         title,
-                        helper("Turn hard-coded values into CSV variables. No AI call."));
+                        helper("Turn hard-coded values into CSV variables."));
         content.add(header, BorderLayout.NORTH);
         JScrollPane preview = new JScrollPane(table);
         preview.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
@@ -147,6 +173,9 @@ final class ParameterizeThisDialog extends JDialog {
         eof.add(recycle);
         eof.add(stop);
         form.add(eof);
+        if (sampleOptions != null) {
+            form.add(sampleOptions);
+        }
         JLabel note = helper("Ctrl+Z in Feather Wand chat restores the plan, not the CSV file.");
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
@@ -160,6 +189,47 @@ final class ParameterizeThisDialog extends JDialog {
         bottom.add(status, BorderLayout.SOUTH);
         content.add(bottom, BorderLayout.SOUTH);
         return content;
+    }
+
+    static String sampleTooltip(boolean configured) {
+        return configured ? "Only column names and locally inferred types are sent."
+                : "Configure a supported AI provider in Feather Wand to generate sample rows.";
+    }
+
+    private JPanel sampleOptions() {
+        askAi.setOpaque(false);
+        askAi.setEnabled(aiCall != null && !candidates.isEmpty());
+        askAi.setToolTipText(sampleTooltip(aiCall != null));
+        sampleCount.setEnabled(false);
+        askAi.addActionListener(event -> sampleCount.setEnabled(askAi.isSelected()));
+        JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        options.setOpaque(false);
+        options.add(askAi);
+        options.add(new JLabel("Rows"));
+        options.add(ParameterDialogControls.field(sampleCount));
+        return column(options, helper("<html>Optional AI: column names and types only. No current values or plan details.<br>"
+                + "Reused CSV columns keep the first existing row's values in new sample rows.</html>"));
+    }
+
+    private void setBusy(boolean busy) {
+        for (JComponent control : List.of(table, filename, delimiter, sharing, recycle, stop)) {
+            control.setEnabled(!busy);
+        }
+        applyButton.setEnabled(!busy && !candidates.isEmpty());
+        askAi.setEnabled(!busy && aiCall != null && !candidates.isEmpty());
+        sampleCount.setEnabled(!busy && askAi.isSelected());
+    }
+
+    @Override
+    public void dispose() {
+        if (committing) {
+            return;
+        }
+        closed = true;
+        if (sampleRequest != null) {
+            sampleRequest.cancel();
+        }
+        super.dispose();
     }
 
     static void styleTable(JTable table) {
@@ -306,55 +376,114 @@ final class ParameterizeThisDialog extends JDialog {
             }
             gui.updateCurrentNode();
             Path target = path;
-            int changed =
-                    ParameterTransaction.apply(
+            if (askAi.isSelected() && aiCall != null) {
+                List<ParameterSampleRows.Column> columns = new ArrayList<>();
+                for (int i = 0; i < names.size(); i++) {
+                    columns.add(ParameterSampleRows.column(names.get(i), values.get(i)));
+                }
+                int count = (Integer) sampleCount.getValue();
+                String prompt = ParameterSampleRows.prompt(columns, count);
+                setBusy(true);
+                error.setText("Generating sample rows. Cancel leaves the plan and CSV unchanged.");
+                Telemetry.record(TelemetryFeature.PARAM_AI_USED);
+                sampleRequest = new ParameterSampleRequest(aiCall, prompt, count, names.size(), 60_000,
+                        samples -> commit(target, reuse, file, chosen, names, values, oldNames, samples),
+                        message -> {
+                            setBusy(false);
+                            error.setText(message);
+                        });
+                sampleRequest.start();
+            } else {
+                commit(target, reuse, file, chosen, names, values, oldNames, List.of());
+            }
+        } catch (Exception exception) {
+            error.setText(exception.getMessage());
+        }
+    }
+
+    private void commit(Path target, CSVDataSet reuse, String file,
+            List<ParameterScanner.Candidate> chosen, List<String> names, List<String> values,
+            List<String> oldNames, List<List<String>> samples) {
+        setBusy(true);
+        committing = true;
+        cancelButton.setEnabled(false);
+        error.setText("Applying variables...");
+        String separator = delimiter.getText();
+        boolean recycleValue = recycle.isSelected();
+        boolean stopValue = stop.isSelected();
+        String shareMode = new String[] {"shareMode.all", "shareMode.group", "shareMode.thread"}
+                [sharing.getSelectedIndex()];
+        boolean header = reuse == null || reuse.getPropertyAsString("variableNames").isBlank()
+                || reuse.getPropertyAsBoolean("ignoreFirstLine");
+        new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                return ParameterTransaction.apply(
                             target,
                             () -> {
                                 ParameterCsv.write(
                                         target,
-                                        delimiter.getText().charAt(0),
+                                        separator.charAt(0),
                                         names,
                                         values,
                                         oldNames,
-                                        reuse == null
-                                                || reuse.getPropertyAsString("variableNames").isBlank()
-                                                || reuse.getPropertyAsBoolean("ignoreFirstLine"));
+                                        header, samples);
                                 return 0;
                             },
-                            () ->
-                                    ParameterPlacement.apply(
-                                            gui.getTreeModel(),
-                                            scope,
-                                            reuse,
-                                            file,
-                                            delimiter.getText(),
-                                            recycle.isSelected(),
-                                            stop.isSelected(),
-                                            new String[] {
-                                                        "shareMode.all",
-                                                        "shareMode.group",
-                                                        "shareMode.thread"
-                                                    }
-                                                    [sharing.getSelectedIndex()],
-                                            chosen,
-                                            oldNames));
-            Telemetry.record(TelemetryFeature.PARAM_APPLIED);
-            ParameterDialogControls.parameterizationApplied();
-            dispose();
-            JOptionPane.showMessageDialog(
-                    gui.getMainFrame(),
-                    "Variables: "
-                            + String.join(", ", names)
-                            + "\nReplaced occurrences: "
-                            + changed
-                            + "\nCSV file: "
-                            + path
-                            + "\nCtrl+Z in Feather Wand chat restores the plan, not the CSV file."
-                            + (reuse == null ? "" : "\nExisting CSV consumer settings were preserved."),
-                    "Parameterize this",
-                    JOptionPane.INFORMATION_MESSAGE);
-        } catch (Exception exception) {
-            error.setText(exception.getMessage());
-        }
+                            () -> {
+                                java.util.concurrent.atomic.AtomicInteger changed =
+                                        new java.util.concurrent.atomic.AtomicInteger();
+                                java.util.concurrent.atomic.AtomicReference<Exception> failure =
+                                        new java.util.concurrent.atomic.AtomicReference<>();
+                                EdtExecutor.swing().run(() -> {
+                                    try {
+                                        changed.set(ParameterPlacement.apply(
+                                                gui.getTreeModel(),
+                                                scope,
+                                                reuse,
+                                                file,
+                                                separator,
+                                                recycleValue,
+                                                stopValue,
+                                                shareMode,
+                                                chosen,
+                                                oldNames));
+                                    } catch (Exception e) {
+                                        failure.set(e);
+                                    }
+                                });
+                                if (failure.get() != null) {
+                                    throw failure.get();
+                                }
+                                return changed.get();
+                            });
+            }
+
+            @Override
+            protected void done() {
+                committing = false;
+                cancelButton.setEnabled(true);
+                try {
+                    int changed = get();
+                    Telemetry.record(TelemetryFeature.PARAM_APPLIED);
+                    ParameterDialogControls.parameterizationApplied();
+                    dispose();
+                    JOptionPane.showMessageDialog(
+                            gui.getMainFrame(),
+                            "Variables: " + String.join(", ", names)
+                                    + "\nReplaced occurrences: " + changed
+                                    + "\nCSV file: " + target
+                                    + "\nAI sample rows: " + samples.size()
+                                    + "\nCtrl+Z in Feather Wand chat restores the plan, not the CSV file."
+                                    + (reuse == null ? "" : "\nExisting CSV consumer settings were preserved."),
+                            "Parameterize this",
+                            JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception exception) {
+                    setBusy(false);
+                    error.setText("Could not apply variables. " + (exception.getCause() == null
+                            ? exception.getMessage() : exception.getCause().getMessage()));
+                }
+            }
+        }.execute();
     }
 }

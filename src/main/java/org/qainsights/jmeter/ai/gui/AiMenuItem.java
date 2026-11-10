@@ -230,6 +230,16 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         }
     }
 
+    static java.util.function.Function<String, String> sampleRowsAiCall() {
+        AiMenuItem item = liveInstance;
+        if (item != null && item.currentChatPanel != null) {
+            AiChatPanel panel = item.currentChatPanel;
+            return CommandDispatcher.workloadAiCall(panel.getSelectedModel(), panel::resolveAiService);
+        }
+        AiService service = createAiService(AiConfig.getProperty("jmeter.ai.service.type", "openai"));
+        return service == null ? null : prompt -> service.generateResponse(java.util.List.of(prompt));
+    }
+
     private void openAiChatPanel() {
         GuiPackage guiPackage = GuiPackage.getInstance();
         if (guiPackage == null || guiPackage.getMainFrame() == null) {
