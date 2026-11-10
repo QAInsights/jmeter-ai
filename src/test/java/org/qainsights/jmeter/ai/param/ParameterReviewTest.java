@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.CSVDataSet;
+import org.apache.jmeter.control.GenericController;
+import org.apache.jmeter.threads.ThreadGroup;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Path;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.Test;
 
@@ -12,6 +16,26 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
+    @TempDir Path directory;
+
+    @Test
+    void reuseOnlySelectsEnabledDirectChildren() {
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        JMeterTreeNode controller = new JMeterTreeNode(new GenericController(), null);
+        group.add(controller);
+        CSVDataSet nested = new CSVDataSet();
+        nested.setFilename("data.csv");
+        nested.setEnabled(true);
+        controller.add(new JMeterTreeNode(nested, null));
+        assertNull(ParameterPlacement.reusable(group, directory, "data.csv"));
+        CSVDataSet direct = new CSVDataSet();
+        direct.setFilename("data.csv");
+        direct.setEnabled(false);
+        group.add(new JMeterTreeNode(direct, null));
+        assertNull(ParameterPlacement.reusable(group, directory, "data.csv"));
+        direct.setEnabled(true);
+        assertSame(direct, ParameterPlacement.reusable(group, directory, "data.csv"));
+    }
     @Test
     void csvAndOtherConfigFilePropertiesAreNeverCandidatesOrReplacementTargets() {
         Arguments config = new Arguments();
