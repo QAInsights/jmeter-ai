@@ -23,7 +23,7 @@ final class ParameterTransaction {
             }
             previous = Files.createTempFile(target.getParent(), ".parameterize-backup-", ".csv");
             try {
-                Files.copy(target, previous, StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(target, previous, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
             } catch (Exception failure) {
                 Files.deleteIfExists(previous);
                 throw failure;
@@ -33,7 +33,7 @@ final class ParameterTransaction {
         try {
             writeCsv.run();
             return applyPlan.run();
-        } catch (Exception failure) {
+        } catch (Throwable failure) {
             try {
                 if (previous == null) {
                     Files.deleteIfExists(target);
@@ -42,12 +42,24 @@ final class ParameterTransaction {
                 }
             } catch (Exception rollback) {
                 cleanup = false;
-                failure.addSuppressed(rollback);
+                java.io.IOException recovery = new java.io.IOException(
+                        "CSV rollback failed: " + rollback.getMessage() + ". Original backup: " + previous, failure);
+                recovery.addSuppressed(rollback);
+                if (failure instanceof Error) {
+                    failure.addSuppressed(recovery);
+                } else {
+                    throw recovery;
+                }
             }
             throw failure;
         } finally {
             if (cleanup && previous != null) {
-                Files.deleteIfExists(previous);
+                try {
+                    Files.deleteIfExists(previous);
+                } catch (java.io.IOException | SecurityException cleanupFailure) {
+                    org.slf4j.LoggerFactory.getLogger(ParameterTransaction.class)
+                            .warn("Could not remove Parameterize backup {}", previous, cleanupFailure);
+                }
             }
         }
     }

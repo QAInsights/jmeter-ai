@@ -11,6 +11,38 @@ class ParameterFollowupTest {
     @TempDir Path directory;
 
     @Test
+    void errorsRollBackCsvBytesAndPermissions() throws Exception {
+        Path csv = directory.resolve("data.csv");
+        Files.writeString(csv, "old\nvalue\n");
+        var permissions = java.nio.file.attribute.PosixFilePermissions.fromString("rw-r-----");
+        Files.setPosixFilePermissions(csv, permissions);
+        assertThrows(AssertionError.class, () -> ParameterTransaction.apply(csv, () -> {
+            ParameterCsv.write(csv, ',', List.of("new"), List.of("value"), List.of("old"));
+            assertEquals(permissions, Files.getPosixFilePermissions(csv));
+            return 0;
+        }, () -> { throw new AssertionError("plan error"); }));
+        assertEquals("old\nvalue\n", Files.readString(csv));
+        assertEquals(permissions, Files.getPosixFilePermissions(csv));
+    }
+
+    @Test
+    void backupCleanupFailureDoesNotHideSuccessfulCommit() throws Exception {
+        Path csv = directory.resolve("cleanup.csv");
+        Files.writeString(csv, "old");
+        try (org.mockito.MockedStatic<Files> files = org.mockito.Mockito.mockStatic(Files.class,
+                org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            files.when(() -> Files.deleteIfExists(org.mockito.ArgumentMatchers.argThat(
+                    path -> path != null && path.getFileName().toString().startsWith(".parameterize-backup-"))))
+                    .thenThrow(new java.io.IOException("cleanup blocked"));
+            assertEquals(7, ParameterTransaction.apply(csv, () -> {
+                Files.writeString(csv, "new");
+                return 0;
+            }, () -> 7));
+        }
+        assertEquals("new", Files.readString(csv));
+    }
+
+    @Test
     void csvCannotReplaceTheSavedPlanOrItsAliases() throws Exception {
         Path plan = directory.resolve("test.jmx");
         Files.writeString(plan, "saved plan");
