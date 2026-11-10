@@ -3,12 +3,13 @@ package org.qainsights.jmeter.ai.param;
 import org.apache.jmeter.save.CSVSaveService;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -47,59 +48,64 @@ public final class ParameterCsv {
         if (delimiter == '"' || delimiter == '\n' || delimiter == '\r') {
             throw new IllegalArgumentException("Invalid CSV delimiter.");
         }
-        List<List<String>> rows = new ArrayList<>();
-        if (!existingNames.isEmpty()) {
-            if (!Files.exists(file)) {
-                throw new IOException("The reused CSV file does not exist: " + file);
-            }
-            try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                String[] row;
-                while ((row = CSVSaveService.csvReadFile(reader, delimiter)).length > 0) {
-                    rows.add(new ArrayList<>(Arrays.asList(row)));
-                }
-            }
-            if (!existingHeader) {
-                rows.add(0, new ArrayList<>(existingNames));
-            }
-            if (rows.isEmpty() || !rows.get(0).equals(existingNames)) {
-                throw new IOException(
-                        "Existing CSV header must match the CSV Data Set variable names.");
-            }
-            for (List<String> row : rows) {
-                if (row.size() != existingNames.size()) {
-                    throw new IOException("Existing CSV has an inconsistent column count.");
-                }
-            }
-            rows.get(0).addAll(names);
-            if (rows.size() == 1) {
-                throw new IOException(
-                        "Existing CSV needs at least one data row before appending columns.");
-            }
-            for (int i = 1; i < rows.size(); i++) {
-                rows.get(i).addAll(values);
-            }
-        } else {
-            rows.add(new ArrayList<>(names));
-            rows.add(new ArrayList<>(values));
-        }
-        StringBuilder output = new StringBuilder();
-        for (List<String> row : rows) {
-            for (int i = 0; i < row.size(); i++) {
-                if (i > 0) {
-                    output.append(delimiter);
-                }
-                output.append('"').append(row.get(i).replace("\"", "\"\"")).append('"');
-            }
-            output.append('\n');
-        }
         Path absolute = file.toAbsolutePath();
         Files.createDirectories(absolute.getParent());
         Path staged = Files.createTempFile(absolute.getParent(), ".parameterize-", ".csv");
         try {
-            Files.writeString(staged, output, StandardCharsets.UTF_8);
-            Files.move(staged, absolute, StandardCopyOption.REPLACE_EXISTING);
+            try (BufferedWriter writer = Files.newBufferedWriter(staged, StandardCharsets.UTF_8)) {
+                if (existingNames.isEmpty()) {
+                    row(writer, delimiter, names, List.of());
+                    row(writer, delimiter, values, List.of());
+                } else {
+                    try (BufferedReader reader = Files.newBufferedReader(absolute, StandardCharsets.UTF_8)) {
+                        if (existingHeader && !Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter))
+                                .equals(existingNames)) {
+                            throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
+                        }
+                        row(writer, delimiter, existingNames, names);
+                        String[] fields;
+                        boolean hasData = false;
+                        while ((fields = CSVSaveService.csvReadFile(reader, delimiter)).length > 0) {
+                            if (fields.length != existingNames.size()) {
+                                throw new IOException("Existing CSV has an inconsistent column count.");
+                            }
+                            row(writer, delimiter, Arrays.asList(fields), values);
+                            hasData = true;
+                        }
+                        if (!hasData) {
+                            throw new IOException("Existing CSV needs at least one data row before appending columns.");
+                        }
+                    }
+                }
+            }
+            replaceFile(staged, absolute);
         } finally {
             Files.deleteIfExists(staged);
+        }
+    }
+
+    private static void row(BufferedWriter writer, char delimiter, List<String> first,
+            List<String> appended) throws IOException {
+        boolean separator = false;
+        for (List<String> fields : List.of(first, appended)) {
+            for (String value : fields) {
+                if (separator) {
+                    writer.write(delimiter);
+                }
+                writer.write('"');
+                writer.write(value.replace("\"", "\"\""));
+                writer.write('"');
+                separator = true;
+            }
+        }
+        writer.write('\n');
+    }
+
+    static void replaceFile(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException unsupported) {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 }
