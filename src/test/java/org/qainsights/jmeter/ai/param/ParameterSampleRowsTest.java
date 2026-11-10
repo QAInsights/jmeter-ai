@@ -14,6 +14,32 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ParameterSampleRowsTest {
+    private static List<ParameterSampleRows.Column> strings(int count) {
+        return java.util.stream.IntStream.range(0, count)
+                .mapToObj(i -> new ParameterSampleRows.Column("column" + i, "string")).toList();
+    }
+
+    @Test
+    void numberAndBooleanSamplesMustRemainValidForUnquotedJsonSubstitution() throws Exception {
+        List<ParameterSampleRows.Column> columns = List.of(
+                ParameterSampleRows.column("number", "12.00"),
+                ParameterSampleRows.column("boolean", "true"));
+        for (String bad : List.of("alice", "NaN", "Infinity", "01", "1.2.3", " 1234", "+1234")) {
+            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(
+                    "[[\"" + bad + "\",\"true\"]]", 1, columns));
+        }
+        for (String bad : List.of("True", "FALSE", "yes", "1234", " true")) {
+            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(
+                    "[[\"1234\",\"" + bad + "\"]]", 1, columns));
+        }
+        List<List<String>> rows = ParameterSampleRows.parse(
+                "[[\"-1.25e+03\",\"false\"]]", 1, columns);
+        com.fasterxml.jackson.databind.JsonNode body = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree("{\"number\":" + rows.get(0).get(0) + ",\"boolean\":" + rows.get(0).get(1) + "}");
+        assertTrue(body.get("number").isNumber());
+        assertTrue(body.get("boolean").isBoolean());
+    }
+
     @TempDir Path directory;
 
     @Test
@@ -44,7 +70,7 @@ class ParameterSampleRowsTest {
         CountDownLatch completed = new CountDownLatch(1);
         AtomicReference<List<List<String>>> result = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> new ParameterSampleRequest(provider,
-                ParameterSampleRows.prompt(columns, 1), 1, columns.size(), 5000, rows -> {
+                ParameterSampleRows.prompt(columns, 1), 1, columns, 5000, rows -> {
                     assertTrue(SwingUtilities.isEventDispatchThread());
                     result.set(rows);
                     completed.countDown();
@@ -60,7 +86,7 @@ class ParameterSampleRowsTest {
                 "[[null]]", "[[1234]]", "[[\"${secret}\"]]", "[[\"=SUM(A1)\"]]",
                 "[[\"line\\nline\"]]", "[[\"a\\\"quote\"]]", "[[\"a\\\\slash\"]]",
                 "[[\"ok\"]] [[\"extra\"]]")) {
-            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(response, 1, 1), response);
+            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(response, 1, strings(1)), response);
         }
         assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.prompt(List.of(), 10));
         for (int count : List.of(0, 501)) {
@@ -68,31 +94,31 @@ class ParameterSampleRowsTest {
                     List.of(ParameterSampleRows.column("id", "1234")), count));
         }
         assertEquals(List.of(List.of("-1234", "a,b")),
-                ParameterSampleRows.parse("[[\"-1234\",\"a,b\"]]", 1, 2));
+                ParameterSampleRows.parse("[[\"-1234\",\"a,b\"]]", 1, strings(2)));
     }
 
     @Test
     void acceptsMarkdownFencedSampleRows() {
         assertEquals(List.of(List.of("test@example.com", "1234")),
-                ParameterSampleRows.parse("```json\n[[\"test@example.com\",\"1234\"]]\n```", 1, 2));
+                ParameterSampleRows.parse("```json\n[[\"test@example.com\",\"1234\"]]\n```", 1, strings(2)));
     }
 
     @Test
     void acceptsProseAroundTheOutermostArrayWithoutRelaxingValidation() {
         assertEquals(List.of(List.of("bracket ] inside a cell")),
                 ParameterSampleRows.parse(
-                        "Here are your sample rows:\n[[\"bracket ] inside a cell\"]]\nHope this helps.", 1, 1));
+                        "Here are your sample rows:\n[[\"bracket ] inside a cell\"]]\nHope this helps.", 1, strings(1)));
         for (String payload : List.of("[[\"${secret}\"]]", "[[\"one\",\"two\"]]", "[]",
                 "[[\"ok\"],]", "[[1234]]")) {
             assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(
-                    "Here are the rows:\n```json\n" + payload + "\n```\nDone.", 1, 1));
+                    "Here are the rows:\n```json\n" + payload + "\n```\nDone.", 1, strings(1)));
         }
     }
 
     @Test
     void sampleRowsFollowCurrentValuesAndReuseOriginalColumnDefaults() throws Exception {
         Path csv = directory.resolve("samples.csv");
-        List<List<String>> samples = ParameterSampleRows.parse("[[\"a,b\"],[\"second\"]]", 2, 1);
+        List<List<String>> samples = ParameterSampleRows.parse("[[\"a,b\"],[\"second\"]]", 2, strings(1));
         ParameterCsv.write(csv, ',', List.of("user"), List.of("alice"), List.of(), true, samples);
         assertEquals("\"user\"\n\"alice\"\n\"a,b\"\n\"second\"\n", Files.readString(csv));
         Files.writeString(csv, "old\r\nfirst\r\nsecond");
@@ -127,7 +153,7 @@ class ParameterSampleRowsTest {
                 }
                 return "[[\"late\"]]";
             };
-            SwingUtilities.invokeAndWait(() -> new ParameterSampleRequest(provider, "metadata", 1, 1,
+            SwingUtilities.invokeAndWait(() -> new ParameterSampleRequest(provider, "metadata", 1, strings(1),
                     timeout ? 30 : 5000, rows -> fail("Unexpected success"), message -> {
                         assertTrue(SwingUtilities.isEventDispatchThread());
                         error.set(message);
@@ -159,7 +185,7 @@ class ParameterSampleRowsTest {
                 }
                 returned.countDown();
                 return "[[\"late\"]]";
-            }, "metadata", 1, 1, 5000, success, failure));
+            }, "metadata", 1, strings(1), 5000, success, failure));
             request.get().start();
         });
         assertTrue(started.await(5, TimeUnit.SECONDS));

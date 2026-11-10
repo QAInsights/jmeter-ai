@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 final class ParameterSampleRows {
+    private static final String NUMBER = "-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?";
     private static final ObjectMapper JSON = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
@@ -24,7 +25,7 @@ final class ParameterSampleRows {
             type = "email";
         } else if (currentValue.matches("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) {
             type = "uuid";
-        } else if (currentValue.matches("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")) {
+        } else if (currentValue.matches(NUMBER)) {
             type = "number";
         } else if (currentValue.matches("\\d{4}-\\d{2}-\\d{2}(?:[T ].*)?")) {
             type = "date";
@@ -50,7 +51,7 @@ final class ParameterSampleRows {
         }
     }
 
-    static List<List<String>> parse(String response, int count, int width) {
+    static List<List<String>> parse(String response, int count, List<Column> columns) {
         if (response == null || response.isBlank() || response.length() > 4_000_000) {
             throw new IllegalArgumentException("The provider returned an empty or oversized sample response.");
         }
@@ -66,13 +67,19 @@ final class ParameterSampleRows {
             }
             List<List<String>> rows = new ArrayList<>();
             for (JsonNode row : root) {
-                if (!row.isArray() || row.size() != width) {
+                if (!row.isArray() || row.size() != columns.size()) {
                     throw new IllegalArgumentException("The sample response has the wrong column count.");
                 }
                 List<String> cells = new ArrayList<>();
                 for (JsonNode cell : row) {
                     if (!cell.isTextual() || !safe(cell.textValue())) {
                         throw new IllegalArgumentException("The sample response contains an unsafe cell.");
+                    }
+                    String type = columns.get(cells.size()).type();
+                    String value = cell.textValue();
+                    if ((type.equals("number") && !value.matches(NUMBER))
+                            || (type.equals("boolean") && !value.equals("true") && !value.equals("false"))) {
+                        throw new IllegalArgumentException("The sample response contains a value that does not match its column type.");
                     }
                     cells.add(cell.textValue());
                 }

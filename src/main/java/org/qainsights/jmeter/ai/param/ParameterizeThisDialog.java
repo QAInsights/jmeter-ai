@@ -387,7 +387,7 @@ final class ParameterizeThisDialog extends JDialog {
                 setBusy(true);
                 error.setText("Generating sample rows. Cancel leaves the plan and CSV unchanged.");
                 Telemetry.record(TelemetryFeature.PARAM_AI_USED);
-                sampleRequest = new ParameterSampleRequest(aiCall, prompt, count, names.size(), 60_000,
+                sampleRequest = new ParameterSampleRequest(aiCall, prompt, count, List.copyOf(columns), 60_000,
                         samples -> commit(target, reuse, file, chosen, names, values, oldNames, samples),
                         message -> {
                             setBusy(false);

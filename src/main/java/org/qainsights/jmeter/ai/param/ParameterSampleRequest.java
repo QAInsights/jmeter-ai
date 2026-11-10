@@ -13,7 +13,8 @@ final class ParameterSampleRequest {
     private final Timer timer;
     private boolean stopped;
 
-    ParameterSampleRequest(Function<String, String> provider, String prompt, int count, int width,
+    ParameterSampleRequest(Function<String, String> provider, String prompt, int count,
+            List<ParameterSampleRows.Column> columns,
             int timeoutMillis, Consumer<List<List<String>>> success, Consumer<String> failure) {
         timer = new Timer(timeoutMillis, event -> {
             cancel();
@@ -23,7 +24,7 @@ final class ParameterSampleRequest {
         worker = new SwingWorker<>() {
             @Override
             protected List<List<String>> doInBackground() {
-                return ParameterSampleRows.parse(provider.apply(prompt), count, width);
+                return ParameterSampleRows.parse(provider.apply(prompt), count, columns);
             }
 
             @Override
