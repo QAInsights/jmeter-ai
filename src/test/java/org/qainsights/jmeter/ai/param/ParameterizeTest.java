@@ -223,9 +223,9 @@ class ParameterizeTest {
                         candidates));
         assertEquals("${user}", http.getArguments().getArgument(0).getValue());
         CSVDataSet csv = (CSVDataSet) ((JMeterTreeNode) group.getChildAt(0)).getTestElement();
-        assertTrue(csv.isIgnoreFirstLine());
-        assertTrue(csv.getQuotedData());
-        assertEquals("user", csv.getVariableNames());
+        assertTrue(csv.getPropertyAsBoolean("ignoreFirstLine"));
+        assertTrue(csv.getPropertyAsBoolean("quotedData"));
+        assertEquals("user", csv.getPropertyAsString("variableNames"));
         assertSame(csv, ParameterPlacement.reusable(group, directory, "data/../data/users.csv"));
         assertNull(ParameterPlacement.reusable(group, directory, "other.csv"));
         http.addArgument("password", "secret");
@@ -239,7 +239,7 @@ class ParameterizeTest {
                 false,
                 "shareMode.all",
                 ParameterScanner.scan(sampler));
-        assertEquals("user,password", csv.getVariableNames());
+        assertEquals("user,password", csv.getPropertyAsString("variableNames"));
         assertEquals(2, group.getChildCount());
         csv.setEnabled(false);
         assertNull(ParameterPlacement.reusable(group, directory, "data/users.csv"));

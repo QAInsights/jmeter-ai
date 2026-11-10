@@ -18,13 +18,62 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import static org.mockito.Mockito.mock;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jmeter.testelement.TestElement;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
+    @BeforeAll
+    static void init() {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+    }
+
     @TempDir Path directory;
+
+    @Test
+    void newCsvSettingsAreStoredInPersistentJMeterProperties() throws Exception {
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.addArgument("user", "alice");
+        JMeterTreeNode scope = new JMeterTreeNode(sampler, null);
+        group.add(scope);
+        when(model.addComponent(any(), eq(group))).thenAnswer(call -> {
+            JMeterTreeNode node = new JMeterTreeNode(call.getArgument(0), null);
+            group.add(node);
+            return node;
+        });
+        ParameterPlacement.apply(model, scope, null, "data.csv", ";", false, true,
+                "shareMode.thread", ParameterScanner.scan(scope));
+        CSVDataSet csv = (CSVDataSet) ((JMeterTreeNode) group.getChildAt(1)).getTestElement();
+        assertEquals("data.csv", csv.getPropertyAsString("filename"));
+        assertEquals("user", csv.getPropertyAsString("variableNames"));
+        assertEquals(";", csv.getPropertyAsString("delimiter"));
+        assertEquals("UTF-8", csv.getPropertyAsString("fileEncoding"));
+        assertTrue(csv.getPropertyAsBoolean("ignoreFirstLine"));
+        assertTrue(csv.getPropertyAsBoolean("quotedData"));
+        assertFalse(csv.getPropertyAsBoolean("recycle"));
+        assertTrue(csv.getPropertyAsBoolean("stopThread"));
+        assertEquals("shareMode.thread", csv.getPropertyAsString("shareMode"));
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            org.apache.jmeter.testbeans.gui.TestBeanGUI editor =
+                    new org.apache.jmeter.testbeans.gui.TestBeanGUI(CSVDataSet.class);
+            editor.configure(csv);
+            TestElement saved = (TestElement) csv.clone();
+            editor.modifyTestElement(saved);
+            assertEquals("data.csv", saved.getPropertyAsString("filename"));
+            assertEquals("user", saved.getPropertyAsString("variableNames"));
+            assertTrue(saved.getPropertyAsBoolean("ignoreFirstLine"));
+            assertTrue(saved.getPropertyAsBoolean("quotedData"));
+        });
+    }
 
     @Test
     void streamsLargeCsvAndRestoresDiskBackupOnPlanFailure() throws Exception {
@@ -81,7 +130,7 @@ class ParameterReviewTest {
         plan.setUserDefinedVariables(variables);
         JMeterTreeNode root = new JMeterTreeNode(plan, null);
         CSVDataSet planCsv = new CSVDataSet();
-        planCsv.setVariableNames("user_2");
+        planCsv.setProperty("variableNames", "user_2");
         root.add(new JMeterTreeNode(planCsv, null));
         JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
         root.add(group);
@@ -89,7 +138,7 @@ class ParameterReviewTest {
         udv.addArgument("user_3", "other");
         group.add(new JMeterTreeNode(udv, null));
         CSVDataSet csv = new CSVDataSet();
-        csv.setVariableNames("user_4");
+        csv.setProperty("variableNames", "user_4");
         group.add(new JMeterTreeNode(csv, null));
         HTTPSamplerProxy sampler = new HTTPSamplerProxy();
         sampler.addArgument("user", "alice");
@@ -111,21 +160,21 @@ class ParameterReviewTest {
         JMeterTreeNode scope = new JMeterTreeNode(http, null);
         group.add(scope);
         CSVDataSet csv = new CSVDataSet();
-        csv.setVariableNames("old");
-        csv.setDelimiter(";");
-        csv.setFileEncoding("");
-        csv.setRecycle(false);
-        csv.setStopThread(true);
-        csv.setShareMode("shareMode.thread");
+        csv.setProperty("variableNames", "old");
+        csv.setProperty("delimiter", ";");
+        csv.setProperty("fileEncoding", "");
+        csv.setProperty("recycle", false);
+        csv.setProperty("stopThread", true);
+        csv.setProperty("shareMode", "shareMode.thread");
         group.add(new JMeterTreeNode(csv, null));
         ParameterPlacement.apply(mock(JMeterTreeModel.class), scope, csv, "data.csv", ",",
                 true, false, "shareMode.all", ParameterScanner.scan(scope));
-        assertEquals(";", csv.getDelimiter());
-        assertEquals("", csv.getFileEncoding());
-        assertFalse(csv.getRecycle());
-        assertTrue(csv.getStopThread());
-        assertEquals("shareMode.thread", csv.getShareMode());
-        assertEquals("old,user", csv.getVariableNames());
+        assertEquals(";", csv.getPropertyAsString("delimiter"));
+        assertEquals("", csv.getPropertyAsString("fileEncoding"));
+        assertFalse(csv.getPropertyAsBoolean("recycle"));
+        assertTrue(csv.getPropertyAsBoolean("stopThread"));
+        assertEquals("shareMode.thread", csv.getPropertyAsString("shareMode"));
+        assertEquals("old,user", csv.getPropertyAsString("variableNames"));
     }
 
     @Test
@@ -134,12 +183,12 @@ class ParameterReviewTest {
         JMeterTreeNode controller = new JMeterTreeNode(new GenericController(), null);
         group.add(controller);
         CSVDataSet nested = new CSVDataSet();
-        nested.setFilename("data.csv");
+        nested.setProperty("filename", "data.csv");
         nested.setEnabled(true);
         controller.add(new JMeterTreeNode(nested, null));
         assertNull(ParameterPlacement.reusable(group, directory, "data.csv"));
         CSVDataSet direct = new CSVDataSet();
-        direct.setFilename("data.csv");
+        direct.setProperty("filename", "data.csv");
         direct.setEnabled(false);
         group.add(new JMeterTreeNode(direct, null));
         assertNull(ParameterPlacement.reusable(group, directory, "data.csv"));
@@ -153,8 +202,8 @@ class ParameterReviewTest {
         config.setProperty("other.filename", "1234");
         JMeterTreeNode root = new JMeterTreeNode(config, null);
         CSVDataSet csv = new CSVDataSet();
-        csv.setFilename("data/1234.csv");
-        csv.setVariableNames("1234");
+        csv.setProperty("filename", "data/1234.csv");
+        csv.setProperty("variableNames", "1234");
         root.add(new JMeterTreeNode(csv, null));
         HTTPSamplerProxy sampler = new HTTPSamplerProxy();
         sampler.addArgument("id", "1234");
@@ -163,8 +212,8 @@ class ParameterReviewTest {
         assertEquals(List.of("1234"), candidates.stream().map(c -> c.value).toList());
         assertEquals(1, candidates.get(0).occurrences);
         assertEquals(1, ParameterReplacement.replace(root, candidates, true));
-        assertEquals("data/1234.csv", csv.getFilename());
-        assertEquals("1234", csv.getVariableNames());
+        assertEquals("data/1234.csv", csv.getPropertyAsString("filename"));
+        assertEquals("1234", csv.getPropertyAsString("variableNames"));
         assertEquals("data/1234.csv", config.getArgument(0).getValue());
         assertEquals("1234", config.getPropertyAsString("other.filename"));
     }

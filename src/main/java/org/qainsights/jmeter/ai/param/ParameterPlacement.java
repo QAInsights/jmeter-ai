@@ -33,8 +33,9 @@ public final class ParameterPlacement {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
             if (node.isEnabled() && node.getTestElement() instanceof CSVDataSet) {
                 CSVDataSet csv = (CSVDataSet) node.getTestElement();
-                if (!csv.getFilename().contains("${")
-                        && base.resolve(csv.getFilename())
+                String filenameProperty = csv.getPropertyAsString("filename");
+                if (!filenameProperty.isBlank() && !filenameProperty.contains("${")
+                        && base.resolve(filenameProperty)
                                 .toAbsolutePath()
                                 .normalize()
                                 .equals(target)) {
@@ -57,9 +58,9 @@ public final class ParameterPlacement {
             List<ParameterScanner.Candidate> chosen)
             throws Exception {
         List<String> existingNames =
-                reuse == null || reuse.getVariableNames().isBlank()
+                reuse == null || reuse.getPropertyAsString("variableNames").isBlank()
                         ? List.of()
-                        : List.of(reuse.getVariableNames().split(",", -1));
+                        : List.of(reuse.getPropertyAsString("variableNames").split(",", -1));
         return apply(
                 model,
                 scope,
@@ -105,20 +106,20 @@ public final class ParameterPlacement {
             CSVDataSet csv = reuse == null ? new CSVDataSet() : reuse;
             String names =
                     String.join(",", chosen.stream().map(c -> c.variable).toArray(String[]::new));
-            csv.setVariableNames(
+            csv.setProperty("variableNames",
                     existingNames.isEmpty()
                             ? names
                             : String.join(",", existingNames) + "," + names);
-            csv.setFilename(filename);
+            csv.setProperty("filename", filename);
             if (reuse == null) {
-                csv.setDelimiter(delimiter);
-                csv.setFileEncoding("UTF-8");
-                csv.setRecycle(recycle);
-                csv.setStopThread(stop);
-                csv.setShareMode(sharing);
+                csv.setProperty("delimiter", delimiter);
+                csv.setProperty("fileEncoding", "UTF-8");
+                csv.setProperty("recycle", recycle);
+                csv.setProperty("stopThread", stop);
+                csv.setProperty("shareMode", sharing);
             }
-            csv.setQuotedData(true);
-            csv.setIgnoreFirstLine(true);
+            csv.setProperty("quotedData", true);
+            csv.setProperty("ignoreFirstLine", true);
             if (reuse == null) {
                 csv.setName("CSV Data Set Config");
                 csv.setEnabled(true);

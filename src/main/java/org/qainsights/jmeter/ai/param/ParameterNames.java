@@ -41,7 +41,7 @@ public final class ParameterNames {
 
     private static void collect(TestElement element, Set<String> names) {
         if (element instanceof CSVDataSet) {
-            Arrays.stream(((CSVDataSet) element).getVariableNames().split(","))
+            Arrays.stream(element.getPropertyAsString("variableNames").split(","))
                     .map(String::trim).filter(name -> !name.isEmpty()).forEach(names::add);
         } else if (element instanceof Arguments) {
             ((Arguments) element).getArgumentsAsMap().keySet().forEach(names::add);

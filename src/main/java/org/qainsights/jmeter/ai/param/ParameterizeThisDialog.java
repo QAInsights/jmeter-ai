@@ -259,13 +259,13 @@ final class ParameterizeThisDialog extends JDialog {
             List<String> oldNames =
                     reuse == null
                             ? List.of()
-                            : reuse.getVariableNames().isBlank()
+                            : reuse.getPropertyAsString("variableNames").isBlank()
                                     ? ParameterCsv.header(path, delimiter.getText().charAt(0))
-                                    : Arrays.asList(reuse.getVariableNames().split(",", -1));
+                                    : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null
-                    && (!delimiter.getText().equals(reuse.getDelimiter())
-                            || (!reuse.getFileEncoding().isBlank()
-                                    && !"UTF-8".equalsIgnoreCase(reuse.getFileEncoding())))) {
+                    && (!delimiter.getText().equals(reuse.getPropertyAsString("delimiter", ","))
+                            || (!reuse.getPropertyAsString("fileEncoding").isBlank()
+                                    && !"UTF-8".equalsIgnoreCase(reuse.getPropertyAsString("fileEncoding"))))) {
                 throw new IllegalArgumentException(
                         "Existing CSV config must use the same delimiter and UTF-8 encoding (or the"
                                 + " default encoding).");
@@ -319,8 +319,8 @@ final class ParameterizeThisDialog extends JDialog {
                                         values,
                                         oldNames,
                                         reuse == null
-                                                || reuse.getVariableNames().isBlank()
-                                                || reuse.isIgnoreFirstLine());
+                                                || reuse.getPropertyAsString("variableNames").isBlank()
+                                                || reuse.getPropertyAsBoolean("ignoreFirstLine"));
                                 return 0;
                             },
                             () ->
