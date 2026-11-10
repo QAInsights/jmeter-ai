@@ -20,6 +20,75 @@ import static org.mockito.Mockito.*;
 
 class ParameterUndoTest {
     @Test
+    void featherWandUndoRestoresPropertiesAndRemovesAddedCsvAfterLaterTreeEvents() throws Exception {
+        JMeterTreeModel model = model();
+        JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
+        JMeterTreeNode group = model.addComponent(group(), plan);
+        HTTPSamplerProxy http = sampler();
+        JMeterTreeNode scope = model.addComponent(http, group);
+        TestElement before = (TestElement) http.clone();
+        ParameterPlacement.apply(model, scope, null, "data.csv", ",", true, false,
+                "shareMode.all", ParameterScanner.scan(scope));
+        JMeterTreeNode csv = (JMeterTreeNode) group.getChildAt(0);
+        model.nodeChanged(csv);
+        model.nodeStructureChanged(group);
+        assertTrue(ParameterPlacement.undoLast(model).startsWith("Restored"));
+        assertEquals(1, group.getChildCount());
+        assertSame(scope, group.getChildAt(0));
+        assertNull(csv.getParent());
+        assertEquals(before.getProperty("HTTPsampler.Arguments"),
+                http.getProperty("HTTPsampler.Arguments"));
+        assertEquals("alice", http.getArguments().getArgument(0).getValue());
+        assertTrue(ParameterPlacement.undoLast(model).startsWith("Nothing to undo"));
+    }
+
+    @Test
+    void featherWandUndoRestoresEveryReusedConfigPropertyAndRejectsOtherPlans() throws Exception {
+        JMeterTreeModel model = model();
+        JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
+        JMeterTreeNode group = model.addComponent(group(), plan);
+        org.apache.jmeter.config.CSVDataSet csv = new org.apache.jmeter.config.CSVDataSet();
+        csv.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.testbeans.gui.TestBeanGUI");
+        csv.setProperty("filename", "data.csv");
+        csv.setProperty("variableNames", "old");
+        csv.setProperty("quotedData", false);
+        csv.setProperty("ignoreFirstLine", false);
+        model.addComponent(csv, group);
+        HTTPSamplerProxy http = sampler();
+        JMeterTreeNode scope = model.addComponent(http, group);
+        ParameterPlacement.apply(model, scope, csv, "data.csv", ",", true, false,
+                "shareMode.all", ParameterScanner.scan(scope));
+        assertEquals("old,user", csv.getPropertyAsString("variableNames"));
+        assertTrue(ParameterPlacement.undoLast(model()).startsWith("Nothing to undo"));
+        assertTrue(ParameterPlacement.undoLast(model).startsWith("Restored"));
+        assertEquals("old", csv.getPropertyAsString("variableNames"));
+        assertFalse(csv.getPropertyAsBoolean("quotedData"));
+        assertFalse(csv.getPropertyAsBoolean("ignoreFirstLine"));
+        assertEquals("alice", http.getArguments().getArgument(0).getValue());
+        assertEquals(2, group.getChildCount());
+    }
+
+    private static JMeterTreeModel model() {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        return new JMeterTreeModel();
+    }
+
+    private static ThreadGroup group() {
+        ThreadGroup group = new ThreadGroup();
+        group.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.threads.gui.ThreadGroupGui");
+        return group;
+    }
+
+    private static HTTPSamplerProxy sampler() {
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.addArgument("user", "alice");
+        http.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui");
+        return http;
+    }
+
+    @Test
     void allPlacementTreeEventsFormOneUndoHistoryEntry() throws Exception {
         if (JMeterUtils.getJMeterProperties() == null) {
             JMeterUtils.loadJMeterProperties("nonexistent.properties");

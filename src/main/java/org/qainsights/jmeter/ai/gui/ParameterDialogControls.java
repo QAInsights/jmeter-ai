@@ -15,4 +15,8 @@ public final class ParameterDialogControls {
         return new QuietButton(
                 text, primary ? QuietButton.Kind.PRIMARY : QuietButton.Kind.OUTLINED);
     }
+
+    public static void parameterizationApplied() {
+        AiMenuItem.parameterizationApplied();
+    }
 }
