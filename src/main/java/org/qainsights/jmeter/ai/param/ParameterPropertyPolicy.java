@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.param;
 
 import org.apache.jmeter.config.CSVDataSet;
+import org.apache.jmeter.config.Argument;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.StringProperty;
 
@@ -15,6 +16,12 @@ final class ParameterPropertyPolicy {
         }
         if (!config) {
             return false;
+        }
+        if (property.getObjectValue() instanceof Argument) {
+            Argument argument = (Argument) property.getObjectValue();
+            return argument.getName().toLowerCase(Locale.ROOT)
+                            .matches(".*(file|filename|filepath|directory|path)$")
+                    || argument.getValue().contains("/") || argument.getValue().contains("\\");
         }
         String name = property.getName().toLowerCase(Locale.ROOT);
         return name.matches(".*(file|filename|filepath|directory|path)$")
