@@ -46,6 +46,7 @@ class ParameterUndoTest {
         JMeterTreeNode scope = model.addComponent(sampler(), group);
         var candidates = ParameterScanner.scan(scope);
         var gui = mock(org.apache.jmeter.gui.GuiPackage.class);
+        when(gui.getGui(any(TestElement.class))).thenReturn(mock(org.apache.jmeter.gui.JMeterGUIComponent.class));
         when(gui.getTreeModel()).thenReturn(model);
         try (MockedStatic<org.apache.jmeter.gui.GuiPackage> global = mockStatic(org.apache.jmeter.gui.GuiPackage.class)) {
             global.when(org.apache.jmeter.gui.GuiPackage::getInstance).thenReturn(gui);
