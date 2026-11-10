@@ -104,6 +104,10 @@ public final class ParameterCsv {
                     }
                 }
             }
+            if (Files.exists(absolute)
+                    && Files.getFileAttributeView(absolute, java.nio.file.attribute.PosixFileAttributeView.class) != null) {
+                Files.setPosixFilePermissions(staged, Files.getPosixFilePermissions(absolute));
+            }
             replaceFile(staged, absolute);
         } finally {
             Files.deleteIfExists(staged);
