@@ -11,6 +11,29 @@ class ParameterFollowupTest {
     @TempDir Path directory;
 
     @Test
+    void invalidJsonPrefixesDoNotLeakCandidatesAndConfigArgumentsRemainUsable() {
+        var http = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+        http.setPostBodyRaw(true);
+        http.addNonEncodedArgument("", "{\"id\":12345} trailing", "");
+        var scope = new org.apache.jmeter.gui.tree.JMeterTreeNode(http, null);
+        assertTrue(ParameterScanner.scan(scope).isEmpty());
+        var config = new org.apache.jmeter.config.ConfigTestElement();
+        config.setProperty("other.filename", "/tmp/12345.csv");
+        config.setProperty("profile", "id=12345");
+        var args = new org.apache.jmeter.config.Arguments();
+        args.addArgument("profile", "/api/12345");
+        config.setProperty(new org.apache.jmeter.testelement.property.TestElementProperty("arguments", args));
+        var node = new org.apache.jmeter.gui.tree.JMeterTreeNode(config, null);
+        var candidates = ParameterScanner.scan(node);
+        assertTrue(candidates.stream().anyMatch(c -> c.value.equals("/api/12345")));
+        var candidate = new ParameterScanner.Candidate("id", "12345", "id");
+        assertEquals(2, ParameterReplacement.replace(node, List.of(candidate), true));
+        assertEquals("/tmp/12345.csv", config.getPropertyAsString("other.filename"));
+        assertEquals("id=${id}", config.getPropertyAsString("profile"));
+        assertEquals("/api/${id}", args.getArgument(0).getValue());
+    }
+
+    @Test
     void expressionsAndUnicodeNeighborsRemainProtectedAndHttpMetadataIsNotRewritten() {
         var http = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
         http.addArgument("id", "12345");

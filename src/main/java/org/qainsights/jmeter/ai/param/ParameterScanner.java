@@ -76,11 +76,16 @@ public final class ParameterScanner {
                 for (JMeterProperty property : http.getArguments().getArguments()) {
                     Argument arg = (Argument) property.getObjectValue();
                     if (http.getPostBodyRaw()) {
-                        String json = ParameterJson.mask(arg.getValue()).text();
-                        try (JsonParser parser = JSON.getFactory().createParser(json)) {
-                            JSON.readTree(json);
+                        try (JsonParser parser = JSON.getFactory().createParser(ParameterJson.mask(arg.getValue()).text())) {
+                            Map<String, Candidate> body = new LinkedHashMap<>(found);
+                            Set<String> bodyNames = new java.util.HashSet<>(names);
                             parser.nextToken();
-                            leaves(parser, path + " > body", "body", found, names);
+                            leaves(parser, path + " > body", "body", body, bodyNames);
+                            if (parser.nextToken() != null) {
+                                throw new java.io.IOException("Trailing JSON content");
+                            }
+                            found.putAll(body);
+                            names.addAll(bodyNames);
                         } catch (Exception ignored) {
                             // Non-JSON raw bodies are not key/value structures.
                         }
