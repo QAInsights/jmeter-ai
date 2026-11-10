@@ -47,6 +47,11 @@ public final class ParameterNames {
     }
 
     private static void collect(TestElement element, Set<String> names) {
+        for (String key : java.util.List.of("RegexExtractor.refname", "JSONPostProcessor.referenceNames",
+                "JMESPathExtractor.referenceName", "XPathExtractor.refname", "XPath2Extractor.refname")) {
+            Arrays.stream(element.getPropertyAsString(key).split(";")).map(String::trim)
+                    .filter(name -> !name.isEmpty()).forEach(names::add);
+        }
         if (element instanceof CSVDataSet) {
             String explicit = element.getPropertyAsString("variableNames");
             Arrays.stream(explicit.isBlank() ? headerNames(element) : explicit.split(","))
