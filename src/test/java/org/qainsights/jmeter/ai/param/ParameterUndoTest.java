@@ -20,6 +20,33 @@ import static org.mockito.Mockito.*;
 
 class ParameterUndoTest {
     @Test
+    void undoPreservesLaterEditsToUntouchedElementsAndProperties() throws Exception {
+        JMeterTreeModel model = model();
+        JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
+        JMeterTreeNode group = model.addComponent(group(), plan);
+        HTTPSamplerProxy http = sampler();
+        http.addArgument("other", "original-other");
+        JMeterTreeNode scope = model.addComponent(http, group);
+        HTTPSamplerProxy untouched = sampler();
+        model.addComponent(untouched, group);
+        ParameterScanner.Candidate user = ParameterScanner.scan(scope).stream()
+                .filter(c -> c.value.equals("alice")).findFirst().orElseThrow();
+        ParameterPlacement.apply(model, scope, null, "data.csv", ",", true, false,
+                "shareMode.all", java.util.List.of(user));
+        untouched.setName("Later name");
+        untouched.getArguments().getArgument(0).setValue("later-value");
+        http.setComment("Later comment");
+        http.getArguments().getArgument(1).setValue("later-other");
+        assertTrue(ParameterPlacement.undoLast(model).startsWith("Restored"));
+        assertEquals("alice", http.getArguments().getArgument(0).getValue());
+        assertEquals("later-other", http.getArguments().getArgument(1).getValue());
+        assertEquals("Later comment", http.getComment());
+        assertEquals("Later name", untouched.getName());
+        assertEquals("later-value", untouched.getArguments().getArgument(0).getValue());
+        assertEquals(2, group.getChildCount());
+    }
+
+    @Test
     void featherWandUndoRestoresPropertiesAndRemovesAddedCsvAfterLaterTreeEvents() throws Exception {
         JMeterTreeModel model = model();
         JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
