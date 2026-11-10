@@ -101,10 +101,12 @@ final class ParameterReplacement {
 
     private static List<Edit> jsonEdits(String text, List<ParameterScanner.Candidate> chosen) {
         List<Edit> edits = new ArrayList<>();
-        try (JsonParser parser = JSON.getFactory().createParser(text)) {
+        ParameterJson.Input input = ParameterJson.mask(text);
+        try (JsonParser parser = JSON.getFactory().createParser(input.text())) {
             JsonToken token;
             while ((token = parser.nextToken()) != null) {
-                if (!token.isScalarValue() || token == JsonToken.VALUE_NULL) {
+                if (!token.isScalarValue() || token == JsonToken.VALUE_NULL
+                        || input.protectedToken(parser.getTokenLocation().getCharOffset())) {
                     continue;
                 }
                 String value = parser.getText();
