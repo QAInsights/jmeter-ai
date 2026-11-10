@@ -340,7 +340,6 @@ final class ParameterizeThisDialog extends JDialog {
                                                     [sharing.getSelectedIndex()],
                                             chosen,
                                             oldNames));
-            gui.refreshCurrentGui();
             Telemetry.record(TelemetryFeature.PARAM_APPLIED);
             dispose();
             JOptionPane.showMessageDialog(
