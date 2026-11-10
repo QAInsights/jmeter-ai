@@ -49,7 +49,8 @@ public class CommandIntellisenseProvider {
     public List<String> getSuggestions(String prefix) {
         List<String> suggestions = new ArrayList<>();
         for (String cmd : commands) {
-            if (cmd.startsWith(prefix)) {
+            if (cmd.startsWith(prefix) && (!cmd.equals("@param")
+                    || org.qainsights.jmeter.ai.param.ParameterizeThisMenu.enabled())) {
                 suggestions.add(cmd);
             }
         }
