@@ -18,7 +18,7 @@ public final class ParameterPlacement {
     private static LastApplied lastApplied;
 
     private record LastApplied(JMeterTreeModel model, JMeterTreeNode group,
-            Map<JMeterTreeNode, TestElement> before, JMeterTreeNode added) {
+            List<ParameterPropertyUndo.Change> changes, JMeterTreeNode added) {
     }
 
     private ParameterPlacement() {}
@@ -144,7 +144,7 @@ public final class ParameterPlacement {
                 gui.refreshCurrentGui();
                 gui.updateCurrentNode();
             }
-            lastApplied = new LastApplied(model, group, before, added);
+            lastApplied = new LastApplied(model, group, ParameterPropertyUndo.changes(before), added);
             return changed;
         } catch (Exception failure) {
             for (Map.Entry<JMeterTreeNode, TestElement> entry : before.entrySet()) {
@@ -204,13 +204,8 @@ public final class ParameterPlacement {
                 gui.getTreeListener().getJTree().setSelectionPath(
                         new javax.swing.tree.TreePath(edit.group.getPath()));
             }
-            for (Map.Entry<JMeterTreeNode, TestElement> entry : edit.before.entrySet()) {
-                TestElement element = entry.getKey().getTestElement();
-                element.clear();
-                PropertyIterator properties = entry.getValue().propertyIterator();
-                while (properties.hasNext()) {
-                    element.setProperty(properties.next().clone());
-                }
+            for (ParameterPropertyUndo.Change change : edit.changes) {
+                change.restore();
             }
             if (edit.added != null && edit.added.getParent() != null) {
                 model.removeNodeFromParent(edit.added);
