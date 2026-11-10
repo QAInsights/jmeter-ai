@@ -59,7 +59,7 @@ class ParameterSampleRowsTest {
         for (String response : List.of("", "not json", "[]", "{}", "[[\"one\",\"two\"]]",
                 "[[null]]", "[[1234]]", "[[\"${secret}\"]]", "[[\"=SUM(A1)\"]]",
                 "[[\"line\\nline\"]]", "[[\"a\\\"quote\"]]", "[[\"a\\\\slash\"]]",
-                "[[\"ok\"]] trailing")) {
+                "[[\"ok\"]] [[\"extra\"]]")) {
             assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(response, 1, 1), response);
         }
         assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.prompt(List.of(), 10));
@@ -69,6 +69,24 @@ class ParameterSampleRowsTest {
         }
         assertEquals(List.of(List.of("-1234", "a,b")),
                 ParameterSampleRows.parse("[[\"-1234\",\"a,b\"]]", 1, 2));
+    }
+
+    @Test
+    void acceptsMarkdownFencedSampleRows() {
+        assertEquals(List.of(List.of("test@example.com", "1234")),
+                ParameterSampleRows.parse("```json\n[[\"test@example.com\",\"1234\"]]\n```", 1, 2));
+    }
+
+    @Test
+    void acceptsProseAroundTheOutermostArrayWithoutRelaxingValidation() {
+        assertEquals(List.of(List.of("bracket ] inside a cell")),
+                ParameterSampleRows.parse(
+                        "Here are your sample rows:\n[[\"bracket ] inside a cell\"]]\nHope this helps.", 1, 1));
+        for (String payload : List.of("[[\"${secret}\"]]", "[[\"one\",\"two\"]]", "[]",
+                "[[\"ok\"],]", "[[1234]]")) {
+            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(
+                    "Here are the rows:\n```json\n" + payload + "\n```\nDone.", 1, 1));
+        }
     }
 
     @Test

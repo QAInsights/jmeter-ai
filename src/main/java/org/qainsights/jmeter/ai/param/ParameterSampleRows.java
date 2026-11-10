@@ -55,7 +55,12 @@ final class ParameterSampleRows {
             throw new IllegalArgumentException("The provider returned an empty or oversized sample response.");
         }
         try {
-            JsonNode root = JSON.readTree(response);
+            int start = response.indexOf('[');
+            int end = response.lastIndexOf(']');
+            if (start < 0 || end < start) {
+                throw new IllegalArgumentException("The provider must return valid JSON sample rows.");
+            }
+            JsonNode root = JSON.readTree(response.substring(start, end + 1));
             if (!root.isArray() || root.size() != count) {
                 throw new IllegalArgumentException("The sample response has the wrong row count.");
             }
