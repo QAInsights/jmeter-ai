@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -66,7 +67,7 @@ public final class ParameterScanner {
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
             TestElement element = node.getTestElement();
-            if (element instanceof CSVDataSet) {
+            if (element instanceof CSVDataSet || element instanceof Arguments) {
                 continue;
             }
             String path = node.getName();

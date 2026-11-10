@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -46,7 +47,8 @@ final class ParameterReplacement {
         Enumeration<?> nodes = scope.preorderEnumeration();
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
-            if (node.getTestElement() instanceof CSVDataSet) {
+            if (node.getTestElement() instanceof CSVDataSet
+                    || node.getTestElement() instanceof Arguments) {
                 continue;
             }
             Set<JMeterProperty> bodies = Collections.newSetFromMap(new IdentityHashMap<>());
