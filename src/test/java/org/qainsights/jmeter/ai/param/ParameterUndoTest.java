@@ -20,6 +20,50 @@ import static org.mockito.Mockito.*;
 
 class ParameterUndoTest {
     @Test
+    void undoTracksChangedArgumentsAfterSiblingReordering() throws Exception {
+        JMeterTreeModel model = model();
+        JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
+        JMeterTreeNode group = model.addComponent(group(), plan);
+        HTTPSamplerProxy http = sampler();
+        http.addArgument("user", "other-value");
+        JMeterTreeNode scope = model.addComponent(http, group);
+        var candidate = ParameterScanner.scan(scope).stream().filter(c -> c.value.equals("alice")).findFirst().orElseThrow();
+        ParameterPlacement.apply(model, scope, null, "data.csv", ",", true, false,
+                "shareMode.all", java.util.List.of(candidate));
+        var changed = http.getArguments().getArgument(0);
+        http.getArguments().removeArgument(0);
+        http.getArguments().addArgument(changed);
+        assertTrue(ParameterPlacement.undoLast(model).startsWith("Restored"));
+        assertEquals("other-value", http.getArguments().getArgument(0).getValue());
+        assertEquals("alice", http.getArguments().getArgument(1).getValue());
+    }
+
+    @Test
+    void applyOwnsGuiTransactionAndStaleUndoIsCleared() throws Exception {
+        JMeterTreeModel model = model();
+        JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
+        JMeterTreeNode group = model.addComponent(group(), plan);
+        JMeterTreeNode scope = model.addComponent(sampler(), group);
+        var candidates = ParameterScanner.scan(scope);
+        var gui = mock(org.apache.jmeter.gui.GuiPackage.class);
+        when(gui.getTreeModel()).thenReturn(model);
+        try (MockedStatic<org.apache.jmeter.gui.GuiPackage> global = mockStatic(org.apache.jmeter.gui.GuiPackage.class)) {
+            global.when(org.apache.jmeter.gui.GuiPackage::getInstance).thenReturn(gui);
+            ParameterPlacement.apply(model, scope, null, "data.csv", ",", true, false, "shareMode.all", candidates);
+            var order = inOrder(gui);
+            order.verify(gui).beginUndoTransaction();
+            order.verify(gui).refreshCurrentGui();
+            order.verify(gui).updateCurrentNode();
+            order.verify(gui).endUndoTransaction();
+            assertTrue(ParameterPlacement.hasUndo());
+            when(gui.getTreeModel()).thenReturn(model());
+            assertFalse(ParameterPlacement.hasUndo());
+            when(gui.getTreeModel()).thenReturn(model);
+            assertFalse(ParameterPlacement.hasUndo());
+        }
+    }
+
+    @Test
     void undoPreservesLaterEditsToUntouchedElementsAndProperties() throws Exception {
         JMeterTreeModel model = model();
         JMeterTreeNode plan = (JMeterTreeNode) ((JMeterTreeNode) model.getRoot()).getChildAt(0);
