@@ -98,13 +98,13 @@ class CommandDispatcherStreamingTest {
     }
 
     @Test
-    void testDispatch_whenStreamingEnabled_callsClearMessageField() {
+    void testDispatch_whenStreamingEnabled_doesNotClearComposer() {
         aiConfigMockedStatic.when(AiConfig::isStreamingEnabled).thenReturn(true);
         setupSuccessfulStreaming();
 
         commandDispatcher.dispatch("Hello");
 
-        verify(cb).clearMessageField();
+        verify(cb, never()).clearMessageField();
     }
 
     @Test

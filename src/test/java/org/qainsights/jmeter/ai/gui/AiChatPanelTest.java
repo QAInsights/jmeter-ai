@@ -163,6 +163,82 @@ class AiChatPanelTest {
     }
 
     @Test
+    void sendingComposerCommandDiscardsTextHistoryAndPreservesUndoForNewTyping() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
+        field.setAccessible(true);
+        PlaceholderTextArea composer = (PlaceholderTextArea) field.get(panel);
+        java.lang.reflect.Method send = AiChatPanel.class.getDeclaredMethod("sendMessage");
+        send.setAccessible(true);
+        javax.swing.Action fallback = org.mockito.Mockito.mock(javax.swing.Action.class);
+        org.mockito.Mockito.when(fallback.isEnabled()).thenReturn(true);
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            org.apache.jorphan.gui.ui.TextComponentUI.INSTANCE.installUndo(composer);
+            composer.setDocument(new javax.swing.text.PlainDocument());
+            composer.setUndoRedoFallbacks(fallback, fallback);
+            composer.append("@code");
+            assertDoesNotThrow(() -> send.invoke(panel));
+            assertEquals("", composer.getText());
+
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
+            assertEquals("", composer.getText());
+            org.mockito.Mockito.verify(fallback).actionPerformed(org.mockito.ArgumentMatchers.any());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.REDO_KEY_STROKE);
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(2))
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+
+            composer.append("new draft");
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
+            assertEquals("", composer.getText());
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(2))
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.REDO_KEY_STROKE);
+            assertEquals("new draft", composer.getText());
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(2))
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+
+            panel.clearMessageField();
+            panel.clearMessageField();
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
+            assertEquals("", composer.getText());
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(3))
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+        });
+    }
+
+    @Test
+    void menuCommandPreservesUnsentDraftAndItsTextUndoHistory() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
+        field.setAccessible(true);
+        PlaceholderTextArea composer = (PlaceholderTextArea) field.get(panel);
+        javax.swing.Action fallback = org.mockito.Mockito.mock(javax.swing.Action.class);
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            org.apache.jorphan.gui.ui.TextComponentUI.INSTANCE.installUndo(composer);
+            composer.setDocument(new javax.swing.text.PlainDocument());
+            composer.setUndoRedoFallbacks(fallback, fallback);
+            composer.append("@code");
+            panel.runCommand("@code");
+            assertEquals("@code", composer.getText());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
+            assertEquals("", composer.getText());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.REDO_KEY_STROKE);
+            assertEquals("@code", composer.getText());
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.never())
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+        });
+    }
+
+    private static void pressComposerShortcut(PlaceholderTextArea composer, javax.swing.KeyStroke key) {
+        java.awt.event.KeyEvent event = new java.awt.event.KeyEvent(composer,
+                java.awt.event.KeyEvent.KEY_PRESSED, 0, key.getModifiers(), key.getKeyCode(),
+                java.awt.event.KeyEvent.CHAR_UNDEFINED);
+        assertTrue(composer.processKeyBinding(key, event, javax.swing.JComponent.WHEN_FOCUSED, true));
+    }
+
+    @Test
     void reloadProvidersRebuildsTheRouterWithRuntimeOpenAiKey() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         org.qainsights.jmeter.ai.service.AiService before =

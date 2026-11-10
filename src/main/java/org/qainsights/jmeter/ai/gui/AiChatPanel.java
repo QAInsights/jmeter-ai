@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.*;
+import javax.swing.text.AbstractDocument;
+import javax.swing.undo.UndoManager;
 import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -609,6 +611,8 @@ public class AiChatPanel
         geminiBorderPanel = new GeminiBorderPanel();
 
         PlaceholderTextArea input = new PlaceholderTextArea(4, 20);
+        input.setUndoRedoFallbacks(transcript.getActionMap().get("undoAction"),
+                transcript.getActionMap().get("redoAction"));
         input.setPlaceholder("Ask Feather Wand about your test plan");
         messageField = input;
         messageField.setLineWrap(true);
@@ -1221,6 +1225,9 @@ public class AiChatPanel
         if (attachmentBar.hasAttachments()) {
             text += attachmentBar.consumeMarkers();
         }
+        if (!text.isEmpty()) {
+            clearMessageField();
+        }
         commandDispatcher.dispatch(text);
     }
 
@@ -1507,6 +1514,13 @@ public class AiChatPanel
     @Override
     public void clearMessageField() {
         messageField.setText("");
+        if (messageField.getDocument() instanceof AbstractDocument document) {
+            for (var listener : document.getUndoableEditListeners()) {
+                if (listener instanceof UndoManager manager) {
+                    manager.discardAllEdits();
+                }
+            }
+        }
     }
 
     public void runCommand(String command) {

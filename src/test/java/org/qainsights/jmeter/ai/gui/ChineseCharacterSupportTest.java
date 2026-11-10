@@ -164,14 +164,14 @@ class ChineseCharacterSupportTest {
     }
 
     @Test
-    void dispatch_chineseMessage_clearsInputFieldAfterSend() {
+    void dispatch_chineseMessage_doesNotClearComposer() {
         String msg = "中文测试消息";
         aiConfigMock.when(AiConfig::isStreamingEnabled).thenReturn(true);
         stubStreamingComplete(msg);
 
         dispatcher.dispatch(msg);
 
-        verify(cb).clearMessageField();
+        verify(cb, never()).clearMessageField();
     }
 
     @Test
