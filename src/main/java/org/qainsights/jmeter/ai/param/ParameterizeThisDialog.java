@@ -63,6 +63,7 @@ final class ParameterizeThisDialog extends JDialog {
     private final JButton applyButton = ParameterDialogControls.button("Apply variables", true);
     private final JButton cancelButton = ParameterDialogControls.button("Cancel", false);
     private ParameterSampleRequest sampleRequest;
+    private SwingWorker<Preflight, Void> preflightRequest;
     private volatile boolean closed;
     private boolean committing;
 
@@ -235,6 +236,9 @@ final class ParameterizeThisDialog extends JDialog {
             return;
         }
         closed = true;
+        if (preflightRequest != null) {
+            preflightRequest.cancel(true);
+        }
         if (sampleRequest != null) {
             sampleRequest.cancel();
         }
@@ -367,17 +371,9 @@ final class ParameterizeThisDialog extends JDialog {
                             ? Path.of(FileServer.getFileServer().getBaseDir())
                             : Path.of(plan).toAbsolutePath().getParent();
             path = base.resolve(path).toAbsolutePath().normalize();
-            ParameterPlacement.validateTarget(path, plan);
             CSVDataSet reuse =
                     ParameterPlacement.reusable(
                             ParameterPlacement.threadGroupOf(scope), base, file);
-            List<String> oldNames =
-                    reuse == null
-                            ? List.of()
-                            : reuse.getPropertyAsString("variableNames").isBlank()
-                                    ? ParameterCsv.header(path, delimiter.getText().charAt(0),
-                                            reuse.getPropertyAsBoolean("quotedData"))
-                                    : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null
                     && (!delimiter.getText().equals(reuse.getPropertyAsString("delimiter", ","))
                             || !ParameterPlacement.utf8Compatible(reuse))) {
@@ -388,8 +384,7 @@ final class ParameterizeThisDialog extends JDialog {
             List<ParameterScanner.Candidate> chosen = new ArrayList<>();
             List<String> names = new ArrayList<>();
             List<String> values = new ArrayList<>();
-            Set<String> used = ParameterNames.used(scope);
-            used.addAll(oldNames);
+            Set<String> used = new java.util.HashSet<>();
             for (int i = 0; i < candidates.size(); i++) {
                 if (!Boolean.TRUE.equals(rows.getValueAt(i, 0))) {
                     continue;
@@ -409,20 +404,97 @@ final class ParameterizeThisDialog extends JDialog {
             if (chosen.isEmpty()) {
                 throw new IllegalArgumentException("Select at least one value.");
             }
-            if (Files.exists(path)
-                    && JOptionPane.showConfirmDialog(
-                                    this,
-                                    (reuse == null
-                                                    ? "Replace existing CSV file?\n"
-                                                    : "Append columns to existing CSV file?\n")
-                                            + path,
-                                    "Confirm CSV change",
-                                    JOptionPane.YES_NO_OPTION)
-                            != JOptionPane.YES_OPTION) {
-                return;
+            preflight(path, plan, reuse, file, chosen, names, values);
+        } catch (Exception exception) {
+            error.setText(exception.getMessage());
+        }
+    }
+
+
+    record Preflight(List<String> oldNames, Set<String> used, boolean exists) {
+    }
+
+    static JMeterTreeNode snapshotScope(JMeterTreeNode scope) {
+        JMeterTreeNode[] selected = new JMeterTreeNode[1];
+        copyTree((JMeterTreeNode) scope.getRoot(), scope, selected);
+        return selected[0];
+    }
+
+    private static JMeterTreeNode copyTree(JMeterTreeNode source, JMeterTreeNode scope,
+            JMeterTreeNode[] selected) {
+        JMeterTreeNode copy = new JMeterTreeNode(
+                (org.apache.jmeter.testelement.TestElement) source.getTestElement().clone(), null);
+        if (source == scope) {
+            selected[0] = copy;
+        }
+        for (int i = 0; i < source.getChildCount(); i++) {
+            copy.add(copyTree((JMeterTreeNode) source.getChildAt(i), scope, selected));
+        }
+        return copy;
+    }
+
+    static Preflight readPreflight(Path target, String plan, CSVDataSet reuse,
+            JMeterTreeNode snapshot, char separator) throws Exception {
+        if (SwingUtilities.isEventDispatchThread()) {
+            throw new IllegalStateException("CSV preflight must run off the EDT.");
+        }
+        ParameterPlacement.validateTarget(target, plan);
+        List<String> oldNames = reuse == null ? List.of()
+                : reuse.getPropertyAsString("variableNames").isBlank()
+                        ? ParameterCsv.header(target, separator, reuse.getPropertyAsBoolean("quotedData"))
+                        : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
+        Set<String> used = ParameterNames.used(snapshot);
+        used.addAll(oldNames);
+        return new Preflight(oldNames, used, Files.exists(target));
+    }
+
+    private void preflight(Path target, String plan, CSVDataSet reuse, String file,
+            List<ParameterScanner.Candidate> chosen, List<String> names, List<String> values) {
+        JMeterTreeNode snapshot = snapshotScope(scope);
+        CSVDataSet csv = reuse == null ? null : (CSVDataSet) reuse.clone();
+        char separator = delimiter.getText().charAt(0);
+        setBusy(true);
+        error.setText("Checking the CSV file...");
+        preflightRequest = new SwingWorker<Preflight, Void>() {
+            @Override
+            protected Preflight doInBackground() throws Exception {
+                return readPreflight(target, plan, csv, snapshot, separator);
             }
+
+            @Override
+            protected void done() {
+                if (closed) {
+                    return;
+                }
+                try {
+                    Preflight result = get();
+                    for (String name : names) {
+                        if (!ParameterNames.valid(name, result.used())) {
+                            throw new IllegalArgumentException("Variable names must not collide with existing variables or CSV columns.");
+                        }
+                    }
+                    if (result.exists() && JOptionPane.showConfirmDialog(ParameterizeThisDialog.this,
+                            (reuse == null ? "Replace existing CSV file?\\n" : "Append columns to existing CSV file?\\n")
+                                    + target, "Confirm CSV change", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+                        setBusy(false);
+                        error.setText(" ");
+                        return;
+                    }
+                    continueApply(target, reuse, file, chosen, names, values, result.oldNames());
+                } catch (Exception exception) {
+                    setBusy(false);
+                    Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+                    error.setText(cause.getMessage());
+                }
+            }
+        };
+        preflightRequest.execute();
+    }
+
+    private void continueApply(Path target, CSVDataSet reuse, String file,
+            List<ParameterScanner.Candidate> chosen, List<String> names, List<String> values,
+            List<String> oldNames) {
             gui.updateCurrentNode();
-            Path target = path;
             if (askAi.isSelected() && aiCall != null) {
                 List<ParameterSampleRows.Column> columns = new ArrayList<>();
                 for (int i = 0; i < names.size(); i++) {
@@ -443,9 +515,6 @@ final class ParameterizeThisDialog extends JDialog {
             } else {
                 commit(target, reuse, file, chosen, names, values, oldNames, List.of());
             }
-        } catch (Exception exception) {
-            error.setText(exception.getMessage());
-        }
     }
 
     private void commit(Path target, CSVDataSet reuse, String file,

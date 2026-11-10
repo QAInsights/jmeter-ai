@@ -17,6 +17,33 @@ import static org.mockito.Mockito.*;
 
 class ParameterSampleDialogTest {
     @Test
+    void csvPreflightUsesAnIsolatedSnapshotAndRejectsTheEdt(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        java.nio.file.Path file = directory.resolve("users.csv");
+        java.nio.file.Files.writeString(file, "existing\n1234\n");
+        org.apache.jmeter.testelement.TestPlan plan = new org.apache.jmeter.testelement.TestPlan();
+        JMeterTreeNode root = new JMeterTreeNode(plan, null);
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        root.add(group);
+        org.apache.jmeter.config.CSVDataSet csv = new org.apache.jmeter.config.CSVDataSet();
+        csv.setProperty("filename", file.toString());
+        csv.setProperty("quotedData", true);
+        group.add(new JMeterTreeNode(csv, null));
+        JMeterTreeNode snapshot = ParameterizeThisDialog.snapshotScope(group);
+        csv.setProperty("variableNames", "later");
+        var result = ParameterizeThisDialog.readPreflight(file, null, new org.apache.jmeter.config.CSVDataSet(), snapshot, ',');
+        assertEquals(java.util.List.of("existing"), result.oldNames());
+        assertTrue(result.used().contains("existing"));
+        assertFalse(result.used().contains("later"));
+        assertTrue(result.exists());
+        var empty = ParameterizeThisDialog.readPreflight(directory.resolve("new.csv"), null, null, snapshot, ',');
+        assertFalse(empty.exists());
+        assertTrue(empty.oldNames().isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> ParameterizeThisDialog.readPreflight(file, file.toString(), null, snapshot, ','));
+        SwingUtilities.invokeAndWait(() -> assertThrows(IllegalStateException.class,
+                () -> ParameterizeThisDialog.readPreflight(file, null, null, snapshot, ',')));
+    }
+
+    @Test
     void providerAvailabilityAndBoundedRowCountControlTheOptionalFeature() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeFalse(java.awt.GraphicsEnvironment.isHeadless());
         if (JMeterUtils.getJMeterProperties() == null) {
