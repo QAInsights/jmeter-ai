@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -88,6 +87,31 @@ final class ParameterizeThisDialog extends JDialog {
         String group =
                 ParameterPlacement.threadGroupOf(scope).getName().replaceAll("[^A-Za-z0-9_-]", "_");
         filename = new JTextField("data/" + (group.isEmpty() ? "users" : group) + ".csv", 36);
+        if (gui.getTestPlanFile() == null || gui.getTestPlanFile().isBlank()) {
+            filename.setText(Path.of(FileServer.getFileServer().getBaseDir())
+                    .resolve(filename.getText()).toAbsolutePath().toString());
+        }
+        JButton apply = ParameterDialogControls.button("Apply variables", true);
+        apply.setEnabled(!candidates.isEmpty());
+        apply.addActionListener(e -> apply());
+        JButton cancel = ParameterDialogControls.button("Cancel", false);
+        cancel.addActionListener(e -> dispose());
+        JPanel content = content(table, candidates.isEmpty(), filename, delimiter, sharing,
+                recycle, stop, error, apply, cancel);
+        setContentPane(content);
+        getRootPane().setDefaultButton(apply);
+        pack();
+        java.awt.Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(getGraphicsConfiguration());
+        setSize(Math.min(getPreferredSize().width, screen.width - insets.left - insets.right - 32),
+                Math.min(getPreferredSize().height, screen.height - insets.top - insets.bottom - 32));
+        setLocationRelativeTo(gui.getMainFrame());
+        setLocation(Math.max(screen.x + insets.left + 16, getX()),
+                Math.max(screen.y + insets.top + 16, getY()));
+    }
+
+    static JPanel content(JTable table, boolean empty, JTextField filename, JTextField delimiter,
+            JComboBox<String> sharing, JCheckBox recycle, JCheckBox stop, JLabel error,
+            JButton apply, JButton cancel) {
         JPanel content = new JPanel(new BorderLayout(0, UiTokens.SPACE_4));
         content.setBackground(ThemeColors.canvas());
         content.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
@@ -96,24 +120,23 @@ final class ParameterizeThisDialog extends JDialog {
         JPanel header =
                 column(
                         title,
-                        helper("Turn hard-coded values into reusable CSV variables. No AI call."));
+                        helper("Turn hard-coded values into CSV variables. No AI call."));
         content.add(header, BorderLayout.NORTH);
         JScrollPane preview = new JScrollPane(table);
         preview.setBorder(BorderFactory.createLineBorder(ThemeColors.separator()));
         preview.getViewport().setBackground(ThemeColors.surface());
-        content.add(candidates.isEmpty() ? emptyState() : preview, BorderLayout.CENTER);
+        content.add(empty ? emptyState() : preview, BorderLayout.CENTER);
         JPanel form =
                 column(
                         field(
                                 "CSV file",
                                 filename,
-                                "Relative to the saved .jmx directory. Unsaved plans need an"
-                                        + " absolute path."));
+                                "<html>Relative to the saved .jmx directory.<br>Unsaved plans need an absolute path.</html>"));
         JPanel options = new JPanel(new GridLayout(1, 2, 16, 0));
         options.setOpaque(false);
         options.setAlignmentX(LEFT_ALIGNMENT);
         options.add(field("Delimiter", delimiter, "One character, usually a comma."));
-        options.add(field("Sharing mode", sharing, "Matching CSV configs keep their existing settings."));
+        options.add(field("Sharing mode", sharing, "Reused CSV settings stay unchanged."));
         form.add(options);
         JPanel eof = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         eof.setOpaque(false);
@@ -124,19 +147,7 @@ final class ParameterizeThisDialog extends JDialog {
         eof.add(recycle);
         eof.add(stop);
         form.add(eof);
-        if (gui.getTestPlanFile() == null || gui.getTestPlanFile().isBlank()) {
-            Path absolute =
-                    Path.of(FileServer.getFileServer().getBaseDir())
-                            .resolve(filename.getText())
-                            .toAbsolutePath();
-            filename.setText(absolute.toString());
-        }
         JLabel note = helper("Ctrl+Z reverts the plan change, not the CSV file on disk.");
-        JButton apply = ParameterDialogControls.button("Apply variables", true);
-        apply.setEnabled(!candidates.isEmpty());
-        apply.addActionListener(e -> apply());
-        JButton cancel = ParameterDialogControls.button("Cancel", false);
-        cancel.addActionListener(e -> dispose());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
         buttons.add(cancel);
@@ -148,20 +159,7 @@ final class ParameterizeThisDialog extends JDialog {
         JPanel status = column(note, error, buttons);
         bottom.add(status, BorderLayout.SOUTH);
         content.add(bottom, BorderLayout.SOUTH);
-        JScrollPane viewport = new JScrollPane(content);
-        viewport.setBorder(BorderFactory.createEmptyBorder());
-        setContentPane(viewport);
-        getRootPane().setDefaultButton(apply);
-        pack();
-        java.awt.Insets insets =
-                Toolkit.getDefaultToolkit().getScreenInsets(getGraphicsConfiguration());
-        setSize(
-                Math.min(getWidth(), screen.width - insets.left - insets.right - 32),
-                Math.min(getHeight(), screen.height - insets.top - insets.bottom - 32));
-        setLocationRelativeTo(gui.getMainFrame());
-        setLocation(
-                Math.max(screen.x + insets.left + 16, getX()),
-                Math.max(screen.y + insets.top + 16, getY()));
+        return content;
     }
 
     static void styleTable(JTable table) {
