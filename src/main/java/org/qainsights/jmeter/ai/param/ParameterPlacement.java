@@ -166,7 +166,7 @@ public final class ParameterPlacement {
             }
             lastApplied = new LastApplied(model, group, ParameterPropertyUndo.changes(before), added);
             return changed;
-        } catch (Exception failure) {
+        } catch (Throwable failure) {
             for (Map.Entry<JMeterTreeNode, TestElement> entry : before.entrySet()) {
                 TestElement original = entry.getKey().getTestElement();
                 original.clear();
