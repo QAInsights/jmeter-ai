@@ -10,6 +10,11 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ParameterizeValuesHandler;
+import org.qainsights.jmeter.ai.param.ParameterPlacement;
+import org.apache.jmeter.services.FileServer;
+import java.nio.file.Path;
+import java.nio.file.Files;
 
 /**
  * Builds the structured content of the agent's confirmation dialog for gated
@@ -76,16 +81,48 @@ public final class ConfirmationPreview {
                 return describeOpenPlan(args);
             case ApplyCorrelationHandler.APPLY_CORRELATION:
                 return describeCorrelation(args);
-            case "parameterize_values":
-                return new Preview("Write CSV data and parameterize the selected scope?",
-                        List.of(new Row("Scope", String.valueOf(args.get("element_id"))),
-                                new Row("CSV file", String.valueOf(args.get("filename"))),
-                                new Row("Variables", String.valueOf(args.get("values")))),
-                        "Creates, overwrites or appends to the CSV file and replaces plan values. "
-                                + "Ctrl+Z does not undo disk changes.", Level.WARN);
+            case ParameterizeValuesHandler.PARAMETERIZE_VALUES:
+                return describeParameterize(args, root);
             default:
                 return generic(toolName, args);
         }
+    }
+
+
+    private Preview describeParameterize(Map<String, Object> args, JMeterTreeNode root) {
+        JMeterTreeNode scope = resolve(root, str(args.get("element_id")));
+        String filename = str(args.get("filename"));
+        List<Row> rows = new ArrayList<>();
+        rows.add(new Row("Scope", scope == null ? orUnknown(str(args.get("element_id"))) : label(scope)));
+        rows.add(new Row("CSV file", orUnknown(filename)));
+        List<String> variables = new ArrayList<>();
+        if (args.get("values") instanceof List<?>) {
+            for (Object value : (List<?>) args.get("values")) {
+                if (value instanceof Map<?, ?>) {
+                    Map<?, ?> entry = (Map<?, ?>) value;
+                    variables.add(orUnknown(str(entry.get("value"))) + " → "
+                            + orUnknown(str(entry.get("variableName"))));
+                }
+            }
+        }
+        rows.add(new Row("Variables", variables.isEmpty() ? "none" : String.join(", ", variables)));
+        try {
+            if (filename != null && !filename.isBlank()) {
+                Path base = Path.of(FileServer.getFileServer().getBaseDir());
+                Path target = base.resolve(filename).toAbsolutePath().normalize();
+                boolean exists = Files.exists(target);
+                JMeterTreeNode group = ParameterPlacement.threadGroupOf(scope);
+                boolean reuse = group != null && ParameterPlacement.reusable(group, base, filename) != null;
+                rows.add(new Row("Write mode", reuse ? "Append columns" : exists ? "Overwrite" : "Create"));
+                rows.add(new Row("File status", exists ? "Exists, " + formatSize(Files.size(target)) : "Does not exist"));
+            }
+        } catch (Exception exception) {
+            rows.add(new Row("File status", "Unavailable: " + exception.getMessage()));
+        }
+        return new Preview("Write CSV data and parameterize the selected scope?", rows,
+                (scope == null ? "Scope not found in the current tree; the call may fail. " : "")
+                        + "Creates, overwrites or appends to the CSV file and replaces plan values. "
+                        + "Ctrl+Z does not undo disk changes.", Level.WARN);
     }
 
     // --- delete_element ------------------------------------------------------

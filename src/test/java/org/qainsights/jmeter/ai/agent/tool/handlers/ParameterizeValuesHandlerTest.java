@@ -82,6 +82,28 @@ class ParameterizeValuesHandlerTest {
     }
 
     @Test
+    void successfulApplySelectsFeatherWandUndoWithoutChangingDryRunState() {
+        try (var controls = mockStatic(org.qainsights.jmeter.ai.gui.ParameterDialogControls.class)) {
+            assertTrue(execute(Map.of("element_id", scopeId)).isSuccess());
+            controls.verifyNoInteractions();
+            assertTrue(execute(applyArgs("alice", "user")).isSuccess());
+            controls.verify(org.qainsights.jmeter.ai.gui.ParameterDialogControls::parameterizationApplied);
+        }
+    }
+
+    @Test
+    void csvPathCannotOverwriteSavedPlan() throws Exception {
+        Path plan = directory.resolve("plan.jmx");
+        Files.writeString(plan, "saved plan");
+        Map<String, Object> args = applyArgs("alice", "user");
+        args.put("filename", plan.toString());
+        ToolResult result = execute(args);
+        assertFalse(result.isSuccess());
+        assertEquals("saved plan", Files.readString(plan));
+        assertEquals("alice", http.getArguments().getArgument(0).getValue());
+    }
+
+    @Test
     void dryRunReturnsCandidatesWithoutPromptingOrWriting() throws Exception {
         AtomicInteger prompts = new AtomicInteger();
         ToolResult result = executor((name, args) -> {

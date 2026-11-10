@@ -145,14 +145,14 @@ public final class ParameterizeValuesHandler {
             Path base = saved ? Path.of(plan).toAbsolutePath().getParent()
                     : Path.of(FileServer.getFileServer().getBaseDir());
             Path target = base.resolve(requested).toAbsolutePath().normalize();
+            ParameterPlacement.validateTarget(target, plan);
             CSVDataSet reuse = ParameterPlacement.reusable(ParameterPlacement.threadGroupOf(scope), base, filename);
             List<String> oldNames = reuse == null ? List.of() : reuse.getPropertyAsString("variableNames").isBlank()
                     ? ParameterCsv.header(target, delimiter.charAt(0), reuse.getPropertyAsBoolean("quotedData"))
                     : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null && (!delimiter.equals(reuse.getPropertyAsString("delimiter", ","))
-                    || (!reuse.getPropertyAsString("fileEncoding").isBlank()
-                            && !"UTF-8".equalsIgnoreCase(reuse.getPropertyAsString("fileEncoding"))))) {
-                throw new IllegalArgumentException("Existing CSV config must use the same delimiter and UTF-8 or default encoding.");
+                    || !ParameterPlacement.utf8Compatible(reuse))) {
+                throw new IllegalArgumentException("Existing CSV config must use the same delimiter and UTF-8 encoding (including a UTF-8 platform default).");
             }
             List<ParameterScanner.Candidate> chosen = new ArrayList<>();
             Map<String, String> variables = new LinkedHashMap<>();
@@ -186,6 +186,7 @@ public final class ParameterizeValuesHandler {
                         reuse == null || reuse.getPropertyAsBoolean("quotedData"));
                 return 0;
             }, () -> ParameterPlacement.apply(model, scope, reuse, filename, delimiter, recycle, stop, sharing, chosen, oldNames));
+            org.qainsights.jmeter.ai.gui.ParameterDialogControls.parameterizationApplied();
             return ToolResult.ok(JSON.writeValueAsString(Map.of("variables", variables, "replacedCount", changed,
                     "filePath", target.toString(), "reusedConfigSettingsPreserved", reuse != null)));
         } catch (IllegalArgumentException e) {
