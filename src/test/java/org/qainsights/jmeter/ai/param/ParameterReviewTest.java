@@ -8,6 +8,8 @@ import org.apache.jmeter.control.GenericController;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
+import org.apache.jmeter.gui.tree.JMeterTreeModel;
+import static org.mockito.Mockito.mock;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +19,31 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @TempDir Path directory;
+
+    @Test
+    void reusingCsvPreservesItsConsumerSettings() throws Exception {
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.addArgument("user", "alice");
+        JMeterTreeNode scope = new JMeterTreeNode(http, null);
+        group.add(scope);
+        CSVDataSet csv = new CSVDataSet();
+        csv.setVariableNames("old");
+        csv.setDelimiter(";");
+        csv.setFileEncoding("");
+        csv.setRecycle(false);
+        csv.setStopThread(true);
+        csv.setShareMode("shareMode.thread");
+        group.add(new JMeterTreeNode(csv, null));
+        ParameterPlacement.apply(mock(JMeterTreeModel.class), scope, csv, "data.csv", ",",
+                true, false, "shareMode.all", ParameterScanner.scan(scope));
+        assertEquals(";", csv.getDelimiter());
+        assertEquals("", csv.getFileEncoding());
+        assertFalse(csv.getRecycle());
+        assertTrue(csv.getStopThread());
+        assertEquals("shareMode.thread", csv.getShareMode());
+        assertEquals("old,user", csv.getVariableNames());
+    }
 
     @Test
     void reuseOnlySelectsEnabledDirectChildren() {
