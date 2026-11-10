@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.param;
 
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.nio.file.Files;
@@ -64,7 +66,11 @@ class ParameterSampleRowsTest {
                 assertFalse(prompt.contains(secret), secret);
             }
             assertFalse(prompt.contains("internal.private.example"));
-            assertTrue(prompt.contains("email"));
+            JsonNode metadata = new ObjectMapper().readTree(prompt.substring(prompt.indexOf('[')));
+            for (int i = 0; i < columns.size(); i++) {
+                assertEquals(columns.get(i).name(), metadata.get(i).get("name").asText());
+                assertEquals(columns.get(i).type(), metadata.get(i).get("type").asText());
+            }
             return "[[\"test@example.com\",\"4567\",\"uuid\",\"2027-01-01\",\"fictional\",\"label\"]]";
         });
         CountDownLatch completed = new CountDownLatch(1);
@@ -95,6 +101,16 @@ class ParameterSampleRowsTest {
         }
         assertEquals(List.of(List.of("-1234", "a,b")),
                 ParameterSampleRows.parse("[[\"-1234\",\"a,b\"]]", 1, strings(2)));
+    }
+
+    @Test
+    void acceptsBracketsInSurroundingProseButRejectsControlsAndUnicodeFormulaPrefixes() throws Exception {
+        assertEquals(List.of(List.of("safe")),
+                ParameterSampleRows.parse("Here [note] are rows: [[\"safe\"]] [end]", 1, strings(1)));
+        for (String unsafe : List.of("a\u007Fb", "a\u0085b", "=\u2028formula", "+\u2028formula", "@\u2028formula")) {
+            String response = new ObjectMapper().writeValueAsString(List.of(List.of(unsafe)));
+            assertThrows(IllegalArgumentException.class, () -> ParameterSampleRows.parse(response, 1, strings(1)));
+        }
     }
 
     @Test

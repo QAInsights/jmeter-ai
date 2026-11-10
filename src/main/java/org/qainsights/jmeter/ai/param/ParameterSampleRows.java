@@ -56,12 +56,7 @@ final class ParameterSampleRows {
             throw new IllegalArgumentException("The provider returned an empty or oversized sample response.");
         }
         try {
-            int start = response.indexOf('[');
-            int end = response.lastIndexOf(']');
-            if (start < 0 || end < start) {
-                throw new IllegalArgumentException("The provider must return valid JSON sample rows.");
-            }
-            JsonNode root = JSON.readTree(response.substring(start, end + 1));
+            JsonNode root = array(response);
             if (!root.isArray() || root.size() != count) {
                 throw new IllegalArgumentException("The sample response has the wrong row count.");
             }
@@ -91,13 +86,40 @@ final class ParameterSampleRows {
         }
     }
 
+    private static JsonNode array(String response) throws java.io.IOException {
+        JsonNode root = null;
+        int start = response.indexOf('[');
+        while (start >= 0) {
+            int next = start + 1;
+            try (com.fasterxml.jackson.core.JsonParser parser =
+                    JSON.getFactory().createParser(response.substring(start))) {
+                JsonNode candidate = JSON.reader().without(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                        .readTree(parser);
+                if (candidate != null && candidate.isArray()) {
+                    if (root != null) {
+                        throw new IllegalArgumentException("The provider returned multiple sample arrays.");
+                    }
+                    root = candidate;
+                    next = start + (int) parser.currentLocation().getCharOffset();
+                }
+            } catch (java.io.IOException ignored) {
+            }
+            start = response.indexOf('[', next);
+        }
+        if (root == null) {
+            throw new java.io.IOException("No valid sample array was returned.");
+        }
+        return root;
+    }
+
     private static boolean safe(String value) {
         if (value.length() > 4096 || value.contains("${")
+                || value.codePoints().anyMatch(Character::isISOControl)
                 || !ParameterReplacement.safeJsonString(value)) {
             return false;
         }
         String trimmed = value.stripLeading();
-        return !trimmed.matches("[=+@].*")
+        return !trimmed.startsWith("=") && !trimmed.startsWith("+") && !trimmed.startsWith("@")
                 && (!trimmed.startsWith("-") || trimmed.matches("-\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"));
     }
 }
