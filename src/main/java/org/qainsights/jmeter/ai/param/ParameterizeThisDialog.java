@@ -477,7 +477,7 @@ final class ParameterizeThisDialog extends JDialog {
                                     + "\nCSV file: " + target
                                     + "\nAI sample rows: " + samples.size()
                                     + "\nCtrl+Z in Feather Wand chat restores the plan, not the CSV file."
-                                    + (reuse == null ? "" : "\nExisting CSV consumer settings were preserved."),
+                                    + (reuse == null ? "" : "\nExisting quoting, encoding, delimiter, EOF and sharing settings were preserved. The CSV header is skipped."),
                             "Parameterize this",
                             JOptionPane.INFORMATION_MESSAGE);
                 } catch (Exception exception) {
