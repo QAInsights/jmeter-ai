@@ -22,7 +22,7 @@ final class ParameterPropertyPolicy {
             return true;
         }
         if (property.getObjectValue() instanceof Arguments
-                && (config || "TestPlan.user_defined_variables".equals(property.getName()))) {
+                && "TestPlan.user_defined_variables".equals(property.getName())) {
             return true;
         }
         if (!config) {
@@ -30,14 +30,13 @@ final class ParameterPropertyPolicy {
         }
         if (property.getObjectValue() instanceof Argument) {
             Argument argument = (Argument) property.getObjectValue();
-            return argument.getName().toLowerCase(Locale.ROOT)
-                            .matches(".*(file|filename|filepath|directory|path)$")
-                    || argument.getValue().contains("/") || argument.getValue().contains("\\");
+            return fileProperty(argument.getName());
         }
-        String name = property.getName().toLowerCase(Locale.ROOT);
-        return name.matches(".*(file|filename|filepath|directory|path)$")
-                || (property instanceof StringProperty
-                        && (property.getStringValue().contains("/")
-                                || property.getStringValue().contains("\\")));
+        return fileProperty(property.getName());
+    }
+
+    private static boolean fileProperty(String name) {
+        return name.replaceAll("([a-z])([A-Z])", "$1.$2").toLowerCase(Locale.ROOT)
+                .matches("(?:.*[._-])?(?:file|filename|filepath|directory|path)");
     }
 }
