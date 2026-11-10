@@ -15,6 +15,12 @@ import java.util.List;
 import java.util.Map;
 
 public final class ParameterPlacement {
+    private static LastApplied lastApplied;
+
+    private record LastApplied(JMeterTreeModel model, JMeterTreeNode group,
+            Map<JMeterTreeNode, TestElement> before, JMeterTreeNode added) {
+    }
+
     private ParameterPlacement() {}
 
     public static JMeterTreeNode threadGroupOf(JMeterTreeNode node) {
@@ -138,6 +144,7 @@ public final class ParameterPlacement {
                 gui.refreshCurrentGui();
                 gui.updateCurrentNode();
             }
+            lastApplied = new LastApplied(model, group, before, added);
             return changed;
         } catch (Exception failure) {
             for (Map.Entry<JMeterTreeNode, TestElement> entry : before.entrySet()) {
@@ -163,6 +170,58 @@ public final class ParameterPlacement {
                 failure.addSuppressed(refreshFailure);
             }
             throw failure;
+        } finally {
+            if (gui != null) {
+                gui.endUndoTransaction();
+            }
+        }
+    }
+
+    public static boolean hasUndo() {
+        GuiPackage gui = GuiPackage.getInstance();
+        return gui != null && lastApplied != null && lastApplied.model == gui.getTreeModel()
+                && lastApplied.group.getRoot() == gui.getTreeModel().getRoot();
+    }
+
+    public static String undoLast() {
+        GuiPackage gui = GuiPackage.getInstance();
+        return undoLast(gui == null ? null : gui.getTreeModel());
+    }
+
+    static String undoLast(JMeterTreeModel model) {
+        LastApplied edit = lastApplied;
+        if (edit == null || model == null || edit.model != model
+                || edit.group.getRoot() != model.getRoot()) {
+            return "Nothing to undo: the last Parameterize change is no longer in this plan.";
+        }
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui != null) {
+            gui.beginUndoTransaction();
+        }
+        try {
+            if (gui != null) {
+                gui.updateCurrentNode();
+                gui.getTreeListener().getJTree().setSelectionPath(
+                        new javax.swing.tree.TreePath(edit.group.getPath()));
+            }
+            for (Map.Entry<JMeterTreeNode, TestElement> entry : edit.before.entrySet()) {
+                TestElement element = entry.getKey().getTestElement();
+                element.clear();
+                PropertyIterator properties = entry.getValue().propertyIterator();
+                while (properties.hasNext()) {
+                    element.setProperty(properties.next().clone());
+                }
+            }
+            if (edit.added != null && edit.added.getParent() != null) {
+                model.removeNodeFromParent(edit.added);
+            }
+            model.nodeStructureChanged(edit.group);
+            if (gui != null) {
+                gui.refreshCurrentGui();
+                gui.updateCurrentNode();
+            }
+            lastApplied = null;
+            return "Restored the plan before Parameterize. The CSV file on disk was not changed.";
         } finally {
             if (gui != null) {
                 gui.endUndoTransaction();

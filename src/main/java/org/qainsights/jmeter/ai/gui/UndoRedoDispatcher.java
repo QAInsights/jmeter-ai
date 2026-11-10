@@ -105,4 +105,9 @@ public class UndoRedoDispatcher {
         javax.swing.SwingUtilities.invokeLater(() ->
                 cb.appendMessageToChat(org.qainsights.jmeter.ai.load.WorkloadApplier.undoLast()));
     }
+
+    public void undoLastParameterize() {
+        javax.swing.SwingUtilities.invokeLater(() -> cb.appendMessageToChat(
+                org.qainsights.jmeter.ai.param.ParameterPlacement.undoLast()));
+    }
 }

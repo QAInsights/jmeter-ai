@@ -147,7 +147,7 @@ final class ParameterizeThisDialog extends JDialog {
         eof.add(recycle);
         eof.add(stop);
         form.add(eof);
-        JLabel note = helper("Ctrl+Z reverts the plan change, not the CSV file on disk.");
+        JLabel note = helper("Ctrl+Z in Feather Wand chat restores the plan, not the CSV file.");
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
         buttons.add(cancel);
@@ -339,6 +339,7 @@ final class ParameterizeThisDialog extends JDialog {
                                             chosen,
                                             oldNames));
             Telemetry.record(TelemetryFeature.PARAM_APPLIED);
+            ParameterDialogControls.parameterizationApplied();
             dispose();
             JOptionPane.showMessageDialog(
                     gui.getMainFrame(),
@@ -348,6 +349,7 @@ final class ParameterizeThisDialog extends JDialog {
                             + changed
                             + "\nCSV file: "
                             + path
+                            + "\nCtrl+Z in Feather Wand chat restores the plan, not the CSV file."
                             + (reuse == null ? "" : "\nExisting CSV consumer settings were preserved."),
                     "Parameterize this",
                     JOptionPane.INFORMATION_MESSAGE);

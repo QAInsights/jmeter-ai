@@ -12,6 +12,19 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UndoRedoDispatcherTest {
 
+    @Test
+    void parameterizeUndoRunsOnTheEdtWithoutAProvider() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean onEdt = new java.util.concurrent.atomic.AtomicBoolean();
+        doAnswer(call -> {
+            onEdt.set(javax.swing.SwingUtilities.isEventDispatchThread());
+            return null;
+        }).when(callback).appendMessageToChat(anyString());
+        new UndoRedoDispatcher(callback).undoLastParameterize();
+        verify(callback, timeout(2000)).appendMessageToChat(startsWith("Nothing to undo"));
+        assertTrue(onEdt.get());
+        verifyNoInteractions(aiService);
+    }
+
     @Mock
     private CommandCallback callback;
 
