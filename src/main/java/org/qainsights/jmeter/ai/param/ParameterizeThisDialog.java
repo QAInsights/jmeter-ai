@@ -251,6 +251,7 @@ final class ParameterizeThisDialog extends JDialog {
                             ? Path.of(FileServer.getFileServer().getBaseDir())
                             : Path.of(plan).toAbsolutePath().getParent();
             path = base.resolve(path).toAbsolutePath().normalize();
+            ParameterPlacement.validateTarget(path, plan);
             CSVDataSet reuse =
                     ParameterPlacement.reusable(
                             ParameterPlacement.threadGroupOf(scope), base, file);
@@ -263,11 +264,10 @@ final class ParameterizeThisDialog extends JDialog {
                                     : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null
                     && (!delimiter.getText().equals(reuse.getPropertyAsString("delimiter", ","))
-                            || (!reuse.getPropertyAsString("fileEncoding").isBlank()
-                                    && !"UTF-8".equalsIgnoreCase(reuse.getPropertyAsString("fileEncoding"))))) {
+                            || !ParameterPlacement.utf8Compatible(reuse))) {
                 throw new IllegalArgumentException(
-                        "Existing CSV config must use the same delimiter and UTF-8 encoding (or the"
-                                + " default encoding).");
+                        "Existing CSV config must use the same delimiter and UTF-8 encoding."
+                                + " A blank encoding is allowed only when the platform default is UTF-8.");
             }
             List<ParameterScanner.Candidate> chosen = new ArrayList<>();
             List<String> names = new ArrayList<>();

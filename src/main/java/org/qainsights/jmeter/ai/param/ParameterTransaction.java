@@ -13,6 +13,8 @@ public final class ParameterTransaction {
 
     public static int apply(Path file, Operation writeCsv, Operation applyPlan) throws Exception {
         Path target = file.toAbsolutePath();
+        org.apache.jmeter.gui.GuiPackage gui = org.apache.jmeter.gui.GuiPackage.getInstance();
+        ParameterPlacement.validateTarget(target, gui == null ? null : gui.getTestPlanFile());
         Files.createDirectories(target.getParent());
         Path previous = null;
         if (Files.exists(target)) {

@@ -9,6 +9,7 @@ import org.apache.jmeter.testelement.property.PropertyIterator;
 import org.apache.jmeter.threads.AbstractThreadGroup;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Enumeration;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -50,6 +51,25 @@ public final class ParameterPlacement {
             }
         }
         return null;
+    }
+
+    public static void validateTarget(Path target, String plan) throws java.io.IOException {
+        if (Files.isSymbolicLink(target)) {
+            throw new IllegalArgumentException("CSV target must not be a symbolic link.");
+        }
+        if (plan != null && !plan.isBlank()) {
+            Path saved = Path.of(plan).toAbsolutePath().normalize();
+            if (target.toAbsolutePath().normalize().equals(saved)
+                    || (Files.exists(target) && Files.exists(saved) && Files.isSameFile(target, saved))) {
+                throw new IllegalArgumentException("CSV file must differ from the saved .jmx plan.");
+            }
+        }
+    }
+
+    public static boolean utf8Compatible(CSVDataSet csv) {
+        String encoding = csv.getPropertyAsString("fileEncoding");
+        return encoding.isBlank() ? java.nio.charset.Charset.defaultCharset().equals(java.nio.charset.StandardCharsets.UTF_8)
+                : "UTF-8".equalsIgnoreCase(encoding);
     }
 
     public static int apply(
