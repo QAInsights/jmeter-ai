@@ -14,10 +14,15 @@ import java.util.List;
 
 /** UTF-8 CSV with a header and explicit columns, using JMeter's CSV parser. */
 public final class ParameterCsv {
-    private ParameterCsv() { }
+    private ParameterCsv() {}
 
-    public static void write(Path file, char delimiter, List<String> names, List<String> values,
-            List<String> existingNames) throws IOException {
+    public static void write(
+            Path file,
+            char delimiter,
+            List<String> names,
+            List<String> values,
+            List<String> existingNames)
+            throws IOException {
         write(file, delimiter, names, values, existingNames, true);
     }
 
@@ -27,10 +32,17 @@ public final class ParameterCsv {
         }
     }
 
-    public static void write(Path file, char delimiter, List<String> names, List<String> values,
-            List<String> existingNames, boolean existingHeader) throws IOException {
+    public static void write(
+            Path file,
+            char delimiter,
+            List<String> names,
+            List<String> values,
+            List<String> existingNames,
+            boolean existingHeader)
+            throws IOException {
         if (names.isEmpty() || names.size() != values.size()) {
-            throw new IllegalArgumentException("CSV requires equally sized, non-empty names and values.");
+            throw new IllegalArgumentException(
+                    "CSV requires equally sized, non-empty names and values.");
         }
         if (delimiter == '"' || delimiter == '\n' || delimiter == '\r') {
             throw new IllegalArgumentException("Invalid CSV delimiter.");
@@ -46,9 +58,12 @@ public final class ParameterCsv {
                     rows.add(new ArrayList<>(Arrays.asList(row)));
                 }
             }
-            if (!existingHeader) { rows.add(0, new ArrayList<>(existingNames)); }
+            if (!existingHeader) {
+                rows.add(0, new ArrayList<>(existingNames));
+            }
             if (rows.isEmpty() || !rows.get(0).equals(existingNames)) {
-                throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
+                throw new IOException(
+                        "Existing CSV header must match the CSV Data Set variable names.");
             }
             for (List<String> row : rows) {
                 if (row.size() != existingNames.size()) {
@@ -57,9 +72,12 @@ public final class ParameterCsv {
             }
             rows.get(0).addAll(names);
             if (rows.size() == 1) {
-                throw new IOException("Existing CSV needs at least one data row before appending columns.");
+                throw new IOException(
+                        "Existing CSV needs at least one data row before appending columns.");
             }
-            for (int i = 1; i < rows.size(); i++) { rows.get(i).addAll(values); }
+            for (int i = 1; i < rows.size(); i++) {
+                rows.get(i).addAll(values);
+            }
         } else {
             rows.add(new ArrayList<>(names));
             rows.add(new ArrayList<>(values));
@@ -67,7 +85,9 @@ public final class ParameterCsv {
         StringBuilder output = new StringBuilder();
         for (List<String> row : rows) {
             for (int i = 0; i < row.size(); i++) {
-                if (i > 0) { output.append(delimiter); }
+                if (i > 0) {
+                    output.append(delimiter);
+                }
                 output.append('"').append(row.get(i).replace("\"", "\"\"")).append('"');
             }
             output.append('\n');
