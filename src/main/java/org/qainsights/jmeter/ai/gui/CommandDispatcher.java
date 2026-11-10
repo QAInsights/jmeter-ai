@@ -95,7 +95,12 @@ public class CommandDispatcher {
         switch (getCommand(message)) {
             case "@param":
                 cb.removeLoadingIndicator();
-                org.qainsights.jmeter.ai.param.ParameterizeThisMenu.open();
+                cb.setLastCommandType("NONE");
+                if (org.qainsights.jmeter.ai.param.ParameterizeThisMenu.enabled()) {
+                    org.qainsights.jmeter.ai.param.ParameterizeThisMenu.open();
+                } else {
+                    cb.appendMessageToChat("Parameterize this is disabled by jmeter.ai.param.enabled=false.");
+                }
                 cb.setInputEnabled(true);
                 return;
             case "@this":

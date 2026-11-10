@@ -11,6 +11,21 @@ class ParameterFollowupTest {
     @TempDir Path directory;
 
     @Test
+    void disabledParameterizeIsNotSuggestedAndStartupWithoutTreeListenerIsSafe() throws Exception {
+        try (var config = org.mockito.Mockito.mockStatic(org.qainsights.jmeter.ai.utils.AiConfig.class)) {
+            config.when(() -> org.qainsights.jmeter.ai.utils.AiConfig.getProperty("jmeter.ai.param.enabled", "true"))
+                    .thenReturn("false");
+            assertFalse(new org.qainsights.jmeter.ai.intellisense.CommandIntellisenseProvider()
+                    .getSuggestions("@p").contains("@param"));
+        }
+        try (var global = org.mockito.Mockito.mockStatic(org.apache.jmeter.gui.GuiPackage.class)) {
+            global.when(org.apache.jmeter.gui.GuiPackage::getInstance)
+                    .thenReturn(org.mockito.Mockito.mock(org.apache.jmeter.gui.GuiPackage.class));
+            javax.swing.SwingUtilities.invokeAndWait(ParameterizeThisMenu::open);
+        }
+    }
+
+    @Test
     void invalidJsonPrefixesDoNotLeakCandidatesAndConfigArgumentsRemainUsable() {
         var http = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
         http.setPostBodyRaw(true);

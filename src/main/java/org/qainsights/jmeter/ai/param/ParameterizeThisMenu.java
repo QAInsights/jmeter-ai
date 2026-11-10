@@ -63,6 +63,7 @@ public final class ParameterizeThisMenu {
 
     static boolean eligible(JMeterTreeNode node) {
         return node != null
+                && ParameterPlacement.threadGroupOf(node) != null
                 && (node.getTestElement() instanceof Sampler
                         || node.getTestElement() instanceof Controller
                         || node.getTestElement() instanceof AbstractThreadGroup);
@@ -74,7 +75,7 @@ public final class ParameterizeThisMenu {
             return;
         }
         GuiPackage gui = GuiPackage.getInstance();
-        if (gui == null || !enabled()) {
+        if (gui == null || gui.getTreeListener() == null || !enabled()) {
             return;
         }
         gui.updateCurrentNode();
