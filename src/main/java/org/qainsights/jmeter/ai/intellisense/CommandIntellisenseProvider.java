@@ -23,6 +23,7 @@ public class CommandIntellisenseProvider {
         DESCRIPTIONS.put("@testplan", "Ask questions about the whole test plan");
         DESCRIPTIONS.put("@sla", "Add SLA assertions, e.g. @sla under 800 ms and no 5xx");
         DESCRIPTIONS.put("@load", "Design samples, messages, threads and generator setup, e.g. @load 200 rps for 1 hour");
+        DESCRIPTIONS.put("@param", "Parameterize selected scope with CSV variables. No AI call.");
         DESCRIPTIONS.put("@fix", "Run the plan with 1 user and fix failures until it passes");
         DESCRIPTIONS.put("@prompts", "Browse and insert saved prompts");
     }
@@ -38,6 +39,7 @@ public class CommandIntellisenseProvider {
         commands.add("@testplan");
         commands.add("@sla");
         commands.add("@load");
+        commands.add("@param");
         commands.add("@fix");
         commands.add("@prompts");
 
