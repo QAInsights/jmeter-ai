@@ -217,7 +217,7 @@ class ParameterizeValuesHandlerTest {
         ToolResult result = execute(applyArgs("alice", "username"));
         assertTrue(result.isSuccess(), result.toString());
         assertEquals("old,username", csv.getPropertyAsString("variableNames"));
-        assertEquals("\"old\",\"username\"\n\"first\",\"alice\"\n\"second\",\"alice\"\n",
+        assertEquals("old,\"username\"\nfirst,\"alice\"\nsecond,\"alice\"\n",
                 Files.readString(directory.resolve("data/users.csv")));
         assertFalse(csv.getPropertyAsBoolean("recycle"));
         assertTrue(csv.getPropertyAsBoolean("stopThread"));
