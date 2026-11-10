@@ -609,6 +609,8 @@ public class AiChatPanel
         geminiBorderPanel = new GeminiBorderPanel();
 
         PlaceholderTextArea input = new PlaceholderTextArea(4, 20);
+        input.setUndoRedoFallbacks(transcript.getActionMap().get("undoAction"),
+                transcript.getActionMap().get("redoAction"));
         input.setPlaceholder("Ask Feather Wand about your test plan");
         messageField = input;
         messageField.setLineWrap(true);
