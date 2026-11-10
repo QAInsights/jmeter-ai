@@ -21,7 +21,6 @@ import org.qainsights.jmeter.ai.extract.ExtractPlacement;
 
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
