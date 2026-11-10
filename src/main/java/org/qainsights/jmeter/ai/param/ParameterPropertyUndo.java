@@ -15,7 +15,8 @@ final class ParameterPropertyUndo {
     private record Key(String name, int occurrence) {
     }
 
-    record Change(JMeterTreeNode node, List<Key> path, JMeterProperty previous) {
+    record Change(JMeterTreeNode node, List<Key> path, JMeterProperty previous,
+            JMeterProperty applied, String appliedValue) {
         void restore() {
             TestElement element = node.getTestElement();
             if (path.size() == 1) {
@@ -27,13 +28,21 @@ final class ParameterPropertyUndo {
                 return;
             }
             PropertyIterator properties = element.propertyIterator();
+            JMeterProperty attached = findIdentity(properties, applied);
+            if (attached != null) {
+                attached.setObjectValue(previous.getObjectValue());
+                return;
+            }
+            properties = element.propertyIterator();
             for (int i = 0; i < path.size(); i++) {
                 JMeterProperty property = find(properties, path.get(i));
                 if (property == null) {
                     return;
                 }
                 if (i == path.size() - 1) {
-                    property.setObjectValue(previous.getObjectValue());
+                    if (property.getStringValue().equals(appliedValue)) {
+                        property.setObjectValue(previous.getObjectValue());
+                    }
                 } else if (property instanceof MultiProperty) {
                     properties = ((MultiProperty) property).iterator();
                 } else {
@@ -72,7 +81,8 @@ final class ParameterPropertyUndo {
                 collect(node, ((MultiProperty) previous).iterator(), ((MultiProperty) property).iterator(),
                         location, changes);
             } else if (!property.equals(previous)) {
-                changes.add(new Change(node, List.copyOf(location), previous == null ? null : previous.clone()));
+                changes.add(new Change(node, List.copyOf(location), previous == null ? null : previous.clone(),
+                        property, property.getStringValue()));
             }
         }
     }
@@ -83,6 +93,22 @@ final class ParameterPropertyUndo {
             JMeterProperty property = properties.next();
             if (property.getName().equals(key.name) && ++occurrence == key.occurrence) {
                 return property;
+            }
+        }
+        return null;
+    }
+
+    private static JMeterProperty findIdentity(PropertyIterator properties, JMeterProperty target) {
+        while (properties.hasNext()) {
+            JMeterProperty property = properties.next();
+            if (property == target) {
+                return property;
+            }
+            if (property instanceof MultiProperty) {
+                JMeterProperty match = findIdentity(((MultiProperty) property).iterator(), target);
+                if (match != null) {
+                    return match;
+                }
             }
         }
         return null;

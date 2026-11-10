@@ -199,8 +199,11 @@ public final class ParameterPlacement {
 
     public static boolean hasUndo() {
         GuiPackage gui = GuiPackage.getInstance();
-        return gui != null && lastApplied != null && lastApplied.model == gui.getTreeModel()
-                && lastApplied.group.getRoot() == gui.getTreeModel().getRoot();
+        if (lastApplied != null && gui != null && (lastApplied.model != gui.getTreeModel()
+                || lastApplied.group.getRoot() != gui.getTreeModel().getRoot())) {
+            lastApplied = null;
+        }
+        return gui != null && lastApplied != null;
     }
 
     public static String undoLast() {
