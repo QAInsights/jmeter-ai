@@ -147,7 +147,7 @@ public final class ParameterizeValuesHandler {
             Path target = base.resolve(requested).toAbsolutePath().normalize();
             CSVDataSet reuse = ParameterPlacement.reusable(ParameterPlacement.threadGroupOf(scope), base, filename);
             List<String> oldNames = reuse == null ? List.of() : reuse.getPropertyAsString("variableNames").isBlank()
-                    ? ParameterCsv.header(target, delimiter.charAt(0))
+                    ? ParameterCsv.header(target, delimiter.charAt(0), reuse.getPropertyAsBoolean("quotedData"))
                     : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null && (!delimiter.equals(reuse.getPropertyAsString("delimiter", ","))
                     || (!reuse.getPropertyAsString("fileEncoding").isBlank()
@@ -182,7 +182,8 @@ public final class ParameterizeValuesHandler {
                 ParameterCsv.write(target, delimiter.charAt(0), new ArrayList<>(variables.keySet()),
                         new ArrayList<>(variables.values()), oldNames,
                         reuse == null || reuse.getPropertyAsString("variableNames").isBlank()
-                                || reuse.getPropertyAsBoolean("ignoreFirstLine"));
+                                || reuse.getPropertyAsBoolean("ignoreFirstLine"),
+                        reuse == null || reuse.getPropertyAsBoolean("quotedData"));
                 return 0;
             }, () -> ParameterPlacement.apply(model, scope, reuse, filename, delimiter, recycle, stop, sharing, chosen, oldNames));
             return ToolResult.ok(JSON.writeValueAsString(Map.of("variables", variables, "replacedCount", changed,
