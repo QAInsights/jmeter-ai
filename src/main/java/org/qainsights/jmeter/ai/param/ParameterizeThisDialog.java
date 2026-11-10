@@ -273,14 +273,15 @@ final class ParameterizeThisDialog extends JDialog {
             List<ParameterScanner.Candidate> chosen = new ArrayList<>();
             List<String> names = new ArrayList<>();
             List<String> values = new ArrayList<>();
-            Set<String> used = new HashSet<>(oldNames);
+            Set<String> used = ParameterNames.used(scope);
+            used.addAll(oldNames);
             for (int i = 0; i < candidates.size(); i++) {
                 if (!Boolean.TRUE.equals(rows.getValueAt(i, 0))) {
                     continue;
                 }
                 ParameterScanner.Candidate c = candidates.get(i);
                 String name = String.valueOf(rows.getValueAt(i, 3)).trim();
-                if (!name.matches("[A-Za-z_][A-Za-z0-9_]*") || !used.add(name)) {
+                if (!ParameterNames.valid(name, used)) {
                     throw new IllegalArgumentException(
                             "Variable names must be valid, non-empty and unique, including existing"
                                     + " CSV columns.");

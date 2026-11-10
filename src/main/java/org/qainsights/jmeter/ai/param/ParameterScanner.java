@@ -58,7 +58,7 @@ public final class ParameterScanner {
 
     public static List<Candidate> scan(JMeterTreeNode scope) {
         Map<String, Candidate> found = new LinkedHashMap<>();
-        Set<String> names = new HashSet<>();
+        Set<String> names = ParameterNames.used(scope);
         if (scope == null) {
             return new ArrayList<>();
         }

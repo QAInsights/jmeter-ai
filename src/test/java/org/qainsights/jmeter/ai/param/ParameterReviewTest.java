@@ -8,6 +8,8 @@ import org.apache.jmeter.control.GenericController;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
+import java.util.Set;
+import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import static org.mockito.Mockito.mock;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
@@ -19,6 +21,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @TempDir Path directory;
+
+    @Test
+    void reservesCsvAndUdvNamesInGroupAndAncestorScopes() {
+        TestPlan plan = new TestPlan();
+        Arguments variables = new Arguments();
+        variables.addArgument("user", "shared");
+        plan.setUserDefinedVariables(variables);
+        JMeterTreeNode root = new JMeterTreeNode(plan, null);
+        CSVDataSet planCsv = new CSVDataSet();
+        planCsv.setVariableNames("user_2");
+        root.add(new JMeterTreeNode(planCsv, null));
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        root.add(group);
+        Arguments udv = new Arguments();
+        udv.addArgument("user_3", "other");
+        group.add(new JMeterTreeNode(udv, null));
+        CSVDataSet csv = new CSVDataSet();
+        csv.setVariableNames("user_4");
+        group.add(new JMeterTreeNode(csv, null));
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.addArgument("user", "alice");
+        JMeterTreeNode scope = new JMeterTreeNode(sampler, null);
+        group.add(scope);
+        assertEquals("user_5", ParameterScanner.scan(scope).get(0).variable);
+        Set<String> used = ParameterNames.used(scope);
+        for (String name : List.of("user", "user_2", "user_3", "user_4")) {
+            assertFalse(ParameterNames.valid(name, used));
+        }
+        assertTrue(ParameterNames.valid("user_5", used));
+    }
 
     @Test
     void reusingCsvPreservesItsConsumerSettings() throws Exception {
