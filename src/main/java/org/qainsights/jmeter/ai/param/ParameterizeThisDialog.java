@@ -328,7 +328,8 @@ final class ParameterizeThisDialog extends JDialog {
                     reuse == null
                             ? List.of()
                             : reuse.getPropertyAsString("variableNames").isBlank()
-                                    ? ParameterCsv.header(path, delimiter.getText().charAt(0))
+                                    ? ParameterCsv.header(path, delimiter.getText().charAt(0),
+                                            reuse.getPropertyAsBoolean("quotedData"))
                                     : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null
                     && (!delimiter.getText().equals(reuse.getPropertyAsString("delimiter", ","))
@@ -415,6 +416,7 @@ final class ParameterizeThisDialog extends JDialog {
                 [sharing.getSelectedIndex()];
         boolean header = reuse == null || reuse.getPropertyAsString("variableNames").isBlank()
                 || reuse.getPropertyAsBoolean("ignoreFirstLine");
+        boolean quotedData = reuse == null || reuse.getPropertyAsBoolean("quotedData");
         new SwingWorker<Integer, Void>() {
             @Override
             protected Integer doInBackground() throws Exception {
@@ -427,7 +429,7 @@ final class ParameterizeThisDialog extends JDialog {
                                         names,
                                         values,
                                         oldNames,
-                                        header, samples);
+                                        header, quotedData, samples);
                                 return 0;
                             },
                             () -> {

@@ -30,8 +30,14 @@ public final class ParameterCsv {
     }
 
     public static List<String> header(Path file, char delimiter) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            return Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter));
+        return header(file, delimiter, true);
+    }
+
+    public static List<String> header(Path file, char delimiter, boolean quotedData) throws IOException {
+        try (PushbackReader reader = new PushbackReader(
+                Files.newBufferedReader(file, StandardCharsets.UTF_8), 1)) {
+            Record header = record(reader, quotedData);
+            return header == null ? List.of() : fields(header, delimiter, quotedData);
         }
     }
 
@@ -43,12 +49,23 @@ public final class ParameterCsv {
             List<String> existingNames,
             boolean existingHeader)
             throws IOException {
-        write(file, delimiter, names, values, existingNames, existingHeader, List.of());
+        write(file, delimiter, names, values, existingNames, existingHeader, true, List.of());
     }
 
     static void write(Path file, char delimiter, List<String> names, List<String> values,
             List<String> existingNames, boolean existingHeader, List<List<String>> samples)
             throws IOException {
+        write(file, delimiter, names, values, existingNames, existingHeader, true, samples);
+    }
+
+    public static void write(Path file, char delimiter, List<String> names, List<String> values,
+            List<String> existingNames, boolean existingHeader, boolean quotedData) throws IOException {
+        write(file, delimiter, names, values, existingNames, existingHeader, quotedData, List.of());
+    }
+
+    static void write(Path file, char delimiter, List<String> names, List<String> values,
+            List<String> existingNames, boolean existingHeader, boolean quotedData,
+            List<List<String>> samples) throws IOException {
         if (names.isEmpty() || names.size() != values.size()) {
             throw new IllegalArgumentException(
                     "CSV requires equally sized, non-empty names and values.");
@@ -60,6 +77,13 @@ public final class ParameterCsv {
             if (sample.size() != names.size() || sample.stream().anyMatch(java.util.Objects::isNull)) {
                 throw new IllegalArgumentException("Sample rows must match the selected columns.");
             }
+            if (!quotedData) {
+                validateUnquoted(sample, delimiter);
+            }
+        }
+        if (!quotedData) {
+            validateUnquoted(names, delimiter);
+            validateUnquoted(values, delimiter);
         }
         Path absolute = file.toAbsolutePath();
         Files.createDirectories(absolute.getParent());
@@ -67,41 +91,41 @@ public final class ParameterCsv {
         try {
             try (BufferedWriter writer = Files.newBufferedWriter(staged, StandardCharsets.UTF_8)) {
                 if (existingNames.isEmpty()) {
-                    row(writer, delimiter, names, List.of());
-                    row(writer, delimiter, values, List.of());
+                    row(writer, delimiter, names, List.of(), quotedData);
+                    row(writer, delimiter, values, List.of(), quotedData);
                     for (List<String> sample : samples) {
-                        row(writer, delimiter, sample, List.of());
+                        row(writer, delimiter, sample, List.of(), quotedData);
                     }
                 } else {
                     try (PushbackReader reader = new PushbackReader(
                             Files.newBufferedReader(absolute, StandardCharsets.UTF_8), 1)) {
-                        Record first = record(reader);
+                        Record first = record(reader, quotedData);
                         String ending = first == null || first.ending.isEmpty() ? "\n" : first.ending;
                         if (existingHeader) {
-                            if (first == null || !fields(first, delimiter).equals(existingNames)) {
+                            if (first == null || !fields(first, delimiter, quotedData).equals(existingNames)) {
                                 throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
                             }
-                            append(writer, first, delimiter, names);
-                            first = record(reader);
+                            append(writer, first, delimiter, names, quotedData);
+                            first = record(reader, quotedData);
                         } else {
-                            row(writer, delimiter, existingNames, names);
+                            row(writer, delimiter, existingNames, names, quotedData);
                         }
                         boolean hasData = false;
                         List<String> defaults = List.of();
                         String lastEnding = ending;
-                        for (Record current = first; current != null; current = record(reader)) {
+                        for (Record current = first; current != null; current = record(reader, quotedData)) {
                             if (current.text.isEmpty()) {
                                 writer.write(current.ending);
                                 continue;
                             }
-                            List<String> currentFields = fields(current, delimiter);
+                            List<String> currentFields = fields(current, delimiter, quotedData);
                             if (currentFields.size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
                             }
                             if (!hasData) {
                                 defaults = currentFields;
                             }
-                            append(writer, current, delimiter, values);
+                            append(writer, current, delimiter, values, quotedData);
                             lastEnding = current.ending;
                             hasData = true;
                         }
@@ -112,7 +136,7 @@ public final class ParameterCsv {
                             writer.write(ending);
                         }
                         for (List<String> sample : samples) {
-                            row(writer, delimiter, defaults, sample, ending);
+                            row(writer, delimiter, defaults, sample, quotedData, ending);
                         }
                     }
                 }
@@ -126,12 +150,22 @@ public final class ParameterCsv {
     private record Record(String text, String ending) {
     }
 
-    private static Record record(PushbackReader reader) throws IOException {
+    public static void validateUnquoted(List<String> values, char delimiter) {
+        for (String value : values) {
+            if (value.indexOf(delimiter) >= 0 || value.contains("\"")
+                    || value.contains("\r") || value.contains("\n")) {
+                throw new IllegalArgumentException("Existing CSV has quotedData=false; new values must not"
+                        + " contain the delimiter, a quote or a newline.");
+            }
+        }
+    }
+
+    private static Record record(PushbackReader reader, boolean quotedData) throws IOException {
         StringBuilder text = new StringBuilder();
         boolean quoted = false;
         int character;
         while ((character = reader.read()) != -1) {
-            if (character == '"') {
+            if (quotedData && character == '"') {
                 quoted = !quoted;
             }
             if (!quoted && (character == '\n' || character == '\r')) {
@@ -151,40 +185,39 @@ public final class ParameterCsv {
         return text.isEmpty() ? null : new Record(text.toString(), "");
     }
 
-    private static List<String> fields(Record record, char delimiter) throws IOException {
+    private static List<String> fields(Record record, char delimiter, boolean quotedData) throws IOException {
+        if (!quotedData) {
+            return Arrays.asList(record.text.split(java.util.regex.Pattern.quote(String.valueOf(delimiter)), -1));
+        }
         try (BufferedReader reader = new BufferedReader(new StringReader(record.text + "\n"))) {
             return Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter));
         }
     }
 
     private static void append(BufferedWriter writer, Record record, char delimiter,
-            List<String> appended) throws IOException {
+            List<String> appended, boolean quotedData) throws IOException {
         writer.write(record.text);
         for (String value : appended) {
             writer.write(delimiter);
-            writer.write('"');
-            writer.write(value.replace("\"", "\"\""));
-            writer.write('"');
+            writer.write(quotedData ? "\"" + value.replace("\"", "\"\"") + "\"" : value);
         }
         writer.write(record.ending);
     }
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
-            List<String> appended) throws IOException {
-        row(writer, delimiter, first, appended, "\n");
+            List<String> appended, boolean quotedData) throws IOException {
+        row(writer, delimiter, first, appended, quotedData, "\n");
     }
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
-            List<String> appended, String ending) throws IOException {
+            List<String> appended, boolean quotedData, String ending) throws IOException {
         boolean separator = false;
         for (List<String> fields : List.of(first, appended)) {
             for (String value : fields) {
                 if (separator) {
                     writer.write(delimiter);
                 }
-                writer.write('"');
-                writer.write(value.replace("\"", "\"\""));
-                writer.write('"');
+                writer.write(quotedData ? "\"" + value.replace("\"", "\"\"") + "\"" : value);
                 separator = true;
             }
         }
