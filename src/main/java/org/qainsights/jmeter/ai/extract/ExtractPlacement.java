@@ -73,7 +73,8 @@ public final class ExtractPlacement {
      * contain {@code value}. Variables are per thread, so other Thread Groups never see the extracted value.
      */
     public static List<JMeterTreeNode> laterUses(JMeterTreeNode root, JMeterTreeNode source, String value) {
-        if (root == null || source == null || value == null || value.length() < MIN_REPLACE_LENGTH) {
+        if (root == null || source == null || value == null || value.length() < MIN_REPLACE_LENGTH
+                || value.contains("${")) {
             return Collections.emptyList();
         }
         JMeterTreeNode group = threadGroupOf(source);
@@ -131,7 +132,8 @@ public final class ExtractPlacement {
                 if (containsIn(((MultiProperty) p).iterator(), value)) {
                     return true;
                 }
-            } else if (p instanceof StringProperty && p.getStringValue().contains(value)) {
+            } else if (p instanceof StringProperty
+                    && !p.getStringValue().equals(replaceLiteral(p.getStringValue(), value, "${preview}"))) {
                 return true;
             }
         }
@@ -169,13 +171,13 @@ public final class ExtractPlacement {
                 break;
             }
             result.append(text.substring(start, variable).replace(value, replacement));
-            int end = text.indexOf('}', variable + 2);
+            int end = ReplacementExpressions.end(text, variable);
             if (end < 0) {
                 result.append(text.substring(variable));
                 break;
             }
-            result.append(text, variable, end + 1);
-            start = end + 1;
+            result.append(text, variable, end);
+            start = end;
         }
         return result.toString();
     }

@@ -11,6 +11,39 @@ class ParameterFollowupTest {
     @TempDir Path directory;
 
     @Test
+    void expressionsAndUnicodeNeighborsRemainProtectedAndHttpMetadataIsNotRewritten() {
+        var http = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+        http.addArgument("id", "12345");
+        http.addArgument("mixed", "é12345 12345９ ${__groovy('${inner}' + '12345')} 12345");
+        http.setDomain("12345");
+        var node = new org.apache.jmeter.gui.tree.JMeterTreeNode(http, null);
+        var candidate = ParameterScanner.scan(node).stream().filter(c -> c.value.equals("12345")).findFirst().orElseThrow();
+        assertEquals(2, ParameterReplacement.replace(node, List.of(candidate), true));
+        assertEquals("12345", http.getDomain());
+        assertEquals("é12345 12345９ ${__groovy('${inner}' + '12345')} ${id}",
+                http.getArguments().getArgument(1).getValue());
+        String json = "{\"value\":${__groovy('}')},\"id\":12345}";
+        assertDoesNotThrow(() -> new com.fasterxml.jackson.databind.ObjectMapper().readTree(ParameterJson.mask(json).text()));
+        assertTimeoutPreemptively(java.time.Duration.ofSeconds(3),
+                () -> ParameterJson.mask("${".repeat(10000)));
+    }
+
+    @Test
+    void extractPreviewAgreesWithExpressionAwareReplacement() {
+        var group = new org.apache.jmeter.gui.tree.JMeterTreeNode(new org.apache.jmeter.threads.ThreadGroup(), null);
+        var source = new org.apache.jmeter.gui.tree.JMeterTreeNode(new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy(), null);
+        group.add(source);
+        var http = new org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy();
+        http.addArgument("id", "${__groovy('${inner}' + '12345')}");
+        var target = new org.apache.jmeter.gui.tree.JMeterTreeNode(http, null);
+        group.add(target);
+        assertTrue(org.qainsights.jmeter.ai.extract.ExtractPlacement.laterUses(group, source, "12345").isEmpty());
+        assertEquals(0, org.qainsights.jmeter.ai.extract.ExtractPlacement.replace(List.of(target), "12345", "id"));
+        http.addArgument("literal", "12345");
+        assertEquals(List.of(target), org.qainsights.jmeter.ai.extract.ExtractPlacement.laterUses(group, source, "12345"));
+    }
+
+    @Test
     void blankRecordsReceiveColumnsAndInsertedHeaderKeepsLineEndings() throws Exception {
         Path csv = directory.resolve("blank.csv");
         Files.writeString(csv, "old\r\n\r\n");

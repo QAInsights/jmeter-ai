@@ -30,17 +30,11 @@ final class ParameterJson {
             } else if (c == '"') {
                 quoted = true;
             } else if (c == '$' && i + 1 < text.length() && text.charAt(i + 1) == '{') {
-                int depth = 1;
-                int end = i + 2;
-                while (end < text.length() && depth > 0) {
-                    char next = text.charAt(end++);
-                    if (next == '{') {
-                        depth++;
-                    } else if (next == '}') {
-                        depth--;
-                    }
+                int end = org.qainsights.jmeter.ai.extract.ReplacementExpressions.end(text, i);
+                if (end < 0) {
+                    break;
                 }
-                if (depth == 0 && end - i >= 4) {
+                if (end - i >= 4) {
                     masked.replace(i, end, "null" + " ".repeat(end - i - 4));
                     expressions.set(i, end);
                     i = end - 1;

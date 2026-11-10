@@ -44,6 +44,7 @@ final class ParameterReplacement {
     static int replace(
             JMeterTreeNode scope, List<ParameterScanner.Candidate> chosen, boolean apply) {
         int count = 0;
+        Pattern literalPattern = literalPattern(chosen);
         Enumeration<?> nodes = scope.preorderEnumeration();
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
@@ -62,7 +63,8 @@ final class ParameterReplacement {
                 }
             }
             count += properties(node.getTestElement().propertyIterator(), bodies, chosen, apply,
-                    node.getTestElement() instanceof ConfigElement);
+                    node.getTestElement() instanceof ConfigElement, literalPattern,
+                    node.getTestElement() instanceof HTTPSamplerBase);
         }
         return count;
     }
@@ -71,20 +73,25 @@ final class ParameterReplacement {
             PropertyIterator iterator,
             Set<JMeterProperty> bodies,
             List<ParameterScanner.Candidate> chosen,
-            boolean apply, boolean config) {
+            boolean apply, boolean config, Pattern literalPattern, boolean httpRoot) {
         int count = 0;
         while (iterator.hasNext()) {
             JMeterProperty property = iterator.next();
+            if (httpRoot && !property.getName().equals("HTTPsampler.Arguments")
+                    && !property.getName().equals("HTTPSampler.path")) {
+                continue;
+            }
             if (SKIPPED.contains(property.getName()) || ParameterPropertyPolicy.skip(property, config)) {
                 continue;
             }
             if (property instanceof MultiProperty) {
-                count += properties(((MultiProperty) property).iterator(), bodies, chosen, apply, config);
+                count += properties(((MultiProperty) property).iterator(), bodies, chosen, apply, config,
+                        literalPattern, false);
             } else if (property instanceof StringProperty) {
                 List<Edit> edits =
                         bodies.contains(property)
                                 ? jsonEdits(property.getStringValue(), chosen)
-                                : literalEdits(property.getStringValue(), chosen);
+                                : literalEdits(property.getStringValue(), chosen, literalPattern);
                 count += edits.size();
                 if (apply && !edits.isEmpty()) {
                     StringBuilder text = new StringBuilder(property.getStringValue());
@@ -139,9 +146,9 @@ final class ParameterReplacement {
         return value.chars().noneMatch(c -> c == '"' || c == '\\' || c < 0x20);
     }
 
-    private static List<Edit> literalEdits(String text, List<ParameterScanner.Candidate> chosen) {
+    private static Pattern literalPattern(List<ParameterScanner.Candidate> chosen) {
         if (chosen.isEmpty()) {
-            return List.of();
+            return Pattern.compile("(?!)");
         }
         String alternatives =
                 chosen.stream()
@@ -151,13 +158,17 @@ final class ParameterReplacement {
                                         .reversed())
                         .map(c -> Pattern.quote(c.value))
                         .collect(Collectors.joining("|"));
-        Pattern pattern =
-                Pattern.compile(
-                        "\\$\\{[^}]*}|(?<![A-Za-z0-9_])(?:" + alternatives + ")(?![A-Za-z0-9_])");
+        return Pattern.compile("(?<![\\p{L}\\p{N}_])(?:" + alternatives + ")(?![\\p{L}\\p{N}_])");
+    }
+
+    private static List<Edit> literalEdits(String text, List<ParameterScanner.Candidate> chosen, Pattern pattern) {
         Matcher matcher = pattern.matcher(text);
+        java.util.BitSet protectedCharacters =
+                org.qainsights.jmeter.ai.extract.ReplacementExpressions.protectedCharacters(text);
         List<Edit> edits = new ArrayList<>();
         while (matcher.find()) {
-            if (matcher.group().startsWith("${")) {
+            int protectedStart = protectedCharacters.nextSetBit(matcher.start());
+            if (protectedStart >= 0 && protectedStart < matcher.end()) {
                 continue;
             }
             for (ParameterScanner.Candidate candidate : chosen) {
