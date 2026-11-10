@@ -40,6 +40,7 @@ import javax.swing.JTextField;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingWorker;
+import javax.swing.SwingUtilities;
 import java.util.function.Function;
 import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import javax.swing.table.DefaultTableModel;
@@ -494,27 +495,27 @@ final class ParameterizeThisDialog extends JDialog {
     private void continueApply(Path target, CSVDataSet reuse, String file,
             List<ParameterScanner.Candidate> chosen, List<String> names, List<String> values,
             List<String> oldNames) {
-            gui.updateCurrentNode();
-            if (askAi.isSelected() && aiCall != null) {
-                List<ParameterSampleRows.Column> columns = new ArrayList<>();
-                for (int i = 0; i < names.size(); i++) {
-                    columns.add(ParameterSampleRows.column(names.get(i), values.get(i)));
-                }
-                int count = (Integer) sampleCount.getValue();
-                String prompt = ParameterSampleRows.prompt(columns, count);
-                setBusy(true);
-                error.setText("Generating sample rows. Cancel leaves the plan and CSV unchanged.");
-                Telemetry.record(TelemetryFeature.PARAM_AI_USED);
-                sampleRequest = new ParameterSampleRequest(aiCall, prompt, count, List.copyOf(columns), 60_000,
-                        samples -> commit(target, reuse, file, chosen, names, values, oldNames, samples),
-                        message -> {
-                            setBusy(false);
-                            error.setText(message);
-                        });
-                sampleRequest.start();
-            } else {
-                commit(target, reuse, file, chosen, names, values, oldNames, List.of());
+        gui.updateCurrentNode();
+        if (askAi.isSelected() && aiCall != null) {
+            List<ParameterSampleRows.Column> columns = new ArrayList<>();
+            for (int i = 0; i < names.size(); i++) {
+                columns.add(ParameterSampleRows.column(names.get(i), values.get(i)));
             }
+            int count = (Integer) sampleCount.getValue();
+            String prompt = ParameterSampleRows.prompt(columns, count);
+            setBusy(true);
+            error.setText("Generating sample rows. Cancel leaves the plan and CSV unchanged.");
+            Telemetry.record(TelemetryFeature.PARAM_AI_USED);
+            sampleRequest = new ParameterSampleRequest(aiCall, prompt, count, List.copyOf(columns), 60_000,
+                    samples -> commit(target, reuse, file, chosen, names, values, oldNames, samples),
+                    message -> {
+                        setBusy(false);
+                        error.setText(message);
+                    });
+            sampleRequest.start();
+        } else {
+            commit(target, reuse, file, chosen, names, values, oldNames, List.of());
+        }
     }
 
     private void commit(Path target, CSVDataSet reuse, String file,
