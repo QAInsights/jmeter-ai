@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.param;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +12,28 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
+    @Test
+    void csvAndOtherConfigFilePropertiesAreNeverCandidatesOrReplacementTargets() {
+        Arguments config = new Arguments();
+        config.addArgument("file", "data/1234.csv");
+        config.setProperty("other.filename", "1234");
+        JMeterTreeNode root = new JMeterTreeNode(config, null);
+        CSVDataSet csv = new CSVDataSet();
+        csv.setFilename("data/1234.csv");
+        csv.setVariableNames("1234");
+        root.add(new JMeterTreeNode(csv, null));
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.addArgument("id", "1234");
+        root.add(new JMeterTreeNode(sampler, null));
+        List<ParameterScanner.Candidate> candidates = ParameterScanner.scan(root);
+        assertEquals(List.of("1234"), candidates.stream().map(c -> c.value).toList());
+        assertEquals(1, candidates.get(0).occurrences);
+        assertEquals(1, ParameterReplacement.replace(root, candidates, true));
+        assertEquals("data/1234.csv", csv.getFilename());
+        assertEquals("1234", csv.getVariableNames());
+        assertEquals("data/1234.csv", config.getArgument(0).getValue());
+        assertEquals("1234", config.getPropertyAsString("other.filename"));
+    }
     @Test
     void unsafeJsonStringsAreNeitherOfferedNorReplacedFromOtherSources() throws Exception {
         ObjectMapper json = new ObjectMapper();
