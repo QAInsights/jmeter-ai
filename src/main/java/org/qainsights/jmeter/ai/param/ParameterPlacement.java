@@ -90,13 +90,16 @@ public final class ParameterPlacement {
         if (group == null) {
             throw new IllegalArgumentException("Select an element inside a Thread Group.");
         }
+        GuiPackage gui = GuiPackage.getInstance();
+        if (gui != null) {
+            gui.updateCurrentNode();
+        }
         Map<JMeterTreeNode, TestElement> before = new IdentityHashMap<>();
         Enumeration<?> enumeration = group.preorderEnumeration();
         while (enumeration.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) enumeration.nextElement();
             before.put(node, (TestElement) node.getTestElement().clone());
         }
-        GuiPackage gui = GuiPackage.getInstance();
         if (gui != null) {
             gui.beginUndoTransaction();
         }
@@ -131,6 +134,10 @@ public final class ParameterPlacement {
                 model.insertNodeInto(added, group, 0);
             }
             model.nodeStructureChanged(group);
+            if (gui != null) {
+                gui.refreshCurrentGui();
+                gui.updateCurrentNode();
+            }
             return changed;
         } catch (Exception failure) {
             for (Map.Entry<JMeterTreeNode, TestElement> entry : before.entrySet()) {
