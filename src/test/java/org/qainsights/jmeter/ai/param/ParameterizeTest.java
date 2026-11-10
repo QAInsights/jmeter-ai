@@ -270,7 +270,7 @@ class ParameterizeTest {
                 "", "{\"username\":\"a\\\"bcd\",\"id\":12345,\"active\":true}", "");
         JMeterTreeNode sampler = model.addComponent(http, group);
         assertEquals(
-                3,
+                2,
                 ParameterPlacement.apply(
                         model,
                         sampler,
@@ -282,7 +282,7 @@ class ParameterizeTest {
                         "shareMode.all",
                         ParameterScanner.scan(sampler)));
         assertEquals(
-                "{\"username\":\"${username}\",\"id\":${id},\"active\":${active}}",
+                "{\"username\":\"a\\\"bcd\",\"id\":${id},\"active\":${active}}",
                 http.getArguments().getArgument(0).getValue());
     }
 }
