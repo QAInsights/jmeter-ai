@@ -60,6 +60,34 @@ class AiMenuItemTest {
     }
 
 
+    @Test
+    void sampleFallbackRoutesAdditionalConfiguredProvidersWithoutCallingThem() {
+        for (String provider : java.util.List.of("grok", "openrouter", "meta")) {
+            aiConfigMockedStatic.when(() -> AiConfig.getProperty(provider + ".api.key", ""))
+                    .thenReturn("test-key");
+        }
+        try (var grok = org.mockito.Mockito.mockConstruction(org.qainsights.jmeter.ai.service.GrokAiService.class,
+                    (service, context) -> org.mockito.Mockito.when(service.getCurrentModel()).thenReturn("grok-model"));
+                var openRouter = org.mockito.Mockito.mockConstruction(org.qainsights.jmeter.ai.service.OpenRouterAiService.class,
+                    (service, context) -> org.mockito.Mockito.when(service.getCurrentModel()).thenReturn("router-model"));
+                var meta = org.mockito.Mockito.mockConstruction(org.qainsights.jmeter.ai.service.MetaMuseAiService.class,
+                    (service, context) -> org.mockito.Mockito.when(service.getCurrentModel()).thenReturn("meta-model"));
+                var bedrock = org.mockito.Mockito.mockConstruction(org.qainsights.jmeter.ai.service.BedrockAiService.class,
+                    (service, context) -> org.mockito.Mockito.when(service.getCurrentModel()).thenReturn("bedrock-model"))) {
+            for (String type : java.util.List.of("grok", "openrouter", "meta", "bedrock")) {
+                assertNotNull(AiMenuItem.configuredSampleService(type));
+            }
+            org.mockito.Mockito.verify(grok.constructed().get(0)).setModel("grok-model");
+            org.mockito.Mockito.verify(openRouter.constructed().get(0)).setModel("router-model");
+            org.mockito.Mockito.verify(meta.constructed().get(0)).setModel("meta-model");
+            org.mockito.Mockito.verify(bedrock.constructed().get(0)).setModel("bedrock-model");
+            for (AiService service : java.util.List.of(grok.constructed().get(0), openRouter.constructed().get(0),
+                    meta.constructed().get(0), bedrock.constructed().get(0))) {
+                org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).generateResponse(org.mockito.ArgumentMatchers.anyList());
+            }
+        }
+    }
+
     private MockedStatic<AiConfig> aiConfigMockedStatic;
     private String configuredServiceType = "openai";
     private String configuredApiKey = "test-key";
