@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.param;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.jmeter.config.Argument;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.Header;
@@ -27,8 +28,15 @@ import java.util.Set;
 /** Deterministic, scope-local candidates. No request is sent to a provider. */
 public final class ParameterScanner {
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Set<String> SKIP_HEADERS = Set.of("host", "content-type", "accept", "accept-encoding",
-            "connection", "user-agent", "content-length");
+    private static final Set<String> SKIP_HEADERS =
+            Set.of(
+                    "host",
+                    "content-type",
+                    "accept",
+                    "accept-encoding",
+                    "connection",
+                    "user-agent",
+                    "content-length");
 
     public static final class Candidate {
         public final String path;
@@ -44,7 +52,7 @@ public final class ParameterScanner {
         }
     }
 
-    private ParameterScanner() { }
+    private ParameterScanner() {}
 
     public static List<Candidate> scan(JMeterTreeNode scope) {
         Map<String, Candidate> found = new LinkedHashMap<>();
@@ -63,12 +71,22 @@ public final class ParameterScanner {
                     Argument arg = (Argument) property.getObjectValue();
                     if (http.getPostBodyRaw()) {
                         try {
-                            leaves(JSON.readTree(arg.getValue()), path + " > body", "body", found, names);
+                            leaves(
+                                    JSON.readTree(arg.getValue()),
+                                    path + " > body",
+                                    "body",
+                                    found,
+                                    names);
                         } catch (Exception ignored) {
                             // Non-JSON raw bodies are not key/value structures.
                         }
                     } else {
-                        add(path + " > arguments > " + arg.getName(), arg.getName(), arg.getValue(), found, names);
+                        add(
+                                path + " > arguments > " + arg.getName(),
+                                arg.getName(),
+                                arg.getValue(),
+                                found,
+                                names);
                     }
                 }
                 int query = http.getPath().indexOf('?');
@@ -76,14 +94,19 @@ public final class ParameterScanner {
                     for (String pair : http.getPath().substring(query + 1).split("&")) {
                         int equals = pair.indexOf('=');
                         if (equals > 0) {
-                            add(path + " > query > " + pair.substring(0, equals), pair.substring(0, equals),
-                                    pair.substring(equals + 1), found, names);
+                            add(
+                                    path + " > query > " + pair.substring(0, equals),
+                                    pair.substring(0, equals),
+                                    pair.substring(equals + 1),
+                                    found,
+                                    names);
                         }
                     }
                 }
                 String urlPath = query < 0 ? http.getPath() : http.getPath().substring(0, query);
                 for (String segment : urlPath.split("/")) {
-                    if (segment.matches("[0-9]+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}|(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{12,}")) {
+                    if (segment.matches(
+                            "[0-9]+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}|(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{12,}")) {
                         add(path + " > path > id", "id", segment, found, names);
                     }
                 }
@@ -92,21 +115,35 @@ public final class ParameterScanner {
                 for (int i = 0; i < headers.size(); i++) {
                     Header header = headers.get(i);
                     if (!SKIP_HEADERS.contains(header.getName().toLowerCase(Locale.ROOT))) {
-                        add(path + " > " + header.getName(), header.getName(), header.getValue(), found, names);
+                        add(
+                                path + " > " + header.getName(),
+                                header.getName(),
+                                header.getValue(),
+                                found,
+                                names);
                     }
                 }
             } else {
-                properties(element.propertyIterator(), path, element instanceof Sampler, found, names);
+                properties(
+                        element.propertyIterator(), path, element instanceof Sampler, found, names);
             }
+        }
+        for (Candidate candidate : found.values()) {
+            candidate.occurrences = ParameterReplacement.replace(scope, List.of(candidate), false);
         }
         return new ArrayList<>(found.values());
     }
 
-    private static void properties(PropertyIterator iterator, String path, boolean sampler,
-            Map<String, Candidate> found, Set<String> names) {
+    private static void properties(
+            PropertyIterator iterator,
+            String path,
+            boolean sampler,
+            Map<String, Candidate> found,
+            Set<String> names) {
         while (iterator.hasNext()) {
             JMeterProperty property = iterator.next();
-            if (property instanceof TestElementProperty && property.getObjectValue() instanceof Argument) {
+            if (property instanceof TestElementProperty
+                    && property.getObjectValue() instanceof Argument) {
                 Argument arg = (Argument) property.getObjectValue();
                 add(path + " > " + arg.getName(), arg.getName(), arg.getValue(), found, names);
             } else if (property instanceof MultiProperty) {
@@ -118,8 +155,12 @@ public final class ParameterScanner {
                     if (equals > 0) {
                         String key = pair.substring(0, equals).trim();
                         if (key.matches("[A-Za-z_][A-Za-z0-9_.-]*")) {
-                            add(path + " > " + property.getName() + " > " + key, key,
-                                    pair.substring(equals + 1).trim(), found, names);
+                            add(
+                                    path + " > " + property.getName() + " > " + key,
+                                    key,
+                                    pair.substring(equals + 1).trim(),
+                                    found,
+                                    names);
                         }
                     }
                 }
@@ -127,13 +168,25 @@ public final class ParameterScanner {
         }
     }
 
-    private static void leaves(JsonNode node, String path, String key, Map<String, Candidate> found,
+    private static void leaves(
+            JsonNode node,
+            String path,
+            String key,
+            Map<String, Candidate> found,
             Set<String> names) {
         if (node == null || node.isNull()) {
             return;
         }
         if (node.isObject()) {
-            node.fields().forEachRemaining(e -> leaves(e.getValue(), path + " > " + e.getKey(), e.getKey(), found, names));
+            node.fields()
+                    .forEachRemaining(
+                            e ->
+                                    leaves(
+                                            e.getValue(),
+                                            path + " > " + e.getKey(),
+                                            e.getKey(),
+                                            found,
+                                            names));
         } else if (node.isArray()) {
             for (int i = 0; i < node.size(); i++) {
                 leaves(node.get(i), path + " > " + i, key, found, names);
@@ -143,8 +196,15 @@ public final class ParameterScanner {
         }
     }
 
-    private static void add(String path, String key, String value, Map<String, Candidate> found, Set<String> names) {
-        if (value == null || value.length() < ExtractPlacement.MIN_REPLACE_LENGTH || value.contains("${")) {
+    private static void add(
+            String path,
+            String key,
+            String value,
+            Map<String, Candidate> found,
+            Set<String> names) {
+        if (value == null
+                || value.length() < ExtractPlacement.MIN_REPLACE_LENGTH
+                || value.contains("${")) {
             return;
         }
         Candidate existing = found.get(value);
@@ -157,10 +217,16 @@ public final class ParameterScanner {
 
     public static String uniqueName(String key, Set<String> used) {
         String base = key.replaceAll("[^A-Za-z0-9_]", "_");
-        if (base.isEmpty()) { base = "value"; }
-        if (Character.isDigit(base.charAt(0))) { base = "value_" + base; }
+        if (base.isEmpty()) {
+            base = "value";
+        }
+        if (Character.isDigit(base.charAt(0))) {
+            base = "value_" + base;
+        }
         String name = base;
-        for (int i = 2; !used.add(name); i++) { name = base + "_" + i; }
+        for (int i = 2; !used.add(name); i++) {
+            name = base + "_" + i;
+        }
         return name;
     }
 }
