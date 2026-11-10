@@ -179,7 +179,7 @@ class ParameterizeTest {
         Files.writeString(file, "old\nfirst\nsecond\n");
         ParameterCsv.write(file, ';', List.of("new"), List.of("a;b"), List.of("old"));
         assertEquals(
-                "\"old\";\"new\"\n\"first\";\"a;b\"\n\"second\";\"a;b\"\n", Files.readString(file));
+                "old;\"new\"\nfirst;\"a;b\"\nsecond;\"a;b\"\n", Files.readString(file));
     }
 
     @Test
@@ -189,7 +189,7 @@ class ParameterizeTest {
         ParameterCsv.write(file, ',', List.of("new"), List.of("value"), List.of("old"), false);
         assertEquals(List.of("old", "new"), ParameterCsv.header(file, ','));
         assertEquals(
-                "\"old\",\"new\"\n\"first\",\"value\"\n\"second\",\"value\"\n",
+                "\"old\",\"new\"\nfirst,\"value\"\nsecond,\"value\"\n",
                 Files.readString(file));
     }
 

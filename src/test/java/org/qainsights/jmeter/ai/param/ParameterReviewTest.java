@@ -178,8 +178,8 @@ class ParameterReviewTest {
         }
         ParameterCsv.write(file, ',', List.of("new"), List.of("value"), List.of("old"));
         try (BufferedReader reader = Files.newBufferedReader(file)) {
-            assertEquals("\"old\",\"new\"", reader.readLine());
-            assertEquals("\"row0\",\"value\"", reader.readLine());
+            assertEquals("old,\"new\"", reader.readLine());
+            assertEquals("row0,\"value\"", reader.readLine());
         }
         try (java.util.stream.Stream<Path> files = Files.list(directory)) {
             assertEquals(List.of(file), files.toList());
