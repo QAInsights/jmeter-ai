@@ -29,6 +29,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @Test
+    void appendingColumnsPreservesExistingQuotesLineEndingsAndFinalNewlineState() throws Exception {
+        Path csv = directory.resolve("preserved.csv");
+        Files.writeString(csv, "id,\"text\"\r\n001,\"a, b\"\r\n\"002\",\"two\r\nlines\"\n003,last");
+        ParameterCsv.write(csv, ',', List.of("new"), List.of("quoted\"value"),
+                List.of("id", "text"), true);
+        assertEquals("id,\"text\",\"new\"\r\n001,\"a, b\",\"quoted\"\"value\"\r\n"
+                + "\"002\",\"two\r\nlines\",\"quoted\"\"value\"\n003,last,\"quoted\"\"value\"",
+                Files.readString(csv));
+    }
+
+    @Test
     void httpUploadPathsMimeTypesAndParameterNamesAreNeverRewritten() {
         HTTPSamplerProxy http = new HTTPSamplerProxy();
         http.setHTTPFiles(new org.apache.jmeter.protocol.http.util.HTTPFileArg[] {
