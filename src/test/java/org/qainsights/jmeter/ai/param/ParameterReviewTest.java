@@ -29,6 +29,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @Test
+    void reservesInferredCsvHeaderNamesUsingJMeterPathsDelimiterAndEncoding() throws Exception {
+        Path file = directory.resolve("inferred.csv");
+        Files.writeString(file, "\"user\";token\nvalue;other\n", java.nio.charset.StandardCharsets.UTF_16LE);
+        CSVDataSet csv = new CSVDataSet();
+        csv.setProperty("filename", "inferred.csv");
+        csv.setProperty("delimiter", ";");
+        csv.setProperty("fileEncoding", "UTF-16LE");
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        group.add(new JMeterTreeNode(csv, null));
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.addArgument("user", "alice");
+        JMeterTreeNode scope = new JMeterTreeNode(http, null);
+        group.add(scope);
+        org.apache.jmeter.services.FileServer server = mock(org.apache.jmeter.services.FileServer.class);
+        when(server.getBaseDir()).thenReturn(directory.toString());
+        try (org.mockito.MockedStatic<org.apache.jmeter.services.FileServer> global =
+                mockStatic(org.apache.jmeter.services.FileServer.class)) {
+            global.when(org.apache.jmeter.services.FileServer::getFileServer).thenReturn(server);
+            assertTrue(ParameterNames.used(scope).containsAll(Set.of("user", "token")));
+            assertEquals("user_2", ParameterScanner.scan(scope).get(0).variable);
+            csv.setProperty("filename", file.toAbsolutePath().toString());
+            assertTrue(ParameterNames.used(scope).contains("user"));
+            csv.setProperty("filename", "missing.csv");
+            assertFalse(ParameterNames.used(scope).contains("user"));
+            csv.setProperty("filename", "${unresolved}");
+            assertTrue(ParameterNames.used(scope).isEmpty());
+        }
+    }
+
+    @Test
     void unquotedCsvKeepsLiteralQuotesAndRejectsUnrepresentableNewValues() throws Exception {
         Path csv = directory.resolve("unquoted.csv");
         Files.writeString(csv, "old\r\nliteral\"quote\r\n");
