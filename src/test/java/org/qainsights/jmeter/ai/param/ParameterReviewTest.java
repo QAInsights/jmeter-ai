@@ -147,6 +147,7 @@ class ParameterReviewTest {
         assertNotEquals("user", candidates.get(0).variable);
         assertEquals(1, candidates.get(0).occurrences);
         assertEquals(1, ParameterReplacement.replace(root, candidates, true));
+        assertEquals("${user_2}", http.getArguments().getArgument(0).getValue());
         assertEquals("alice", plan.getUserDefinedVariables().get("user"));
         assertEquals("alice", variables.getArgument(1).getValue());
         assertTrue(ParameterNames.used(group).containsAll(Set.of("user", "token", "same")));
