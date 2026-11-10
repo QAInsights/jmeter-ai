@@ -192,6 +192,9 @@ public final class ParameterScanner {
                 leaves(node.get(i), path + " > " + i, key, found, names);
             }
         } else {
+            if (node.isTextual() && !ParameterReplacement.safeJsonString(node.asText())) {
+                return;
+            }
             add(path, key, node.asText(), found, names);
         }
     }
