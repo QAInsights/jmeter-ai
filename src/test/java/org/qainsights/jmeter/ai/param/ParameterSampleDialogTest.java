@@ -18,6 +18,7 @@ import static org.mockito.Mockito.*;
 class ParameterSampleDialogTest {
     @Test
     void providerAvailabilityAndBoundedRowCountControlTheOptionalFeature() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(java.awt.GraphicsEnvironment.isHeadless());
         if (JMeterUtils.getJMeterProperties() == null) {
             JMeterUtils.loadJMeterProperties("nonexistent.properties");
         }

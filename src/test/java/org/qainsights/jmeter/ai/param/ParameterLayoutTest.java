@@ -42,11 +42,14 @@ class ParameterLayoutTest {
                 new String[] {"Use", "Field", "Value", "Variable", "Occurrences"});
         ParameterizeThisDialog.styleTable(table);
         table.setPreferredScrollableViewportSize(new Dimension(740, 160));
+        JPanel samples = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        samples.add(new JCheckBox("Ask AI for sample rows"));
+        samples.add(new JSpinner(new SpinnerNumberModel(10, 1, 500, 1)));
         return ParameterizeThisDialog.content(table, false, new JTextField("data/users.csv", 36),
                 new JTextField(",", 3), new JComboBox<>(new String[] {"All threads", "Thread Group", "Thread"}),
                 new JCheckBox("Recycle on EOF", true), new JCheckBox("Stop thread on EOF", false),
                 new JLabel(" "), ParameterDialogControls.button("Apply variables", true),
-                ParameterDialogControls.button("Cancel", false));
+                ParameterDialogControls.button("Cancel", false), samples);
     }
 
     static void layout(Container container) {
@@ -60,7 +63,8 @@ class ParameterLayoutTest {
 
     private static void checkControls(Container container, JPanel root) {
         for (Component component : container.getComponents()) {
-            if ((component instanceof JTextField || component instanceof JComboBox || component instanceof JCheckBox)
+            if ((component instanceof JTextField || component instanceof JComboBox || component instanceof JCheckBox
+                    || component instanceof JSpinner)
                     && !(component.getParent() instanceof JScrollBar)) {
                 Rectangle bounds = SwingUtilities.convertRectangle(component.getParent(), component.getBounds(), root);
                 assertTrue(new Rectangle(root.getSize()).contains(bounds), component.getClass() + " is clipped");
