@@ -113,7 +113,7 @@ final class ParameterizeThisDialog extends JDialog {
         options.setOpaque(false);
         options.setAlignmentX(LEFT_ALIGNMENT);
         options.add(field("Delimiter", delimiter, "One character, usually a comma."));
-        options.add(field("Sharing mode", sharing, "Choose which threads share the file."));
+        options.add(field("Sharing mode", sharing, "Matching CSV configs keep their existing settings."));
         form.add(options);
         JPanel eof = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         eof.setOpaque(false);
@@ -349,7 +349,8 @@ final class ParameterizeThisDialog extends JDialog {
                             + "\nReplaced occurrences: "
                             + changed
                             + "\nCSV file: "
-                            + path,
+                            + path
+                            + (reuse == null ? "" : "\nExisting CSV consumer settings were preserved."),
                     "Parameterize this",
                     JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception exception) {

@@ -110,13 +110,15 @@ public final class ParameterPlacement {
                             ? names
                             : String.join(",", existingNames) + "," + names);
             csv.setFilename(filename);
-            csv.setDelimiter(delimiter);
-            csv.setFileEncoding("UTF-8");
+            if (reuse == null) {
+                csv.setDelimiter(delimiter);
+                csv.setFileEncoding("UTF-8");
+                csv.setRecycle(recycle);
+                csv.setStopThread(stop);
+                csv.setShareMode(sharing);
+            }
             csv.setQuotedData(true);
             csv.setIgnoreFirstLine(true);
-            csv.setRecycle(recycle);
-            csv.setStopThread(stop);
-            csv.setShareMode(sharing);
             if (reuse == null) {
                 csv.setName("CSV Data Set Config");
                 csv.setEnabled(true);
