@@ -5,6 +5,8 @@ import org.apache.jmeter.save.CSVSaveService;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.PushbackReader;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,19 +59,28 @@ public final class ParameterCsv {
                     row(writer, delimiter, names, List.of());
                     row(writer, delimiter, values, List.of());
                 } else {
-                    try (BufferedReader reader = Files.newBufferedReader(absolute, StandardCharsets.UTF_8)) {
-                        if (existingHeader && !Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter))
-                                .equals(existingNames)) {
-                            throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
+                    try (PushbackReader reader = new PushbackReader(
+                            Files.newBufferedReader(absolute, StandardCharsets.UTF_8), 1)) {
+                        Record first = record(reader);
+                        if (existingHeader) {
+                            if (first == null || !fields(first, delimiter).equals(existingNames)) {
+                                throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
+                            }
+                            append(writer, first, delimiter, names);
+                            first = record(reader);
+                        } else {
+                            row(writer, delimiter, existingNames, names);
                         }
-                        row(writer, delimiter, existingNames, names);
-                        String[] fields;
                         boolean hasData = false;
-                        while ((fields = CSVSaveService.csvReadFile(reader, delimiter)).length > 0) {
-                            if (fields.length != existingNames.size()) {
+                        for (Record current = first; current != null; current = record(reader)) {
+                            if (current.text.isEmpty()) {
+                                writer.write(current.ending);
+                                continue;
+                            }
+                            if (fields(current, delimiter).size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
                             }
-                            row(writer, delimiter, Arrays.asList(fields), values);
+                            append(writer, current, delimiter, values);
                             hasData = true;
                         }
                         if (!hasData) {
@@ -82,6 +93,52 @@ public final class ParameterCsv {
         } finally {
             Files.deleteIfExists(staged);
         }
+    }
+
+    private record Record(String text, String ending) {
+    }
+
+    private static Record record(PushbackReader reader) throws IOException {
+        StringBuilder text = new StringBuilder();
+        boolean quoted = false;
+        int character;
+        while ((character = reader.read()) != -1) {
+            if (character == '"') {
+                quoted = !quoted;
+            }
+            if (!quoted && (character == '\n' || character == '\r')) {
+                String ending = Character.toString((char) character);
+                if (character == '\r') {
+                    int next = reader.read();
+                    if (next == '\n') {
+                        ending = "\r\n";
+                    } else if (next != -1) {
+                        reader.unread(next);
+                    }
+                }
+                return new Record(text.toString(), ending);
+            }
+            text.append((char) character);
+        }
+        return text.isEmpty() ? null : new Record(text.toString(), "");
+    }
+
+    private static List<String> fields(Record record, char delimiter) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new StringReader(record.text + "\n"))) {
+            return Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter));
+        }
+    }
+
+    private static void append(BufferedWriter writer, Record record, char delimiter,
+            List<String> appended) throws IOException {
+        writer.write(record.text);
+        for (String value : appended) {
+            writer.write(delimiter);
+            writer.write('"');
+            writer.write(value.replace("\"", "\"\""));
+            writer.write('"');
+        }
+        writer.write(record.ending);
     }
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
