@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.CSVDataSet;
+import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.Header;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
@@ -64,6 +66,9 @@ public final class ParameterScanner {
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
             TestElement element = node.getTestElement();
+            if (element instanceof CSVDataSet) {
+                continue;
+            }
             String path = node.getName();
             if (element instanceof HTTPSamplerBase) {
                 HTTPSamplerBase http = (HTTPSamplerBase) element;
@@ -125,7 +130,8 @@ public final class ParameterScanner {
                 }
             } else {
                 properties(
-                        element.propertyIterator(), path, element instanceof Sampler, found, names);
+                        element.propertyIterator(), path, element instanceof Sampler,
+                        element instanceof ConfigElement, found, names);
             }
         }
         for (Candidate candidate : found.values()) {
@@ -138,16 +144,20 @@ public final class ParameterScanner {
             PropertyIterator iterator,
             String path,
             boolean sampler,
+            boolean config,
             Map<String, Candidate> found,
             Set<String> names) {
         while (iterator.hasNext()) {
             JMeterProperty property = iterator.next();
+            if (ParameterPropertyPolicy.skip(property, config)) {
+                continue;
+            }
             if (property instanceof TestElementProperty
                     && property.getObjectValue() instanceof Argument) {
                 Argument arg = (Argument) property.getObjectValue();
                 add(path + " > " + arg.getName(), arg.getName(), arg.getValue(), found, names);
             } else if (property instanceof MultiProperty) {
-                properties(((MultiProperty) property).iterator(), path, sampler, found, names);
+                properties(((MultiProperty) property).iterator(), path, sampler, config, found, names);
             } else if (sampler && !property.getName().startsWith("TestElement.")) {
                 String text = property.getStringValue();
                 for (String pair : text.split("[&;\\r\\n]")) {

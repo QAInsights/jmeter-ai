@@ -5,6 +5,8 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.CSVDataSet;
+import org.apache.jmeter.config.ConfigElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.testelement.TestElement;
@@ -44,6 +46,9 @@ final class ParameterReplacement {
         Enumeration<?> nodes = scope.preorderEnumeration();
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
+            if (node.getTestElement() instanceof CSVDataSet) {
+                continue;
+            }
             Set<JMeterProperty> bodies = Collections.newSetFromMap(new IdentityHashMap<>());
             if (node.getTestElement() instanceof HTTPSamplerBase) {
                 HTTPSamplerBase http = (HTTPSamplerBase) node.getTestElement();
@@ -54,7 +59,8 @@ final class ParameterReplacement {
                     }
                 }
             }
-            count += properties(node.getTestElement().propertyIterator(), bodies, chosen, apply);
+            count += properties(node.getTestElement().propertyIterator(), bodies, chosen, apply,
+                    node.getTestElement() instanceof ConfigElement);
         }
         return count;
     }
@@ -63,15 +69,15 @@ final class ParameterReplacement {
             PropertyIterator iterator,
             Set<JMeterProperty> bodies,
             List<ParameterScanner.Candidate> chosen,
-            boolean apply) {
+            boolean apply, boolean config) {
         int count = 0;
         while (iterator.hasNext()) {
             JMeterProperty property = iterator.next();
-            if (SKIPPED.contains(property.getName())) {
+            if (SKIPPED.contains(property.getName()) || ParameterPropertyPolicy.skip(property, config)) {
                 continue;
             }
             if (property instanceof MultiProperty) {
-                count += properties(((MultiProperty) property).iterator(), bodies, chosen, apply);
+                count += properties(((MultiProperty) property).iterator(), bodies, chosen, apply, config);
             } else if (property instanceof StringProperty) {
                 List<Edit> edits =
                         bodies.contains(property)
