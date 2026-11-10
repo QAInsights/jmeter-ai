@@ -76,8 +76,9 @@ public final class ParameterScanner {
                 for (JMeterProperty property : http.getArguments().getArguments()) {
                     Argument arg = (Argument) property.getObjectValue();
                     if (http.getPostBodyRaw()) {
-                        try (JsonParser parser = JSON.getFactory().createParser(arg.getValue())) {
-                            JSON.readTree(arg.getValue());
+                        String json = ParameterJson.mask(arg.getValue()).text();
+                        try (JsonParser parser = JSON.getFactory().createParser(json)) {
+                            JSON.readTree(json);
                             parser.nextToken();
                             leaves(parser, path + " > body", "body", found, names);
                         } catch (Exception ignored) {

@@ -29,6 +29,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @Test
+    void jsonCanBeParameterizedTwiceWithoutChangingExistingExpressionOffsets() {
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.setPostBodyRaw(true);
+        http.addNonEncodedArgument("", "{\n  \"id\":1234, \"longer\":123456789, \"name\":\"alice\"\n}", "");
+        JMeterTreeNode scope = new JMeterTreeNode(http, null);
+        ParameterScanner.Candidate id = ParameterScanner.scan(scope).stream()
+                .filter(c -> c.value.equals("1234")).findFirst().orElseThrow();
+        assertEquals(1, ParameterReplacement.replace(scope, List.of(id), true));
+        assertEquals("{\n  \"id\":${id}, \"longer\":123456789, \"name\":\"alice\"\n}",
+                http.getArguments().getArgument(0).getValue());
+        List<ParameterScanner.Candidate> remaining = ParameterScanner.scan(scope);
+        assertEquals(Set.of("123456789", "alice"),
+                remaining.stream().map(c -> c.value).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(2, ParameterReplacement.replace(scope, remaining, true));
+        assertEquals("{\n  \"id\":${id}, \"longer\":${longer}, \"name\":\"${name}\"\n}",
+                http.getArguments().getArgument(0).getValue());
+        assertTrue(ParameterScanner.scan(scope).isEmpty());
+    }
+
+    @Test
     void appendingColumnsPreservesExistingQuotesLineEndingsAndFinalNewlineState() throws Exception {
         Path csv = directory.resolve("preserved.csv");
         Files.writeString(csv, "id,\"text\"\r\n001,\"a, b\"\r\n\"002\",\"two\r\nlines\"\n003,last");
