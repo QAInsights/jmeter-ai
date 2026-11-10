@@ -8,6 +8,10 @@ import org.apache.jmeter.control.GenericController;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.BufferedWriter;
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.util.Set;
 import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
@@ -21,6 +25,40 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @TempDir Path directory;
+
+    @Test
+    void streamsLargeCsvAndRestoresDiskBackupOnPlanFailure() throws Exception {
+        Path file = directory.resolve("large.csv");
+        try (BufferedWriter writer = Files.newBufferedWriter(file)) {
+            writer.write("old\n");
+            for (int i = 0; i < 100000; i++) {
+                writer.write("row" + i + "\n");
+            }
+        }
+        long originalSize = Files.size(file);
+        assertThrows(IOException.class, () -> ParameterTransaction.apply(file, () -> {
+            ParameterCsv.write(file, ',', List.of("new"), List.of("value"), List.of("old"));
+            return 0;
+        }, () -> {
+            throw new IOException("plan failed");
+        }));
+        assertEquals(originalSize, Files.size(file));
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            assertEquals("old", reader.readLine());
+            for (int i = 0; i < 100000; i++) {
+                assertEquals("row" + i, reader.readLine());
+            }
+            assertNull(reader.readLine());
+        }
+        ParameterCsv.write(file, ',', List.of("new"), List.of("value"), List.of("old"));
+        try (BufferedReader reader = Files.newBufferedReader(file)) {
+            assertEquals("\"old\",\"new\"", reader.readLine());
+            assertEquals("\"row0\",\"value\"", reader.readLine());
+        }
+        try (java.util.stream.Stream<Path> files = Files.list(directory)) {
+            assertEquals(List.of(file), files.toList());
+        }
+    }
 
     @Test
     void jsonNumbersKeepTheirOriginalLexicalValue() {
