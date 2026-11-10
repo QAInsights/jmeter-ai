@@ -23,6 +23,19 @@ class ParameterReviewTest {
     @TempDir Path directory;
 
     @Test
+    void jsonNumbersKeepTheirOriginalLexicalValue() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setPostBodyRaw(true);
+        sampler.addNonEncodedArgument("", "{\n  \"price\": 12.00, \"exponent\": [1e+03]\n}", "");
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        List<ParameterScanner.Candidate> candidates = ParameterScanner.scan(node);
+        assertEquals(List.of("12.00", "1e+03"), candidates.stream().map(c -> c.value).toList());
+        assertEquals(2, ParameterReplacement.replace(node, candidates, true));
+        assertEquals("{\n  \"price\": ${price}, \"exponent\": [${exponent}]\n}",
+                sampler.getArguments().getArgument(0).getValue());
+    }
+
+    @Test
     void reservesCsvAndUdvNamesInGroupAndAncestorScopes() {
         TestPlan plan = new TestPlan();
         Arguments variables = new Arguments();
