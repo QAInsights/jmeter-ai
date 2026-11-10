@@ -160,13 +160,13 @@ class ParameterizeTest {
                 IllegalArgumentException.class,
                 () -> ParameterCsv.write(file, '"', List.of("new"), List.of("value"), List.of()));
         assertThrows(
-                Exception.class,
+                java.io.IOException.class,
                 () ->
                         ParameterCsv.write(
                                 file, ',', List.of("new"), List.of("value"), List.of("old")));
         Files.writeString(file, "wrong\nvalue\n");
         assertThrows(
-                Exception.class,
+                java.io.IOException.class,
                 () ->
                         ParameterCsv.write(
                                 file, ',', List.of("new"), List.of("value"), List.of("old")));

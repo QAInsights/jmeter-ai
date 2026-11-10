@@ -138,7 +138,13 @@ final class ParameterizeThisDialog extends JDialog {
     static JPanel content(JTable table, boolean empty, JTextField filename, JTextField delimiter,
             JComboBox<String> sharing, JCheckBox recycle, JCheckBox stop, JLabel error,
             JButton apply, JButton cancel, JPanel sampleOptions) {
-        JPanel content = new JPanel(new BorderLayout(0, UiTokens.SPACE_4));
+        JPanel content = new JPanel(new BorderLayout(0, UiTokens.SPACE_4)) {
+            @Override
+            public void doLayout() {
+                fitFooter(this);
+                super.doLayout();
+            }
+        };
         content.setBackground(ThemeColors.canvas());
         content.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
         JLabel title = new JLabel("Parameterize this");
@@ -187,6 +193,8 @@ final class ParameterizeThisDialog extends JDialog {
         bottom.add(form, BorderLayout.NORTH);
         JPanel status = column(note, error, buttons);
         bottom.add(status, BorderLayout.SOUTH);
+        content.putClientProperty("parameterForm", form);
+        content.putClientProperty("parameterStatus", status);
         content.add(bottom, BorderLayout.SOUTH);
         return content;
     }
@@ -230,6 +238,43 @@ final class ParameterizeThisDialog extends JDialog {
             sampleRequest.cancel();
         }
         super.dispose();
+    }
+
+    private static void fitFooter(JPanel root) {
+        JPanel form = (JPanel) root.getClientProperty("parameterForm");
+        JPanel status = (JPanel) root.getClientProperty("parameterStatus");
+        if (form == null || status == null) {
+            return;
+        }
+        BorderLayout layout = (BorderLayout) root.getLayout();
+        JPanel footer = (JPanel) layout.getLayoutComponent(BorderLayout.SOUTH);
+        Component header = layout.getLayoutComponent(BorderLayout.NORTH);
+        int available = root.getHeight() - root.getInsets().top - root.getInsets().bottom
+                - header.getPreferredSize().height - layout.getVgap() * 2;
+        int natural = form.getPreferredSize().height + status.getPreferredSize().height + 8;
+        boolean cramped = available < natural;
+        JScrollPane scroll = (JScrollPane) root.getClientProperty("parameterFormScroll");
+        if (cramped) {
+            if (scroll == null) {
+                scroll = new JScrollPane(form, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                scroll.setBorder(null);
+                root.putClientProperty("parameterFormScroll", scroll);
+            } else {
+                scroll.setViewportView(form);
+            }
+            footer.add(scroll, BorderLayout.NORTH);
+            scroll.setPreferredSize(new Dimension(form.getPreferredSize().width,
+                    Math.max(0, available - status.getPreferredSize().height - 8)));
+        } else if (form.getParent() != footer) {
+            if (scroll != null) {
+                footer.remove(scroll);
+                scroll.setViewportView(null);
+            }
+            footer.add(form, BorderLayout.NORTH);
+        }
+        footer.setPreferredSize(new Dimension(form.getPreferredSize().width,
+                Math.max(status.getPreferredSize().height, Math.min(natural, available))));
     }
 
     static void styleTable(JTable table) {
