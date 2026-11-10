@@ -11,6 +11,21 @@ class ParameterFollowupTest {
     @TempDir Path directory;
 
     @Test
+    void blankRecordsReceiveColumnsAndInsertedHeaderKeepsLineEndings() throws Exception {
+        Path csv = directory.resolve("blank.csv");
+        Files.writeString(csv, "old\r\n\r\n");
+        ParameterCsv.write(csv, ',', List.of("new"), List.of("value"), List.of("old"));
+        assertEquals("old,\"new\"\r\n,\"value\"\r\n", Files.readString(csv));
+        Files.writeString(csv, "first\rsecond\r");
+        ParameterCsv.write(csv, ',', List.of("new"), List.of("value"), List.of("old"), false);
+        assertTrue(Files.readString(csv).startsWith("\"old\",\"new\"\rfirst,"));
+        Files.writeString(csv, "old,other\n\n");
+        assertThrows(java.io.IOException.class, () -> ParameterCsv.write(csv, ',',
+                List.of("new"), List.of("value"), List.of("old", "other")));
+        assertEquals("old,other\n\n", Files.readString(csv));
+    }
+
+    @Test
     void errorsRollBackCsvBytesAndPermissions() throws Exception {
         Path csv = directory.resolve("data.csv");
         Files.writeString(csv, "old\nvalue\n");

@@ -108,16 +108,12 @@ public final class ParameterCsv {
                             append(writer, first, delimiter, names, quotedData);
                             first = record(reader, quotedData);
                         } else {
-                            row(writer, delimiter, existingNames, names, quotedData);
+                            row(writer, delimiter, existingNames, names, quotedData, ending);
                         }
                         boolean hasData = false;
                         List<String> defaults = List.of();
                         String lastEnding = ending;
                         for (Record current = first; current != null; current = record(reader, quotedData)) {
-                            if (current.text.isEmpty()) {
-                                writer.write(current.ending);
-                                continue;
-                            }
                             List<String> currentFields = fields(current, delimiter, quotedData);
                             if (currentFields.size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
@@ -190,6 +186,9 @@ public final class ParameterCsv {
     }
 
     private static List<String> fields(Record record, char delimiter, boolean quotedData) throws IOException {
+        if (record.text.isEmpty()) {
+            return List.of("");
+        }
         if (!quotedData) {
             return Arrays.asList(record.text.split(java.util.regex.Pattern.quote(String.valueOf(delimiter)), -1));
         }
