@@ -28,6 +28,33 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
+    @Test
+    void userDefinedValuesAreNotOfferedOrReplacedButTheirNamesRemainReserved() {
+        TestPlan plan = new TestPlan();
+        Arguments planVariables = new Arguments();
+        planVariables.addArgument("user", "alice");
+        plan.setUserDefinedVariables(planVariables);
+        JMeterTreeNode root = new JMeterTreeNode(plan, null);
+        JMeterTreeNode group = new JMeterTreeNode(new ThreadGroup(), null);
+        root.add(group);
+        Arguments variables = new Arguments();
+        variables.addArgument("token", "secret-value");
+        variables.addArgument("same", "alice");
+        group.add(new JMeterTreeNode(variables, null));
+        assertTrue(ParameterScanner.scan(group).isEmpty());
+        HTTPSamplerProxy http = new HTTPSamplerProxy();
+        http.addArgument("user", "alice");
+        group.add(new JMeterTreeNode(http, null));
+        List<ParameterScanner.Candidate> candidates = ParameterScanner.scan(root);
+        assertEquals(1, candidates.size());
+        assertNotEquals("user", candidates.get(0).variable);
+        assertEquals(1, candidates.get(0).occurrences);
+        assertEquals(1, ParameterReplacement.replace(root, candidates, true));
+        assertEquals("alice", plan.getUserDefinedVariables().get("user"));
+        assertEquals("alice", variables.getArgument(1).getValue());
+        assertTrue(ParameterNames.used(group).containsAll(Set.of("user", "token", "same")));
+    }
+
     @BeforeAll
     static void init() {
         if (JMeterUtils.getJMeterProperties() == null) {

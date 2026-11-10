@@ -100,7 +100,7 @@ class ParameterizeTest {
         vars.addArgument("username", "alice");
         vars.addArgument("skip", "${token}");
         scope.add(node(vars));
-        assertEquals(Set.of("Bearer abcdef", "alice"), values(scope));
+        assertEquals(Set.of("Bearer abcdef"), values(scope));
     }
 
     @Test
