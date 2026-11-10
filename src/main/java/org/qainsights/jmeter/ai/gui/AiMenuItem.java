@@ -223,6 +223,13 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         }
     }
 
+    static void parameterizationApplied() {
+        AiMenuItem item = liveInstance;
+        if (item != null && item.currentChatPanel != null) {
+            item.currentChatPanel.setLastCommandType("PARAMETERIZE");
+        }
+    }
+
     private void openAiChatPanel() {
         GuiPackage guiPackage = GuiPackage.getInstance();
         if (guiPackage == null || guiPackage.getMainFrame() == null) {
