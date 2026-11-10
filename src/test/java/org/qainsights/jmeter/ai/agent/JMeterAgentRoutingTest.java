@@ -75,7 +75,7 @@ class JMeterAgentRoutingTest {
 
         agent.run("inspect", "inspect", List.of(), null, null, null, notice::set);
 
-        assertTrue(capturedSpecs.get().size() >= 21);
+        assertTrue(capturedSpecs.get().size() >= 22);
         assertNull(notice.get());
     }
 
@@ -93,7 +93,7 @@ class JMeterAgentRoutingTest {
 
         agent.run("inspect", "inspect", List.of(), null, null, null, notice::set);
 
-        assertTrue(capturedSpecs.get().size() >= 21);
+        assertTrue(capturedSpecs.get().size() >= 22);
         assertEquals(AgentRequestRouter.Outcome.UNAVAILABLE, notice.get().decision().outcome());
         assertEquals(capturedSpecs.get().size(), notice.get().totalToolCount());
     }

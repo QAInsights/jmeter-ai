@@ -220,7 +220,8 @@ public final class EmbeddingAgentRequestRouter implements AgentRequestRouter {
         values.put(Route.CORRELATE, List.of("handle the dynamic session id",
                 "extract the access token and pass it to the next call", "find values that need correlation",
                 "the viewstate changes every time", "apply a regex extractor for the order id",
-                "auto correlate this recording"));
+                "auto correlate this recording", "parameterize these hard-coded values",
+                "create CSV variables for the selected sampler", "parameterize the test data"));
         values.put(Route.PLAN_FILES, List.of("save my work", "save to file", "open a jmx file",
                 "load the plan from disk", "save as a new jmx", "open the recorded script"));
         Map<Route, List<String>> withCriteria = new EnumMap<>(Route.class);
