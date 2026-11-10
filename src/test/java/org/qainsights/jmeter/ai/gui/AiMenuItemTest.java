@@ -23,6 +23,42 @@ import static org.mockito.Mockito.mockStatic;
 
 @ExtendWith(MockitoExtension.class)
 class AiMenuItemTest {
+    @Test
+    void sampleRowsFallsBackWhenChatHasNoModelOrNoService() {
+        AiService fallback = org.mockito.Mockito.mock(AiService.class);
+        org.mockito.Mockito.when(fallback.generateResponse(java.util.List.of("metadata")))
+                .thenReturn("samples");
+        try (MockedStatic<AiMenuItem> menu = mockStatic(AiMenuItem.class, org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            menu.when(() -> AiMenuItem.createAiService("openai")).thenReturn(fallback);
+            for (String model : new String[] {null, "unavailable:model"}) {
+                AiChatPanel panel = org.mockito.Mockito.mock(AiChatPanel.class);
+                org.mockito.Mockito.when(panel.getSelectedModel()).thenReturn(model);
+                java.util.function.Function<String, String> call = AiMenuItem.sampleRowsAiCall(panel);
+                assertNotNull(call);
+                assertEquals("samples", call.apply("metadata"));
+            }
+            assertNotNull(AiMenuItem.sampleRowsAiCall(null));
+        }
+        org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(2))
+                .generateResponse(java.util.List.of("metadata"));
+    }
+
+    @Test
+    void sampleRowsPrefersAResolvedChatProviderAndCanRemainUnavailable() {
+        AiChatPanel panel = org.mockito.Mockito.mock(AiChatPanel.class);
+        AiService selected = org.mockito.Mockito.mock(AiService.class);
+        org.mockito.Mockito.when(panel.getSelectedModel()).thenReturn("selected:model");
+        org.mockito.Mockito.when(panel.resolveAiService("selected:model")).thenReturn(selected);
+        org.mockito.Mockito.when(selected.generateResponse(java.util.List.of("metadata")))
+                .thenReturn("selected samples");
+        try (MockedStatic<AiMenuItem> menu = mockStatic(AiMenuItem.class, org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            assertEquals("selected samples", AiMenuItem.sampleRowsAiCall(panel).apply("metadata"));
+            menu.verify(() -> AiMenuItem.createAiService(anyString()), org.mockito.Mockito.never());
+            menu.when(() -> AiMenuItem.createAiService("openai")).thenReturn(null);
+            assertNull(AiMenuItem.sampleRowsAiCall(org.mockito.Mockito.mock(AiChatPanel.class)));
+        }
+    }
+
 
     private MockedStatic<AiConfig> aiConfigMockedStatic;
     private String configuredServiceType = "openai";

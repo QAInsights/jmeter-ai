@@ -232,9 +232,16 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
 
     static java.util.function.Function<String, String> sampleRowsAiCall() {
         AiMenuItem item = liveInstance;
-        if (item != null && item.currentChatPanel != null) {
-            AiChatPanel panel = item.currentChatPanel;
-            return CommandDispatcher.workloadAiCall(panel.getSelectedModel(), panel::resolveAiService);
+        return sampleRowsAiCall(item == null ? null : item.currentChatPanel);
+    }
+
+    static java.util.function.Function<String, String> sampleRowsAiCall(AiChatPanel panel) {
+        if (panel != null) {
+            java.util.function.Function<String, String> selected =
+                    CommandDispatcher.workloadAiCall(panel.getSelectedModel(), panel::resolveAiService);
+            if (selected != null) {
+                return selected;
+            }
         }
         AiService service = createAiService(AiConfig.getProperty("jmeter.ai.service.type", "openai"));
         return service == null ? null : prompt -> service.generateResponse(java.util.List.of(prompt));
