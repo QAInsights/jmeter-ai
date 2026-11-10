@@ -1225,6 +1225,9 @@ public class AiChatPanel
         if (attachmentBar.hasAttachments()) {
             text += attachmentBar.consumeMarkers();
         }
+        if (!text.isEmpty()) {
+            clearMessageField();
+        }
         commandDispatcher.dispatch(text);
     }
 

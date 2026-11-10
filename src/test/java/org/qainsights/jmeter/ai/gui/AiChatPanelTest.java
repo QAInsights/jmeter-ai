@@ -163,11 +163,13 @@ class AiChatPanelTest {
     }
 
     @Test
-    void clearingSentCommandDiscardsTextHistoryAndPreservesUndoForNewTyping() throws Exception {
+    void sendingComposerCommandDiscardsTextHistoryAndPreservesUndoForNewTyping() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
         field.setAccessible(true);
         PlaceholderTextArea composer = (PlaceholderTextArea) field.get(panel);
+        java.lang.reflect.Method send = AiChatPanel.class.getDeclaredMethod("sendMessage");
+        send.setAccessible(true);
         javax.swing.Action fallback = org.mockito.Mockito.mock(javax.swing.Action.class);
         org.mockito.Mockito.when(fallback.isEnabled()).thenReturn(true);
 
@@ -175,8 +177,8 @@ class AiChatPanelTest {
             org.apache.jorphan.gui.ui.TextComponentUI.INSTANCE.installUndo(composer);
             composer.setDocument(new javax.swing.text.PlainDocument());
             composer.setUndoRedoFallbacks(fallback, fallback);
-            composer.append("@wrap");
-            panel.clearMessageField();
+            composer.append("@code");
+            assertDoesNotThrow(() -> send.invoke(panel));
             assertEquals("", composer.getText());
 
             pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
@@ -201,6 +203,30 @@ class AiChatPanelTest {
             pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
             assertEquals("", composer.getText());
             org.mockito.Mockito.verify(fallback, org.mockito.Mockito.times(3))
+                    .actionPerformed(org.mockito.ArgumentMatchers.any());
+        });
+    }
+
+    @Test
+    void menuCommandPreservesUnsentDraftAndItsTextUndoHistory() throws Exception {
+        AiChatPanel panel = new AiChatPanel();
+        java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
+        field.setAccessible(true);
+        PlaceholderTextArea composer = (PlaceholderTextArea) field.get(panel);
+        javax.swing.Action fallback = org.mockito.Mockito.mock(javax.swing.Action.class);
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            org.apache.jorphan.gui.ui.TextComponentUI.INSTANCE.installUndo(composer);
+            composer.setDocument(new javax.swing.text.PlainDocument());
+            composer.setUndoRedoFallbacks(fallback, fallback);
+            composer.append("@code");
+            panel.runCommand("@code");
+            assertEquals("@code", composer.getText());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.UNDO_KEY_STROKE);
+            assertEquals("", composer.getText());
+            pressComposerShortcut(composer, org.qainsights.jmeter.ai.utils.Constants.REDO_KEY_STROKE);
+            assertEquals("@code", composer.getText());
+            org.mockito.Mockito.verify(fallback, org.mockito.Mockito.never())
                     .actionPerformed(org.mockito.ArgumentMatchers.any());
         });
     }
