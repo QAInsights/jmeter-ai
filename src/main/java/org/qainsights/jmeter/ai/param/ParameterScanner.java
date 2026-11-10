@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.param;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.jmeter.config.Argument;
@@ -75,13 +76,10 @@ public final class ParameterScanner {
                 for (JMeterProperty property : http.getArguments().getArguments()) {
                     Argument arg = (Argument) property.getObjectValue();
                     if (http.getPostBodyRaw()) {
-                        try {
-                            leaves(
-                                    JSON.readTree(arg.getValue()),
-                                    path + " > body",
-                                    "body",
-                                    found,
-                                    names);
+                        try (JsonParser parser = JSON.getFactory().createParser(arg.getValue())) {
+                            JSON.readTree(arg.getValue());
+                            parser.nextToken();
+                            leaves(parser, path + " > body", "body", found, names);
                         } catch (Exception ignored) {
                             // Non-JSON raw bodies are not key/value structures.
                         }
@@ -179,33 +177,32 @@ public final class ParameterScanner {
     }
 
     private static void leaves(
-            JsonNode node,
+            JsonParser parser,
             String path,
             String key,
             Map<String, Candidate> found,
-            Set<String> names) {
-        if (node == null || node.isNull()) {
+            Set<String> names) throws java.io.IOException {
+        JsonToken token = parser.currentToken();
+        if (token == null || token == JsonToken.VALUE_NULL) {
             return;
         }
-        if (node.isObject()) {
-            node.fields()
-                    .forEachRemaining(
-                            e ->
-                                    leaves(
-                                            e.getValue(),
-                                            path + " > " + e.getKey(),
-                                            e.getKey(),
-                                            found,
-                                            names));
-        } else if (node.isArray()) {
-            for (int i = 0; i < node.size(); i++) {
-                leaves(node.get(i), path + " > " + i, key, found, names);
+        if (token == JsonToken.START_OBJECT) {
+            while (parser.nextToken() != JsonToken.END_OBJECT) {
+                String field = parser.currentName();
+                parser.nextToken();
+                leaves(parser, path + " > " + field, field, found, names);
+            }
+        } else if (token == JsonToken.START_ARRAY) {
+            int i = 0;
+            while (parser.nextToken() != JsonToken.END_ARRAY) {
+                leaves(parser, path + " > " + i++, key, found, names);
             }
         } else {
-            if (node.isTextual() && !ParameterReplacement.safeJsonString(node.asText())) {
+            String value = parser.getText();
+            if (token == JsonToken.VALUE_STRING && !ParameterReplacement.safeJsonString(value)) {
                 return;
             }
-            add(path, key, node.asText(), found, names);
+            add(path, key, value, found, names);
         }
     }
 
