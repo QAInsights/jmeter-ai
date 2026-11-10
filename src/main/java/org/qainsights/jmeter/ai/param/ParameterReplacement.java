@@ -100,6 +100,9 @@ final class ParameterReplacement {
                     continue;
                 }
                 String value = parser.getText();
+                if (token == JsonToken.VALUE_STRING && !safeJsonString(value)) {
+                    continue;
+                }
                 for (ParameterScanner.Candidate candidate : chosen) {
                     if (candidate.value.equals(value)) {
                         int start = (int) parser.getTokenLocation().getCharOffset();
@@ -120,6 +123,10 @@ final class ParameterReplacement {
             return List.of();
         }
         return edits;
+    }
+
+    static boolean safeJsonString(String value) {
+        return value.chars().noneMatch(c -> c == '"' || c == '\\' || c < 0x20);
     }
 
     private static List<Edit> literalEdits(String text, List<ParameterScanner.Candidate> chosen) {
