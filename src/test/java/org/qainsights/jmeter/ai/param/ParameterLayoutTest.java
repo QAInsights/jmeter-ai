@@ -13,6 +13,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterLayoutTest {
     @Test
+    void shortDisplaysKeepButtonsOutsideTheScrollableForm() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JPanel content = surface();
+            content.setSize(800, 300);
+            layout(content);
+            JPanel status = (JPanel) content.getClientProperty("parameterStatus");
+            Rectangle bounds = SwingUtilities.convertRectangle(status.getParent(), status.getBounds(), content);
+            assertTrue(new Rectangle(content.getSize()).contains(bounds));
+            assertNull(SwingUtilities.getAncestorOfClass(JScrollPane.class, status));
+            assertNotNull(content.getClientProperty("parameterFormScroll"));
+        });
+    }
+
+    @Test
     void controlsAndButtonsRemainOutsideScrollingAtSmallScreenSize() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             JPanel content = surface();
@@ -46,6 +60,12 @@ class ParameterLayoutTest {
 
     private static void checkControls(Container container, JPanel root) {
         for (Component component : container.getComponents()) {
+            if ((component instanceof JTextField || component instanceof JComboBox || component instanceof JCheckBox)
+                    && !(component.getParent() instanceof JScrollBar)) {
+                Rectangle bounds = SwingUtilities.convertRectangle(component.getParent(), component.getBounds(), root);
+                assertTrue(new Rectangle(root.getSize()).contains(bounds), component.getClass() + " is clipped");
+                assertNull(SwingUtilities.getAncestorOfClass(JScrollPane.class, component));
+            }
             if (component instanceof JButton && !(component.getParent() instanceof JScrollBar)) {
                 JButton button = (JButton) component;
                 if (button.getText() != null && !button.getText().isEmpty()) {
@@ -56,7 +76,7 @@ class ParameterLayoutTest {
                     assertNull(SwingUtilities.getAncestorOfClass(JScrollPane.class, button));
                 }
             }
-            if (component instanceof Container && !(component instanceof JScrollPane)) {
+            if (component instanceof Container) {
                 checkControls((Container) component, root);
             }
         }
