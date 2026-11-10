@@ -119,6 +119,7 @@ class ParameterReviewTest {
         assertEquals(1, candidates.size());
         assertEquals(1, candidates.get(0).occurrences);
         assertEquals(1, ParameterReplacement.replace(scope, candidates, true));
+        assertEquals("${id}", http.getArguments().getArgument(0).getValue());
         assertEquals("uploads/1234.csv", http.getHTTPFiles()[0].getPath());
         assertEquals("upload_1234", http.getHTTPFiles()[0].getParamName());
         assertEquals("application/x-1234", http.getHTTPFiles()[0].getMimeType());
