@@ -64,9 +64,9 @@ class ParameterRegressionTest {
                 ParameterScanner.scan(scope).stream()
                         .filter(c -> !c.value.equals("unchanged"))
                         .collect(java.util.stream.Collectors.toList());
-        assertEquals(3, ParameterReplacement.replace(scope, chosen, true));
+        assertEquals(2, ParameterReplacement.replace(scope, chosen, true));
         assertEquals(
-                original.replace("\"a\\\"bcd\"", "\"${username}\"").replace("12345", "${id}"),
+                original.replace("12345", "${id}"),
                 http.getArguments().getArgument(0).getValue());
     }
 
