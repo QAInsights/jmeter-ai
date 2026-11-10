@@ -1,35 +1,27 @@
 package org.qainsights.jmeter.ai.param;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.POJONode;
-import com.fasterxml.jackson.databind.node.TextNode;
-import com.fasterxml.jackson.databind.util.RawValue;
-import org.apache.jmeter.config.Argument;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
-import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.testelement.TestElement;
-import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
 import org.apache.jmeter.threads.AbstractThreadGroup;
-import org.qainsights.jmeter.ai.extract.ExtractPlacement;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ParameterPlacement {
-    private static final ObjectMapper JSON = new ObjectMapper();
-    private ParameterPlacement() { }
+    private ParameterPlacement() {}
 
     public static JMeterTreeNode threadGroupOf(JMeterTreeNode node) {
         for (JMeterTreeNode n = node; n != null; n = (JMeterTreeNode) n.getParent()) {
-            if (n.getTestElement() instanceof AbstractThreadGroup) { return n; }
+            if (n.getTestElement() instanceof AbstractThreadGroup) {
+                return n;
+            }
         }
         return null;
     }
@@ -42,7 +34,10 @@ public final class ParameterPlacement {
             if (node.isEnabled() && node.getTestElement() instanceof CSVDataSet) {
                 CSVDataSet csv = (CSVDataSet) node.getTestElement();
                 if (!csv.getFilename().contains("${")
-                        && base.resolve(csv.getFilename()).toAbsolutePath().normalize().equals(target)) {
+                        && base.resolve(csv.getFilename())
+                                .toAbsolutePath()
+                                .normalize()
+                                .equals(target)) {
                     return csv;
                 }
             }
@@ -50,51 +45,70 @@ public final class ParameterPlacement {
         return null;
     }
 
-    public static int apply(JMeterTreeModel model, JMeterTreeNode scope, CSVDataSet reuse, String filename,
-            String delimiter, boolean recycle, boolean stop, String sharing,
-            List<ParameterScanner.Candidate> chosen) throws Exception {
-        List<String> existingNames = reuse == null || reuse.getVariableNames().isBlank() ? List.of()
-                : List.of(reuse.getVariableNames().split(",", -1));
-        return apply(model, scope, reuse, filename, delimiter, recycle, stop, sharing, chosen, existingNames);
+    public static int apply(
+            JMeterTreeModel model,
+            JMeterTreeNode scope,
+            CSVDataSet reuse,
+            String filename,
+            String delimiter,
+            boolean recycle,
+            boolean stop,
+            String sharing,
+            List<ParameterScanner.Candidate> chosen)
+            throws Exception {
+        List<String> existingNames =
+                reuse == null || reuse.getVariableNames().isBlank()
+                        ? List.of()
+                        : List.of(reuse.getVariableNames().split(",", -1));
+        return apply(
+                model,
+                scope,
+                reuse,
+                filename,
+                delimiter,
+                recycle,
+                stop,
+                sharing,
+                chosen,
+                existingNames);
     }
 
-    public static int apply(JMeterTreeModel model, JMeterTreeNode scope, CSVDataSet reuse, String filename,
-            String delimiter, boolean recycle, boolean stop, String sharing,
-            List<ParameterScanner.Candidate> chosen, List<String> existingNames) throws Exception {
+    public static int apply(
+            JMeterTreeModel model,
+            JMeterTreeNode scope,
+            CSVDataSet reuse,
+            String filename,
+            String delimiter,
+            boolean recycle,
+            boolean stop,
+            String sharing,
+            List<ParameterScanner.Candidate> chosen,
+            List<String> existingNames)
+            throws Exception {
         JMeterTreeNode group = threadGroupOf(scope);
-        if (group == null) { throw new IllegalArgumentException("Select an element inside a Thread Group."); }
-        List<JMeterTreeNode> nodes = new ArrayList<>();
-        Enumeration<?> enumeration = scope.preorderEnumeration();
-        while (enumeration.hasMoreElements()) { nodes.add((JMeterTreeNode) enumeration.nextElement()); }
+        if (group == null) {
+            throw new IllegalArgumentException("Select an element inside a Thread Group.");
+        }
+        Map<JMeterTreeNode, TestElement> before = new IdentityHashMap<>();
+        Enumeration<?> enumeration = group.preorderEnumeration();
+        while (enumeration.hasMoreElements()) {
+            JMeterTreeNode node = (JMeterTreeNode) enumeration.nextElement();
+            before.put(node, (TestElement) node.getTestElement().clone());
+        }
         GuiPackage gui = GuiPackage.getInstance();
-        if (gui != null) { gui.beginUndoTransaction(); }
+        if (gui != null) {
+            gui.beginUndoTransaction();
+        }
+        JMeterTreeNode added = null;
         try {
-            int changed = 0;
-            for (JMeterTreeNode node : nodes) {
-                if (node.getTestElement() instanceof HTTPSamplerBase) {
-                    HTTPSamplerBase http = (HTTPSamplerBase) node.getTestElement();
-                    if (http.getPostBodyRaw()) {
-                        for (JMeterProperty property : http.getArguments().getArguments()) {
-                            Argument argument = (Argument) property.getObjectValue();
-                            JsonNode body;
-                            try { body = JSON.readTree(argument.getValue()); }
-                            catch (Exception ignored) { continue; }
-                            boolean[] replaced = {false};
-                            JsonNode result = replaceJson(body, chosen, replaced);
-                            if (replaced[0]) {
-                                argument.setValue(JSON.writeValueAsString(result));
-                                changed++;
-                            }
-                        }
-                    }
-                }
-            }
-            for (ParameterScanner.Candidate candidate : chosen) {
-                changed += ExtractPlacement.replace(nodes, candidate.value, candidate.variable);
-            }
+            int changed = ParameterReplacement.replace(scope, chosen, true);
             CSVDataSet csv = reuse == null ? new CSVDataSet() : reuse;
-            String names = String.join(",", chosen.stream().map(c -> c.variable).toArray(String[]::new));
-            csv.setVariableNames(existingNames.isEmpty() ? names : String.join(",", existingNames) + "," + names);
+            String names =
+                    String.join(",", chosen.stream().map(c -> c.variable).toArray(String[]::new));
+            csv.setVariableNames(
+                    existingNames.isEmpty()
+                            ? names
+                            : String.join(",", existingNames) + "," + names);
             csv.setFilename(filename);
             csv.setDelimiter(delimiter);
             csv.setFileEncoding("UTF-8");
@@ -107,37 +121,42 @@ public final class ParameterPlacement {
                 csv.setName("CSV Data Set Config");
                 csv.setEnabled(true);
                 csv.setProperty(TestElement.TEST_CLASS, CSVDataSet.class.getName());
-                csv.setProperty(TestElement.GUI_CLASS, "org.apache.jmeter.testbeans.gui.TestBeanGUI");
-                JMeterTreeNode added = model.addComponent(csv, group);
+                csv.setProperty(
+                        TestElement.GUI_CLASS, "org.apache.jmeter.testbeans.gui.TestBeanGUI");
+                added = model.addComponent(csv, group);
                 model.removeNodeFromParent(added);
                 model.insertNodeInto(added, group, 0);
             }
             model.nodeStructureChanged(group);
             return changed;
-        } finally {
-            if (gui != null) { gui.endUndoTransaction(); }
-        }
-    }
-
-    private static JsonNode replaceJson(JsonNode node, List<ParameterScanner.Candidate> chosen, boolean[] replaced) {
-        if (node == null || node.isNull()) { return node; }
-        if (node.isObject()) {
-            ObjectNode object = (ObjectNode) node;
-            List<String> keys = new ArrayList<>();
-            object.fieldNames().forEachRemaining(keys::add);
-            for (String key : keys) { object.set(key, replaceJson(object.get(key), chosen, replaced)); }
-        } else if (node.isArray()) {
-            ArrayNode array = (ArrayNode) node;
-            for (int i = 0; i < array.size(); i++) { array.set(i, replaceJson(array.get(i), chosen, replaced)); }
-        } else {
-            for (ParameterScanner.Candidate candidate : chosen) {
-                if (node.asText().equals(candidate.value)) {
-                    replaced[0] = true;
-                    String variable = "${" + candidate.variable + "}";
-                    return node.isTextual() ? TextNode.valueOf(variable) : new POJONode(new RawValue(variable));
+        } catch (Exception failure) {
+            for (Map.Entry<JMeterTreeNode, TestElement> entry : before.entrySet()) {
+                TestElement original = entry.getKey().getTestElement();
+                original.clear();
+                PropertyIterator properties = entry.getValue().propertyIterator();
+                while (properties.hasNext()) {
+                    original.setProperty(properties.next().clone());
                 }
             }
+            if (added != null && added.getParent() != null) {
+                added.removeFromParent();
+            }
+            for (int i = group.getChildCount() - 1; i >= 0; i--) {
+                JMeterTreeNode child = (JMeterTreeNode) group.getChildAt(i);
+                if (!before.containsKey(child)) {
+                    child.removeFromParent();
+                }
+            }
+            try {
+                model.nodeStructureChanged(group);
+            } catch (Exception refreshFailure) {
+                failure.addSuppressed(refreshFailure);
+            }
+            throw failure;
+        } finally {
+            if (gui != null) {
+                gui.endUndoTransaction();
+            }
         }
-        return node;
     }
 }

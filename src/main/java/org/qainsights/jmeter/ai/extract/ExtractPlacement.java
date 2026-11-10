@@ -170,7 +170,10 @@ public final class ExtractPlacement {
             }
             result.append(text.substring(start, variable).replace(value, replacement));
             int end = text.indexOf('}', variable + 2);
-            if (end < 0) { result.append(text.substring(variable)); break; }
+            if (end < 0) {
+                result.append(text.substring(variable));
+                break;
+            }
             result.append(text, variable, end + 1);
             start = end + 1;
         }
