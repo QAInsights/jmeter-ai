@@ -93,6 +93,11 @@ public class CommandDispatcher {
         }
 
         switch (getCommand(message)) {
+            case "@param":
+                cb.removeLoadingIndicator();
+                org.qainsights.jmeter.ai.param.ParameterizeThisMenu.open();
+                cb.setInputEnabled(true);
+                return;
             case "@this":
                 Telemetry.record(TelemetryFeature.CMD_THIS);
                 handleThisCommand();
