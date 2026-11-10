@@ -28,7 +28,7 @@ public final class ParameterPlacement {
 
     public static CSVDataSet reusable(JMeterTreeNode group, Path base, String filename) {
         Path target = base.resolve(filename).toAbsolutePath().normalize();
-        Enumeration<?> nodes = group.preorderEnumeration();
+        Enumeration<?> nodes = group.children();
         while (nodes.hasMoreElements()) {
             JMeterTreeNode node = (JMeterTreeNode) nodes.nextElement();
             if (node.isEnabled() && node.getTestElement() instanceof CSVDataSet) {
