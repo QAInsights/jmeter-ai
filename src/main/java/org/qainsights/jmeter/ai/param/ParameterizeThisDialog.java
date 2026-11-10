@@ -258,7 +258,8 @@ final class ParameterizeThisDialog extends JDialog {
                     reuse == null
                             ? List.of()
                             : reuse.getPropertyAsString("variableNames").isBlank()
-                                    ? ParameterCsv.header(path, delimiter.getText().charAt(0))
+                                    ? ParameterCsv.header(path, delimiter.getText().charAt(0),
+                                            reuse.getPropertyAsBoolean("quotedData"))
                                     : Arrays.asList(reuse.getPropertyAsString("variableNames").split(",", -1));
             if (reuse != null
                     && (!delimiter.getText().equals(reuse.getPropertyAsString("delimiter", ","))
@@ -318,7 +319,8 @@ final class ParameterizeThisDialog extends JDialog {
                                         oldNames,
                                         reuse == null
                                                 || reuse.getPropertyAsString("variableNames").isBlank()
-                                                || reuse.getPropertyAsBoolean("ignoreFirstLine"));
+                                                || reuse.getPropertyAsBoolean("ignoreFirstLine"),
+                                        reuse == null || reuse.getPropertyAsBoolean("quotedData"));
                                 return 0;
                             },
                             () ->

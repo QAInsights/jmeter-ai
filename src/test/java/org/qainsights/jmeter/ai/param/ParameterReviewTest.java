@@ -29,6 +29,22 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ParameterReviewTest {
     @Test
+    void unquotedCsvKeepsLiteralQuotesAndRejectsUnrepresentableNewValues() throws Exception {
+        Path csv = directory.resolve("unquoted.csv");
+        Files.writeString(csv, "old\r\nliteral\"quote\r\n");
+        ParameterCsv.write(csv, ',', List.of("new"), List.of("value"), List.of("old"), true, false);
+        assertEquals("old,new\r\nliteral\"quote,value\r\n", Files.readString(csv));
+        String before = Files.readString(csv);
+        for (String unsafe : List.of("a,b", "a\"b", "a\nb", "a\rb")) {
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> ParameterCsv.write(csv, ',', List.of("another"), List.of(unsafe),
+                            List.of("old", "new"), true, false));
+            assertTrue(error.getMessage().contains("quotedData=false"));
+            assertEquals(before, Files.readString(csv));
+        }
+    }
+
+    @Test
     void jsonCanBeParameterizedTwiceWithoutChangingExistingExpressionOffsets() {
         HTTPSamplerProxy http = new HTTPSamplerProxy();
         http.setPostBodyRaw(true);
@@ -243,6 +259,7 @@ class ParameterReviewTest {
         csv.setProperty("recycle", false);
         csv.setProperty("stopThread", true);
         csv.setProperty("shareMode", "shareMode.thread");
+        csv.setProperty("quotedData", false);
         group.add(new JMeterTreeNode(csv, null));
         ParameterPlacement.apply(mock(JMeterTreeModel.class), scope, csv, "data.csv", ",",
                 true, false, "shareMode.all", ParameterScanner.scan(scope));
@@ -251,6 +268,7 @@ class ParameterReviewTest {
         assertFalse(csv.getPropertyAsBoolean("recycle"));
         assertTrue(csv.getPropertyAsBoolean("stopThread"));
         assertEquals("shareMode.thread", csv.getPropertyAsString("shareMode"));
+        assertFalse(csv.getPropertyAsBoolean("quotedData"));
         assertEquals("old,user", csv.getPropertyAsString("variableNames"));
     }
 

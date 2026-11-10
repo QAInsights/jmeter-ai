@@ -126,8 +126,8 @@ public final class ParameterPlacement {
                 csv.setProperty("recycle", recycle);
                 csv.setProperty("stopThread", stop);
                 csv.setProperty("shareMode", sharing);
+                csv.setProperty("quotedData", true);
             }
-            csv.setProperty("quotedData", true);
             csv.setProperty("ignoreFirstLine", true);
             if (reuse == null) {
                 csv.setName("CSV Data Set Config");

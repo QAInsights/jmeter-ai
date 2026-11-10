@@ -30,8 +30,14 @@ public final class ParameterCsv {
     }
 
     public static List<String> header(Path file, char delimiter) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            return Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter));
+        return header(file, delimiter, true);
+    }
+
+    public static List<String> header(Path file, char delimiter, boolean quotedData) throws IOException {
+        try (PushbackReader reader = new PushbackReader(
+                Files.newBufferedReader(file, StandardCharsets.UTF_8), 1)) {
+            Record header = record(reader, quotedData);
+            return header == null ? List.of() : fields(header, delimiter, quotedData);
         }
     }
 
@@ -43,6 +49,11 @@ public final class ParameterCsv {
             List<String> existingNames,
             boolean existingHeader)
             throws IOException {
+        write(file, delimiter, names, values, existingNames, existingHeader, true);
+    }
+
+    public static void write(Path file, char delimiter, List<String> names, List<String> values,
+            List<String> existingNames, boolean existingHeader, boolean quotedData) throws IOException {
         if (names.isEmpty() || names.size() != values.size()) {
             throw new IllegalArgumentException(
                     "CSV requires equally sized, non-empty names and values.");
@@ -50,37 +61,41 @@ public final class ParameterCsv {
         if (delimiter == '"' || delimiter == '\n' || delimiter == '\r') {
             throw new IllegalArgumentException("Invalid CSV delimiter.");
         }
+        if (!quotedData) {
+            validateUnquoted(names, delimiter);
+            validateUnquoted(values, delimiter);
+        }
         Path absolute = file.toAbsolutePath();
         Files.createDirectories(absolute.getParent());
         Path staged = Files.createTempFile(absolute.getParent(), ".parameterize-", ".csv");
         try {
             try (BufferedWriter writer = Files.newBufferedWriter(staged, StandardCharsets.UTF_8)) {
                 if (existingNames.isEmpty()) {
-                    row(writer, delimiter, names, List.of());
-                    row(writer, delimiter, values, List.of());
+                    row(writer, delimiter, names, List.of(), quotedData);
+                    row(writer, delimiter, values, List.of(), quotedData);
                 } else {
                     try (PushbackReader reader = new PushbackReader(
                             Files.newBufferedReader(absolute, StandardCharsets.UTF_8), 1)) {
-                        Record first = record(reader);
+                        Record first = record(reader, quotedData);
                         if (existingHeader) {
-                            if (first == null || !fields(first, delimiter).equals(existingNames)) {
+                            if (first == null || !fields(first, delimiter, quotedData).equals(existingNames)) {
                                 throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
                             }
-                            append(writer, first, delimiter, names);
-                            first = record(reader);
+                            append(writer, first, delimiter, names, quotedData);
+                            first = record(reader, quotedData);
                         } else {
-                            row(writer, delimiter, existingNames, names);
+                            row(writer, delimiter, existingNames, names, quotedData);
                         }
                         boolean hasData = false;
-                        for (Record current = first; current != null; current = record(reader)) {
+                        for (Record current = first; current != null; current = record(reader, quotedData)) {
                             if (current.text.isEmpty()) {
                                 writer.write(current.ending);
                                 continue;
                             }
-                            if (fields(current, delimiter).size() != existingNames.size()) {
+                            if (fields(current, delimiter, quotedData).size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
                             }
-                            append(writer, current, delimiter, values);
+                            append(writer, current, delimiter, values, quotedData);
                             hasData = true;
                         }
                         if (!hasData) {
@@ -98,12 +113,22 @@ public final class ParameterCsv {
     private record Record(String text, String ending) {
     }
 
-    private static Record record(PushbackReader reader) throws IOException {
+    public static void validateUnquoted(List<String> values, char delimiter) {
+        for (String value : values) {
+            if (value.indexOf(delimiter) >= 0 || value.contains("\"")
+                    || value.contains("\r") || value.contains("\n")) {
+                throw new IllegalArgumentException("Existing CSV has quotedData=false; new values must not"
+                        + " contain the delimiter, a quote or a newline.");
+            }
+        }
+    }
+
+    private static Record record(PushbackReader reader, boolean quotedData) throws IOException {
         StringBuilder text = new StringBuilder();
         boolean quoted = false;
         int character;
         while ((character = reader.read()) != -1) {
-            if (character == '"') {
+            if (quotedData && character == '"') {
                 quoted = !quoted;
             }
             if (!quoted && (character == '\n' || character == '\r')) {
@@ -123,35 +148,34 @@ public final class ParameterCsv {
         return text.isEmpty() ? null : new Record(text.toString(), "");
     }
 
-    private static List<String> fields(Record record, char delimiter) throws IOException {
+    private static List<String> fields(Record record, char delimiter, boolean quotedData) throws IOException {
+        if (!quotedData) {
+            return Arrays.asList(record.text.split(java.util.regex.Pattern.quote(String.valueOf(delimiter)), -1));
+        }
         try (BufferedReader reader = new BufferedReader(new StringReader(record.text + "\n"))) {
             return Arrays.asList(CSVSaveService.csvReadFile(reader, delimiter));
         }
     }
 
     private static void append(BufferedWriter writer, Record record, char delimiter,
-            List<String> appended) throws IOException {
+            List<String> appended, boolean quotedData) throws IOException {
         writer.write(record.text);
         for (String value : appended) {
             writer.write(delimiter);
-            writer.write('"');
-            writer.write(value.replace("\"", "\"\""));
-            writer.write('"');
+            writer.write(quotedData ? "\"" + value.replace("\"", "\"\"") + "\"" : value);
         }
         writer.write(record.ending);
     }
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
-            List<String> appended) throws IOException {
+            List<String> appended, boolean quotedData) throws IOException {
         boolean separator = false;
         for (List<String> fields : List.of(first, appended)) {
             for (String value : fields) {
                 if (separator) {
                     writer.write(delimiter);
                 }
-                writer.write('"');
-                writer.write(value.replace("\"", "\"\""));
-                writer.write('"');
+                writer.write(quotedData ? "\"" + value.replace("\"", "\"\"") + "\"" : value);
                 separator = true;
             }
         }
