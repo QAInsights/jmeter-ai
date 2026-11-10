@@ -77,6 +77,7 @@ public final class ParameterCsv {
                     try (PushbackReader reader = new PushbackReader(
                             Files.newBufferedReader(absolute, StandardCharsets.UTF_8), 1)) {
                         Record first = record(reader, quotedData);
+                        String ending = first == null || first.ending.isEmpty() ? "\n" : first.ending;
                         if (existingHeader) {
                             if (first == null || !fields(first, delimiter, quotedData).equals(existingNames)) {
                                 throw new IOException("Existing CSV header must match the CSV Data Set variable names.");
@@ -84,14 +85,10 @@ public final class ParameterCsv {
                             append(writer, first, delimiter, names, quotedData);
                             first = record(reader, quotedData);
                         } else {
-                            row(writer, delimiter, existingNames, names, quotedData);
+                            row(writer, delimiter, existingNames, names, quotedData, ending);
                         }
                         boolean hasData = false;
                         for (Record current = first; current != null; current = record(reader, quotedData)) {
-                            if (current.text.isEmpty()) {
-                                writer.write(current.ending);
-                                continue;
-                            }
                             if (fields(current, delimiter, quotedData).size() != existingNames.size()) {
                                 throw new IOException("Existing CSV has an inconsistent column count.");
                             }
@@ -153,6 +150,9 @@ public final class ParameterCsv {
     }
 
     private static List<String> fields(Record record, char delimiter, boolean quotedData) throws IOException {
+        if (record.text.isEmpty()) {
+            return List.of("");
+        }
         if (!quotedData) {
             return Arrays.asList(record.text.split(java.util.regex.Pattern.quote(String.valueOf(delimiter)), -1));
         }
@@ -173,6 +173,11 @@ public final class ParameterCsv {
 
     private static void row(BufferedWriter writer, char delimiter, List<String> first,
             List<String> appended, boolean quotedData) throws IOException {
+        row(writer, delimiter, first, appended, quotedData, "\n");
+    }
+
+    private static void row(BufferedWriter writer, char delimiter, List<String> first,
+            List<String> appended, boolean quotedData, String ending) throws IOException {
         boolean separator = false;
         for (List<String> fields : List.of(first, appended)) {
             for (String value : fields) {
@@ -183,7 +188,7 @@ public final class ParameterCsv {
                 separator = true;
             }
         }
-        writer.write('\n');
+        writer.write(ending);
     }
 
     static void replaceFile(Path source, Path target) throws IOException {
