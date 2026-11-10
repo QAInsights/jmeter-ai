@@ -22,6 +22,17 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ConfirmationPreviewTest {
 
+    @Test
+    void parameterizationPreviewNamesCsvAndWarnsAboutDiskChanges() {
+        Preview result = preview.describe("parameterize_values", Map.of("element_id", "Test Plan/Users",
+                "filename", "data/users.csv", "values", List.of(Map.of("value", "alice", "variableName", "user"))), null);
+        assertTrue(result.rows().stream().anyMatch(row -> "CSV file".equals(row.label())
+                && "data/users.csv".equals(row.value())));
+        assertTrue(result.note().contains("overwrites or appends"));
+        assertTrue(result.note().contains("Ctrl+Z does not undo disk changes"));
+        assertEquals(ConfirmationPreview.Level.WARN, result.level());
+    }
+
     @TempDir
     Path tempDir;
 

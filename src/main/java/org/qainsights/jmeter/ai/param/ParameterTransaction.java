@@ -4,14 +4,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-final class ParameterTransaction {
-    interface Operation {
+public final class ParameterTransaction {
+    public interface Operation {
         int run() throws Exception;
     }
 
     private ParameterTransaction() {}
 
-    static int apply(Path file, Operation writeCsv, Operation applyPlan) throws Exception {
+    public static int apply(Path file, Operation writeCsv, Operation applyPlan) throws Exception {
         Path target = file.toAbsolutePath();
         Files.createDirectories(target.getParent());
         Path previous = null;

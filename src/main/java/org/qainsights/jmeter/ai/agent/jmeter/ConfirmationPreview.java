@@ -76,6 +76,13 @@ public final class ConfirmationPreview {
                 return describeOpenPlan(args);
             case ApplyCorrelationHandler.APPLY_CORRELATION:
                 return describeCorrelation(args);
+            case "parameterize_values":
+                return new Preview("Write CSV data and parameterize the selected scope?",
+                        List.of(new Row("Scope", String.valueOf(args.get("element_id"))),
+                                new Row("CSV file", String.valueOf(args.get("filename"))),
+                                new Row("Variables", String.valueOf(args.get("values")))),
+                        "Creates, overwrites or appends to the CSV file and replaces plan values. "
+                                + "Ctrl+Z does not undo disk changes.", Level.WARN);
             default:
                 return generic(toolName, args);
         }

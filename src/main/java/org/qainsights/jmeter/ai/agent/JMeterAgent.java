@@ -29,6 +29,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ParameterizeValuesHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
@@ -73,7 +74,8 @@ public final class JMeterAgent {
     /** Tool names that require confirmation via the {@link ToolConfirmationGate} when set. */
     private static final Set<String> DESTRUCTIVE_TOOLS = Collections.unmodifiableSet(new HashSet<>(
             Arrays.asList(DeleteElementHandler.DELETE_ELEMENT, MoveElementHandler.MOVE_ELEMENT,
-                    OpenPlanHandler.OPEN_PLAN, ApplyCorrelationHandler.APPLY_CORRELATION)));
+                    OpenPlanHandler.OPEN_PLAN, ApplyCorrelationHandler.APPLY_CORRELATION,
+                    ParameterizeValuesHandler.PARAMETERIZE_VALUES)));
 
     /** Tool names gated behind the destructive-action confirmation dialog. */
     public static Set<String> destructiveTools() {

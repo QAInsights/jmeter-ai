@@ -23,6 +23,28 @@ import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
  */
 class CliAgentChatModelTest {
 
+    @Test
+    void sharedCliProtocolAdvertisesAndParsesParameterizationWithoutProviderSpecificChanges() throws Exception {
+        String schemas = CliToolProtocol.renderTools(
+                org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry.createDefault().getSpecs());
+        com.fasterxml.jackson.databind.JsonNode tools = new com.fasterxml.jackson.databind.ObjectMapper().readTree(schemas);
+        com.fasterxml.jackson.databind.JsonNode parameterize = null;
+        for (com.fasterxml.jackson.databind.JsonNode tool : tools) {
+            if ("parameterize_values".equals(tool.path("name").asText())) {
+                parameterize = tool;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(parameterize);
+        assertEquals("array", parameterize.path("parameters").path("properties").path("values").path("type").asText());
+        AssistantTurn turn = CliToolProtocol.parse("{\"tool_calls\":[{\"name\":\"parameterize_values\",\"arguments\":{"
+                + "\"element_id\":\"Test Plan/Users\",\"filename\":\"data.csv\",\"values\":[{"
+                + "\"value\":\"alice\",\"variableName\":\"user\"}],\"recycle\":false,\"stopThread\":true}}]}", "test");
+        assertEquals("parameterize_values", turn.getToolCalls().get(0).getName());
+        assertEquals(Boolean.FALSE, turn.getToolCalls().get(0).getArguments().get("recycle"));
+        assertEquals(List.of(java.util.Map.of("value", "alice", "variableName", "user")),
+                turn.getToolCalls().get(0).getArguments().get("values"));
+    }
+
     private static final ToolSpec SPEC = ToolSpec.builder("add_element")
             .description("Adds an element")
             .addParameter(org.qainsights.jmeter.ai.agent.tool.ToolParameter
