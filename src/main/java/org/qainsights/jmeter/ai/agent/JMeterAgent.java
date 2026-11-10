@@ -97,6 +97,7 @@ public final class JMeterAgent {
     /**
      * @param confirmationGate asked before running a destructive tool ({@code delete_element},
      *                          {@code move_element}, {@code open_plan}, {@code apply_correlation}, {@code parameterize_values});
+     *                          parameterization dry runs are not gated;
      *                          {@code null} runs destructive tools without confirmation
      */
     public JMeterAgent(ClaudeChatModel.MessageService service, String model, long maxTokens, int maxIterations,
@@ -254,6 +255,7 @@ public final class JMeterAgent {
      * Wires an agent against an existing {@link ClaudeService}'s client and model. Destructive
      * tools (delete/move/open_plan/apply_correlation/parameterize_values) are gated behind a confirmation dialog
      * unless {@code jmeter.ai.agent.confirm.destructive} is set to {@code false}.
+     * Parameterization is gated only when writing a file, not on candidate scans.
      */
     public static JMeterAgent forClaude(ClaudeService claude) {
         return JMeterAgentProviderResolver.forClaude(claude);
