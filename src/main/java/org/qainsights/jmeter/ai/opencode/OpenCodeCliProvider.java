@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.opencode;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -8,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -34,9 +34,16 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OpenCodeCliProvider.class);
     private static final Pattern MODEL_ID = Pattern.compile("^[A-Za-z0-9._-]+/\\S+$");
-    private static final Pattern VERSION_MAJOR = Pattern.compile("(?:^|[^0-9.])v?(\\d+)\\.\\d+");
+    private static final Pattern VERSION_LINE = Pattern.compile(
+            "^(?:opencode(?:\\s+version)?\\s+)?v?(\\d+)\\.\\d+(?:\\.\\d+)?(?:[-+][0-9A-Za-z.-]+)?$",
+            Pattern.CASE_INSENSITIVE);
     private static final Duration STATUS_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration MODELS_TIMEOUT = Duration.ofSeconds(60);
+
+    enum CliGeneration {
+        V1,
+        V2
+    }
 
     public static final String MODEL_PREFIX = "opencode:";
     public static final String DEFAULT_MODEL = "default";
@@ -54,7 +61,7 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
     private final boolean skipConfiguredExecutable;
     private String executable;
     private boolean detectionAttempted;
-    private volatile int detectedMajorVersion;
+    private volatile CliGeneration generation;
     private volatile List<String> discoveredModels;
     private volatile String model = "";
 
@@ -169,11 +176,12 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         synchronized (this) {
             detectionAttempted = false;
             executable = null;
+            generation = null;
             discoveredModels = null;
-            detectedMajorVersion = 0;
         }
         String exe = executable();
         if (exe != null) {
+            resolveGeneration(exe);
             discoverModels(exe);
         }
     }
@@ -184,36 +192,68 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         if (exe == null) {
             return OpenCodeAuthStatus.CLI_NOT_INSTALLED;
         }
-        try {
-            CliProcessResult result = runner.run(List.of(exe, "--version"), null, STATUS_TIMEOUT);
-            if (!result.isSuccess()) {
-                return OpenCodeAuthStatus.UNKNOWN;
-            }
-            int major = parseMajorVersion(
-                    OpenCodeOutputParser.firstNonBlank(result.getStdout(), result.getStderr()));
-            if (major > 0) {
-                detectedMajorVersion = major;
-            }
-            return OpenCodeAuthStatus.READY;
-        } catch (RuntimeException e) {
-            log.warn("Could not read the OpenCode CLI status: {}", e.getMessage());
+        CliGeneration detected = probeGeneration(exe);
+        if (detected == null) {
+            generation = null;
             return OpenCodeAuthStatus.UNKNOWN;
+        }
+        generation = detected;
+        return OpenCodeAuthStatus.READY;
+    }
+
+    private CliGeneration resolveGeneration(String exe) {
+        CliGeneration cached = generation;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            cached = generation;
+            if (cached != null) {
+                return cached;
+            }
+            CliGeneration detected = probeGeneration(exe);
+            if (detected != null) {
+                generation = detected;
+                return detected;
+            }
+            return CliGeneration.V2;
         }
     }
 
-    private static int parseMajorVersion(String versionOutput) {
-        if (versionOutput == null || versionOutput.isBlank()) {
-            return 0;
-        }
-        Matcher matcher = VERSION_MAJOR.matcher(versionOutput);
-        if (!matcher.find()) {
-            return 0;
-        }
+    private CliGeneration probeGeneration(String exe) {
         try {
-            return Integer.parseInt(matcher.group(1));
-        } catch (NumberFormatException e) {
-            return 0;
+            CliProcessResult result = runner.run(List.of(exe, "--version"), null, STATUS_TIMEOUT);
+            if (!result.isSuccess()) {
+                return null;
+            }
+            return parseGeneration(result.getStdout(), result.getStderr());
+        } catch (RuntimeException e) {
+            log.warn("Could not read the OpenCode CLI status: {}", e.getMessage());
+            return null;
         }
+    }
+
+    static CliGeneration parseGeneration(String stdout, String stderr) {
+        CliGeneration parsed = parseGenerationStream(stdout);
+        if (parsed != null) {
+            return parsed;
+        }
+        parsed = parseGenerationStream(stderr);
+        return parsed != null ? parsed : CliGeneration.V2;
+    }
+
+    private static CliGeneration parseGenerationStream(String output) {
+        if (output == null || output.isBlank()) {
+            return null;
+        }
+        String[] lines = output.split("\\R");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            Matcher matcher = VERSION_LINE.matcher(lines[i].trim());
+            if (matcher.matches()) {
+                return "1".equals(matcher.group(1)) ? CliGeneration.V1 : CliGeneration.V2;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -241,11 +281,14 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             throw new CliProviderException("Nothing to send to OpenCode: the prompt is empty.");
         }
 
+        CliGeneration cliGeneration = resolveGeneration(exe);
         Path tempDirectory = createTempDirectory();
         try {
             String requestModel = normalizeModel(model);
             Duration timeout = executionTimeout();
-            CliProcessResult result = runWithFallback(exe, tempDirectory, requestModel, prompt, timeout);
+            CliProcessResult result = runner.run(
+                    buildRunCommand(exe, tempDirectory, requestModel, cliGeneration),
+                    prompt, timeout, tempDirectory, Map.of("OPENCODE_CONFIG_CONTENT", SAFE_CONFIG));
             return OpenCodeOutputParser.readAnswer(
                     result, timeout, TIMEOUT_KEY, requestModel, discoveredModels, configuredModels());
         } finally {
@@ -253,40 +296,9 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         }
     }
 
-    private CliProcessResult runWithFallback(
-            String exe, Path directory, String model, String prompt, Duration timeout) {
-        boolean useLegacyV1 = detectedMajorVersion == 1;
-        Map<String, String> env = Map.of("OPENCODE_CONFIG_CONTENT", SAFE_CONFIG);
-        CliProcessResult result = runner.run(
-                buildRunCommand(exe, directory, model, useLegacyV1),
-                prompt, timeout, directory, env);
-        if (useLegacyV1 && isUnsupportedV1FlagError(result)) {
-            detectedMajorVersion = 2;
-            return runner.run(
-                    buildRunCommand(exe, directory, model, false),
-                    prompt, timeout, directory, env);
-        }
-        return result;
-    }
-
-    private static boolean isUnsupportedV1FlagError(CliProcessResult result) {
-        if (result.isSuccess() || result.isTimedOut()) {
-            return false;
-        }
-        String stdout = result.getStdout() == null ? "" : result.getStdout();
-        String stderr = result.getStderr() == null ? "" : result.getStderr();
-        String combined = (stdout + '\n' + stderr).toLowerCase(Locale.ROOT);
-        boolean unknownFlag = combined.contains("unrecognized flag")
-                || combined.contains("unknown flag")
-                || combined.contains("unknown option");
-        return unknownFlag && (combined.contains("--pure") || combined.contains("--dir"));
-    }
-
-    List<String> buildRunCommand(String exe, Path directory, String model) {
-        return buildRunCommand(exe, directory, model, detectedMajorVersion == 1);
-    }
-
-    List<String> buildRunCommand(String exe, Path directory, String model, boolean legacyV1) {
+    static List<String> buildRunCommand(
+            String exe, Path directory, String model, CliGeneration generation) {
+        boolean legacyV1 = generation == CliGeneration.V1;
         List<String> command = new ArrayList<>(List.of(exe, "run"));
         if (legacyV1) {
             command.add("--pure");
@@ -334,7 +346,7 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
             }
-        } catch (IOException e) {
+        } catch (IOException | UncheckedIOException e) {
             log.debug("Could not remove the temporary OpenCode directory: {}", e.getMessage());
         }
     }

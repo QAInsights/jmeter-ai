@@ -160,12 +160,13 @@ class OpenCodeCliProviderTest {
 
     @Test
     void runsWithJsonFormatInAnExistingEmptyTemporaryDirectory() throws IOException {
-        runner.queue(CliProcessResult.of(0, textEvent("PONG")));
+        queueAfterVersion(CliProcessResult.of(0, textEvent("PONG")));
         OpenCodeCliProvider provider = provider("opencode");
 
         assertEquals("PONG", provider.execute("Reply with PONG.", "opencode/big-pickle"));
 
-        List<String> command = runner.commands.get(0);
+        assertEquals(List.of("opencode", "--version"), runner.commands.get(0));
+        List<String> command = runner.commands.get(1);
         assertEquals(List.of("opencode", "run", "--format", "json", "-m", "opencode/big-pickle"), command);
         assertFalse(command.contains("--pure"));
         assertFalse(command.contains("--dir"));
@@ -174,7 +175,7 @@ class OpenCodeCliProviderTest {
         assertTrue(runner.tempDirectoryEmptyWhenRun);
         assertTrue(directory.getFileName().toString().startsWith("feather-wand-opencode"));
         assertFalse(command.contains("Reply with PONG."));
-        assertEquals("Reply with PONG.", runner.stdins.get(0));
+        assertEquals("Reply with PONG.", runner.stdins.get(1));
         assertEquals(Map.of("OPENCODE_CONFIG_CONTENT", OpenCodeCliProvider.SAFE_CONFIG),
                 runner.environments.get(0));
         assertFalse(Files.exists(directory), "temporary working directory is deleted after the run");
@@ -182,17 +183,18 @@ class OpenCodeCliProviderTest {
 
     @Test
     void omitsTheModelFlagForTheDefaultAndNormalizesTheSelectedModel() {
-        runner.queue(CliProcessResult.of(0, textEvent("ok")));
+        queueAfterVersion(CliProcessResult.of(0, textEvent("ok")));
         OpenCodeCliProvider provider = provider("opencode");
         provider.setModel(OpenCodeCliProvider.DEFAULT_MODEL);
 
         assertEquals("", provider.getModel());
         assertEquals("ok", provider.execute("hello"));
-        assertFalse(runner.commands.get(0).contains("-m"));
+        assertFalse(runner.commands.get(1).contains("-m"));
 
         runner.queue(CliProcessResult.of(0, textEvent("ok")));
         assertEquals("ok", provider.execute("hello", "default"));
-        assertFalse(runner.commands.get(1).contains("-m"));
+        assertFalse(runner.commands.get(2).contains("-m"));
+        assertEquals(3, runner.commands.size());
     }
 
     @Test
@@ -208,35 +210,35 @@ class OpenCodeCliProviderTest {
                 {"type":"step_finish"}
                 trailing noise
                 """;
-        runner.queue(CliProcessResult.of(0, output));
+        queueAfterVersion(CliProcessResult.of(0, output));
 
         assertEquals("final answer", provider("opencode").execute("prompt"));
     }
 
     @Test
     void mapsFreeTierErrors() {
-        runner.queue(errorResult("FreeTierError", "Free tier request was refused"));
+        queueAfterVersion(errorResult("FreeTierError", "Free tier request was refused"));
         assertEquals("OpenCode's free tier refused this request. Pick another free model, or add a provider "
                 + "with 'opencode auth login' in the AI CLI terminal tab.", executeFailure(""));
     }
 
     @Test
     void mapsAuthenticationErrors() {
-        runner.queue(errorResult("ProviderAuthError", "HTTP 401: Unauthorized API key; not authenticated"));
+        queueAfterVersion(errorResult("ProviderAuthError", "Token expired"));
         assertEquals("OpenCode isn't signed in to that model's provider. Run 'opencode auth login' in the "
                 + "AI CLI terminal tab, or pick an opencode/ free model.", executeFailure(""));
     }
 
     @Test
     void mapsModelNotFoundErrorsUsingTheRequestedModel() {
-        runner.queue(errorResult("ProviderModelNotFoundError", "provider rejected model"));
+        queueAfterVersion(errorResult("ProviderModelNotFoundError", "provider rejected model"));
         assertEquals("OpenCode doesn't know the model 'example/model'. Pick one from the list or check "
                 + "'opencode models'.", executeFailure("example/model"));
     }
 
     @Test
     void mapsModelNotFoundMessages() {
-        runner.queue(errorResult("ProviderError", "The model not found in this provider"));
+        queueAfterVersion(errorResult("ProviderError", "The model not found in this provider"));
         String message = executeFailure("example/model");
         assertTrue(message.contains("doesn't know the model 'example/model'"), message);
     }
@@ -244,9 +246,9 @@ class OpenCodeCliProviderTest {
     @Test
     void preservesUnknownErrorMessageAndHintsWhenModelIsAbsentFromDiscoveredModels() {
         runner.queue(CliProcessResult.of(0, "known/model\n"));
-        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
         OpenCodeCliProvider provider = provider("opencode");
         provider.listModels();
+        queueAfterVersion(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
 
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details. "
                 + "'nope/missing-model' isn't in the 'opencode models' list, so check the model ID.",
@@ -256,9 +258,9 @@ class OpenCodeCliProviderTest {
     @Test
     void keepsUnknownErrorGenericWhenModelIsDiscovered() {
         runner.queue(CliProcessResult.of(0, "known/model\n"));
-        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
         OpenCodeCliProvider provider = provider("opencode");
         provider.listModels();
+        queueAfterVersion(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
 
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
                 executeFailure(provider, "known/model"));
@@ -266,31 +268,31 @@ class OpenCodeCliProviderTest {
 
     @Test
     void keepsUnknownErrorGenericWhenModelsHaveNotBeenDiscovered() {
-        runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
+        queueAfterVersion(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
                 executeFailure("nope/missing-model"));
     }
 
     @Test
     void mapsOtherJsonErrorsToTheFirstThreeMessageLines() {
-        runner.queue(errorResult("ProviderError", "line one\nline two\nline three\nline four"));
+        queueAfterVersion(errorResult("ProviderError", "line one\nline two\nline three\nline four"));
         assertEquals("OpenCode failed: line one line two line three", executeFailure(""));
     }
 
     @Test
     void fallsBackToExitCodeAndStderrWhenNoJsonErrorIsAvailable() {
-        runner.queue(new CliProcessResult(7, "not-json", "line one\nline two\nline three\nline four", false, 1L));
+        queueAfterVersion(new CliProcessResult(7, "not-json", "line one\nline two\nline three\nline four", false, 1L));
         assertEquals("OpenCode failed: exited with code 7. Details: line one line two line three",
                 executeFailure(""));
     }
 
     @Test
     void reportsTimeoutAndEmptyResponses() {
-        runner.queue(CliProcessResult.timeout(180_000L));
+        queueAfterVersion(CliProcessResult.timeout(180_000L));
         assertEquals("OpenCode did not respond within 180 seconds and was stopped. Increase "
                 + OpenCodeCliProvider.TIMEOUT_KEY + " if your prompts need longer.", executeFailure(""));
 
-        runner.queue(CliProcessResult.of(0, "{\"type\":\"step_start\"}\n"));
+        queueAfterVersion(CliProcessResult.of(0, "{\"type\":\"step_start\"}\n"));
         assertEquals("OpenCode returned an empty response. Try rephrasing your request.", executeFailure(""));
     }
 
@@ -348,6 +350,7 @@ class OpenCodeCliProviderTest {
     @Test
     void refreshClearsCachesAndRediscoversModelsSynchronously() {
         runner.queue(CliProcessResult.of(0, "provider/first"));
+        runner.queue(CliProcessResult.of(0, "opencode v2.2.6"));
         runner.queue(CliProcessResult.of(0, "provider/second"));
         FakeAdapter adapter = new FakeAdapter("opencode");
         OpenCodeCliProvider provider = new OpenCodeCliProvider(adapter, runner);
@@ -356,7 +359,10 @@ class OpenCodeCliProviderTest {
         provider.refresh();
 
         assertEquals(List.of("default", "provider/second"), provider.listModels());
-        assertEquals(2, runner.commands.size());
+        assertEquals(List.of(
+                List.of("opencode", "models"),
+                List.of("opencode", "--version"),
+                List.of("opencode", "models")), runner.commands);
         assertEquals(2, adapter.detections);
     }
 
@@ -371,6 +377,11 @@ class OpenCodeCliProviderTest {
 
     private OpenCodeCliProvider provider(String binary) {
         return new OpenCodeCliProvider(new FakeAdapter(binary), runner);
+    }
+
+    private void queueAfterVersion(CliProcessResult result) {
+        runner.queue(CliProcessResult.of(0, "opencode v2.2.6"));
+        runner.queue(result);
     }
 
     private String executeFailure(String model) {
@@ -467,16 +478,9 @@ class OpenCodeCliProviderTest {
             commands.add(List.copyOf(command));
             stdins.add(stdin);
             timeouts.add(timeout);
-            Path directory = workingDirectory;
-            if (directory == null) {
-                int directoryFlag = command.indexOf("--dir");
-                if (directoryFlag >= 0) {
-                    directory = Path.of(command.get(directoryFlag + 1));
-                }
-            }
-            if (directory != null) {
-                tempDirectoryExistedWhenRun = Files.isDirectory(directory);
-                try (var children = Files.list(directory)) {
+            if (workingDirectory != null) {
+                tempDirectoryExistedWhenRun = Files.isDirectory(workingDirectory);
+                try (var children = Files.list(workingDirectory)) {
                     tempDirectoryEmptyWhenRun = children.findAny().isEmpty();
                 } catch (IOException e) {
                     throw new AssertionError(e);

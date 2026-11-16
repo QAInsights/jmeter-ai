@@ -99,6 +99,10 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
         builder.redirectErrorStream(false);
         if (workingDirectory != null) {
+            Path executable = Path.of(builder.command().get(0));
+            if (executable.getNameCount() > 1) {
+                builder.command().set(0, executable.toAbsolutePath().toString());
+            }
             Path directory = workingDirectory.toAbsolutePath();
             builder.directory(directory.toFile());
             builder.environment().put("PWD", directory.toString());

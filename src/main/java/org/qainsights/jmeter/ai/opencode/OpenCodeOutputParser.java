@@ -48,7 +48,7 @@ final class OpenCodeOutputParser {
         String name = errorName == null ? "" : errorName.toLowerCase(Locale.ROOT);
         String message = errorMessage == null ? "" : errorMessage;
         String lowerMessage = message.toLowerCase(Locale.ROOT).replace('_', ' ');
-        if (name.contains("freetiererror") || name.contains("free-limit")) {
+        if ("provider.free-limit".equals(name) || name.contains("freetiererror")) {
             return "OpenCode's free tier refused this request. Pick another free model, or add a provider "
                     + "with 'opencode auth login' in the AI CLI terminal tab.";
         }
@@ -65,15 +65,15 @@ final class OpenCodeOutputParser {
     }
 
     private static boolean isAuthError(String name, String lowerMessage) {
-        return name.contains("provider.auth") || lowerMessage.contains("401")
+        return "provider.auth".equals(name) || "providerautherror".equals(name)
+                || lowerMessage.contains("401")
                 || lowerMessage.contains("unauthorized") || lowerMessage.contains("api key")
                 || lowerMessage.contains("apikey") || lowerMessage.contains("not authenticated");
     }
 
     private static boolean isModelNotFoundError(String name, String lowerMessage) {
-        return name.contains("modelnotfound") || name.contains("no-route")
-                || lowerMessage.contains("model not found")
-                || lowerMessage.contains("model unavailable");
+        return "provider.no-route".equals(name) || name.contains("modelnotfound")
+                || lowerMessage.contains("model not found");
     }
 
     private static String describeFallbackError(String name, String message, CliProcessResult result,

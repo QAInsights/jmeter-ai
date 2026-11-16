@@ -191,6 +191,14 @@ class DefaultCliProcessRunnerTest {
                 () -> runner.run(List.of(), null, Duration.ofSeconds(5)));
     }
 
+    @Test
+    void defaultRunnerRejectsWorkingDirectoryWhenNotOverridden(@TempDir Path dir) {
+        CliProcessRunner minimal = (command, stdin, timeout) -> CliProcessResult.of(0, "ok");
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> minimal.run(List.of("echo"), null, Duration.ofSeconds(5), dir, Map.of()));
+    }
+
     /**
      * Runs the command, retrying when the child exhibits a launch flake: a
      * non-zero exit in under a second. A freshly written {@code .java} file can
