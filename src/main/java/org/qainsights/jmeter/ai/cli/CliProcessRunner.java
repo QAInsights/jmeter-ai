@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.cli;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,17 @@ public interface CliProcessRunner {
     default CliProcessResult run(List<String> command, String stdin, Duration timeout,
                                  Map<String, String> environment) {
         return run(command, stdin, timeout);
+    }
+
+    /**
+     * Runs {@code command} inside {@code workingDirectory} (when non-null) with
+     * additional environment variables for the child process. Runners that do not
+     * support directory or environment overrides retain the default process
+     * behavior.
+     */
+    default CliProcessResult run(List<String> command, String stdin, Duration timeout,
+                                 Path workingDirectory, Map<String, String> environment) {
+        return run(command, stdin, timeout, environment);
     }
 
     /**

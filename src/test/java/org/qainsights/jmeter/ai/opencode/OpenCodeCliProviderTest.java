@@ -159,24 +159,20 @@ class OpenCodeCliProviderTest {
     }
 
     @Test
-    void runsWithPureJsonAndAnExistingEmptyTemporaryDirectory() throws IOException {
+    void runsWithJsonFormatInAnExistingEmptyTemporaryDirectory() throws IOException {
         runner.queue(CliProcessResult.of(0, textEvent("PONG")));
         OpenCodeCliProvider provider = provider("opencode");
 
         assertEquals("PONG", provider.execute("Reply with PONG.", "opencode/big-pickle"));
 
         List<String> command = runner.commands.get(0);
-        assertEquals("opencode", command.get(0));
-        assertEquals(List.of("run", "--pure", "--format", "json"),
-                command.subList(1, 5));
-        int directoryFlag = command.indexOf("--dir");
-        assertTrue(directoryFlag >= 0);
-        Path directory = Path.of(command.get(directoryFlag + 1));
+        assertEquals(List.of("opencode", "run", "--format", "json", "-m", "opencode/big-pickle"), command);
+        assertFalse(command.contains("--pure"));
+        assertFalse(command.contains("--dir"));
+        Path directory = runner.workingDirectories.get(0);
         assertTrue(runner.tempDirectoryExistedWhenRun);
         assertTrue(runner.tempDirectoryEmptyWhenRun);
         assertTrue(directory.getFileName().toString().startsWith("feather-wand-opencode"));
-        assertEquals(List.of("-m", "opencode/big-pickle"),
-                command.subList(directoryFlag + 2, command.size()));
         assertFalse(command.contains("Reply with PONG."));
         assertEquals("Reply with PONG.", runner.stdins.get(0));
         assertEquals(Map.of("OPENCODE_CONFIG_CONTENT", OpenCodeCliProvider.SAFE_CONFIG),
@@ -220,44 +216,29 @@ class OpenCodeCliProviderTest {
     @Test
     void mapsFreeTierErrors() {
         runner.queue(errorResult("FreeTierError", "Free tier request was refused"));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
-
         assertEquals("OpenCode's free tier refused this request. Pick another free model, or add a provider "
-                + "with 'opencode auth login' in the AI CLI terminal tab.", failure.getMessage());
+                + "with 'opencode auth login' in the AI CLI terminal tab.", executeFailure(""));
     }
 
     @Test
     void mapsAuthenticationErrors() {
         runner.queue(errorResult("ProviderAuthError", "HTTP 401: Unauthorized API key; not authenticated"));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
-
         assertEquals("OpenCode isn't signed in to that model's provider. Run 'opencode auth login' in the "
-                + "AI CLI terminal tab, or pick an opencode/ free model.", failure.getMessage());
+                + "AI CLI terminal tab, or pick an opencode/ free model.", executeFailure(""));
     }
 
     @Test
     void mapsModelNotFoundErrorsUsingTheRequestedModel() {
         runner.queue(errorResult("ProviderModelNotFoundError", "provider rejected model"));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt", "example/model"));
-
         assertEquals("OpenCode doesn't know the model 'example/model'. Pick one from the list or check "
-                + "'opencode models'.", failure.getMessage());
+                + "'opencode models'.", executeFailure("example/model"));
     }
 
     @Test
     void mapsModelNotFoundMessages() {
         runner.queue(errorResult("ProviderError", "The model not found in this provider"));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt", "example/model"));
-
-        assertTrue(failure.getMessage().contains("doesn't know the model 'example/model'"), failure.getMessage());
+        String message = executeFailure("example/model");
+        assertTrue(message.contains("doesn't know the model 'example/model'"), message);
     }
 
     @Test
@@ -267,12 +248,9 @@ class OpenCodeCliProviderTest {
         OpenCodeCliProvider provider = provider("opencode");
         provider.listModels();
 
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider.execute("prompt", "nope/missing-model"));
-
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details. "
                 + "'nope/missing-model' isn't in the 'opencode models' list, so check the model ID.",
-                failure.getMessage());
+                executeFailure(provider, "nope/missing-model"));
     }
 
     @Test
@@ -282,57 +260,38 @@ class OpenCodeCliProviderTest {
         OpenCodeCliProvider provider = provider("opencode");
         provider.listModels();
 
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider.execute("prompt", "known/model"));
-
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
-                failure.getMessage());
+                executeFailure(provider, "known/model"));
     }
 
     @Test
     void keepsUnknownErrorGenericWhenModelsHaveNotBeenDiscovered() {
         runner.queue(errorResult("UnknownError", "Unexpected server error. Check server logs for details."));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt", "nope/missing-model"));
-
         assertEquals("OpenCode failed: Unexpected server error. Check server logs for details.",
-                failure.getMessage());
+                executeFailure("nope/missing-model"));
     }
 
     @Test
     void mapsOtherJsonErrorsToTheFirstThreeMessageLines() {
         runner.queue(errorResult("ProviderError", "line one\nline two\nline three\nline four"));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
-
-        assertEquals("OpenCode failed: line one line two line three", failure.getMessage());
+        assertEquals("OpenCode failed: line one line two line three", executeFailure(""));
     }
 
     @Test
     void fallsBackToExitCodeAndStderrWhenNoJsonErrorIsAvailable() {
         runner.queue(new CliProcessResult(7, "not-json", "line one\nline two\nline three\nline four", false, 1L));
-
-        CliProviderException failure = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
-
         assertEquals("OpenCode failed: exited with code 7. Details: line one line two line three",
-                failure.getMessage());
+                executeFailure(""));
     }
 
     @Test
     void reportsTimeoutAndEmptyResponses() {
         runner.queue(CliProcessResult.timeout(180_000L));
-        CliProviderException timeout = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
         assertEquals("OpenCode did not respond within 180 seconds and was stopped. Increase "
-                + OpenCodeCliProvider.TIMEOUT_KEY + " if your prompts need longer.", timeout.getMessage());
+                + OpenCodeCliProvider.TIMEOUT_KEY + " if your prompts need longer.", executeFailure(""));
 
         runner.queue(CliProcessResult.of(0, "{\"type\":\"step_start\"}\n"));
-        CliProviderException empty = assertThrows(CliProviderException.class,
-                () -> provider("opencode").execute("prompt"));
-        assertEquals("OpenCode returned an empty response. Try rephrasing your request.", empty.getMessage());
+        assertEquals("OpenCode returned an empty response. Try rephrasing your request.", executeFailure(""));
     }
 
     @Test
@@ -414,6 +373,20 @@ class OpenCodeCliProviderTest {
         return new OpenCodeCliProvider(new FakeAdapter(binary), runner);
     }
 
+    private String executeFailure(String model) {
+        return executeFailure(provider("opencode"), model);
+    }
+
+    private String executeFailure(OpenCodeCliProvider provider, String model) {
+        return assertThrows(CliProviderException.class, () -> {
+            if (model.isEmpty()) {
+                provider.execute("prompt");
+            } else {
+                provider.execute("prompt", model);
+            }
+        }).getMessage();
+    }
+
     private static CliProcessResult errorResult(String name, String message) {
         String json = "{\"type\":\"error\",\"error\":{\"name\":\"" + name
                 + "\",\"data\":{\"message\":\"" + message.replace("\\", "\\\\")
@@ -449,6 +422,7 @@ class OpenCodeCliProviderTest {
         private final List<List<String>> commands = new ArrayList<>();
         private final List<String> stdins = new ArrayList<>();
         private final List<Duration> timeouts = new ArrayList<>();
+        private final List<Path> workingDirectories = new ArrayList<>();
         private final List<Map<String, String>> environments = new ArrayList<>();
         private RuntimeException nextFailure;
         private boolean tempDirectoryExistedWhenRun;
@@ -464,14 +438,22 @@ class OpenCodeCliProviderTest {
 
         @Override
         public CliProcessResult run(List<String> command, String stdin, Duration timeout) {
-            return record(command, stdin, timeout);
+            return record(command, stdin, timeout, null);
         }
 
         @Override
         public CliProcessResult run(List<String> command, String stdin, Duration timeout,
                                    Map<String, String> environment) {
             environments.add(Map.copyOf(environment));
-            return record(command, stdin, timeout);
+            return record(command, stdin, timeout, null);
+        }
+
+        @Override
+        public CliProcessResult run(List<String> command, String stdin, Duration timeout,
+                                    Path workingDirectory, Map<String, String> environment) {
+            workingDirectories.add(workingDirectory);
+            environments.add(Map.copyOf(environment));
+            return record(command, stdin, timeout, workingDirectory);
         }
 
         @Override
@@ -480,13 +462,19 @@ class OpenCodeCliProviderTest {
             return run(command, stdin, timeout);
         }
 
-        private CliProcessResult record(List<String> command, String stdin, Duration timeout) {
+        private CliProcessResult record(
+                List<String> command, String stdin, Duration timeout, Path workingDirectory) {
             commands.add(List.copyOf(command));
             stdins.add(stdin);
             timeouts.add(timeout);
-            int directoryFlag = command.indexOf("--dir");
-            if (directoryFlag >= 0) {
-                Path directory = Path.of(command.get(directoryFlag + 1));
+            Path directory = workingDirectory;
+            if (directory == null) {
+                int directoryFlag = command.indexOf("--dir");
+                if (directoryFlag >= 0) {
+                    directory = Path.of(command.get(directoryFlag + 1));
+                }
+            }
+            if (directory != null) {
                 tempDirectoryExistedWhenRun = Files.isDirectory(directory);
                 try (var children = Files.list(directory)) {
                     tempDirectoryEmptyWhenRun = children.findAny().isEmpty();

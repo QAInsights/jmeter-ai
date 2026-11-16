@@ -1,18 +1,17 @@
 package org.qainsights.jmeter.ai.opencode;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.SwingUtilities;
 
@@ -26,10 +25,6 @@ import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * Runs the local OpenCode CLI for Chat and Agent Mode. Requests use a fresh,
  * empty working directory and a restrictive permission configuration; OpenCode
@@ -38,8 +33,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class OpenCodeCliProvider implements SubscriptionCliProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OpenCodeCliProvider.class);
-    private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern MODEL_ID = Pattern.compile("^[A-Za-z0-9._-]+/\\S+$");
+    private static final Pattern VERSION_MAJOR = Pattern.compile("(?:^|[^0-9.])v?(\\d+)\\.\\d+");
     private static final Duration STATUS_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration MODELS_TIMEOUT = Duration.ofSeconds(60);
 
@@ -59,6 +54,7 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
     private final boolean skipConfiguredExecutable;
     private String executable;
     private boolean detectionAttempted;
+    private volatile int detectedMajorVersion;
     private volatile List<String> discoveredModels;
     private volatile String model = "";
 
@@ -70,11 +66,8 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         this(adapter, runner, null, false);
     }
 
-    private OpenCodeCliProvider(
-            OpenCodeCliAdapter adapter,
-            CliProcessRunner runner,
-            String executableOverride,
-            boolean skipConfiguredExecutable) {
+    private OpenCodeCliProvider(OpenCodeCliAdapter adapter, CliProcessRunner runner,
+            String executableOverride, boolean skipConfiguredExecutable) {
         this.adapter = adapter;
         this.runner = runner;
         this.executableOverride = executableOverride;
@@ -85,8 +78,7 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         return forExecutable(path, new OpenCodeCliAdapter(), new DefaultCliProcessRunner());
     }
 
-    static OpenCodeCliProvider forExecutable(
-            String path, OpenCodeCliAdapter adapter, CliProcessRunner runner) {
+    static OpenCodeCliProvider forExecutable(String path, OpenCodeCliAdapter adapter, CliProcessRunner runner) {
         String override = path == null || path.isBlank() ? null : path.trim();
         return new OpenCodeCliProvider(adapter, runner, override, override == null);
     }
@@ -178,6 +170,7 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             detectionAttempted = false;
             executable = null;
             discoveredModels = null;
+            detectedMajorVersion = 0;
         }
         String exe = executable();
         if (exe != null) {
@@ -193,10 +186,33 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         }
         try {
             CliProcessResult result = runner.run(List.of(exe, "--version"), null, STATUS_TIMEOUT);
-            return result.isSuccess() ? OpenCodeAuthStatus.READY : OpenCodeAuthStatus.UNKNOWN;
+            if (!result.isSuccess()) {
+                return OpenCodeAuthStatus.UNKNOWN;
+            }
+            int major = parseMajorVersion(
+                    OpenCodeOutputParser.firstNonBlank(result.getStdout(), result.getStderr()));
+            if (major > 0) {
+                detectedMajorVersion = major;
+            }
+            return OpenCodeAuthStatus.READY;
         } catch (RuntimeException e) {
             log.warn("Could not read the OpenCode CLI status: {}", e.getMessage());
             return OpenCodeAuthStatus.UNKNOWN;
+        }
+    }
+
+    private static int parseMajorVersion(String versionOutput) {
+        if (versionOutput == null || versionOutput.isBlank()) {
+            return 0;
+        }
+        Matcher matcher = VERSION_MAJOR.matcher(versionOutput);
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -228,154 +244,64 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         Path tempDirectory = createTempDirectory();
         try {
             String requestModel = normalizeModel(model);
-            CliProcessResult result = runner.run(
-                    buildRunCommand(exe, tempDirectory, requestModel),
-                    prompt,
-                    executionTimeout(),
-                    Map.of("OPENCODE_CONFIG_CONTENT", SAFE_CONFIG));
-            return readAnswer(result, requestModel);
+            Duration timeout = executionTimeout();
+            CliProcessResult result = runWithFallback(exe, tempDirectory, requestModel, prompt, timeout);
+            return OpenCodeOutputParser.readAnswer(
+                    result, timeout, TIMEOUT_KEY, requestModel, discoveredModels, configuredModels());
         } finally {
             deleteTreeQuietly(tempDirectory);
         }
     }
 
+    private CliProcessResult runWithFallback(
+            String exe, Path directory, String model, String prompt, Duration timeout) {
+        boolean useLegacyV1 = detectedMajorVersion == 1;
+        Map<String, String> env = Map.of("OPENCODE_CONFIG_CONTENT", SAFE_CONFIG);
+        CliProcessResult result = runner.run(
+                buildRunCommand(exe, directory, model, useLegacyV1),
+                prompt, timeout, directory, env);
+        if (useLegacyV1 && isUnsupportedV1FlagError(result)) {
+            detectedMajorVersion = 2;
+            return runner.run(
+                    buildRunCommand(exe, directory, model, false),
+                    prompt, timeout, directory, env);
+        }
+        return result;
+    }
+
+    private static boolean isUnsupportedV1FlagError(CliProcessResult result) {
+        if (result.isSuccess() || result.isTimedOut()) {
+            return false;
+        }
+        String stdout = result.getStdout() == null ? "" : result.getStdout();
+        String stderr = result.getStderr() == null ? "" : result.getStderr();
+        String combined = (stdout + '\n' + stderr).toLowerCase(Locale.ROOT);
+        boolean unknownFlag = combined.contains("unrecognized flag")
+                || combined.contains("unknown flag")
+                || combined.contains("unknown option");
+        return unknownFlag && (combined.contains("--pure") || combined.contains("--dir"));
+    }
+
     List<String> buildRunCommand(String exe, Path directory, String model) {
-        List<String> command = new ArrayList<>(List.of(
-                exe, "run", "--pure", "--format", "json", "--dir", directory.toString()));
+        return buildRunCommand(exe, directory, model, detectedMajorVersion == 1);
+    }
+
+    List<String> buildRunCommand(String exe, Path directory, String model, boolean legacyV1) {
+        List<String> command = new ArrayList<>(List.of(exe, "run"));
+        if (legacyV1) {
+            command.add("--pure");
+        }
+        command.add("--format");
+        command.add("json");
+        if (legacyV1) {
+            command.add("--dir");
+            command.add(directory.toString());
+        }
         if (!model.isEmpty()) {
             command.add("-m");
             command.add(model);
         }
         return command;
-    }
-
-    private String readAnswer(CliProcessResult result, String model) {
-        if (result.isTimedOut()) {
-            throw new CliProviderException("OpenCode did not respond within "
-                    + executionTimeout().toSeconds() + " seconds and was stopped. Increase "
-                    + TIMEOUT_KEY + " if your prompts need longer.");
-        }
-
-        ParsedOutput output = parseOutput(result.getStdout());
-        if (output.errorName != null || output.errorMessage != null) {
-            throw new CliProviderException(describeError(
-                    output.errorName, output.errorMessage, result, model));
-        }
-        if (!result.isSuccess()) {
-            throw new CliProviderException(describeFailure(result));
-        }
-        if (output.answer.isBlank()) {
-            throw new CliProviderException(
-                    "OpenCode returned an empty response. Try rephrasing your request.");
-        }
-        return output.answer.trim();
-    }
-
-    private String describeError(String errorName, String errorMessage,
-                                 CliProcessResult result, String model) {
-        String name = errorName == null ? "" : errorName.toLowerCase(Locale.ROOT);
-        String message = errorMessage == null ? "" : errorMessage;
-        String lowerMessage = message.toLowerCase(Locale.ROOT).replace('_', ' ');
-        if (name.contains("freetiererror")) {
-            return "OpenCode's free tier refused this request. Pick another free model, or add a provider "
-                    + "with 'opencode auth login' in the AI CLI terminal tab.";
-        }
-        if (lowerMessage.contains("401") || lowerMessage.contains("unauthorized")
-                || lowerMessage.contains("api key") || lowerMessage.contains("apikey")
-                || lowerMessage.contains("not authenticated")) {
-            return "OpenCode isn't signed in to that model's provider. Run 'opencode auth login' in the "
-                    + "AI CLI terminal tab, or pick an opencode/ free model.";
-        }
-        if (name.contains("modelnotfound") || lowerMessage.contains("model not found")) {
-            String modelId = model.isEmpty() ? DEFAULT_MODEL : model;
-            return "OpenCode doesn't know the model '" + modelId
-                    + "'. Pick one from the list or check 'opencode models'.";
-        }
-        List<String> discovered = discoveredModels;
-        if ("unknownerror".equals(name)
-                && model != null && !model.isBlank()
-                && discovered != null && !discovered.isEmpty()
-                && !discovered.contains(model)
-                && !configuredModels().contains(model)) {
-            String modelHint = "'" + model
-                    + "' isn't in the 'opencode models' list, so check the model ID.";
-            if (!message.isBlank()) {
-                return "OpenCode failed: " + firstLines(message) + " " + modelHint;
-            }
-            return describeFailure(result) + " " + modelHint;
-        }
-        if (!message.isBlank()) {
-            return "OpenCode failed: " + firstLines(message);
-        }
-        return describeFailure(result);
-    }
-
-    private static String describeFailure(CliProcessResult result) {
-        String detail = result.getStderr() == null ? "" : result.getStderr().trim();
-        if (detail.isEmpty() && result.getStdout() != null) {
-            detail = result.getStdout().trim();
-        }
-        String suffix = detail.isEmpty() ? "" : " Details: " + firstLines(detail);
-        return "OpenCode failed: exited with code " + result.getExitCode() + "." + suffix;
-    }
-
-    private static String firstLines(String text) {
-        String[] lines = text.trim().split("\\R");
-        int count = Math.min(lines.length, 3);
-        return String.join(" ", java.util.Arrays.copyOfRange(lines, 0, count));
-    }
-
-    private static ParsedOutput parseOutput(String stdout) {
-        StringBuilder answer = new StringBuilder();
-        String errorName = null;
-        String errorMessage = null;
-        if (stdout == null || stdout.isEmpty()) {
-            return new ParsedOutput("", null, null);
-        }
-        for (String line : stdout.split("\\R")) {
-            if (line.isBlank()) {
-                continue;
-            }
-            JsonNode event;
-            try {
-                event = JSON.readTree(line);
-            } catch (JacksonException e) {
-                continue;
-            }
-            if (event == null || !event.isObject()) {
-                continue;
-            }
-            String type = event.path("type").asText("");
-            if ("step_start".equals(type)) {
-                answer.setLength(0);
-            } else if ("text".equals(type)) {
-                JsonNode text = event.path("part").path("text");
-                if (text.isTextual()) {
-                    answer.append(text.asText());
-                }
-            } else if ("error".equals(type)) {
-                JsonNode error = event.path("error");
-                if (!error.isObject()) {
-                    error = event;
-                }
-                errorName = firstNonBlank(error.path("name").asText(null),
-                        event.path("name").asText(null));
-                JsonNode data = error.path("data");
-                errorMessage = firstNonBlank(data.path("message").asText(null),
-                        error.path("message").asText(null),
-                        event.path("data").path("message").asText(null));
-            }
-        }
-        return new ParsedOutput(answer.toString(), errorName, errorMessage);
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return null;
     }
 
     private Duration executionTimeout() {
@@ -404,23 +330,10 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
         if (directory == null) {
             return;
         }
-        try {
-            Files.walkFileTree(directory, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                    Files.deleteIfExists(file);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException error) throws IOException {
-                    if (error != null) {
-                        throw error;
-                    }
-                    Files.deleteIfExists(dir);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
         } catch (IOException e) {
             log.debug("Could not remove the temporary OpenCode directory: {}", e.getMessage());
         }
@@ -500,18 +413,6 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
             }
             discoveredModels = List.copyOf(models);
             return discoveredModels;
-        }
-    }
-
-    private static final class ParsedOutput {
-        private final String answer;
-        private final String errorName;
-        private final String errorMessage;
-
-        ParsedOutput(String answer, String errorName, String errorMessage) {
-            this.answer = answer;
-            this.errorName = errorName;
-            this.errorMessage = errorMessage;
         }
     }
 }

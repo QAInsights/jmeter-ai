@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,29 +34,32 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
 
     @Override
     public CliProcessResult run(List<String> command, String stdin, Duration timeout) {
-        return runProcess(command, stdin, timeout, Map.of(), null);
+        return runProcess(command, stdin, timeout, null, Map.of(), null);
+    }
+
+    @Override
+    public CliProcessResult run(List<String> command, String stdin, Duration timeout, Map<String, String> environment) {
+        return runProcess(command, stdin, timeout, null, environment, null);
     }
 
     @Override
     public CliProcessResult run(List<String> command, String stdin, Duration timeout,
-                               Map<String, String> environment) {
-        return runProcess(command, stdin, timeout, environment, null);
+                                Path workingDirectory, Map<String, String> environment) {
+        return runProcess(command, stdin, timeout, workingDirectory, environment, null);
     }
 
     @Override
-    public CliProcessResult run(List<String> command, String stdin, Duration timeout,
-                                Consumer<String> stdoutLineConsumer) {
-        return runProcess(command, stdin, timeout, Map.of(), stdoutLineConsumer);
+    public CliProcessResult run(List<String> command, String stdin, Duration timeout, Consumer<String> lineConsumer) {
+        return runProcess(command, stdin, timeout, null, Map.of(), lineConsumer);
     }
 
-    private CliProcessResult runProcess(List<String> command, String stdin, Duration timeout,
-                                        Map<String, String> environment,
-                                        Consumer<String> stdoutLineConsumer) {
+    private CliProcessResult runProcess(List<String> command, String stdin, Duration timeout, Path workingDirectory,
+                                        Map<String, String> environment, Consumer<String> stdoutLineConsumer) {
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("command must not be empty");
         }
         long startNanos = System.nanoTime();
-        Process process = start(command, environment);
+        Process process = start(command, workingDirectory, environment);
 
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
@@ -91,9 +95,14 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
         return new CliProcessResult(exitCode, snapshot(stdout), snapshot(stderr), false, elapsed);
     }
 
-    private static Process start(List<String> command, Map<String, String> environment) {
+    private static Process start(List<String> command, Path workingDirectory, Map<String, String> environment) {
         ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
         builder.redirectErrorStream(false);
+        if (workingDirectory != null) {
+            Path directory = workingDirectory.toAbsolutePath();
+            builder.directory(directory.toFile());
+            builder.environment().put("PWD", directory.toString());
+        }
         if (environment != null) {
             builder.environment().putAll(environment);
         }
@@ -125,8 +134,7 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
 
     private static Thread drain(InputStream stream, StringBuilder sink, Consumer<String> lineConsumer, String name) {
         Thread thread = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            try (var reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     synchronized (sink) {
@@ -136,9 +144,7 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
                         lineConsumer.accept(line);
                     }
                 }
-            } catch (IOException e) {
-                log.debug("Stopped reading CLI output: {}", e.getMessage());
-            } catch (UncheckedIOException e) {
+            } catch (IOException | UncheckedIOException e) {
                 log.debug("Stopped reading CLI output: {}", e.getMessage());
             }
         }, name);
@@ -148,10 +154,7 @@ public final class DefaultCliProcessRunner implements CliProcessRunner {
     }
 
     private static void destroy(Process process) {
-        List<ProcessHandle> descendants = process.descendants().toList();
-        for (ProcessHandle descendant : descendants) {
-            descendant.destroyForcibly();
-        }
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
     }
 
