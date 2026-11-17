@@ -196,6 +196,12 @@ public final class Telemetry {
         return previous;
     }
 
+    static TelemetryState swapStateForTesting(TelemetryState replacement) {
+        TelemetryState previous = state;
+        state = replacement;
+        return previous;
+    }
+
     /** Counts a provider failure as err_&lt;provider&gt;_&lt;category&gt;; never the message itself. */
     public static void recordError(Throwable error) {
         try {
@@ -259,6 +265,11 @@ public final class Telemetry {
             TelemetryCounters c = counters;
             if (c != null && feature != null) {
                 c.increment(feature);
+                TelemetryState s = state;
+                if (s != null && s.recordFirstUse(feature)) {
+                    c.increment(feature == TelemetryFeature.CHAT_MESSAGE
+                            ? TelemetryFeature.FIRST_CHAT_MESSAGE : TelemetryFeature.FIRST_AGENT_RUN);
+                }
             }
         } catch (Throwable t) {
             // telemetry must never break the plugin

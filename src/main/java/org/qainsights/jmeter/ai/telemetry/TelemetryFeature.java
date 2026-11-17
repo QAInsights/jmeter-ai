@@ -4,6 +4,9 @@ package org.qainsights.jmeter.ai.telemetry;
 public enum TelemetryFeature {
     PANEL_OPEN("panel_open"),
     CHAT_MESSAGE("chat_message"),
+    FIRST_CHAT_MESSAGE("first_chat_message"),
+    FIRST_AGENT_RUN("first_agent_run"),
+    SETUP_AUTO_OPEN("setup_auto_open"),
     CHAT_STARTER_PICK("chat_starter_pick"),
     AGENT_RUN("agent_run"),
     RECORDING_RUN("recording_run"),

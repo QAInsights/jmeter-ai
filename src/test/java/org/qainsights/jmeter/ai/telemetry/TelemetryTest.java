@@ -30,6 +30,38 @@ class TelemetryTest {
     private TelemetryCounters counters;
     private TelemetryCounters previous;
 
+    @org.junit.jupiter.api.io.TempDir
+    java.nio.file.Path stateDir;
+
+    @Test
+    void firstUseIsCountedOnceAndDisabledRecordingDoesNotConsumeIt() {
+        TelemetryState state = TelemetryState.load(stateDir);
+        TelemetryState previousState = Telemetry.swapStateForTesting(state);
+        try {
+            Telemetry.swapCountersForTesting(null);
+            Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
+            Telemetry.record(TelemetryFeature.AGENT_RUN);
+            Telemetry.swapCountersForTesting(counters);
+            Telemetry.record(null);
+            for (int i = 0; i < 3; i++) {
+                Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
+                Telemetry.record(TelemetryFeature.AGENT_RUN);
+            }
+            assertEquals(3, counters.snapshot().get("chat_message"));
+            assertEquals(3, counters.snapshot().get("agent_run"));
+            assertEquals(1, counters.snapshot().get("first_chat_message"));
+            assertEquals(1, counters.snapshot().get("first_agent_run"));
+            state.save();
+            Telemetry.swapStateForTesting(TelemetryState.load(stateDir));
+            Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
+            Telemetry.record(TelemetryFeature.AGENT_RUN);
+            assertEquals(1, counters.snapshot().get("first_chat_message"));
+            assertEquals(1, counters.snapshot().get("first_agent_run"));
+        } finally {
+            Telemetry.swapStateForTesting(previousState);
+        }
+    }
+
     @BeforeEach
     void setUp() {
         counters = new TelemetryCounters();

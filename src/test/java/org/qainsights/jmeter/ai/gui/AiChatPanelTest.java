@@ -18,6 +18,16 @@ import static org.mockito.Mockito.mockStatic;
 @ExtendWith(MockitoExtension.class)
 class AiChatPanelTest {
 
+    @Test
+    void autoSetupOnlyForInteractiveUnconfiguredWelcomeOncePerProcess() {
+        java.util.concurrent.atomic.AtomicBoolean opened = new java.util.concurrent.atomic.AtomicBoolean();
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(true, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, false, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, false, opened));
+        assertTrue(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, opened));
+    }
+
     @org.junit.jupiter.api.io.TempDir
     java.nio.file.Path tempDir;
 
