@@ -266,7 +266,8 @@ public final class Telemetry {
             if (c != null && feature != null) {
                 c.increment(feature);
                 TelemetryState s = state;
-                if (s != null && s.recordFirstUse(feature)) {
+                if (s != null && (feature == TelemetryFeature.CHAT_MESSAGE || feature == TelemetryFeature.AGENT_RUN)
+                        && s.recordFirstUse(feature)) {
                     c.increment(feature == TelemetryFeature.CHAT_MESSAGE
                             ? TelemetryFeature.FIRST_CHAT_MESSAGE : TelemetryFeature.FIRST_AGENT_RUN);
                 }

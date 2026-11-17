@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.telemetry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -32,6 +33,40 @@ class TelemetryTest {
 
     @org.junit.jupiter.api.io.TempDir
     java.nio.file.Path stateDir;
+
+    @Test
+    void firstUseRecordingDoesNotWaitForStateSaveMonitor() throws Exception {
+        TelemetryState state = TelemetryState.load(stateDir);
+        TelemetryState previousState = Telemetry.swapStateForTesting(state);
+        java.util.concurrent.CountDownLatch locked = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        Thread saver = new Thread(() -> {
+            synchronized (state) {
+                locked.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        try {
+            saver.start();
+            assertTrue(locked.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+                Telemetry.record(TelemetryFeature.CHAT_MESSAGE);
+                Telemetry.record(TelemetryFeature.AGENT_RUN);
+                Telemetry.record(TelemetryFeature.PANEL_OPEN);
+            });
+            assertEquals(1, counters.snapshot().get("first_chat_message"));
+            assertEquals(1, counters.snapshot().get("first_agent_run"));
+            assertEquals(1, counters.snapshot().get("panel_open"));
+        } finally {
+            release.countDown();
+            saver.join(5000);
+            Telemetry.swapStateForTesting(previousState);
+        }
+    }
 
     @Test
     void firstUseIsCountedOnceAndDisabledRecordingDoesNotConsumeIt() {
