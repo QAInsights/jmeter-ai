@@ -103,8 +103,8 @@ Check with `java -version` or in JMeter's `jmeter.log`.
 ### Manual Installation
 
 ```text
-1. Download jmeter-agent-<version>.jar and zzz-jmeter-agent-<version>-deps.jar from Releases
-2. Put jmeter-agent-<version>.jar in JMeter's lib/ext and zzz-jmeter-agent-<version>-deps.jar in lib
+1. Download jmeter-agent-<version>.jar and zzz-jmeter-agent-deps-<version>.jar from Releases
+2. Put jmeter-agent-<version>.jar in JMeter's lib/ext and zzz-jmeter-agent-deps-<version>.jar in lib
 3. Paste jmeter-ai-quickstart.properties into JMeter's bin/user.properties
 4. Uncomment one provider (Claude, OpenAI, Gemini, Ollama or Apple on-device), add its key (Ollama and Apple on-device need none), then restart JMeter
 ```

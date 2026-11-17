@@ -24,7 +24,8 @@ if (( ${#candidate_jars[@]} > 1 )); then
     exit 1
 fi
 JAR="${candidate_jars[0]}"
-DEPS="$(dirname "$JAR")/zzz-$(basename "${JAR%.jar}")-deps.jar"
+VERSION="${JAR##*/jmeter-agent-}"
+DEPS="$(dirname "$JAR")/zzz-jmeter-agent-deps-$VERSION"
 test -f "$DEPS"
 
 MAVEN_LOCAL_REPOSITORY="$(

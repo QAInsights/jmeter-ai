@@ -30,7 +30,7 @@ public class AiMenuCreator implements MenuCreator {
     public AiMenuCreator() {
         dependenciesAvailable = dependenciesAvailable(getClass().getClassLoader());
         if (!dependenciesAvailable) {
-            log.error("Feather Wand dependencies are missing. Install zzz-jmeter-agent-<version>-deps.jar "
+            log.error("Feather Wand dependencies are missing. Install zzz-jmeter-agent-deps-<version>.jar "
                     + "into JMeter lib/ (or install via Plugins Manager). Alternatively use the -all.jar in lib/ext/.");
             return;
         }
