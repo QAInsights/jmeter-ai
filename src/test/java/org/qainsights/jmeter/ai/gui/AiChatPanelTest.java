@@ -21,11 +21,12 @@ class AiChatPanelTest {
     @Test
     void autoSetupOnlyForInteractiveUnconfiguredWelcomeOncePerProcess() {
         java.util.concurrent.atomic.AtomicBoolean opened = new java.util.concurrent.atomic.AtomicBoolean();
-        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(true, true, true, opened));
-        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, false, true, opened));
-        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, false, opened));
-        assertTrue(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, opened));
-        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(true, true, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, false, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, false, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, false, opened));
+        assertTrue(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, true, opened));
+        assertFalse(AiChatPanel.shouldAutoOpenProviderSetup(false, true, true, true, opened));
     }
 
     @org.junit.jupiter.api.io.TempDir
