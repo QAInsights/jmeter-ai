@@ -116,9 +116,9 @@ See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest 
 
 1. Install the plugin using one of the methods above, then open Feather Wand with the toolbar wand button, **Ctrl+Shift+A** (**⌘⇧A** on macOS), or **Run → AI**.
 2. Click **Connect a provider** on the welcome screen, or **⋯ → Connect a provider…**.
-3. Pick a provider and paste its **API key**; **Get a key** opens the provider's key page where available. **Ollama** and **Apple on-device** need no key; **OpenCode** is also available as a CLI option. Apple on-device appears only on supported Macs.
+3. Pick a provider. For API-key providers, paste an **API key**; **Get a key** opens the provider's key page where available. **Ollama** and **Apple on-device** need no key; **OpenCode** is a CLI option using free models or credentials managed by its CLI, with no API-key field in Feather Wand. Apple on-device appears only on supported Macs.
 4. Click **Test connection**, then **Save and connect**. For Apple on-device, use **Use Apple on-device**.
-5. Pick a model and use Chat or Agent Mode immediately—no restart needed. Settings are saved to JMeter's `bin/user.properties` for you (or your configured `user.properties` path).
+5. Pick a model and use Chat immediately—no restart needed. Agent Mode requires a supported provider; Ollama, AWS Bedrock, and Apple on-device are chat-only. Settings are saved to JMeter's `bin/user.properties` for you (or your configured `user.properties` path).
 
 The JSR223 refactor menu picks up a new provider after a JMeter restart. Smart routing can also be configured in this dialog.
 
