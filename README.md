@@ -105,19 +105,24 @@ Check with `java -version` or in JMeter's `jmeter.log`.
 ```text
 1. Download the latest JAR from Releases
 2. Drop it into JMeter's lib/ext directory
-3. Paste jmeter-ai-quickstart.properties into JMeter's bin/user.properties
-4. Uncomment one provider (Claude, OpenAI, Gemini, Ollama or Apple on-device), add its key (Ollama and Apple on-device need none), then restart JMeter
+3. Start or restart JMeter, then connect a provider as described below
 ```
 
 See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest JAR.
 
 ## ⚙️ Configuration
 
-**First time?** Paste [`jmeter-ai-quickstart.properties`](jmeter-ai-quickstart.properties) into JMeter's `bin/user.properties`, uncomment one provider and add its key (Ollama and Apple on-device need none):
+**First time?** Connect a provider in JMeter:
 
-You can connect a provider from the Feather Wand panel's ⋯ menu > Connect a provider and use it immediately in Chat and Agent Mode, without restarting JMeter. Smart routing and Apple on-device can also be configured in this dialog. The manual properties below remain documented. The JSR223 refactor menu picks up a new provider after a JMeter restart.
+1. Install the plugin using one of the methods above, then open Feather Wand with the toolbar wand button, **Ctrl+Shift+A** (**⌘⇧A** on macOS), or **Run → AI**.
+2. Click **Connect a provider** on the welcome screen, or **⋯ → Connect a provider…**.
+3. Pick a provider and paste its **API key**; **Get a key** opens the provider's key page where available. **Ollama** and **Apple on-device** need no key; **OpenCode** is also available as a CLI option. Apple on-device appears only on supported Macs.
+4. Click **Test connection**, then **Save and connect**. For Apple on-device, use **Use Apple on-device**.
+5. Pick a model and use Chat or Agent Mode immediately—no restart needed. Settings are saved to JMeter's `bin/user.properties` for you (or your configured `user.properties` path).
 
-An empty chat offers three contextual suggestions from the open plan, in rounded-rectangle buttons just above the message box. The first suggests creating a Thread Group, adding a request, adding a CSV data set, or reviewing an existing group. CSV data under child controllers counts when it covers every enabled sampler. If the selected group is disabled, or the plan has groups but none are enabled, suggestions are plan-wide and the first option is **Review this test plan** instead. A plan without any Thread Groups offers **Create a Thread Group**. The other options offer relevant plan review, response-check review, or workload-planning prompts. For enabled selections, they follow the containing Thread Group; selections outside a group use the first enabled group. Duplicate enabled group names are disambiguated by tree position in the draft. Suggestions refresh as the plan changes. Click any option to fill the message box, review the draft, then press Enter to send. Clicking never overwrites a draft, calls AI, or changes the plan on its own. Suggestions disappear when the conversation starts and return on New Chat. Provider setup remains the first step when no provider is connected.
+The JSR223 refactor menu picks up a new provider after a JMeter restart. Smart routing can also be configured in this dialog.
+
+**Prefer properties?** Append [`jmeter-ai-quickstart.properties`](jmeter-ai-quickstart.properties) to JMeter's `bin/user.properties`, preserving existing settings, then uncomment one provider and add its key. Restart JMeter after manual file edits. **AWS Bedrock and corporate gateways are properties-only.** Minimal example:
 
 ```properties
 jmeter.ai.service.type=anthropic
@@ -125,6 +130,10 @@ anthropic.api.key=YOUR_ANTHROPIC_API_KEY
 ```
 
 That is all Feather Wand needs; every other setting has a default. [`jmeter-ai-sample.properties`](jmeter-ai-sample.properties) is the full reference: copy only the settings you want to change from it into `user.properties` (or `jmeter.properties`). The tables below list each setting and its default.
+
+### Chat starters
+
+An empty chat offers three contextual suggestions from the open plan, in rounded-rectangle buttons just above the message box. The first suggests creating a Thread Group, adding a request, adding a CSV data set, or reviewing an existing group. CSV data under child controllers counts when it covers every enabled sampler. If the selected group is disabled, or the plan has groups but none are enabled, suggestions are plan-wide and the first option is **Review this test plan** instead. A plan without any Thread Groups offers **Create a Thread Group**. The other options offer relevant plan review, response-check review, or workload-planning prompts. For enabled selections, they follow the containing Thread Group; selections outside a group use the first enabled group. Duplicate enabled group names are disambiguated by tree position in the draft. Suggestions refresh as the plan changes. Click any option to fill the message box, review the draft, then press Enter to send. Clicking never overwrites a draft, calls AI, or changes the plan on its own. Suggestions disappear when the conversation starts and return on New Chat. Provider setup remains the first step when no provider is connected.
 
 ### General Settings
 
