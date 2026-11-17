@@ -103,13 +103,20 @@ Check with `java -version` or in JMeter's `jmeter.log`.
 ### Manual Installation
 
 ```text
-1. Download the latest JAR from Releases
-2. Drop it into JMeter's lib/ext directory
+1. Download jmeter-agent-<version>.jar and zzz-jmeter-agent-<version>-deps.jar from Releases
+2. Put jmeter-agent-<version>.jar in JMeter's lib/ext and zzz-jmeter-agent-<version>-deps.jar in lib
 3. Paste jmeter-ai-quickstart.properties into JMeter's bin/user.properties
 4. Uncomment one provider (Claude, OpenAI, Gemini, Ollama or Apple on-device), add its key (Ollama and Apple on-device need none), then restart JMeter
 ```
 
 See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest JAR.
+
+Remove older Feather Wand jars from both directories when upgrading. Keep the `zzz-`
+prefix: it preserves JMeter's own library precedence. Alternatively, install only
+`jmeter-agent-<version>-all.jar` in `lib/ext` for the self-contained distribution
+(also available for Plugins Manager registries that have not adopted dependency metadata).
+Do not install the `all` jar together with the split jars. The split layout avoids
+scanning third-party classes during JMeter plugin discovery and starts faster.
 
 ## ⚙️ Configuration
 

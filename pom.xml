@@ -282,13 +282,7 @@
                     <target>17</target>
                 </configuration>
             </plugin>
-            <!-- Shaded uber jar: the artifact published to Central must be
-                 self-contained. JMeter loads plugins from lib/ext and never
-                 resolves Maven dependencies, and the Plugins Manager registry
-                 has no libs metadata for this plugin, so a thin jar breaks
-                 with NoClassDefFoundError on user machines. Keep shading in
-                 the default build (including release) unless dependency
-                 delivery is solved elsewhere. -->
+            <!-- Shade before splitting so filtering, relocation and service merging stay identical. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -476,6 +470,32 @@
                 <version>3.1.0</version>
                 <executions>
                     <execution>
+                        <id>split-shaded-jar</id>
+                        <phase>package</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <target>
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      tofile="${project.build.directory}/${project.build.finalName}-all.jar" overwrite="true"/>
+                                <delete file="${project.build.directory}/${project.build.finalName}.jar"/>
+                                <zip destfile="${project.build.directory}/${project.build.finalName}.jar">
+                                    <zipfileset src="${project.build.directory}/${project.build.finalName}-all.jar"
+                                                includes="org/qainsights/**,META-INF/maven/com.qainsights/**,META-INF/MANIFEST.MF"
+                                                excludes="org/qainsights/jmeter/ai/shaded/**"/>
+                                </zip>
+                                <!-- NewDriver 5.6.3 sorts lib jars before lib/ext. zzz sorts after
+                                     stock lib jars, preserving their precedence over shaded dependencies. -->
+                                <delete file="${project.build.directory}/zzz-${project.build.finalName}-deps.jar"/>
+                                <zip destfile="${project.build.directory}/zzz-${project.build.finalName}-deps.jar">
+                                    <zipfileset src="${project.build.directory}/${project.build.finalName}-all.jar"
+                                                excludes="org/qainsights/**,META-INF/maven/com.qainsights/**,META-INF/MANIFEST.MF"/>
+                                    <zipfileset src="${project.build.directory}/${project.build.finalName}-all.jar"
+                                                includes="org/qainsights/jmeter/ai/shaded/**"/>
+                                </zip>
+                            </target>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>copy-to-jmeter</id>
                         <phase>install</phase>
                         <goals>
@@ -483,11 +503,37 @@
                         </goals>
                         <configuration>
                             <target>
+                                <delete>
+                                    <fileset dir="${jmeter.home}/lib/ext" erroronmissingdir="false"
+                                             includes="jmeter-agent-*.jar"/>
+                                    <fileset dir="${jmeter.home}/lib" erroronmissingdir="false"
+                                             includes="zzz-jmeter-agent-*-deps.jar"/>
+                                </delete>
                                 <copy
                                         file="${project.build.directory}/${project.build.finalName}.jar"
                                         todir="${jmeter.home}/lib/ext"
                                 />
+                                <copy file="${project.build.directory}/zzz-${project.build.finalName}-deps.jar"
+                                      todir="${jmeter.home}/lib"/>
                             </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-distributions</id>
+                        <phase>package</phase>
+                        <goals><goal>attach-artifact</goal></goals>
+                        <configuration>
+                            <artifacts>
+                                <artifact><file>${project.build.directory}/${project.build.finalName}-all.jar</file><type>jar</type><classifier>all</classifier></artifact>
+                                <artifact><file>${project.build.directory}/zzz-${project.build.finalName}-deps.jar</file><type>jar</type><classifier>deps</classifier></artifact>
+                            </artifacts>
                         </configuration>
                     </execution>
                 </executions>
