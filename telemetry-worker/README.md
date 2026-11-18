@@ -9,14 +9,16 @@ Each install can send one ping per UTC day. Stored fields: a random install UUID
 plugin/JMeter/Java version, OS name, CPU arch, AI provider name, agent-mode
 enabled flag, first-run flag, coarse feature usage counts, and the country code
 Cloudflare reports for the request. Day and timestamp are assigned server side.
-IP addresses are used only for rate limiting and are never stored in plaintext.
+IP addresses are used for burst rate limiting and starter lifetime quotas, and
+are never stored in plaintext. Starter quota records retain a SHA-256 IP hash
+for the lifetime of the quota, alongside the independent starter UUID.
 
 ## Starter chat
 
 `POST /v1/starter/chat/completions` accepts OpenAI Chat Completions text chats.
 Use SDK base URL `https://telemetry.jmeter.ai/v1/starter` and the plugin's random
 starter UUID as the bearer API key (separate from its telemetry ID). No user provider key is required. Agent tools and
-functions are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
+functions, client model fallbacks and paid plugins are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
 clamped to 2048 tokens by default. Both JSON and SSE streaming are supported.
 
 Configure either or both provider secrets before deployment:
@@ -46,13 +48,21 @@ as `"STARTER_PROVIDER": "{\"only\":[\"deepinfra\"],\"data_collection\":\"deny\"}
 D1 migration 0003 stores lifetime reservations per install UUID and SHA-256 IP
 hash (not raw IP), plus UTC-month usage, upstream name and estimated cost. It
 never stores chat content. Default lifetime allowances are 10 per install and 30
-per IP; failed requests refund the message. Bursts are limited to 60/IP/minute.
+per IP; failed requests with no answer text refund the message. A stream that
+delivers answer text consumes a message even if it later disconnects. Empty
+streams return an error with the refunded allowance before sending headers.
+Bursts are limited to 60/IP/minute. Each upstream attempt has a 120-second deadline.
 Responses include `X-Starter-Remaining` and `X-Starter-Limit`. Quota exhaustion
 returns 402 `starter_quota_exhausted`; unavailable providers or the default $50
 monthly budget cap return 503 when no eligible upstream remains. The budget
 cap excludes any upstream with a non-zero input or output price, while free
-upstreams keep serving. In-flight calls can overshoot the budget before
-their usage arrives. Missing provider usage cannot be priced. Failed upstream
+upstreams keep serving. Migration 0004 adds atomic in-flight paid budget
+reservations before every attempt, including fallbacks. Reservations use a
+conservative text-token bound (UTF-8 bytes of the request) plus the requested
+output limit. Admission includes recorded spend and outstanding reservations,
+so a paid request can be refused just below the cap. Reported usage replaces
+the reservation atomically; missing usage retains its conservative cost estimate.
+Failed upstream
 attempts count in monthly request totals; any reported usage is priced at that
 upstream's configured rates. The JSON stats include a `starter` summary and
 per-upstream request/cost totals.

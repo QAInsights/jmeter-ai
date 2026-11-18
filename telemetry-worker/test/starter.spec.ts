@@ -14,7 +14,7 @@ function completion() {
 	return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Hi" } }], usage: { prompt_tokens: 100, completion_tokens: 50 } }));
 }
 beforeEach(async () => {
-	await env.DB.exec("DELETE FROM starter_messages; DELETE FROM starter_usage;");
+	await env.DB.exec("DELETE FROM starter_messages; DELETE FROM starter_usage; DELETE FROM starter_budget_reservations;");
 	env.STARTER_API_KEY = "test-primary";
 	env.STARTER_FALLBACK_API_KEY = "";
 	env.STARTER_MONTHLY_BUDGET_USD = "50";
@@ -66,13 +66,13 @@ describe("starter chat", () => {
 	});
 	it("strips tools, overrides model and clamps both token fields", async () => {
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
-		expect((await chat({ messages: [{ role: "user", content: "Hi" }], tools: [{}], tool_choice: "auto", functions: [{}], function_call: "auto", model: "expensive", max_tokens: 9000, max_completion_tokens: 4000 })).status).toBe(200);
+		expect((await chat({ messages: [{ role: "user", content: "Hi" }], tools: [{}], tool_choice: "auto", functions: [{}], function_call: "auto", model: "expensive", models: ["paid"], plugins: [{ id: "web" }], route: "fallback", max_tokens: 9000, max_completion_tokens: 4000 })).status).toBe(200);
 		const init = spy.mock.calls[0][1]!;
 		const body = JSON.parse(String(init.body));
 		expect(body.model).toBe("nvidia/nemotron-3.5-lightning:free");
 		expect(body.max_tokens).toBe(2048);
 		expect(body.max_completion_tokens).toBe(2048);
-		for (const key of ["tools", "tool_choice", "functions", "function_call"]) expect(body).not.toHaveProperty(key);
+		for (const key of ["tools", "tool_choice", "functions", "function_call", "models", "plugins", "route"]) expect(body).not.toHaveProperty(key);
 		expect(init.headers).toMatchObject({ "HTTP-Referer": "https://jmeter.ai", "X-Title": "Feather Wand" });
 	});
 	it.each([undefined, "512"])("uses the default or configured cap when token limits are omitted (%s)", async cap => {
@@ -100,7 +100,7 @@ describe("starter chat", () => {
 		expect((await chat()).status).toBe(200);
 		expect(spy).toHaveBeenCalledTimes(1);
 		spy.mockResolvedValue(new Response("limited", { status: 429 }));
-		expect((await chat()).status).toBe(502);
+		expect((await chat()).status).toBe(503);
 		expect(spy).toHaveBeenCalledTimes(2);
 		expect(spy.mock.calls.every(([url]) => String(url).includes("openrouter.ai"))).toBe(true);
 	});
@@ -158,8 +158,8 @@ describe("starter chat", () => {
 			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
 			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], stream: true }),
 		}), env, ctx, UUID_RE);
-		expect(res.status).toBe(200);
-		expect(await res.text()).toBe(sse);
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 		await waitOnExecutionContext(ctx);
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: 1 });
@@ -169,18 +169,107 @@ describe("starter chat", () => {
 		const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(stream));
 		const ctx = createExecutionContext();
-		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+		const pending = handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
 			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
 			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], stream: true }),
 		}), env, ctx, UUID_RE);
-		const reader = res.body!.getReader();
 		controller!.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: answered ? "Hi" : "" } }], usage: { prompt_tokens: 20, completion_tokens: 10 } })}\n\n`));
-		await reader.read();
-		controller!.error(new Error("upstream disconnected"));
-		await expect(reader.read()).rejects.toThrow();
+		if (answered) {
+			const res = await pending;
+			const reader = res.body!.getReader();
+			await reader.read();
+			controller!.error(new Error("upstream disconnected"));
+			await expect(reader.read()).rejects.toThrow();
+		} else {
+			await vi.waitFor(() => expect(stream.locked).toBe(true));
+			await vi.waitFor(async () => expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 1 }));
+			controller!.error(new Error("upstream disconnected"));
+			const res = await pending;
+			expect(res.status).toBe(502);
+			expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		}
 		await waitOnExecutionContext(ctx);
 		expect(await env.DB.prepare("SELECT input_tokens,output_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20, output_tokens: 10 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: answered ? 1 : 0 });
+	});
+	it.each([{ error: { message: "provider failed" } }, { choices: [] }, { choices: [{ message: { content: "  " } }] }])
+	("refunds error envelopes and empty JSON completions", async result => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ ...result, usage: { prompt_tokens: 20, completion_tokens: 1 } }));
+		const res = await chat();
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(await env.DB.prepare("SELECT input_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20 });
+	});
+	it("checks budget again after recording a failed paid attempt", async () => {
+		env.STARTER_INPUT_USD_PER_MTOK = "1";
+		env.STARTER_FALLBACK_API_KEY = "fallback";
+		env.STARTER_MONTHLY_BUDGET_USD = "0.01";
+		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ usage: { prompt_tokens: 10000 } }, { status: 429 }));
+		const res = await chat();
+		expect(res.status).toBe(503);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(spy).toHaveBeenCalledTimes(1);
+	});
+	it("atomically reserves paid budget while another request is in flight", async () => {
+		env.STARTER_API_KEY = "";
+		env.STARTER_FALLBACK_API_KEY = "fallback";
+		env.STARTER_MONTHLY_BUDGET_USD = "0.001";
+		let release!: (res: Response) => void;
+		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(resolve => { release = resolve; }));
+		const ctx = createExecutionContext();
+		const directChat = (id: string) => handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${id}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), env, ctx, UUID_RE);
+		const first = directChat(UUID);
+		await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+		const blocked = await directChat(crypto.randomUUID());
+		expect(blocked.status).toBe(503);
+		expect(blocked.headers.get("X-Starter-Remaining")).toBe("10");
+		release(completion());
+		expect((await first).status).toBe(200);
+		await waitOnExecutionContext(ctx);
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
+	});
+	it("times out a stalled primary and uses the fallback", async () => {
+		env.STARTER_FALLBACK_API_KEY = "fallback";
+		vi.useFakeTimers();
+		try {
+			const spy = vi.spyOn(globalThis, "fetch").mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+				init!.signal!.addEventListener("abort", () => reject(new Error("timed out")));
+			})).mockImplementation(async () => completion());
+			const ctx = createExecutionContext();
+			const pending = handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+				method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+				body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+			}), env, ctx, UUID_RE);
+			await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+			await vi.advanceTimersByTimeAsync(120_000);
+			expect((await pending).status).toBe(200);
+			await waitOnExecutionContext(ctx);
+			expect(spy).toHaveBeenCalledTimes(2);
+		} finally { vi.useRealTimers(); }
+	});
+	it.each([false, true])("keeps recovery independent of accounting failure (fallback=%s)", async fallback => {
+		const ctx = createExecutionContext();
+		const batch = vi.fn().mockImplementationOnce(async (statements: D1PreparedStatement[]) => {
+			await env.DB.batch(statements);
+			throw new Error("lost accounting acknowledgement");
+		}).mockImplementation((statements: D1PreparedStatement[]) => env.DB.batch(statements));
+		const db = new Proxy(env.DB, { get(target, key) {
+			return key === "batch" ? batch : key === "prepare" ? target.prepare.bind(target) : Reflect.get(target, key);
+		} });
+		const spy = vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => new Response("limited", { status: 429 }))
+			.mockImplementation(async () => completion());
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, DB: db, STARTER_FALLBACK_API_KEY: fallback ? "fallback" : "" }, ctx, UUID_RE);
+		expect(res.status).toBe(fallback ? 200 : 502);
+		await waitOnExecutionContext(ctx);
+		expect(spy).toHaveBeenCalledTimes(fallback ? 2 : 1);
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: fallback ? 1 : 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: fallback ? 2 : 1 });
 	});
 	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
