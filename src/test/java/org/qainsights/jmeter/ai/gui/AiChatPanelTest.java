@@ -148,18 +148,20 @@ class AiChatPanelTest {
     }
 
     @Test
-    void testConstructorAndBasicMethods() {
-        AiChatPanel panel = new AiChatPanel();
+    void testConstructorAndBasicMethods() throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            AiChatPanel panel = new AiChatPanel();
 
-        assertNotNull(panel);
-        assertNotNull(panel.getConversationHistory());
-        assertNull(panel.getSelectedModel());
-        
-        // Test basic callback methods
-        assertDoesNotThrow(() -> panel.setInputEnabled(true));
-        assertDoesNotThrow(() -> panel.setInputEnabled(false));
-        assertDoesNotThrow(panel::clearMessageField);
-        assertDoesNotThrow(() -> panel.setLastCommandType("LINT"));
+            assertNotNull(panel);
+            assertNotNull(panel.getConversationHistory());
+            assertNull(panel.getSelectedModel());
+
+            // Test basic callback methods
+            assertDoesNotThrow(() -> panel.setInputEnabled(true));
+            assertDoesNotThrow(() -> panel.setInputEnabled(false));
+            assertDoesNotThrow(panel::clearMessageField);
+            assertDoesNotThrow(() -> panel.setLastCommandType("LINT"));
+        });
     }
 
     @Test
@@ -683,18 +685,29 @@ class AiChatPanelTest {
         assertEquals(java.util.List.of("question B"), panel.getConversationHistory());
     }
 
-    @Test void resolvingFreeForCommandsShowsTheSharedPrivacyNoticeOnce() throws Exception {
+    @Test void commandRequestsShowPrivacyAndAllowanceWithoutChangingTheWelcomeOnSelection() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         org.qainsights.jmeter.ai.service.StarterAiService service = org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class);
         org.mockito.Mockito.when(service.showPrivacyNotice()).thenReturn(true, false);
         installFreeRouter(panel, service);
         panel.resolveAiService(org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
         panel.resolveAiService(org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).showPrivacyNotice();
+        org.mockito.Mockito.when(service.getRemainingMessage()).thenReturn("7 of 10 free messages left.");
+        var commandService = panel.resolveCommandAiService(org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).showPrivacyNotice();
+        commandService.generateResponse(java.util.List.of("Lint this"));
+        panel.onWorkerSuccess("Lint result");
+        commandService.generateResponse(java.util.List.of("Optimize this"));
+        panel.onWorkerSuccess("Optimization result");
         javax.swing.SwingUtilities.invokeAndWait(() -> { });
         TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
         long notices = java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
                 .map(javax.swing.JTextArea.class::cast).filter(text -> text.getText().contains("use them for training")).count();
         assertEquals(1, notices);
+        assertTrue(java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
+                .map(javax.swing.JTextArea.class::cast).anyMatch(text -> text.getText().contains("7 of 10")));
+        assertEquals(1, java.util.Arrays.stream(transcript.getComponents()).filter(QuietButton.class::isInstance).count());
     }
 
     @Test void freeStreamReadsTheOriginalServicesAllowanceAfterReload() throws Exception {

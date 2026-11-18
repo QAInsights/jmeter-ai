@@ -1762,9 +1762,23 @@ public class AiChatPanel
      */
     @Override
     public AiService resolveAiService(String selectedModel) {
+        return aiResponseRouter.resolveAiService(selectedModel);
+    }
+
+    @Override
+    public AiService resolveCommandAiService(String selectedModel) {
         AiService service = aiResponseRouter.resolveAiService(selectedModel);
-        if (service instanceof StarterAiService) showFreePrivacyNotice((StarterAiService) service);
-        return service;
+        if (!(service instanceof StarterAiService)) return service;
+        StarterAiService starter = (StarterAiService) service;
+        return new AiService() {
+            public String getName() { return starter.getName(); }
+            public String generateResponse(List<String> history) { return generateResponse(history, null); }
+            public String generateResponse(List<String> history, String model) {
+                showFreePrivacyNotice(starter);
+                nonStreamFreeResponse.set(starter);
+                return starter.generateResponse(history, model);
+            }
+        };
     }
 
     /**
