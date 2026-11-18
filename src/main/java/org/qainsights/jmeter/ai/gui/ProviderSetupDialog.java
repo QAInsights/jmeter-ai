@@ -1646,6 +1646,7 @@ final class ProviderSetupDialog extends JDialog {
 
     private void saveOrTest() {
         if (selectedOption == ProviderSetupOption.FREE) {
+            Telemetry.recordSetupSave(selectedOption.name());
             onSaved.accept(selectedOption);
             dispose();
             return;

@@ -1443,7 +1443,6 @@ public class AiChatPanel
             // Re-render the streamed card with full markdown so code blocks
             // get their styled panel with the Copy button.
             transcript.completeStream(fullResponse);
-            showFreeConnectAction();
             ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
             firstTokenReceived = false;
             hideStopButton();
@@ -1481,14 +1480,21 @@ public class AiChatPanel
         java.util.function.Consumer<Exception> onError
     ) {
         int generation = beginStream();
-        showFreePrivacyNotice();
+        AiResponseRouter router = aiResponseRouter;
+        String selectedModel = modelSelectorPanel.getSelectedModel();
+        AiService service = router.resolveAiService(selectedModel);
+        StarterAiService freeService = service instanceof StarterAiService ? (StarterAiService) service : null;
+        showFreePrivacyNotice(freeService);
         java.util.function.Consumer<String> reasoning = this::appendReasoningToken;
-        Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
-            modelSelectorPanel.getSelectedModel(),
+        Runnable cancelHandle = router.generateStreamResponse(
+            selectedModel,
             conversationTracker.historyCopy(),
             ifStreamCurrent(generation, tokenConsumer),
             ifStreamCurrent(generation, reasoning),
-            runIfStreamCurrent(generation, onComplete),
+            runIfStreamCurrent(generation, () -> {
+                onComplete.run();
+                runOnEdt(runIfStreamCurrent(generation, () -> showFreeConnectAction(freeService)));
+            }),
             ifStreamCurrent(generation, onError)
         );
         currentCancelHandle = cancelHandle;
@@ -1609,12 +1615,19 @@ public class AiChatPanel
      */
     @Override
     public String getAiResponse(String message) {
-        showFreePrivacyNotice();
+        nonStreamFreeResponse.set(null);
+        AiResponseRouter router = aiResponseRouter;
+        String model = modelSelectorPanel.getSelectedModel();
+        AiService service = router.resolveAiService(model);
+        StarterAiService freeService = service instanceof StarterAiService ? (StarterAiService) service : null;
+        showFreePrivacyNotice(freeService);
         log.info("Getting AI response for message: {}", message);
-        return aiResponseRouter.getAiResponse(
-            modelSelectorPanel.getSelectedModel(),
+        String response = router.getAiResponse(
+            model,
             conversationTracker.historyCopy()
         );
+        nonStreamFreeResponse.set(freeService);
+        return response;
     }
 
     private void undoLastRename() {
@@ -1749,7 +1762,9 @@ public class AiChatPanel
      */
     @Override
     public AiService resolveAiService(String selectedModel) {
-        return aiResponseRouter.resolveAiService(selectedModel);
+        AiService service = aiResponseRouter.resolveAiService(selectedModel);
+        if (service instanceof StarterAiService) showFreePrivacyNotice((StarterAiService) service);
+        return service;
     }
 
     /**
@@ -1776,7 +1791,8 @@ public class AiChatPanel
         runOnEdt(() -> transcript.finishReasoning());
         showNonStreamReasoning();
         processAiResponse(response);
-        runOnEdt(this::showFreeConnectAction);
+        StarterAiService freeService = nonStreamFreeResponse.getAndSet(null);
+        runOnEdt(() -> showFreeConnectAction(freeService));
         playResponseChime();
         setInputEnabled(true);
     }
@@ -1802,19 +1818,19 @@ public class AiChatPanel
                 && !model.startsWith(StarterAiService.MODEL_PREFIX);
     }
 
-    private void showFreePrivacyNotice() {
-        String model = getSelectedModel();
-        if (model != null && model.startsWith(StarterAiService.MODEL_PREFIX)
-                && starterService != null && starterService.showPrivacyNotice()) {
+    private final java.util.concurrent.atomic.AtomicReference<StarterAiService> nonStreamFreeResponse =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    private void showFreePrivacyNotice(StarterAiService service) {
+        if (service != null && service.showPrivacyNotice()) {
             runOnEdt(() -> transcript.addSystemMessage(StarterAiService.PRIVACY_NOTICE, null));
         }
     }
 
-    private void showFreeConnectAction() {
-        String model = getSelectedModel();
-        if (model != null && model.startsWith(StarterAiService.MODEL_PREFIX)) {
-            if (starterService != null && !starterService.getRemainingMessage().isEmpty()) {
-                transcript.addSystemMessage(starterService.getRemainingMessage(), null);
+    private void showFreeConnectAction(StarterAiService service) {
+        if (service != null) {
+            if (!service.getRemainingMessage().isEmpty()) {
+                transcript.addSystemMessage(service.getRemainingMessage(), null);
             }
             transcript.addConnectProviderAction(this::openProviderSetup);
         }
@@ -1834,6 +1850,7 @@ public class AiChatPanel
         Exception e,
         String userMessage
     ) {
+        nonStreamFreeResponse.set(null);
         CliProviderException cliProviderException = findCliProviderException(e);
         if (cliProviderException == null) {
             log.error(logMessage, e);
@@ -1846,6 +1863,12 @@ public class AiChatPanel
             }
             removeLoadingIndicator();
             transcript.addSystemMessage(userMessage, ThemeColors.error());
+            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+                if (cause instanceof StarterAiService.Failure) {
+                    transcript.addConnectProviderAction(this::openProviderSetup);
+                    break;
+                }
+            }
             setInputEnabled(true);
         });
     }

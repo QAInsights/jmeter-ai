@@ -55,6 +55,24 @@ class ProviderSetupDialogTest {
     @TempDir
     Path tempDir;
 
+    @Test void freeSetupRecordsSaveBeforeInvokingCallback() throws Exception {
+        assumeFalse(GraphicsEnvironment.isHeadless());
+        try (var telemetry = org.mockito.Mockito.mockStatic(org.qainsights.jmeter.ai.telemetry.Telemetry.class)) {
+            ProviderSetupDialog dialog = new ProviderSetupDialog(null, option -> {
+                assertEquals(ProviderSetupOption.FREE, option);
+                telemetry.verify(() -> org.qainsights.jmeter.ai.telemetry.Telemetry.recordSetupSave("FREE"));
+            }, false, new ProviderConnectionTester(request -> {
+                throw new AssertionError("Free must not test a provider key");
+            }), tempDir.resolve("properties"), () -> { });
+            try {
+                dialog.selectOption(ProviderSetupOption.FREE);
+                Method save = ProviderSetupDialog.class.getDeclaredMethod("saveOrTest");
+                save.setAccessible(true);
+                save.invoke(dialog);
+            } finally { dialog.dispose(); }
+        }
+    }
+
     @Test
     void keepsAnEditedCustomModelWhenTheModelListRefreshes() {
         assertEquals("custom-model",
