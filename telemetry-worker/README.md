@@ -9,7 +9,53 @@ Each install can send one ping per UTC day. Stored fields: a random install UUID
 plugin/JMeter/Java version, OS name, CPU arch, AI provider name, agent-mode
 enabled flag, first-run flag, coarse feature usage counts, and the country code
 Cloudflare reports for the request. Day and timestamp are assigned server side.
-IP addresses are used only for rate limiting and are never stored.
+IP addresses are used only for rate limiting and are never stored in plaintext.
+
+## Starter chat
+
+`POST /v1/starter/chat/completions` accepts OpenAI Chat Completions text chats.
+Use SDK base URL `https://telemetry.jmeter.ai/v1/starter` and the plugin's random
+starter UUID as the bearer API key (separate from its telemetry ID). No user provider key is required. Agent tools and
+functions are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
+clamped to 1024 tokens by default. Both JSON and SSE streaming are supported.
+
+Configure either or both provider secrets before deployment:
+
+```bash
+npx wrangler secret put STARTER_API_KEY
+npx wrangler secret put STARTER_FALLBACK_API_KEY
+```
+
+Primary defaults to OpenRouter `nvidia/nemotron-3.5-lightning:free` (zero token cost).
+Fallback defaults to Gemini `gemini-2.5-flash-lite` ($0.10/$0.40 per million
+input/output tokens). Network failures, 402, 429, and 5xx trigger one fallback
+attempt before streaming begins. With only one secret, only that provider is used.
+URLs, models, token limits, prices and budgets are configurable via the
+`STARTER_*` vars in `wrangler.jsonc`; secrets must never be added there.
+
+The free NVIDIA endpoint retains and may train on prompts per OpenRouter's
+listing. To switch to paid no-training Nemotron, set
+`STARTER_MODEL=nvidia/nemotron-3.5-lightning`,
+`STARTER_INPUT_USD_PER_MTOK=0.06`, `STARTER_OUTPUT_USD_PER_MTOK=0.16`, and
+`STARTER_PROVIDER` to the JSON string
+`{"only":["deepinfra"],"data_collection":"deny"}`. This optional var defaults to
+unset and is sent as the `provider` field only to the primary upstream when its
+host is `openrouter.ai`; invalid JSON is ignored. In `wrangler.jsonc`, encode it
+as `"STARTER_PROVIDER": "{\"only\":[\"deepinfra\"],\"data_collection\":\"deny\"}"`.
+
+D1 migration 0003 stores lifetime reservations per install UUID and SHA-256 IP
+hash (not raw IP), plus UTC-month usage, upstream name and estimated cost. It
+never stores chat content. Default lifetime allowances are 10 per install and 30
+per IP; failed requests refund the message. Bursts are limited to 60/IP/minute.
+Responses include `X-Starter-Remaining` and `X-Starter-Limit`. Quota exhaustion
+returns 402 `starter_quota_exhausted`; unavailable providers or the default $50
+monthly budget cap return 503 when no eligible upstream remains. The budget
+cap excludes any upstream with a non-zero input or output price, while free
+upstreams keep serving. In-flight calls can overshoot the budget before
+their usage arrives. Missing provider usage cannot be priced. Failed upstream
+attempts count in monthly request totals; any reported usage is priced at that
+upstream's configured rates. The JSON stats include a `starter` summary and
+per-upstream request/cost totals.
 
 ## Deploy
 
