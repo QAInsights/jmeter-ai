@@ -13,6 +13,9 @@ import org.qainsights.jmeter.ai.service.ClaudeService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.BedrockAiService;
+import org.qainsights.jmeter.ai.service.ProviderStatus;
+import org.qainsights.jmeter.ai.service.OllamaAiService;
+import org.mockito.MockedStatic;
 
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,13 +61,15 @@ class FreeProviderTest {
             System.setProperty("user.home", home.toString());
             assertNoKeyDiscovery();
         } finally {
-            System.setProperty("user.home", before);
+            if (before == null) System.clearProperty("user.home");
+            else System.setProperty("user.home", before);
         }
     }
 
     private void assertNoKeyDiscovery() {
         java.util.Properties before = (java.util.Properties) JMeterUtils.getJMeterProperties().clone();
-        try {
+        try (MockedStatic<ProviderStatus> status = mockStatic(ProviderStatus.class, CALLS_REAL_METHODS)) {
+            status.when(ProviderStatus::isBedrockConfigured).thenReturn(false);
             JMeterUtils.getJMeterProperties().clear();
             JMeterUtils.setProperty("apple.enabled", "false");
             AiServiceHolder holder = new AiServiceHolder();
@@ -82,6 +87,46 @@ class FreeProviderTest {
             verifyNoInteractions(claude, openai, meta, bedrock);
             JMeterUtils.setProperty("jmeter.ai.starter.enabled", "false");
             assertTrue(Models.loadAllModels(holder).isEmpty());
+        } finally {
+            JMeterUtils.getJMeterProperties().clear();
+            JMeterUtils.getJMeterProperties().putAll(before);
+        }
+    }
+
+    @Test void configuredProviderRemainsDefaultWhenDiscoveryFails() {
+        java.util.Properties before = (java.util.Properties) JMeterUtils.getJMeterProperties().clone();
+        try (MockedStatic<ProviderStatus> status = mockStatic(ProviderStatus.class, CALLS_REAL_METHODS)) {
+            status.when(ProviderStatus::isBedrockConfigured).thenReturn(false);
+            JMeterUtils.getJMeterProperties().clear();
+            JMeterUtils.setProperty("apple.enabled", "false");
+            JMeterUtils.setProperty("anthropic.api.key", "test-key");
+            AiServiceHolder holder = new AiServiceHolder();
+            ClaudeService claude = mock(ClaudeService.class);
+            holder.setClaudeService(claude);
+            when(claude.getClient()).thenThrow(new RuntimeException("offline"));
+            when(claude.getCurrentModel()).thenReturn("claude-default");
+            List<String> models = Models.loadAllModels(holder);
+            assertTrue(models.contains(StarterAiService.MODEL_ID));
+            assertEquals("claude-default", Models.defaultChatModel(models, "claude-default"));
+        } finally {
+            JMeterUtils.getJMeterProperties().clear();
+            JMeterUtils.getJMeterProperties().putAll(before);
+        }
+    }
+
+    @Test void explicitlyConfiguredOllamaRemainsDefaultWhenDiscoveryFails() {
+        java.util.Properties before = (java.util.Properties) JMeterUtils.getJMeterProperties().clone();
+        try {
+            JMeterUtils.getJMeterProperties().clear();
+            JMeterUtils.setProperty("apple.enabled", "false");
+            JMeterUtils.setProperty("jmeter.ai.service.type", "ollama");
+            JMeterUtils.setProperty("ollama.default.model", "local-model");
+            AiServiceHolder holder = new AiServiceHolder();
+            OllamaAiService ollama = mock(OllamaAiService.class);
+            holder.setOllamaService(ollama);
+            when(ollama.listModels()).thenThrow(new RuntimeException("offline"));
+            List<String> models = Models.loadAllModels(holder);
+            assertEquals("ollama:local-model", Models.defaultChatModel(models, null));
         } finally {
             JMeterUtils.getJMeterProperties().clear();
             JMeterUtils.getJMeterProperties().putAll(before);

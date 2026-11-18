@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -239,10 +240,37 @@ public class Models {
             }
         }
 
+        addConfiguredFallback(allModels, serviceHolder.getClaudeService() != null
+                        && (ProviderStatus.isApiKeyConfigured("anthropic.api.key") || GatewayConfig.hasAnthropicGatewayCredentials()),
+                "", () -> serviceHolder.getClaudeService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOpenAiService() != null
+                        && (ProviderStatus.isApiKeyConfigured("openai.api.key") || GatewayConfig.hasOpenAiGatewayCredentials()),
+                "openai:", () -> serviceHolder.getOpenAiService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getDeepseekService() != null && ProviderStatus.isApiKeyConfigured("deepseek.api.key"),
+                "deepseek:", () -> serviceHolder.getDeepseekService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getGoogleService() != null && ProviderStatus.isApiKeyConfigured("google.api.key"),
+                "google:", () -> serviceHolder.getGoogleService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getGrokService() != null && ProviderStatus.isApiKeyConfigured("grok.api.key"),
+                "grok:", () -> serviceHolder.getGrokService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOpenRouterService() != null && ProviderStatus.isApiKeyConfigured("openrouter.api.key"),
+                OpenRouterAiService.MODEL_PREFIX, () -> serviceHolder.getOpenRouterService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getMetaMuseService() != null && ProviderStatus.isApiKeyConfigured("meta.api.key"),
+                "meta:", () -> serviceHolder.getMetaMuseService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getBedrockService() != null && ProviderStatus.isBedrockConfigured(),
+                "bedrock:", () -> serviceHolder.getBedrockService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOllamaService() != null
+                        && "ollama".equalsIgnoreCase(AiConfig.getProperty("jmeter.ai.service.type", "")),
+                "ollama:", () -> AiConfig.getProperty("ollama.default.model", "deepseek-r1:1.5b"));
         if (StarterAiService.isEnabled()) {
             allModels.add(StarterAiService.MODEL_ID);
         }
         return allModels;
+    }
+
+    private static void addConfiguredFallback(List<String> models, boolean configured, String prefix, Supplier<String> currentModel) {
+        if (!configured || models.stream().anyMatch(model -> prefix.isEmpty() ? !model.contains(":") : model.startsWith(prefix))) return;
+        String model = currentModel.get();
+        if (model != null && !model.isBlank()) models.add(prefix + model);
     }
 
     public static String defaultChatModel(List<String> models, String preferred) {

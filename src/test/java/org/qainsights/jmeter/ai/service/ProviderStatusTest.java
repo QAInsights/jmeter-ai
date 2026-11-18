@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.MockedStatic;
+import org.mockito.Answers;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.GatewayConfig;
@@ -26,6 +27,7 @@ class ProviderStatusTest {
     @TempDir Path home;
 
     private MockedStatic<AiConfig> aiConfig;
+    private MockedStatic<ProviderStatus> localAws;
     private final Map<String, String> props = new HashMap<>();
 
     @BeforeEach
@@ -37,10 +39,14 @@ class ProviderStatusTest {
             String def = inv.getArgument(1);
             return props.getOrDefault(key, def);
         });
+        localAws = mockStatic(ProviderStatus.class, Answers.CALLS_REAL_METHODS);
+        localAws.when(() -> ProviderStatus.hasLocalAwsCredentials(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.isNull())).thenReturn(false);
     }
 
     @AfterEach
     void tearDown() {
+        if (localAws != null) localAws.close();
         if (aiConfig != null) {
             aiConfig.close();
         }
@@ -179,7 +185,6 @@ class ProviderStatusTest {
     @Test
     void localAwsDetectionAcceptsProfileAndCredentialEnvironmentSources() {
         for (Map<String, String> env : java.util.List.of(
-                Map.of("AWS_PROFILE", "work"),
                 Map.of("AWS_ACCESS_KEY_ID", "access", "AWS_SECRET_ACCESS_KEY", "secret"),
                 Map.of("AWS_BEARER_TOKEN_BEDROCK", "token"),
                 Map.of("AWS_WEB_IDENTITY_TOKEN_FILE", "token-path", "AWS_ROLE_ARN", "role"),
@@ -187,7 +192,8 @@ class ProviderStatusTest {
                 Map.of("AWS_CONTAINER_CREDENTIALS_FULL_URI", "http://localhost/credentials"))) {
             assertTrue(ProviderStatus.hasLocalAwsCredentials(env::get, key -> null, home));
         }
-        assertTrue(ProviderStatus.hasLocalAwsCredentials(key -> null, Map.of("aws.profile", "work")::get, home));
+        assertFalse(ProviderStatus.hasLocalAwsCredentials(key -> null, Map.of("aws.profile", "work")::get, home));
+        assertFalse(ProviderStatus.hasLocalAwsCredentials(Map.of("AWS_PROFILE", "missing")::get, key -> null, home));
         assertTrue(ProviderStatus.hasLocalAwsCredentials(key -> null,
                 Map.of("aws.accessKeyId", "access", "aws.secretAccessKey", "secret")::get, home));
     }
@@ -197,7 +203,7 @@ class ProviderStatusTest {
         Files.createDirectories(home.resolve(".aws"));
         for (String file : java.util.List.of("credentials", "config")) {
             Path path = home.resolve(".aws").resolve(file);
-            Files.writeString(path, "[default]\naws_access_key_id = access\n");
+            Files.writeString(path, "[default]\naws_access_key_id = access\naws_secret_access_key = secret\n");
             assertTrue(ProviderStatus.hasLocalAwsCredentials(key -> null, key -> null, home));
             Files.delete(path);
         }
@@ -225,12 +231,38 @@ class ProviderStatusTest {
     }
 
     @Test
-    void localAwsDetectionAcceptsEachSupportedCredentialSetting() throws Exception {
+    void localAwsDetectionChecksTheSelectedProfileAndCompleteCredentialSources() throws Exception {
         Files.createDirectories(home.resolve(".aws"));
-        for (String key : java.util.List.of("aws_access_key_id", "credential_process", "sso_session",
-                "sso_start_url", "sso_account_id", "role_arn", "web_identity_token_file")) {
-            Files.writeString(home.resolve(".aws/config"), "[profile work]\n" + key + " = configured\n");
-            assertTrue(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, home), key);
+        for (String settings : java.util.List.of("aws_access_key_id = access\naws_secret_access_key = secret\n",
+                "credential_process = helper\n", "role_arn = role\nweb_identity_token_file = token\n",
+                "sso_account_id = account\nsso_role_name = role\nsso_start_url = https://example.com\nsso_region = us-east-1\n",
+                "sso_account_id = account\nsso_role_name = role\nsso_session = login\n[sso-session login]\nsso_start_url = https://example.com\nsso_region = us-east-1\n")) {
+            Files.writeString(home.resolve(".aws/config"), "[default]\nregion = us-east-1\n[profile work]\n" + settings);
+            assertFalse(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, home));
+            assertTrue(ProviderStatus.hasLocalAwsCredentials(Map.of("AWS_PROFILE", "work")::get, k -> null, home));
+            assertTrue(ProviderStatus.hasLocalAwsCredentials(k -> null, Map.of("aws.profile", "work")::get, home));
         }
+    }
+
+    @Test void localAwsDetectionRejectsIncompleteAndCyclicProfiles() throws Exception {
+        Files.createDirectories(home.resolve(".aws"));
+        for (String settings : java.util.List.of("aws_access_key_id = access\n", "sso_account_id = account\n",
+                "role_arn = role\n", "web_identity_token_file = token\n",
+                "role_arn = role\nsource_profile = default\n")) {
+            Files.writeString(home.resolve(".aws/config"), "[default]\n" + settings);
+            assertFalse(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, home));
+        }
+        Files.writeString(home.resolve(".aws/config"), "[default]\nrole_arn = role\nsource_profile = work\n[profile work]\naws_access_key_id = access\naws_secret_access_key = secret\n");
+        assertTrue(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, home));
+    }
+
+    @Test void missingHomeDoesNotHideExplicitCredentialsOrThrow() throws Exception {
+        localAws.close();
+        localAws = null;
+        assertFalse(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, null));
+        assertFalse(ProviderStatus.hasLocalAwsCredentials(k -> null, Map.of("user.home", "\u0000")::get, null));
+        assertTrue(ProviderStatus.hasLocalAwsCredentials(Map.of("AWS_ACCESS_KEY_ID", "access", "AWS_SECRET_ACCESS_KEY", "secret")::get, k -> null, null));
+        Path custom = Files.writeString(home.resolve("aws-file"), "[default]\ncredential_process = helper\n");
+        assertTrue(ProviderStatus.hasLocalAwsCredentials(k -> null, Map.of("aws.configFile", custom.toString())::get, null));
     }
 }
