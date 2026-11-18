@@ -355,6 +355,59 @@ describe("starter chat", () => {
 		expect(res.status).toBe(502);
 		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 	});
+	it("does not dispatch or charge a paid fallback after a primary header-wait disconnect", async () => {
+		const ctx = createExecutionContext();
+		const disconnect = new AbortController();
+		let started!: () => void;
+		const ready = new Promise<void>(resolve => { started = resolve; });
+		const fetch = vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+			init!.signal!.addEventListener("abort", () => reject(new Error("disconnected")), { once: true });
+			started();
+		}));
+		const pending = handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", signal: disconnect.signal,
+			headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, STARTER_FALLBACK_API_KEY: "fallback" }, ctx, UUID_RE);
+		await ready;
+		disconnect.abort();
+		const res = await pending;
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(await env.DB.prepare("SELECT SUM(cost_usd) AS cost FROM starter_usage").first()).toEqual({ cost: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage WHERE upstream = 'fallback'").first()).toEqual({ n: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
+	});
+	it("releases a paid reservation without a charge if disconnected during admission", async () => {
+		const ctx = createExecutionContext();
+		const disconnect = new AbortController();
+		const db = new Proxy(env.DB, { get(target, key) {
+			if (key !== "prepare") return Reflect.get(target, key);
+			return (sql: string) => {
+				const statement = target.prepare(sql);
+				if (!sql.includes("INSERT INTO starter_budget_reservations")) return statement;
+				return { bind: (...args: any[]) => ({ run: async () => {
+					const result = await statement.bind(...args).run();
+					disconnect.abort();
+					return result;
+				} }) };
+			};
+		} });
+		const fetch = vi.spyOn(globalThis, "fetch");
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", signal: disconnect.signal,
+			headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, DB: db, STARTER_INPUT_USD_PER_MTOK: "1" }, ctx, UUID_RE);
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(fetch).not.toHaveBeenCalled();
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
+	});
 	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
 		env.STARTER_INPUT_USD_PER_MTOK = "1";

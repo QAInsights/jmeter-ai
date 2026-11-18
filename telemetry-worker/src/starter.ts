@@ -116,6 +116,10 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		await refreshRemaining();
 	};
 	for (let i = 0; i < upstreams.length; i++) {
+		if (request.signal.aborted) {
+			await refund();
+			return error(502, "starter_upstream_error", "Starter request was cancelled.");
+		}
 		const upstream = upstreams[i];
 		const month = new Date().toISOString().slice(0, 7);
 		const attemptId = crypto.randomUUID();
@@ -167,6 +171,12 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 			clearTimeout(timer);
 			request.signal.removeEventListener("abort", disconnect);
 		};
+		if (abort.signal.aborted) {
+			finishAttempt();
+			if (paid) await env.DB.prepare("DELETE FROM starter_budget_reservations WHERE id = ?").bind(attemptId).run();
+			await refund();
+			return error(502, "starter_upstream_error", "Starter request was cancelled.");
+		}
 		let response: Response;
 		try {
 			const openRouter = new URL(upstream.url).hostname === "openrouter.ai";
@@ -181,7 +191,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		} catch {
 			finishAttempt();
 			await record(null);
-			if (i + 1 < upstreams.length) continue;
+			if (!request.signal.aborted && i + 1 < upstreams.length) continue;
 			await refund();
 			return error(502, "starter_upstream_error", "Starter provider is unavailable. Please try again.");
 		}
