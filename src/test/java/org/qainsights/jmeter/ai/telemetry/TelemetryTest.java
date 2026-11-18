@@ -49,6 +49,12 @@ class TelemetryTest {
     }
 
     @Test
+    void sampleGenerationRecordsOnlyAFixedCounter() {
+        Telemetry.record(TelemetryFeature.PARAM_AI_USED);
+        assertEquals(Map.of("param_ai_used", 1), counters.snapshot());
+    }
+
+    @Test
     void providerHelpersRecordOnlyNormalizedProviderKeys() {
         Telemetry.recordChatProvider("claude-code:sonnet");
         Telemetry.recordAgentProvider("opencode:openai/gpt-4o");
