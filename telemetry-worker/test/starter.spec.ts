@@ -19,8 +19,9 @@ beforeEach(async () => {
 	env.STARTER_IP_HASH_SECRET = "test-ip-hash-secret";
 	env.STARTER_FALLBACK_API_KEY = "";
 	env.STARTER_MONTHLY_BUDGET_USD = "50";
-	env.STARTER_INPUT_USD_PER_MTOK = "0";
-	env.STARTER_OUTPUT_USD_PER_MTOK = "0";
+	env.STARTER_MODEL = undefined;
+	env.STARTER_INPUT_USD_PER_MTOK = undefined;
+	env.STARTER_OUTPUT_USD_PER_MTOK = undefined;
 	env.STARTER_MAX_OUTPUT_TOKENS = "2048";
 	env.STARTER_PROVIDER = "";
 	env.STARTER_UPSTREAM_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -100,7 +101,7 @@ describe("starter chat", () => {
 		expect((await chat({ messages: [{ role: "user", content: "Hi" }], tools: [{}], tool_choice: "auto", functions: [{}], function_call: "auto", model: "expensive", models: ["paid"], plugins: [{ id: "web" }], route: "fallback", max_tokens: 9000, max_completion_tokens: 4000 })).status).toBe(200);
 		const init = spy.mock.calls[0][1]!;
 		const body = JSON.parse(String(init.body));
-		expect(body.model).toBe("nvidia/nemotron-3.5-lightning:free");
+		expect(body.model).toBe("nvidia/nemotron-3.5-lightning");
 		expect(body.max_tokens).toBe(2048);
 		expect(body.max_completion_tokens).toBe(2048);
 		for (const key of ["tools", "tool_choice", "functions", "function_call", "models", "plugins", "route"]) expect(body).not.toHaveProperty(key);
@@ -112,7 +113,7 @@ describe("starter chat", () => {
 		expect((await chat()).status).toBe(200);
 		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).max_tokens).toBe(cap === undefined ? 2048 : 512);
 	});
-	it.each([["0.06", "0.16"], ["0", "0.16"], ["0.06", "0"]])("blocks paid upstreams at exhausted monthly budgets (%s/%s)", async (input, output) => {
+	it.each([[undefined, undefined], ["0.06", "0.16"], ["0", "0.16"], ["0.06", "0"], ["0", "0"]])("blocks both upstreams at exhausted monthly budgets (%s/%s)", async (input, output) => {
 		env.STARTER_INPUT_USD_PER_MTOK = input;
 		env.STARTER_OUTPUT_USD_PER_MTOK = output;
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
@@ -124,16 +125,15 @@ describe("starter chat", () => {
 		expect(await res.json()).toMatchObject({ error: { code: "starter_budget_exhausted" } });
 		expect(spy).not.toHaveBeenCalled();
 	});
-	it("keeps the free primary serving at the budget cap but excludes paid fallback", async () => {
+	it("blocks both default paid providers at a zero budget and refunds the message", async () => {
 		env.STARTER_MONTHLY_BUDGET_USD = "0";
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
-		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
-		expect((await chat()).status).toBe(200);
-		expect(spy).toHaveBeenCalledTimes(1);
-		spy.mockResolvedValue(new Response("limited", { status: 429 }));
-		expect((await chat()).status).toBe(503);
-		expect(spy).toHaveBeenCalledTimes(2);
-		expect(spy.mock.calls.every(([url]) => String(url).includes("openrouter.ai"))).toBe(true);
+		const spy = vi.spyOn(globalThis, "fetch");
+		const res = await chat();
+		expect(res.status).toBe(503);
+		expect(await res.json()).toMatchObject({ error: { code: "starter_budget_exhausted" } });
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(spy).not.toHaveBeenCalled();
 	});
 	it("routes OpenRouter primary with configured provider JSON", async () => {
 		const provider = { only: ["deepinfra"], data_collection: "deny" };
@@ -142,11 +142,21 @@ describe("starter chat", () => {
 		expect((await chat()).status).toBe(200);
 		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).provider).toEqual(provider);
 	});
-	it.each(["", "{invalid"]) ("ignores unset or invalid provider JSON (%s)", async provider => {
+	it("accounts for default paid primary usage at the highest allowed rates", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
+		expect((await chat()).status).toBe(200);
+		const usage = await env.DB.prepare("SELECT upstream,cost_usd FROM starter_usage").first<{ upstream: string; cost_usd: number }>();
+		expect(usage?.upstream).toBe("primary");
+		expect(usage?.cost_usd).toBeCloseTo((100 * 0.07 + 50 * 0.20) / 1e6, 10);
+	});
+	it.each([undefined, "", "{invalid", "null", "[]", "42"]) ("keeps default private routing for unset or invalid provider JSON (%s)", async provider => {
 		env.STARTER_PROVIDER = provider;
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
 		expect((await chat()).status).toBe(200);
-		expect(JSON.parse(String(spy.mock.calls[0][1]?.body))).not.toHaveProperty("provider");
+		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).provider).toEqual({
+			only: ["fireworks", "deepinfra", "modelrun", "coreweave"], data_collection: "deny", zdr: true,
+			max_price: { prompt: 0.07, completion: 0.20 },
+		});
 	});
 	it("does not send provider routing to other primary hosts", async () => {
 		env.STARTER_PROVIDER = '{"only":["deepinfra"]}';
@@ -313,17 +323,17 @@ describe("starter chat", () => {
 		const directChat = () => handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
 			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
 			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
-		}), { ...env, DB: db, STARTER_FALLBACK_API_KEY: "fallback", STARTER_MONTHLY_BUDGET_USD: "0.001" }, ctx, UUID_RE);
+		}), { ...env, DB: db, STARTER_FALLBACK_API_KEY: "fallback", STARTER_MONTHLY_BUDGET_USD: "0.0013" }, ctx, UUID_RE);
 		expect((await directChat()).status).toBe(200);
 		await waitOnExecutionContext(ctx);
 		expect(batch).toHaveBeenCalledTimes(4);
 		expect((await directChat()).status).toBe(503);
-		expect(spy).toHaveBeenCalledTimes(3);
+		expect(spy).toHaveBeenCalledTimes(2);
 		vi.spyOn(Date, "now").mockReturnValue(Date.now() + 600_001);
 		expect((await directChat()).status).toBe(200);
-		expect(spy).toHaveBeenCalledTimes(5);
+		expect(spy).toHaveBeenCalledTimes(4);
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations WHERE expires_at > ?")
-			.bind(Date.now()).first()).toEqual({ n: 1 });
+			.bind(Date.now()).first()).toEqual({ n: 2 });
 		await waitOnExecutionContext(ctx);
 	});
 	it.each([{}, { prompt_tokens: "bad", completion_tokens: -1 }])("uses the paid cost bound for malformed usage %j", async usage => {
@@ -407,7 +417,8 @@ describe("starter chat", () => {
 		expect(res.status).toBe(502);
 		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(await env.DB.prepare("SELECT SUM(cost_usd) AS cost FROM starter_usage").first()).toEqual({ cost: 0 });
+		const charged = await env.DB.prepare("SELECT SUM(cost_usd) AS cost FROM starter_usage").first<{ cost: number }>();
+		expect(charged?.cost).toBeGreaterThan(0);
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage WHERE upstream = 'fallback'").first()).toEqual({ n: 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
 	});
@@ -439,7 +450,7 @@ describe("starter chat", () => {
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
 	});
-	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
+	it.each([401, 402, 403, 429, 500, 503])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
 		env.STARTER_INPUT_USD_PER_MTOK = "1";
 		env.STARTER_OUTPUT_USD_PER_MTOK = "2";

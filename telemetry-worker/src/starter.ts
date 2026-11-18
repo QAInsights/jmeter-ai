@@ -57,7 +57,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 	if (!(await env.STARTER_LIMITER.limit({ key: ip })).success) return error(429, "starter_rate_limited", "Please try again in a minute.");
 	const upstreams = [
 		{ name: "primary", key: env.STARTER_API_KEY, url: env.STARTER_UPSTREAM_URL ?? "https://openrouter.ai/api/v1/chat/completions",
-			model: env.STARTER_MODEL ?? "nvidia/nemotron-3.5-lightning:free", input: number(env.STARTER_INPUT_USD_PER_MTOK, 0), output: number(env.STARTER_OUTPUT_USD_PER_MTOK, 0) },
+			model: env.STARTER_MODEL ?? "nvidia/nemotron-3.5-lightning", input: number(env.STARTER_INPUT_USD_PER_MTOK, 0.07), output: number(env.STARTER_OUTPUT_USD_PER_MTOK, 0.20) },
 		{ name: "fallback", key: env.STARTER_FALLBACK_API_KEY, url: env.STARTER_FALLBACK_UPSTREAM_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 			model: env.STARTER_FALLBACK_MODEL ?? "gemini-2.5-flash-lite", input: number(env.STARTER_FALLBACK_INPUT_USD_PER_MTOK, 0.10), output: number(env.STARTER_FALLBACK_OUTPUT_USD_PER_MTOK, 0.40) },
 	].filter(u => u.key);
@@ -126,18 +126,19 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		const upstream = upstreams[i];
 		const month = new Date().toISOString().slice(0, 7);
 		const attemptId = crypto.randomUUID();
-		const paid = upstream.input !== 0 || upstream.output !== 0;
 		const inputBound = new TextEncoder().encode(JSON.stringify({ ...body, model: upstream.model })).byteLength;
 		const outputBound = Math.max(Number(body.max_tokens) || 0, Number(body.max_completion_tokens) || 0);
 		const reservedCost = (inputBound * upstream.input + outputBound * upstream.output) / 1e6;
-		if (paid) {
+		{
 			const now = Date.now();
 			let admitted: D1Result;
 			try {
-				admitted = await env.DB.prepare(`INSERT INTO starter_budget_reservations(id,month,cost_usd,expires_at)
-			 SELECT ?,?,?,? WHERE (SELECT COALESCE(SUM(cost_usd),0) FROM starter_usage WHERE month = ?)
-			 + (SELECT COALESCE(SUM(cost_usd),0) FROM starter_budget_reservations WHERE month = ? AND expires_at > ?) + ? <= ?`)
-				.bind(attemptId, month, reservedCost, now + 600_000, month, month, now, reservedCost, budget).run();
+				admitted = await env.DB.prepare(`WITH spend AS (
+			 SELECT (SELECT COALESCE(SUM(cost_usd),0) FROM starter_usage WHERE month = ?)
+			 + (SELECT COALESCE(SUM(cost_usd),0) FROM starter_budget_reservations WHERE month = ? AND expires_at > ?) AS total)
+			 INSERT INTO starter_budget_reservations(id,month,cost_usd,expires_at)
+			 SELECT ?,?,?,? FROM spend WHERE total < ? AND total + ? <= ?`)
+				.bind(month, month, now, attemptId, month, reservedCost, now + 600_000, budget, reservedCost, budget).run();
 			} catch {
 				const release = () => env.DB.batch([
 					env.DB.prepare("DELETE FROM starter_budget_reservations WHERE id = ?").bind(attemptId),
@@ -176,7 +177,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		};
 		if (abort.signal.aborted) {
 			finishAttempt();
-			if (paid) await env.DB.prepare("DELETE FROM starter_budget_reservations WHERE id = ?").bind(attemptId).run();
+			await env.DB.prepare("DELETE FROM starter_budget_reservations WHERE id = ?").bind(attemptId).run();
 			await refund();
 			return error(502, "starter_upstream_error", "Starter request was cancelled.");
 		}
@@ -184,8 +185,15 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		try {
 			const openRouter = new URL(upstream.url).hostname === "openrouter.ai";
 			let routing: Record<string, unknown> = {};
-			if (upstream.name === "primary" && openRouter && env.STARTER_PROVIDER) {
-				try { routing = { provider: JSON.parse(env.STARTER_PROVIDER) }; } catch { /* Ignore invalid provider routing JSON. */ }
+			if (upstream.name === "primary" && openRouter) {
+				routing = { provider: { only: ["fireworks", "deepinfra", "modelrun", "coreweave"], data_collection: "deny", zdr: true,
+					max_price: { prompt: upstream.input, completion: upstream.output } } };
+				if (env.STARTER_PROVIDER) {
+					try {
+						const provider = JSON.parse(env.STARTER_PROVIDER);
+						if (provider && typeof provider === "object" && !Array.isArray(provider)) routing = { provider };
+					} catch { /* Keep the default privacy routing for invalid JSON. */ }
+				}
 			}
 			response = await fetch(upstream.url, { method: "POST", headers: {
 				"Authorization": `Bearer ${upstream.key}`, "Content-Type": "application/json",

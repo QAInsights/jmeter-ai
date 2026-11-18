@@ -31,7 +31,9 @@ npx wrangler secret put STARTER_API_KEY
 npx wrangler secret put STARTER_FALLBACK_API_KEY
 ```
 
-Primary defaults to OpenRouter `nvidia/nemotron-3.5-lightning:free` (zero token cost).
+Primary defaults to paid OpenRouter `nvidia/nemotron-3.5-lightning`, accounted at
+$0.07 input / $0.20 output per million tokens (the highest prices among the
+allowed providers below).
 Fallback defaults to Gemini `gemini-2.5-flash-lite` ($0.10/$0.40 per million
 input/output tokens). Network failures, 401, 402, 403, 429, and 5xx trigger one fallback
 attempt before streaming begins. With only one provider secret, only that provider is used.
@@ -41,15 +43,63 @@ changes the per-IP quota identities.
 URLs, models, token limits, prices and budgets are configurable via the
 `STARTER_*` vars in `wrangler.jsonc`; secrets must never be added there.
 
-The free NVIDIA endpoint retains and may train on prompts per OpenRouter's
-listing. To switch to paid no-training Nemotron, set
-`STARTER_MODEL=nvidia/nemotron-3.5-lightning`,
-`STARTER_INPUT_USD_PER_MTOK=0.06`, `STARTER_OUTPUT_USD_PER_MTOK=0.16`, and
-`STARTER_PROVIDER` to the JSON string
-`{"only":["deepinfra"],"data_collection":"deny"}`. This optional var defaults to
-unset and is sent as the `provider` field only to the primary upstream when its
-host is `openrouter.ai`; invalid JSON is ignored. In `wrangler.jsonc`, encode it
-as `"STARTER_PROVIDER": "{\"only\":[\"deepinfra\"],\"data_collection\":\"deny\"}"`.
+Messages go through jmeter.ai to OpenRouter and providers that don't train on
+or retain prompts. The default primary `provider` routing is
+`{"only":["fireworks","deepinfra","modelrun","coreweave"],"data_collection":"deny","zdr":true,"max_price":{"prompt":0.07,"completion":0.20}}`.
+`max_price` follows the configured primary accounting prices (USD per million
+tokens), so a provider price increase cannot silently exceed those rates.
+In [OpenRouter privacy settings](https://openrouter.ai/settings/privacy), select
+**ZDR only** for **All other models** (disallow Safety Retention). OpenRouter's
+[`zdr` documentation](https://openrouter.ai/docs/guides/features/zdr) notes that
+`zdr: true` otherwise also permits Safety Retention endpoints if the account
+allows them. ZDR permits transient in-memory prompt caching and has legal/safety
+exceptions; it is not a promise that no processing or legal preservation occurs.
+**Do not include secrets.** Keep OpenRouter prompt logging/data-sharing opt-ins off.
+
+The Gemini fallback uses Google's **paid API**. Set `STARTER_FALLBACK_API_KEY`
+to a key for a paid-tier Gemini project with billing enabled. Free-tier Gemini
+may use prompts for training; do not use a free-tier key for this service.
+Google may retain paid API content for abuse monitoring; this fallback is not
+represented as zero-retention. See [Google's terms](https://ai.google.dev/gemini-api/terms).
+
+`STARTER_PROVIDER` is an optional JSON object that completely overrides the
+default routing for the primary OpenRouter host only. For example,
+`{"only":["deepinfra"],"data_collection":"deny","zdr":true,"max_price":{"prompt":0.06,"completion":0.16}}`
+can be paired with primary prices of 0.06/0.16. Encode the object as a JSON string
+in `wrangler.jsonc`. Unset, empty, malformed or non-object JSON retains the safe
+defaults. Overrides can weaken privacy or change prices: preserve the privacy
+filters and update accounting rates if changing providers or the model.
+
+### Paid endpoint check and message costs
+
+Live [Nemotron endpoints](https://openrouter.ai/api/v1/models/nvidia/nemotron-3.5-lightning/endpoints)
+and the [ZDR endpoint list](https://openrouter.ai/api/v1/endpoints/zdr), checked
+2026-11-18 (prices USD per million tokens):
+
+| Provider | Input | Output | Training / prompt retention | Default allowed |
+| --- | ---: | ---: | --- | --- |
+| Darkbloom | 0.025 | 0.12 | No general-purpose training right (§5.6); may retain content for operations/support/abuse/legal purposes (§8 of its [policy](https://www.darkbloom.dev/privacy.html)); not ZDR-listed | No |
+| Fireworks | 0.05 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
+| DeepInfra | 0.06 | 0.16 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
+| ModelRun | 0.07 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
+| CoreWeave | 0.07 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
+
+The model endpoint API supplies prices but not data-policy fields; the ZDR list
+supplies eligibility and the Safety Retention flag. Recheck these before changing
+the allowlist or prices.
+
+At the configured default rates, `cost = (input_tokens * input_rate + output_tokens * output_rate) / 1e6`:
+
+| Attempt | Typical: 3,000 in + 500 out | Approximate worst case: 16,000 in + 2,048 out |
+| --- | ---: | ---: |
+| Nemotron primary (0.07 / 0.20) | $0.000310 | $0.0015296 |
+| Gemini fallback (0.10 / 0.40) | $0.000500 | $0.0024192 |
+
+The requested 64 KB ≈ 16k-token estimate assumes roughly four bytes per token;
+it is not a hard token bound (64 KiB / 4 is 16,384 tokens, costing $0.00155648
+primary / $0.00245760 fallback with 2,048 output tokens). Actual tokenization
+varies. Admission uses the more conservative UTF-8-byte bound described below.
+If both attempts incur usage, both costs count toward the shared monthly cap.
 
 D1 migration 0003 stores lifetime reservations per install UUID and HMAC-SHA-256 IP
 hash (not raw IP), plus UTC-month usage, upstream name and estimated cost. It
@@ -60,9 +110,10 @@ streams return an error with the refunded allowance before sending headers.
 Bursts are limited to 60/IP/minute. Each upstream attempt has a 120-second deadline.
 Responses include `X-Starter-Remaining` and `X-Starter-Limit`. Quota exhaustion
 returns 402 `starter_quota_exhausted`; unavailable providers or the default $50
-monthly budget cap return 503 when no eligible upstream remains. The budget
-cap excludes any upstream with a non-zero input or output price, while free
-upstreams keep serving. Migration 0004 adds atomic in-flight paid budget
+monthly budget cap return 503 when no eligible upstream remains. The $50 cap
+covers both primary and fallback; at the cap all starter calls return
+`starter_budget_exhausted`, which the plugin displays as a friendly temporary
+unavailability notice with a Connect a provider action. Migration 0004 adds atomic in-flight budget
 reservations before every attempt, including fallbacks. Reservations use a
 conservative text-token bound (UTF-8 bytes of the request) plus the requested
 output limit. Admission includes recorded spend and outstanding reservations,

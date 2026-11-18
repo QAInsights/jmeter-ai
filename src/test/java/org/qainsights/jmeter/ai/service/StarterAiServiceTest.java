@@ -143,6 +143,12 @@ class StarterAiServiceTest {
         assertFalse(answer.contains("private"));
     }
 
+    @Test void describesPaidProviderPrivacy() {
+        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("OpenRouter"));
+        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("don't train on or retain prompts"));
+        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("Google's paid API"));
+    }
+
     @Test void mapsUnavailableBudgetAndRateLimits() {
         for (String code : List.of("starter_unavailable", "starter_budget_exhausted")) {
             status = 503;
