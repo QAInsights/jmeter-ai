@@ -22,22 +22,23 @@ starter UUID as the bearer API key (separate from its telemetry ID). No user pro
 functions, client model fallbacks and paid plugins are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
 clamped to 2048 tokens by default. Both JSON and SSE streaming are supported.
 
-Configure the required IP-hashing secret (choose a long random value) and either
-or both provider secrets before deployment:
+Configure the two required starter secrets before deployment (choose a long
+random value for the IP-hashing secret):
 
 ```bash
 npx wrangler secret put STARTER_IP_HASH_SECRET
 npx wrangler secret put STARTER_API_KEY
-npx wrangler secret put STARTER_FALLBACK_API_KEY
 ```
 
-Primary defaults to paid OpenRouter `nvidia/nemotron-3.5-lightning`, accounted at
+The only upstream defaults to paid OpenRouter `nvidia/nemotron-3.5-lightning`, accounted at
 $0.07 input / $0.20 output per million tokens (the highest prices among the
 allowed providers below).
-Fallback defaults to Gemini `gemini-2.5-flash-lite` ($0.10/$0.40 per million
-input/output tokens). Network failures, 401, 402, 403, 429, and 5xx trigger one fallback
-attempt before streaming begins. With only one provider secret, only that provider is used.
-If the IP-hashing secret or all provider secrets are missing, starter requests
+Network failures and non-2xx responses (including 401, 402, 403, 429 and 5xx)
+are terminal: return 502 `starter_upstream_error` and refund the message reservation.
+The plugin shows a friendly unavailable notice and Connect a provider action.
+OpenRouter may still fail over internally among the allowed no-training,
+zero-retention providers; the worker never retries against a different upstream.
+If the IP-hashing secret or provider key is missing, starter requests
 return 503 `starter_unavailable`. Keep the IP-hashing secret stable: rotating it
 changes the per-IP quota identities.
 URLs, models, token limits, prices and budgets are configurable via the
@@ -55,12 +56,6 @@ In [OpenRouter privacy settings](https://openrouter.ai/settings/privacy), select
 allows them. ZDR permits transient in-memory prompt caching and has legal/safety
 exceptions; it is not a promise that no processing or legal preservation occurs.
 **Do not include secrets.** Keep OpenRouter prompt logging/data-sharing opt-ins off.
-
-The Gemini fallback uses Google's **paid API**. Set `STARTER_FALLBACK_API_KEY`
-to a key for a paid-tier Gemini project with billing enabled. Free-tier Gemini
-may use prompts for training; do not use a free-tier key for this service.
-Google may retain paid API content for abuse monitoring; this fallback is not
-represented as zero-retention. See [Google's terms](https://ai.google.dev/gemini-api/terms).
 
 `STARTER_PROVIDER` is an optional JSON object that completely overrides the
 default routing for the primary OpenRouter host only. For example,
@@ -93,13 +88,11 @@ At the configured default rates, `cost = (input_tokens * input_rate + output_tok
 | Attempt | Typical: 3,000 in + 500 out | Approximate worst case: 16,000 in + 2,048 out |
 | --- | ---: | ---: |
 | Nemotron primary (0.07 / 0.20) | $0.000310 | $0.0015296 |
-| Gemini fallback (0.10 / 0.40) | $0.000500 | $0.0024192 |
 
 The requested 64 KB ≈ 16k-token estimate assumes roughly four bytes per token;
 it is not a hard token bound (64 KiB / 4 is 16,384 tokens, costing $0.00155648
-primary / $0.00245760 fallback with 2,048 output tokens). Actual tokenization
+with 2,048 output tokens). Actual tokenization
 varies. Admission uses the more conservative UTF-8-byte bound described below.
-If both attempts incur usage, both costs count toward the shared monthly cap.
 
 D1 migration 0003 stores lifetime reservations per install UUID and HMAC-SHA-256 IP
 hash (not raw IP), plus UTC-month usage, upstream name and estimated cost. It
@@ -109,18 +102,19 @@ delivers answer text consumes a message even if it later disconnects. Empty
 streams return an error with the refunded allowance before sending headers.
 Bursts are limited to 60/IP/minute. Each upstream attempt has a 120-second deadline.
 Responses include `X-Starter-Remaining` and `X-Starter-Limit`. Quota exhaustion
-returns 402 `starter_quota_exhausted`; unavailable providers or the default $50
-monthly budget cap return 503 when no eligible upstream remains. The $50 cap
-covers both primary and fallback; at the cap all starter calls return
+returns 402 `starter_quota_exhausted`; missing starter secrets return 503
+`starter_unavailable`. The default $50 monthly budget cap returns 503
+`starter_budget_exhausted` when exhausted. The $50 cap
+covers all starter calls; at the cap they return
 `starter_budget_exhausted`, which the plugin displays as a friendly temporary
 unavailability notice with a Connect a provider action. Migration 0004 adds atomic in-flight budget
-reservations before every attempt, including fallbacks. Reservations use a
+reservations before each request. Reservations use a
 conservative text-token bound (UTF-8 bytes of the request) plus the requested
 output limit. Admission includes recorded spend and outstanding reservations,
 so a paid request can be refused just below the cap. Reported usage replaces
 the reservation atomically; missing usage retains its conservative cost estimate.
 In-flight reservations expire after ten minutes (longer than the attempt
-deadline), so an accounting outage cannot block paid fallbacks indefinitely.
+deadline), so an accounting outage cannot block starter requests indefinitely.
 If both accounting writes fail, the unrecorded attempt stops gating paid calls
 at expiry; this recovery tradeoff can leave that attempt's request, token and
 cost totals uncounted.
@@ -146,11 +140,10 @@ npx wrangler d1 migrations apply feather-wand-telemetry --remote
 # 3. Set the stats bearer token (choose a long random value).
 npx wrangler secret put STATS_TOKEN
 
-# 4. Enable starter chat: choose a long random IP-hashing secret and set
-#    at least one provider key (both enable primary/fallback routing).
+# 4. Enable starter chat with the two required secrets.
+#    Choose a long random IP-hashing secret and set the paid OpenRouter key.
 npx wrangler secret put STARTER_IP_HASH_SECRET
 npx wrangler secret put STARTER_API_KEY
-npx wrangler secret put STARTER_FALLBACK_API_KEY
 
 # 5. Deploy.
 npx wrangler deploy

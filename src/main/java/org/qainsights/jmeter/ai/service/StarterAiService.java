@@ -29,8 +29,7 @@ public final class StarterAiService implements AiService {
     public static final String MODEL_ID = "free:feather-wand";
     public static final String DEFAULT_URL = "https://telemetry.jmeter.ai/v1/starter";
     public static final String PRIVACY_NOTICE = "Feather Wand Free sends messages through jmeter.ai to OpenRouter "
-            + "and NVIDIA Nemotron providers that don't train on or retain prompts. "
-            + "The Gemini fallback uses Google's paid API. Don't include secrets.";
+            + "and NVIDIA Nemotron providers that don't train on or retain prompts. Don't include secrets.";
     private static final String UNAVAILABLE = "Free messages are unavailable right now. Try later or connect a provider.";
     private static final ScheduledExecutorService DEADLINES = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "starter-chat-deadlines");

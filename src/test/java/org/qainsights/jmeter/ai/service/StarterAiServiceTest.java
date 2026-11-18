@@ -146,7 +146,6 @@ class StarterAiServiceTest {
     @Test void describesPaidProviderPrivacy() {
         assertTrue(StarterAiService.PRIVACY_NOTICE.contains("OpenRouter"));
         assertTrue(StarterAiService.PRIVACY_NOTICE.contains("don't train on or retain prompts"));
-        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("Google's paid API"));
     }
 
     @Test void mapsUnavailableBudgetAndRateLimits() {
@@ -158,6 +157,15 @@ class StarterAiServiceTest {
         status = 429;
         response = "not json";
         assertTrue(assertThrows(StarterAiService.Failure.class, () -> service().generateResponse(List.of("Hi"))).getMessage().contains("Try later or connect a provider"));
+    }
+
+    @Test void mapsTerminalUpstreamErrorsToFriendlyUnavailableNotice() {
+        status = 502;
+        response = "{\"error\":{\"code\":\"starter_upstream_error\",\"message\":\"private provider detail\"}}";
+        String message = assertThrows(StarterAiService.Failure.class,
+                () -> service().generateResponse(List.of("Hi"))).getMessage();
+        assertEquals("Free messages are unavailable right now. Try later or connect a provider.", message);
+        assertFalse(message.contains("private provider detail"));
     }
 
     @Test void structuredResponsesRemainParseableWithoutAllowanceText() throws Exception {
