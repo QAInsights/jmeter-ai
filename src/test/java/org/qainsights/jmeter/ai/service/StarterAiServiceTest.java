@@ -144,8 +144,8 @@ class StarterAiServiceTest {
     }
 
     @Test void describesPaidProviderPrivacy() {
-        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("OpenRouter"));
-        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("don't train on or retain prompts"));
+        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("jmeter.ai to DeepInfra"));
+        assertTrue(StarterAiService.PRIVACY_NOTICE.contains("doesn't train on or retain prompts"));
     }
 
     @Test void mapsUnavailableBudgetAndRateLimits() {

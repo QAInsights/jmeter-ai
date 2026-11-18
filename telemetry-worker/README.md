@@ -30,67 +30,60 @@ npx wrangler secret put STARTER_IP_HASH_SECRET
 npx wrangler secret put STARTER_API_KEY
 ```
 
-The only upstream defaults to paid OpenRouter `nvidia/nemotron-3.5-lightning`, accounted at
-$0.07 input / $0.20 output per million tokens (the highest prices among the
-allowed providers below).
+The only upstream is DeepInfra's paid OpenAI-compatible endpoint,
+`https://api.deepinfra.com/v1/openai/chat/completions`, using the exact model ID
+`nvidia/NVIDIA-Nemotron-3.5-Lightning`. Set `STARTER_API_KEY` to a DeepInfra API key.
+Default accounting prices are $0.06 input / $0.16 output per million tokens,
+matching the live [model documentation](https://deepinfra.com/nvidia/NVIDIA-Nemotron-3.5-Lightning/api)
+(checked 2026-11-18).
+Client `service_tier` overrides are stripped to keep standard-tier pricing;
+[priority requests](https://docs.deepinfra.com/chat/overview) otherwise carry a 50% surcharge.
 Network failures and non-2xx responses (including 401, 402, 403, 429 and 5xx)
 are terminal: return 502 `starter_upstream_error` and refund the message reservation.
 The plugin shows a friendly unavailable notice and Connect a provider action.
-OpenRouter may still fail over internally among the allowed no-training,
-zero-retention providers; the worker never retries against a different upstream.
+The worker never retries against a different upstream.
 If the IP-hashing secret or provider key is missing, starter requests
 return 503 `starter_unavailable`. Keep the IP-hashing secret stable: rotating it
 changes the per-IP quota identities.
 URLs, models, token limits, prices and budgets are configurable via the
 `STARTER_*` vars in `wrangler.jsonc`; secrets must never be added there.
 
-Messages go through jmeter.ai to OpenRouter and providers that don't train on
-or retain prompts. The default primary `provider` routing is
-`{"only":["fireworks","deepinfra","modelrun","coreweave"],"data_collection":"deny","zdr":true,"max_price":{"prompt":0.07,"completion":0.20}}`.
-`max_price` follows the configured primary accounting prices (USD per million
-tokens), so a provider price increase cannot silently exceed those rates.
-In [OpenRouter privacy settings](https://openrouter.ai/settings/privacy), select
-**ZDR only** for **All other models** (disallow Safety Retention). OpenRouter's
-[`zdr` documentation](https://openrouter.ai/docs/guides/features/zdr) notes that
-`zdr: true` otherwise also permits Safety Retention endpoints if the account
-allows them. ZDR permits transient in-memory prompt caching and has legal/safety
-exceptions; it is not a promise that no processing or legal preservation occurs.
-**Do not include secrets.** Keep OpenRouter prompt logging/data-sharing opt-ins off.
+Messages go through jmeter.ai directly to DeepInfra. Its
+[inference privacy documentation](https://docs.deepinfra.com/account/data-privacy)
+says inputs/outputs are processed in memory, not stored on disk, deleted after
+inference, and not used for training. Logs contain metadata (request ID, cost,
+sampling parameters), not request content. The model page labels Nemotron
+**Zero retention**. Keep the upstream/model and accounting rates aligned if
+overriding configuration, and recheck the provider's policy and prices.
 
-`STARTER_PROVIDER` is an optional JSON object that completely overrides the
-default routing for the primary OpenRouter host only. For example,
-`{"only":["deepinfra"],"data_collection":"deny","zdr":true,"max_price":{"prompt":0.06,"completion":0.16}}`
-can be paired with primary prices of 0.06/0.16. Encode the object as a JSON string
-in `wrangler.jsonc`. Unset, empty, malformed or non-object JSON retains the safe
-defaults. Overrides can weaken privacy or change prices: preserve the privacy
-filters and update accounting rates if changing providers or the model.
+Privacy qualifications: DeepInfra's [privacy policy](https://deepinfra.com/privacy)
+allows storage/training with explicit consent and legal disclosures. Its separate
+bulk API can temporarily retain encrypted data on disk, and Google/Anthropic and
+image models have exceptions; none is used by this text-chat endpoint. DeepInfra
+also documents best-effort in-memory prompt caching and optional
+[explicit cache retention](https://docs.deepinfra.com/chat/prompt-cache-retention)
+for 5 minutes or 1 hour. The worker strips client cache/storage options (including
+message `cache_control`) so callers cannot opt in to explicit retention. This is
+not a guarantee against transient processing/caching in memory or legal obligations.
+**Do not include secrets.** Do not opt in to content storage or training.
 
-### Paid endpoint check and message costs
+DeepInfra supports `stream_options.include_usage` (default true in its
+[API schema](https://docs.deepinfra.com/api-reference/chat-completions/openai-chat-completions)).
+The worker requests it explicitly. Its [streaming protocol](https://docs.deepinfra.com/chat/streaming)
+returns token usage in the final chunk with `finish_reason`, before `[DONE]`;
+the existing SSE accounting parser consumes that usage. Missing usage still uses
+the conservative reservation cost bound.
 
-Live [Nemotron endpoints](https://openrouter.ai/api/v1/models/nvidia/nemotron-3.5-lightning/endpoints)
-and the [ZDR endpoint list](https://openrouter.ai/api/v1/endpoints/zdr), checked
-2026-11-18 (prices USD per million tokens):
-
-| Provider | Input | Output | Training / prompt retention | Default allowed |
-| --- | ---: | ---: | --- | --- |
-| Darkbloom | 0.025 | 0.12 | No general-purpose training right (§5.6); may retain content for operations/support/abuse/legal purposes (§8 of its [policy](https://www.darkbloom.dev/privacy.html)); not ZDR-listed | No |
-| Fireworks | 0.05 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
-| DeepInfra | 0.06 | 0.16 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
-| ModelRun | 0.07 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
-| CoreWeave | 0.07 | 0.20 | No / No (ZDR-listed, `safety_retention: false`) | Yes |
-
-The model endpoint API supplies prices but not data-policy fields; the ZDR list
-supplies eligibility and the Safety Retention flag. Recheck these before changing
-the allowlist or prices.
+### Message costs
 
 At the configured default rates, `cost = (input_tokens * input_rate + output_tokens * output_rate) / 1e6`:
 
 | Attempt | Typical: 3,000 in + 500 out | Approximate worst case: 16,000 in + 2,048 out |
 | --- | ---: | ---: |
-| Nemotron primary (0.07 / 0.20) | $0.000310 | $0.0015296 |
+| DeepInfra Nemotron (0.06 / 0.16) | $0.000260 | $0.00128768 |
 
 The requested 64 KB ≈ 16k-token estimate assumes roughly four bytes per token;
-it is not a hard token bound (64 KiB / 4 is 16,384 tokens, costing $0.00155648
+it is not a hard token bound (64 KiB / 4 is 16,384 tokens, costing $0.00131072
 with 2,048 output tokens). Actual tokenization
 varies. Admission uses the more conservative UTF-8-byte bound described below.
 
@@ -141,7 +134,7 @@ npx wrangler d1 migrations apply feather-wand-telemetry --remote
 npx wrangler secret put STATS_TOKEN
 
 # 4. Enable starter chat with the two required secrets.
-#    Choose a long random IP-hashing secret and set the paid OpenRouter key.
+#    Choose a long random IP-hashing secret and set the DeepInfra API key.
 npx wrangler secret put STARTER_IP_HASH_SECRET
 npx wrangler secret put STARTER_API_KEY
 
