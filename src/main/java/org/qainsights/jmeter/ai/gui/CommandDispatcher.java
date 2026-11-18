@@ -320,7 +320,7 @@ public class CommandDispatcher {
             @Override
             protected String doInBackground() throws Exception {
                 String selectedModel = cb.getSelectedModel();
-                AiService serviceToUse = cb.resolveAiService(selectedModel);
+                AiService serviceToUse = cb.resolveCommandAiService(selectedModel);
                 return OptimizeRequestHandler.analyzeAndOptimizeSelectedElement(serviceToUse);
             }
 
@@ -348,7 +348,7 @@ public class CommandDispatcher {
                 if (selectedModel == null) {
                     return "Please select a model first.";
                 }
-                AiService serviceToUse = cb.resolveAiService(selectedModel);
+                AiService serviceToUse = cb.resolveCommandAiService(selectedModel);
                 LintCommandHandler lintCommandHandler = new LintCommandHandler(serviceToUse);
                 return lintCommandHandler.processLintCommand(message);
             }
@@ -575,6 +575,7 @@ public class CommandDispatcher {
                 && !selectedModel.startsWith("meta:")
                 && !selectedModel.startsWith("bedrock:")
                 && !selectedModel.startsWith("apple:")
+                && !selectedModel.startsWith("free:")
                 && !selectedModel.startsWith("codex:")
                 && !selectedModel.startsWith("claude-code:")
                 && !selectedModel.startsWith("opencode:");

@@ -59,7 +59,7 @@ final class InteractionModeSelector extends JPanel {
             chatButton.setSelected(true);
             agentButton.setEnabled(false);
             agentButton.setToolTipText(
-                    "Agent mode isn't available for Apple's on-device model. Pick a cloud model, Codex, Claude Code "
+                    "Agent mode isn't available for this chat-only model. Pick a tool-capable cloud model, Codex, Claude Code "
                             + "or OpenCode to use Agent");
         }
         applyTheme();

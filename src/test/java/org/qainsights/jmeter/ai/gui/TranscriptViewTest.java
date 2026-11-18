@@ -167,4 +167,22 @@ class TranscriptViewTest {
             view.refreshTheme();
         });
     }
+
+    @Test void connectActionIsReplacedAndCanBeRecreatedAfterClearing() {
+        TranscriptView view = view();
+        java.util.concurrent.atomic.AtomicInteger clicks = new java.util.concurrent.atomic.AtomicInteger();
+        view.addConnectProviderAction(() -> { throw new AssertionError("old action"); });
+        view.addAssistantMessage("Hello");
+        view.addConnectProviderAction(clicks::incrementAndGet);
+        var buttons = java.util.Arrays.stream(view.getComponents()).filter(QuietButton.class::isInstance).toList();
+        assertEquals(1, buttons.size());
+        ((QuietButton) buttons.get(0)).doClick();
+        assertEquals(1, clicks.get());
+        view.clearTranscript();
+        view.addConnectProviderAction(clicks::incrementAndGet);
+        buttons = java.util.Arrays.stream(view.getComponents()).filter(QuietButton.class::isInstance).toList();
+        assertEquals(1, buttons.size());
+        ((QuietButton) buttons.get(0)).doClick();
+        assertEquals(2, clicks.get());
+    }
 }

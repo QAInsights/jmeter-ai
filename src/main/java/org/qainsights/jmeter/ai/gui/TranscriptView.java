@@ -142,6 +142,19 @@ class TranscriptView extends JPanel implements javax.swing.Scrollable {
 
     // --- Streaming ----------------------------------------------------------
 
+    void addConnectProviderAction(Runnable connect) {
+        for (java.awt.Component component : getComponents()) {
+            if (component instanceof QuietButton && "Connect a provider".equals(((QuietButton) component).getText())) {
+                remove(component);
+            }
+        }
+        QuietButton button = new QuietButton("Connect a provider", QuietButton.Kind.PRIMARY);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+        button.addActionListener(event -> connect.run());
+        insertBeforeGlue(button);
+        relayout(button);
+    }
+
     /** Starts a new assistant card that will receive streamed tokens. */
     void beginAssistantStream() {
         finishActivityIfRunning();

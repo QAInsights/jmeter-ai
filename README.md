@@ -112,7 +112,31 @@ See [Releases](https://github.com/QAInsights/jmeter-ai/releases) for the latest 
 
 ## ⚙️ Configuration
 
-**First time?** Connect a provider in JMeter:
+### Feather Wand Free
+
+With no other chat provider configured, **Feather Wand Free** is selected automatically:
+open Feather Wand and send a message without connecting a provider or entering a key.
+It remains in the model picker when you connect your own provider, but does not
+replace that provider as the default. You can also select it as the first option in
+**Connect a provider**, then click **Use Feather Wand Free**.
+
+Free chat allows 10 lifetime messages per starter ID and 30 per shared IP, with
+burst limits and a service-wide paid-provider budget. After each reply the chat
+shows the remaining allowance and a **Connect a provider** action. Availability
+is not guaranteed; connect your own provider for continued use and Agent Mode.
+Free is chat-only: Agent Mode and tool calls are unavailable.
+
+Messages are sent through jmeter.ai to OpenRouter and paid NVIDIA Nemotron
+providers that don't train on or retain prompts. **Do not include secrets**.
+The worker stores quota/usage counts, not message content. Authentication uses a
+random UUID persisted separately in `~/.jmeter-ai/starter-id`, not your telemetry
+install ID, and works even when telemetry is disabled.
+
+Set `jmeter.ai.starter.enabled=false` in JMeter's `bin/user.properties` to disable
+Free entirely. `jmeter.ai.starter.url` overrides the OpenAI-compatible base URL
+(default `https://telemetry.jmeter.ai/v1/starter`). Restart after changing properties.
+
+**Prefer your own provider?** Connect a provider in JMeter:
 
 1. Install the plugin using one of the methods above, then open Feather Wand with the toolbar wand button, **Ctrl+Shift+A** (**⌘⇧A** on macOS), or **Run → AI**.
 2. Click **Connect a provider** on the welcome screen, or **⋯ → Connect a provider…**.

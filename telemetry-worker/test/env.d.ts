@@ -1,5 +1,7 @@
-declare namespace Cloudflare {
-	interface Env {
+import type { StarterEnv } from "../src/starter";
+declare global {
+namespace Cloudflare {
+	interface Env extends StarterEnv {
 		DB: D1Database;
 		PING_LIMITER: RateLimit;
 		STATS_TOKEN: string;
@@ -7,4 +9,5 @@ declare namespace Cloudflare {
 		POSTHOG_HOST?: string;
 		TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
 	}
+}
 }

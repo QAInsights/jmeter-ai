@@ -2,6 +2,7 @@
 	"name": "feather-wand-telemetry",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-08-22",
+	"compatibility_flags": ["enable_request_signal"],
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -14,6 +15,7 @@
 		{ "pattern": "telemetry.jmeter.ai", "custom_domain": true }
 	],
 	"ratelimits": [
+		{ "name": "STARTER_LIMITER", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } },
 		{
 			"name": "PING_LIMITER",
 			"namespace_id": "1001",
@@ -24,6 +26,15 @@
 		}
 	],
 	"vars": {
+		"STARTER_UPSTREAM_URL": "https://openrouter.ai/api/v1/chat/completions",
+		"STARTER_MODEL": "nvidia/nemotron-3.5-lightning",
+		// Optional STARTER_PROVIDER: JSON string for primary OpenRouter provider routing.
+		"STARTER_MAX_OUTPUT_TOKENS": "2048",
+		"STARTER_FREE_MESSAGES": "10",
+		"STARTER_IP_MESSAGES": "30",
+		"STARTER_INPUT_USD_PER_MTOK": "0.07",
+		"STARTER_OUTPUT_USD_PER_MTOK": "0.20",
+		"STARTER_MONTHLY_BUDGET_USD": "50",
 		"POSTHOG_KEY": "phc_x2Njec7G4bZsgtRiDTuzj7xA2EBfzGTQEhe8L4hXVsmx",
 		"POSTHOG_HOST": "https://us.i.posthog.com"
 	}

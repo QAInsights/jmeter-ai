@@ -85,6 +85,10 @@ public interface CommandCallback {
 
     AiService resolveAiService(String selectedModel);
 
+    default AiService resolveCommandAiService(String selectedModel) {
+        return resolveAiService(selectedModel);
+    }
+
     String getCurrentElementInfo();
 
     // --- Command-type tracking ---

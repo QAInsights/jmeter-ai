@@ -54,6 +54,7 @@ import org.qainsights.jmeter.ai.service.CodexAiService;
 import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
+import org.qainsights.jmeter.ai.service.StarterAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -137,6 +138,7 @@ public class AiChatPanel
     private ClaudeCodeAiService claudeCodeService;
     private OpenCodeAiService openCodeService;
     private AppleFoundationAiService appleFoundationAiService;
+    private StarterAiService starterService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private JPanel headerPanel;
@@ -291,6 +293,7 @@ public class AiChatPanel
         claudeCodeService = new ClaudeCodeAiService();
         openCodeService = new OpenCodeAiService();
         appleFoundationAiService = new AppleFoundationAiService();
+        starterService = StarterAiService.isEnabled() ? new StarterAiService() : null;
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         googleService = null;
@@ -365,6 +368,7 @@ public class AiChatPanel
 
     /** Shares the session usage accumulator with every service (context-stats label). */
     private void injectUsageStats() {
+        if (starterService != null) starterService.setUsageStats(usageStats);
         claudeService.setUsageStats(usageStats);
         openAiService.setUsageStats(usageStats);
         ollamaService.setUsageStats(usageStats);
@@ -415,7 +419,7 @@ public class AiChatPanel
         log.info("Model selected: {}", selectedModel);
         if (interactionModeSelector != null && selectedModel != null) {
             interactionModeSelector.setModelSupportsAgent(
-                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+                    supportsAgent(selectedModel));
         }
         resolveAiService(selectedModel);
         reasoningControls.updateForModel(selectedModel);
@@ -736,7 +740,7 @@ public class AiChatPanel
         String selectedModel = modelSelectorPanel.getSelectedModel();
         if (selectedModel != null) {
             interactionModeSelector.setModelSupportsAgent(
-                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+                    supportsAgent(selectedModel));
         }
         inputOptionsRow = new InputOptionsRow(
                 this, attachmentBar, attachButton, interactionModeSelector, this::sendMessage);
@@ -899,6 +903,7 @@ public class AiChatPanel
         holder.setClaudeCodeService(claudeCodeService);
         holder.setOpenCodeService(openCodeService);
         holder.setAppleFoundationAiService(appleFoundationAiService);
+        holder.setStarterService(starterService);
         return holder;
     }
 
@@ -930,7 +935,7 @@ public class AiChatPanel
                                     || model.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)
                                     || model.startsWith(OpenCodeCliProvider.MODEL_PREFIX));
                     // Get the default model ID
-                    String defaultModelId = claudeService.getCurrentModel();
+                    String defaultModelId = Models.defaultChatModel(models, claudeService.getCurrentModel());
                     log.info("Default model ID: {}", defaultModelId);
                     List<String> featuredModels = new ArrayList<>(openRouterService == null
                             ? List.of() : openRouterService.featuredModelIds());
@@ -1029,6 +1034,7 @@ public class AiChatPanel
 
     private static boolean modelBelongsToProvider(String model, ProviderSetupOption option) {
         return switch (option) {
+            case FREE -> model.startsWith(StarterAiService.MODEL_PREFIX);
             case ANTHROPIC -> !model.contains(":");
             case OPENAI -> model.startsWith("openai:");
             case GEMINI -> model.startsWith("google:");
@@ -1075,7 +1081,8 @@ public class AiChatPanel
             return;
         }
         boolean showConnect = !providerStatus().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
+        String welcome = showConnect && StarterAiService.isEnabled() ? WelcomeMessages.freeWelcome()
+                : WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (!welcome.equals(lastShownWelcome) || showConnect != lastWelcomeHasConnectButton) {
             if (showConnect) {
                 Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
@@ -1090,7 +1097,8 @@ public class AiChatPanel
 
     private void showWelcomeForCurrentConfig() {
         boolean showConnect = !providerStatus().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
+        String welcome = showConnect && StarterAiService.isEnabled() ? WelcomeMessages.freeWelcome()
+                : WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (showConnect) {
             Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
         }
@@ -1505,13 +1513,21 @@ public class AiChatPanel
         java.util.function.Consumer<Exception> onError
     ) {
         int generation = beginStream();
+        AiResponseRouter router = aiResponseRouter;
+        String selectedModel = modelSelectorPanel.getSelectedModel();
+        AiService service = router.resolveAiService(selectedModel);
+        StarterAiService freeService = service instanceof StarterAiService ? (StarterAiService) service : null;
+        showFreePrivacyNotice(freeService);
         java.util.function.Consumer<String> reasoning = this::appendReasoningToken;
-        Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
-            modelSelectorPanel.getSelectedModel(),
+        Runnable cancelHandle = router.generateStreamResponse(
+            selectedModel,
             conversationTracker.historyCopy(),
             ifStreamCurrent(generation, tokenConsumer),
             ifStreamCurrent(generation, reasoning),
-            runIfStreamCurrent(generation, onComplete),
+            runIfStreamCurrent(generation, () -> {
+                onComplete.run();
+                runOnEdt(runIfStreamCurrent(generation, () -> showFreeConnectAction(freeService)));
+            }),
             ifStreamCurrent(generation, onError)
         );
         currentCancelHandle = cancelHandle;
@@ -1632,11 +1648,19 @@ public class AiChatPanel
      */
     @Override
     public String getAiResponse(String message) {
+        nonStreamFreeResponse.set(null);
+        AiResponseRouter router = aiResponseRouter;
+        String model = modelSelectorPanel.getSelectedModel();
+        AiService service = router.resolveAiService(model);
+        StarterAiService freeService = service instanceof StarterAiService ? (StarterAiService) service : null;
+        showFreePrivacyNotice(freeService);
         log.info("Getting AI response for message: {}", message);
-        return aiResponseRouter.getAiResponse(
-            modelSelectorPanel.getSelectedModel(),
+        String response = router.getAiResponse(
+            model,
             conversationTracker.historyCopy()
         );
+        nonStreamFreeResponse.set(freeService);
+        return response;
     }
 
     private void undoLastRename() {
@@ -1774,6 +1798,22 @@ public class AiChatPanel
         return aiResponseRouter.resolveAiService(selectedModel);
     }
 
+    @Override
+    public AiService resolveCommandAiService(String selectedModel) {
+        AiService service = aiResponseRouter.resolveAiService(selectedModel);
+        if (!(service instanceof StarterAiService)) return service;
+        StarterAiService starter = (StarterAiService) service;
+        return new AiService() {
+            public String getName() { return starter.getName(); }
+            public String generateResponse(List<String> history) { return generateResponse(history, null); }
+            public String generateResponse(List<String> history, String model) {
+                showFreePrivacyNotice(starter);
+                nonStreamFreeResponse.set(starter);
+                return starter.generateResponse(history, model);
+            }
+        };
+    }
+
     /**
      * Displays a message indicating that redo is not supported for wrap operations.
      */
@@ -1798,6 +1838,8 @@ public class AiChatPanel
         runOnEdt(() -> transcript.finishReasoning());
         showNonStreamReasoning();
         processAiResponse(response);
+        StarterAiService freeService = nonStreamFreeResponse.getAndSet(null);
+        runOnEdt(() -> showFreeConnectAction(freeService));
         playResponseChime();
         setInputEnabled(true);
     }
@@ -1818,6 +1860,29 @@ public class AiChatPanel
         }
     }
 
+    static boolean supportsAgent(String model) {
+        return model != null && !model.startsWith(AppleFoundationAiService.MODEL_PREFIX)
+                && !model.startsWith(StarterAiService.MODEL_PREFIX);
+    }
+
+    private final java.util.concurrent.atomic.AtomicReference<StarterAiService> nonStreamFreeResponse =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    private void showFreePrivacyNotice(StarterAiService service) {
+        if (service != null && service.showPrivacyNotice()) {
+            runOnEdt(() -> transcript.addSystemMessage(StarterAiService.PRIVACY_NOTICE, null));
+        }
+    }
+
+    private void showFreeConnectAction(StarterAiService service) {
+        if (service != null) {
+            if (!service.getRemainingMessage().isEmpty()) {
+                transcript.addSystemMessage(service.getRemainingMessage(), null);
+            }
+            transcript.addConnectProviderAction(this::openProviderSetup);
+        }
+    }
+
     /**
      * Common error handler for all SwingWorker done() callbacks.
      * Logs the error, removes the loading indicator, shows a red error message, and re-enables input.
@@ -1832,6 +1897,7 @@ public class AiChatPanel
         Exception e,
         String userMessage
     ) {
+        nonStreamFreeResponse.set(null);
         CliProviderException cliProviderException = findCliProviderException(e);
         if (cliProviderException == null) {
             log.error(logMessage, e);
@@ -1844,6 +1910,12 @@ public class AiChatPanel
             }
             removeLoadingIndicator();
             transcript.addSystemMessage(userMessage, ThemeColors.error());
+            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+                if (cause instanceof StarterAiService.Failure) {
+                    transcript.addConnectProviderAction(this::openProviderSetup);
+                    break;
+                }
+            }
             setInputEnabled(true);
         });
     }

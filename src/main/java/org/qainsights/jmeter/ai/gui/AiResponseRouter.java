@@ -5,6 +5,7 @@ import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.StarterAiService;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
 import org.qainsights.jmeter.ai.service.ClaudeService;
@@ -35,6 +36,7 @@ public class AiResponseRouter {
     private static final Logger log = LoggerFactory.getLogger(AiResponseRouter.class);
 
     private final ClaudeService claudeService;
+    private final StarterAiService starterService;
     private final OpenAiService openAiService;
     private final OllamaAiService ollamaService;
     private final DeepseekAiService deepseekService;
@@ -50,6 +52,7 @@ public class AiResponseRouter {
     private org.qainsights.jmeter.ai.service.attach.AttachmentRegistry attachmentRegistry;
 
     public AiResponseRouter(AiServiceHolder serviceHolder) {
+        this.starterService = serviceHolder.getStarterService();
         this.claudeService = serviceHolder.getClaudeService();
         this.openAiService = serviceHolder.getOpenAiService();
         this.ollamaService = serviceHolder.getOllamaService();
@@ -90,6 +93,10 @@ public class AiResponseRouter {
 
     public String getAiResponse(String selectedModel, List<String> conversationHistory) {
         conversationHistory = resolveAttachments(conversationHistory);
+        if (selectedModel != null && selectedModel.startsWith(StarterAiService.MODEL_PREFIX)) {
+            return starterService == null ? "Free messages are unavailable right now. Connect a provider."
+                    : starterService.generateResponse(conversationHistory);
+        }
         if (selectedModel == null) {
             log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
             return claudeService.generateResponse(conversationHistory);
@@ -211,6 +218,14 @@ public class AiResponseRouter {
      */
     public Runnable generateStreamResponse(String selectedModel, List<String> conversationHistory, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, Runnable onComplete, Consumer<Exception> onError) {
         conversationHistory = resolveAttachments(conversationHistory);
+        if (selectedModel != null && selectedModel.startsWith(StarterAiService.MODEL_PREFIX)) {
+            if (starterService != null) {
+                return starterService.generateStreamResponse(conversationHistory, null, tokenConsumer, onComplete, onError);
+            }
+            tokenConsumer.accept("Free messages are unavailable right now. Connect a provider.");
+            onComplete.run();
+            return () -> { };
+        }
         if (selectedModel == null) {
             log.warn("No model selected, using default Anthropic model: {}", claudeService.getCurrentModel());
             return claudeService.generateStreamResponse(conversationHistory, claudeService.getCurrentModel(), tokenConsumer, reasoningConsumer, onComplete, onError);
@@ -326,6 +341,9 @@ public class AiResponseRouter {
      * @return the matching AiService
      */
     public AiService resolveAiService(String selectedModel) {
+        if (selectedModel != null && selectedModel.startsWith(StarterAiService.MODEL_PREFIX)) {
+            return starterService;
+        }
         if (selectedModel == null || selectedModel.isEmpty()) {
             return claudeService;
         }

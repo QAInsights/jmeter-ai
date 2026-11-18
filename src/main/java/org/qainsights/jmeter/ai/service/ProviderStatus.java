@@ -1,6 +1,15 @@
 package org.qainsights.jmeter.ai.service;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -101,13 +110,88 @@ public final class ProviderStatus {
         return isUsableSecret(value);
     }
 
-    static boolean isBedrockConfigured() {
+    public static boolean isBedrockConfigured() {
         if (isApiKeyConfigured("bedrock.api.key")) {
             return true;
         }
         String access = AiConfig.getProperty("bedrock.aws.access.key", "");
         String secret = AiConfig.getProperty("bedrock.aws.secret.key", "");
-        return isUsableSecret(access) && isUsableSecret(secret);
+        return (isUsableSecret(access) && isUsableSecret(secret))
+                || hasLocalAwsCredentials(System::getenv, System::getProperty, null);
+    }
+
+    static boolean hasLocalAwsCredentials(Function<String, String> env, Function<String, String> properties,
+                                          Path home) {
+        if (isUsableSecret(env.apply("AWS_BEARER_TOKEN_BEDROCK"))
+                || isUsableSecret(properties.apply("aws.bearerTokenBedrock"))
+                || (isUsableSecret(env.apply("AWS_ACCESS_KEY_ID")) && isUsableSecret(env.apply("AWS_SECRET_ACCESS_KEY")))
+                || (isUsableSecret(properties.apply("aws.accessKeyId")) && isUsableSecret(properties.apply("aws.secretAccessKey")))
+                || (isUsableSecret(env.apply("AWS_WEB_IDENTITY_TOKEN_FILE")) && isUsableSecret(env.apply("AWS_ROLE_ARN")))
+                || (isUsableSecret(properties.apply("aws.webIdentityTokenFile")) && isUsableSecret(properties.apply("aws.roleArn")))
+                || isUsableSecret(env.apply("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"))
+                || isUsableSecret(env.apply("AWS_CONTAINER_CREDENTIALS_FULL_URI"))) {
+            return true;
+        }
+        Map<String, Map<String, String>> profiles = new HashMap<>();
+        readAwsFile(profiles, properties.apply("aws.configFile"), env.apply("AWS_CONFIG_FILE"), home,
+                properties.apply("user.home"), "config", true);
+        readAwsFile(profiles, properties.apply("aws.sharedCredentialsFile"), env.apply("AWS_SHARED_CREDENTIALS_FILE"), home,
+                properties.apply("user.home"), "credentials", false);
+        String profile = isUsableSecret(properties.apply("aws.profile")) ? properties.apply("aws.profile")
+                : isUsableSecret(env.apply("AWS_PROFILE")) ? env.apply("AWS_PROFILE") : "default";
+        return hasProfileCredentials(profiles, profile.trim(), new HashSet<>());
+    }
+
+    private static void readAwsFile(Map<String, Map<String, String>> profiles, String property, String environment,
+                                    Path home, String userHome, String file, boolean config) {
+        try {
+            Path path = isUsableSecret(property) ? Path.of(property)
+                    : isUsableSecret(environment) ? Path.of(environment)
+                    : home != null ? home.resolve(".aws").resolve(file)
+                    : isUsableSecret(userHome) ? Path.of(userHome, ".aws", file) : null;
+            if (path == null || !Files.isRegularFile(path) || !Files.isReadable(path)) return;
+            String section = null;
+            for (String raw : Files.readAllLines(path)) {
+                String line = raw.trim();
+                if (line.startsWith("#") || line.startsWith(";")) continue;
+                if (line.startsWith("[") && line.endsWith("]")) {
+                    section = line.substring(1, line.length() - 1).trim();
+                    if (config && section.startsWith("profile ")) section = section.substring(8).trim();
+                    else if (config && !section.equals("default") && !section.startsWith("sso-session ")) section = null;
+                    continue;
+                }
+                String[] setting = line.split("=", 2);
+                if (section != null && setting.length == 2 && isUsableSecret(setting[1])
+                        && !setting[1].trim().startsWith("#") && !setting[1].trim().startsWith(";")) {
+                    profiles.computeIfAbsent(section, key -> new HashMap<>())
+                            .put(setting[0].trim().toLowerCase(Locale.ROOT), setting[1].trim());
+                }
+            }
+        } catch (IOException | java.io.UncheckedIOException | IllegalArgumentException | SecurityException e) {
+            // Unreadable local configuration is not a credential source.
+        }
+    }
+
+    private static boolean hasProfileCredentials(Map<String, Map<String, String>> profiles, String name, Set<String> visited) {
+        if (!visited.add(name)) return false;
+        Map<String, String> profile = profiles.getOrDefault(name, Map.of());
+        if (hasSettings(profile, "aws_access_key_id", "aws_secret_access_key") || hasSettings(profile, "credential_process")) return true;
+        if (hasSettings(profile, "role_arn")) {
+            if (hasSettings(profile, "web_identity_token_file")) return true;
+            if (hasSettings(profile, "source_profile")
+                    && hasProfileCredentials(profiles, profile.get("source_profile"), visited)) return true;
+            if ("Ec2InstanceMetadata".equals(profile.get("credential_source"))
+                    || "EcsContainer".equals(profile.get("credential_source"))) return true;
+        }
+        if (!hasSettings(profile, "sso_account_id", "sso_role_name")) return false;
+        Map<String, String> session = profile.containsKey("sso_session")
+                ? profiles.getOrDefault("sso-session " + profile.get("sso_session"), Map.of()) : profile;
+        return hasSettings(session, "sso_start_url", "sso_region");
+    }
+
+    private static boolean hasSettings(Map<String, String> profile, String... names) {
+        for (String name : names) if (!isUsableSecret(profile.get(name))) return false;
+        return true;
     }
 
     /**

@@ -1,8 +1,9 @@
 import { posthogEvents, sendToPostHog, type PostHogEvent } from "./posthog";
 import { FEATHER_WAND_ICON } from "./brand";
 import { TEST_INSTALLS, TEST_ONLY_FEATURES } from "./test-installs";
+import { handleStarter, starterStats, type StarterEnv } from "./starter";
 
-export interface Env {
+export interface Env extends StarterEnv {
 	DB: D1Database;
 	PING_LIMITER: RateLimit;
 	STATS_TOKEN?: string;
@@ -14,7 +15,7 @@ const MAX_BODY_BYTES = 8192;
 const MAX_STRING_FIELD = 64;
 const MAX_FEATURES = 100;
 const FEATURE_KEY_RE = /^[a-z0-9_]{1,40}$/;
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const STRING_FIELDS = [
 	"pluginVersion",
 	"jmeterVersion",
@@ -429,6 +430,7 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 
 	return {
 		today, dau, wau, mau, totalInstalls, testInstalls,
+		starter: await starterStats(env),
 		growth: { newThisWeek, newPrevWeek, wau, wauPrev },
 		engagement: { messages: messagers?.total ?? 0, messagingInstalls: messagers?.installs ?? 0, activeInstalls: mau },
 		dailyActive, newInstalls, retention, versionAdoption,
@@ -927,6 +929,9 @@ ${table("Agent tool failures (30d)", ["Tool", "Failures", "Installs", "Of calls"
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
+		if (url.pathname === "/v1/starter/chat/completions" && request.method === "POST") {
+			return handleStarter(request, env, ctx, UUID_RE);
+		}
 		if (url.pathname === "/v1/ping" && request.method === "POST") {
 			return handlePing(request, env, ctx);
 		}

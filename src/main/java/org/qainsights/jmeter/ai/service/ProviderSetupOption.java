@@ -1,6 +1,13 @@
 package org.qainsights.jmeter.ai.service;
 
 public enum ProviderSetupOption {
+    FREE(
+            "Feather Wand Free",
+            "10 free messages, no key",
+            "Try chat with 10 free messages. No key needed; chat only.",
+            null,
+            null,
+            null),
     ANTHROPIC(
             "Anthropic Claude",
             "Chat and Agent Mode",

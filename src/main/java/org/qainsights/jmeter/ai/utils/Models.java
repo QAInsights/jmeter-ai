@@ -12,6 +12,8 @@ import org.qainsights.jmeter.ai.claudecode.ClaudeCodeCliProvider;
 import org.qainsights.jmeter.ai.codex.CodexCliProvider;
 import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.StarterAiService;
+import org.qainsights.jmeter.ai.service.ProviderStatus;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.service.DeepseekAiService;
@@ -27,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -49,7 +52,8 @@ public class Models {
 
         // Get Anthropic models
         try {
-            if (serviceHolder.getClaudeService() != null) {
+            if (serviceHolder.getClaudeService() != null && (ProviderStatus.isApiKeyConfigured("anthropic.api.key")
+                    || GatewayConfig.hasAnthropicGatewayCredentials())) {
                 List<String> anthropicModelIds = getAnthropicModelIds(serviceHolder.getClaudeService().getClient());
                 for (String modelId : anthropicModelIds) {
                     allModels.add(modelId);
@@ -63,7 +67,8 @@ public class Models {
 
         // Add OpenAI models
         try {
-            if (serviceHolder.getOpenAiService() != null) {
+            if (serviceHolder.getOpenAiService() != null && (ProviderStatus.isApiKeyConfigured("openai.api.key")
+                    || GatewayConfig.hasOpenAiGatewayCredentials())) {
                 List<String> openAiModelIds = getOpenAiModelIds(serviceHolder.getOpenAiService().getClient());
                 for (String modelId : openAiModelIds) {
                     allModels.add("openai:" + modelId);
@@ -94,7 +99,7 @@ public class Models {
 
         // Add DeepSeek models
         try {
-            if (serviceHolder.getDeepseekService() != null) {
+            if (serviceHolder.getDeepseekService() != null && ProviderStatus.isApiKeyConfigured("deepseek.api.key")) {
                 List<String> deepseekModels = getDeepSeekModelIds(serviceHolder.getDeepseekService());
                 if (deepseekModels != null) {
                     for (String modelId : deepseekModels) {
@@ -154,7 +159,7 @@ public class Models {
 
         // Add Meta Muse models
         try {
-            if (serviceHolder.getMetaMuseService() != null) {
+            if (serviceHolder.getMetaMuseService() != null && ProviderStatus.isApiKeyConfigured("meta.api.key")) {
                 List<String> metaMuseModels = getMetaMuseModelIds(serviceHolder.getMetaMuseService());
                 if (metaMuseModels != null) {
                     for (String modelId : metaMuseModels) {
@@ -170,7 +175,8 @@ public class Models {
 
         // Add Bedrock models
         try {
-            if (serviceHolder.getBedrockService() != null) {
+            if (serviceHolder.getBedrockService() != null && (ProviderStatus.isBedrockConfigured()
+                    || "bedrock".equalsIgnoreCase(AiConfig.getProperty("jmeter.ai.service.type", "")))) {
                 List<String> bedrockModels = getBedrockModelIds(serviceHolder.getBedrockService());
                 if (bedrockModels != null) {
                     for (String modelId : bedrockModels) {
@@ -234,7 +240,45 @@ public class Models {
             }
         }
 
+        addConfiguredFallback(allModels, serviceHolder.getClaudeService() != null
+                        && (ProviderStatus.isApiKeyConfigured("anthropic.api.key") || GatewayConfig.hasAnthropicGatewayCredentials()),
+                "", () -> serviceHolder.getClaudeService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOpenAiService() != null
+                        && (ProviderStatus.isApiKeyConfigured("openai.api.key") || GatewayConfig.hasOpenAiGatewayCredentials()),
+                "openai:", () -> serviceHolder.getOpenAiService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getDeepseekService() != null && ProviderStatus.isApiKeyConfigured("deepseek.api.key"),
+                "deepseek:", () -> serviceHolder.getDeepseekService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getGoogleService() != null && ProviderStatus.isApiKeyConfigured("google.api.key"),
+                "google:", () -> serviceHolder.getGoogleService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getGrokService() != null && ProviderStatus.isApiKeyConfigured("grok.api.key"),
+                "grok:", () -> serviceHolder.getGrokService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOpenRouterService() != null && ProviderStatus.isApiKeyConfigured("openrouter.api.key"),
+                OpenRouterAiService.MODEL_PREFIX, () -> serviceHolder.getOpenRouterService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getMetaMuseService() != null && ProviderStatus.isApiKeyConfigured("meta.api.key"),
+                "meta:", () -> serviceHolder.getMetaMuseService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getBedrockService() != null && ProviderStatus.isBedrockConfigured(),
+                "bedrock:", () -> serviceHolder.getBedrockService().getCurrentModel());
+        addConfiguredFallback(allModels, serviceHolder.getOllamaService() != null
+                        && "ollama".equalsIgnoreCase(AiConfig.getProperty("jmeter.ai.service.type", "")),
+                "ollama:", () -> AiConfig.getProperty("ollama.default.model", "deepseek-r1:1.5b"));
+        if (StarterAiService.isEnabled()) {
+            allModels.add(StarterAiService.MODEL_ID);
+        }
         return allModels;
+    }
+
+    private static void addConfiguredFallback(List<String> models, boolean configured, String prefix, Supplier<String> currentModel) {
+        if (!configured || models.stream().anyMatch(model -> prefix.isEmpty() ? !model.contains(":") : model.startsWith(prefix))) return;
+        String model = currentModel.get();
+        if (model != null && !model.isBlank()) models.add(prefix + model);
+    }
+
+    public static String defaultChatModel(List<String> models, String preferred) {
+        if (preferred != null && models.contains(preferred) && !StarterAiService.MODEL_ID.equals(preferred)) {
+            return preferred;
+        }
+        return models.stream().filter(model -> !StarterAiService.MODEL_ID.equals(model)).findFirst()
+                .orElse(models.contains(StarterAiService.MODEL_ID) ? StarterAiService.MODEL_ID : null);
     }
 
     private static List<String> getGoogleModelIds(GoogleAiService googleService) {

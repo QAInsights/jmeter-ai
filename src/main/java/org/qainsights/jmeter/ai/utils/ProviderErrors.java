@@ -43,6 +43,11 @@ public final class ProviderErrors {
     /** User-facing text with the provider context needed for provider-specific error mappings. */
     public static String describe(Throwable error, String action, boolean agentMode, String provider) {
         Telemetry.recordError(error);
+        for (Throwable cause : chain(error)) {
+            if (cause instanceof org.qainsights.jmeter.ai.service.StarterAiService.Failure) {
+                return cause.getMessage();
+            }
+        }
         if (RateLimitErrors.isRateLimited(error)) {
             return "Error: " + RateLimitErrors.describe(error, agentMode);
         }
