@@ -126,8 +126,10 @@ shows the remaining allowance and a **Connect a provider** action. Availability
 is not guaranteed; connect your own provider for continued use and Agent Mode.
 Free is chat-only: Agent Mode and tool calls are unavailable.
 
-Messages are sent through jmeter.ai to OpenRouter and paid NVIDIA Nemotron
-providers that don't train on or retain prompts. **Do not include secrets**.
+Messages are sent through jmeter.ai to DeepInfra's paid NVIDIA Nemotron model.
+DeepInfra [doesn't train on or retain inference prompts](https://docs.deepinfra.com/account/data-privacy).
+Requests are processed in memory; DeepInfra logs request metadata, not content.
+**Do not include secrets**.
 The worker stores quota/usage counts, not message content. Authentication uses a
 random UUID persisted separately in `~/.jmeter-ai/starter-id`, not your telemetry
 install ID, and works even when telemetry is disabled.

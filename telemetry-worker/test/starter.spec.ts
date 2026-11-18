@@ -22,8 +22,7 @@ beforeEach(async () => {
 	env.STARTER_INPUT_USD_PER_MTOK = undefined;
 	env.STARTER_OUTPUT_USD_PER_MTOK = undefined;
 	env.STARTER_MAX_OUTPUT_TOKENS = "2048";
-	env.STARTER_PROVIDER = "";
-	env.STARTER_UPSTREAM_URL = "https://openrouter.ai/api/v1/chat/completions";
+	env.STARTER_UPSTREAM_URL = undefined;
 	ip = crypto.randomUUID();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -104,11 +103,10 @@ describe("starter chat", () => {
 		expect((await chat({ messages: [{ role: "user", content: "Hi" }], tools: [{}], tool_choice: "auto", functions: [{}], function_call: "auto", model: "expensive", models: ["paid"], plugins: [{ id: "web" }], route: "fallback", max_tokens: 9000, max_completion_tokens: 4000 })).status).toBe(200);
 		const init = spy.mock.calls[0][1]!;
 		const body = JSON.parse(String(init.body));
-		expect(body.model).toBe("nvidia/nemotron-3.5-lightning");
+		expect(body.model).toBe("nvidia/NVIDIA-Nemotron-3.5-Lightning");
 		expect(body.max_tokens).toBe(2048);
 		expect(body.max_completion_tokens).toBe(2048);
 		for (const key of ["tools", "tool_choice", "functions", "function_call", "models", "plugins", "route"]) expect(body).not.toHaveProperty(key);
-		expect(init.headers).toMatchObject({ "HTTP-Referer": "https://jmeter.ai", "X-Title": "Feather Wand" });
 	});
 	it.each([undefined, "512"])("uses the default or configured cap when token limits are omitted (%s)", async cap => {
 		env.STARTER_MAX_OUTPUT_TOKENS = cap;
@@ -136,34 +134,37 @@ describe("starter chat", () => {
 		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 		expect(spy).not.toHaveBeenCalled();
 	});
-	it("routes OpenRouter primary with configured provider JSON", async () => {
-		const provider = { only: ["deepinfra"], data_collection: "deny" };
-		env.STARTER_PROVIDER = JSON.stringify(provider);
+	it("calls DeepInfra directly with the default model and no gateway routing or attribution", async () => {
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
 		expect((await chat()).status).toBe(200);
-		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).provider).toEqual(provider);
+		expect(spy.mock.calls[0][0]).toBe("https://api.deepinfra.com/v1/openai/chat/completions");
+		const init = spy.mock.calls[0][1]!;
+		expect(init.headers).toEqual({ Authorization: "Bearer test-primary", "Content-Type": "application/json" });
+		expect(JSON.parse(String(init.body)).model).toBe("nvidia/NVIDIA-Nemotron-3.5-Lightning");
+		expect(JSON.parse(String(init.body))).not.toHaveProperty("provider");
 	});
-	it("accounts for default paid primary usage at the highest allowed rates", async () => {
+	it("accounts for default DeepInfra usage at direct rates", async () => {
 		vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
 		expect((await chat()).status).toBe(200);
 		const usage = await env.DB.prepare("SELECT upstream,cost_usd FROM starter_usage").first<{ upstream: string; cost_usd: number }>();
 		expect(usage?.upstream).toBe("primary");
-		expect(usage?.cost_usd).toBeCloseTo((100 * 0.07 + 50 * 0.20) / 1e6, 10);
+		expect(usage?.cost_usd).toBeCloseTo((100 * 0.06 + 50 * 0.16) / 1e6, 10);
 	});
-	it.each([undefined, "", "{invalid", "null", "[]", "42"]) ("keeps default private routing for unset or invalid provider JSON (%s)", async provider => {
-		env.STARTER_PROVIDER = provider;
+	it("strips client routing, prompt-storage and premium-tier options", async () => {
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
-		expect((await chat()).status).toBe(200);
-		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).provider).toEqual({
-			only: ["fireworks", "deepinfra", "modelrun", "coreweave"], data_collection: "deny", zdr: true,
-			max_price: { prompt: 0.07, completion: 0.20 },
-		});
+		expect((await chat({ messages: [{ role: "user", content: "Hi", cache_control: { type: "ephemeral" } }],
+			provider: { only: ["other"] }, models: ["other"], route: "other", cache_control: {}, store: true,
+			prompt_cache_key: "session", prompt_cache_options: { mode: "explicit", ttl: "1h" }, prompt_cache_breakpoint: {}, service_tier: "priority" })).status).toBe(200);
+		expect(JSON.parse(String(spy.mock.calls[0][1]?.body))).toEqual({
+			messages: [{ role: "user", content: "Hi" }], model: "nvidia/NVIDIA-Nemotron-3.5-Lightning", max_tokens: 2048 });
 	});
-	it("does not send provider routing to other primary hosts", async () => {
-		env.STARTER_PROVIDER = '{"only":["deepinfra"]}';
+	it("honors an explicit upstream and model override without gateway fields", async () => {
 		env.STARTER_UPSTREAM_URL = "https://provider.example/chat/completions";
+		env.STARTER_MODEL = "custom-model";
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
 		expect((await chat()).status).toBe(200);
+		expect(spy.mock.calls[0][0]).toBe(env.STARTER_UPSTREAM_URL);
+		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).model).toBe("custom-model");
 		expect(JSON.parse(String(spy.mock.calls[0][1]?.body))).not.toHaveProperty("provider");
 	});
 	it("returns unavailable without the provider secret", async () => {
@@ -172,8 +173,8 @@ describe("starter chat", () => {
 		expect(res.status).toBe(503);
 		expect(await res.json()).toMatchObject({ error: { code: "starter_unavailable" } });
 	});
-	it("passes SSE through unchanged and records chunked usage", async () => {
-		const sse = 'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\ndata: {"usage":{"prompt_tokens":20,"completion_tokens":10}}\n\ndata: [DONE]\n\n';
+	it("passes DeepInfra SSE through unchanged and records usage from the final finish chunk", async () => {
+		const sse = 'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":10}}\n\ndata: [DONE]\n\n';
 		const bytes = new TextEncoder().encode(sse);
 		const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new ReadableStream({ start(c) {
 			c.enqueue(bytes.slice(0, 42)); c.enqueue(bytes.slice(42)); c.close();
@@ -182,6 +183,8 @@ describe("starter chat", () => {
 		expect(await res.text()).toBe(sse);
 		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).stream_options).toEqual({ include_usage: true });
 		await vi.waitFor(async () => expect(await env.DB.prepare("SELECT input_tokens,output_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20, output_tokens: 10 }));
+		const usage = await env.DB.prepare("SELECT cost_usd FROM starter_usage").first<{ cost_usd: number }>();
+		expect(usage?.cost_usd).toBeCloseTo((20 * 0.06 + 10 * 0.16) / 1e6, 10);
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 1 });
 	});
 	it.each(["", 'data: {"choices":[{"delta":{"role":"assistant","content":""}}]}\n\ndata: [DONE]\n\n'])

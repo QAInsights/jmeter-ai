@@ -5,7 +5,6 @@ export interface StarterEnv {
 	STARTER_IP_HASH_SECRET?: string;
 	STARTER_UPSTREAM_URL?: string;
 	STARTER_MODEL?: string;
-	STARTER_PROVIDER?: string;
 	STARTER_MAX_OUTPUT_TOKENS?: string;
 	STARTER_FREE_MESSAGES?: string;
 	STARTER_IP_MESSAGES?: string;
@@ -50,8 +49,8 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 	remaining = Math.max(0, limit - (used?.n ?? 0));
 	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 	if (!(await env.STARTER_LIMITER.limit({ key: ip })).success) return error(429, "starter_rate_limited", "Please try again in a minute.");
-	const upstream = { name: "primary", key: env.STARTER_API_KEY, url: env.STARTER_UPSTREAM_URL ?? "https://openrouter.ai/api/v1/chat/completions",
-		model: env.STARTER_MODEL ?? "nvidia/nemotron-3.5-lightning", input: number(env.STARTER_INPUT_USD_PER_MTOK, 0.07), output: number(env.STARTER_OUTPUT_USD_PER_MTOK, 0.20) };
+	const upstream = { name: "primary", key: env.STARTER_API_KEY, url: env.STARTER_UPSTREAM_URL ?? "https://api.deepinfra.com/v1/openai/chat/completions",
+		model: env.STARTER_MODEL ?? "nvidia/NVIDIA-Nemotron-3.5-Lightning", input: number(env.STARTER_INPUT_USD_PER_MTOK, 0.06), output: number(env.STARTER_OUTPUT_USD_PER_MTOK, 0.16) };
 	if (!upstream.key || !env.STARTER_IP_HASH_SECRET) return error(503, "starter_unavailable", "Starter chat is unavailable. Connect your own provider.");
 	const budget = number(env.STARTER_MONTHLY_BUDGET_USD, 50);
 	let body: Record<string, unknown>;
@@ -80,9 +79,11 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 				|| typeof message.content !== "string") throw new Error();
 			delete message.tool_calls;
 			delete message.function_call;
+			delete message.cache_control;
 		}
 	} catch { return error(400, "invalid_request", "Expected a JSON chat with 1–100 text messages, at most 64 KB."); }
-	for (const field of ["tools", "tool_choice", "functions", "function_call", "n", "provider", "plugins", "models", "route"]) delete body[field];
+	for (const field of ["tools", "tool_choice", "functions", "function_call", "n", "provider", "plugins", "models", "route",
+		"cache_control", "prompt_cache_key", "prompt_cache_options", "prompt_cache_breakpoint", "store", "service_tier"]) delete body[field];
 	const max = Math.max(1, Math.floor(number(env.STARTER_MAX_OUTPUT_TOKENS, 2048)));
 	for (const field of ["max_tokens", "max_completion_tokens"]) {
 		if (body[field] !== undefined) body[field] = Math.max(1, Math.min(max, Math.floor(Number(body[field])) || max));
@@ -175,22 +176,9 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 	}
 	let response: Response;
 	try {
-		const openRouter = new URL(upstream.url).hostname === "openrouter.ai";
-		let routing: Record<string, unknown> = {};
-		if (openRouter) {
-			routing = { provider: { only: ["fireworks", "deepinfra", "modelrun", "coreweave"], data_collection: "deny", zdr: true,
-				max_price: { prompt: upstream.input, completion: upstream.output } } };
-			if (env.STARTER_PROVIDER) {
-				try {
-					const provider = JSON.parse(env.STARTER_PROVIDER);
-					if (provider && typeof provider === "object" && !Array.isArray(provider)) routing = { provider };
-				} catch { /* Keep the default privacy routing for invalid JSON. */ }
-			}
-		}
 		response = await fetch(upstream.url, { method: "POST", headers: {
 			"Authorization": `Bearer ${upstream.key}`, "Content-Type": "application/json",
-			...(openRouter ? { "HTTP-Referer": "https://jmeter.ai", "X-Title": "Feather Wand" } : {}),
-		}, body: JSON.stringify({ ...body, ...routing, model: upstream.model }), signal: abort.signal });
+		}, body: JSON.stringify({ ...body, model: upstream.model }), signal: abort.signal });
 	} catch {
 		finishAttempt();
 		await record(null);

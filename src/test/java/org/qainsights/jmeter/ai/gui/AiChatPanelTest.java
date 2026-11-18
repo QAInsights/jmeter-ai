@@ -714,7 +714,8 @@ class AiChatPanelTest {
         javax.swing.SwingUtilities.invokeAndWait(() -> { });
         TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
         long notices = java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
-                .map(javax.swing.JTextArea.class::cast).filter(text -> text.getText().contains("don't train on or retain prompts")).count();
+                .map(javax.swing.JTextArea.class::cast).filter(text -> text.getText().contains(
+                        org.qainsights.jmeter.ai.service.StarterAiService.PRIVACY_NOTICE)).count();
         assertEquals(1, notices);
         assertTrue(java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
                 .map(javax.swing.JTextArea.class::cast).anyMatch(text -> text.getText().contains("7 of 10")));
