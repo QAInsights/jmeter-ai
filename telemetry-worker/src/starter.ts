@@ -166,8 +166,18 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		const [client, accounting] = response.body.tee();
 		ctx.waitUntil((async () => {
 			let usage: unknown;
+			let answered = false;
 			const reader = accounting.pipeThrough(new TextDecoderStream()).getReader();
 			let pending = "";
+			const consume = (line: string) => {
+				if (!line.startsWith("data:")) return;
+				try {
+					const data = JSON.parse(line.slice(5));
+					if (data.usage) usage = data.usage;
+					if (Array.isArray(data.choices) && data.choices.some((choice: any) =>
+						typeof choice?.delta?.content === "string" && choice.delta.content.trim().length > 0)) answered = true;
+				} catch { /* SSE sentinel or non-JSON event. */ }
+			};
 			try {
 				while (true) {
 					const { value, done } = await reader.read();
@@ -176,13 +186,16 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 					let newline;
 					while ((newline = pending.indexOf("\n")) >= 0) {
 						const line = pending.slice(0, newline).trim(); pending = pending.slice(newline + 1);
-						if (line.startsWith("data:")) {
-							try { const data = JSON.parse(line.slice(5)); if (data.usage) usage = data.usage; } catch { /* SSE sentinel or non-JSON event. */ }
-						}
+						consume(line);
 					}
 					if (pending.length > 262144) pending = "";
 				}
-			} finally { await record(usage); }
+				consume(pending.trim());
+			} catch { /* The client receives the upstream stream error. */ }
+			finally {
+				try { await record(usage); }
+				finally { if (!answered) await refund(); }
+			}
 		})());
 		return new Response(client, { headers: { ...headers(), "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 	}

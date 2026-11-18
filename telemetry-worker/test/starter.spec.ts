@@ -1,5 +1,7 @@
-import { env, SELF } from "cloudflare:test";
+import { env, SELF, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import { handleStarter } from "../src/starter";
+import { UUID_RE } from "../src/index";
 
 const UUID = "3f6b9f2e-9c1a-4d2b-8e5f-1a2b3c4d5e6f";
 let ip: string;
@@ -130,7 +132,7 @@ describe("starter chat", () => {
 		expect(await res.json()).toMatchObject({ error: { code: "starter_unavailable" } });
 	});
 	it("passes SSE through unchanged and records chunked usage", async () => {
-		const sse = 'data: {"choices":[]}\n\ndata: {"usage":{"prompt_tokens":20,"completion_tokens":10}}\n\ndata: [DONE]\n\n';
+		const sse = 'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\ndata: {"usage":{"prompt_tokens":20,"completion_tokens":10}}\n\ndata: [DONE]\n\n';
 		const bytes = new TextEncoder().encode(sse);
 		const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new ReadableStream({ start(c) {
 			c.enqueue(bytes.slice(0, 42)); c.enqueue(bytes.slice(42)); c.close();
@@ -139,6 +141,39 @@ describe("starter chat", () => {
 		expect(await res.text()).toBe(sse);
 		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).stream_options).toEqual({ include_usage: true });
 		await vi.waitFor(async () => expect(await env.DB.prepare("SELECT input_tokens,output_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20, output_tokens: 10 }));
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 1 });
+	});
+	it.each(["", 'data: {"choices":[{"delta":{"role":"assistant","content":""}}]}\n\ndata: [DONE]\n\n'])
+	("refunds a successful stream with no answer content", async sse => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(sse));
+		const ctx = createExecutionContext();
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], stream: true }),
+		}), env, ctx, UUID_RE);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe(sse);
+		await waitOnExecutionContext(ctx);
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: 1 });
+	});
+	it.each([false, true])("refunds a failed stream only before an answer (answered=%s)", async answered => {
+		let controller: ReadableStreamDefaultController<Uint8Array>;
+		const stream = new ReadableStream<Uint8Array>({ start(c) { controller = c; } });
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(stream));
+		const ctx = createExecutionContext();
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], stream: true }),
+		}), env, ctx, UUID_RE);
+		const reader = res.body!.getReader();
+		controller!.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: answered ? "Hi" : "" } }], usage: { prompt_tokens: 20, completion_tokens: 10 } })}\n\n`));
+		await reader.read();
+		controller!.error(new Error("upstream disconnected"));
+		await expect(reader.read()).rejects.toThrow();
+		await waitOnExecutionContext(ctx);
+		expect(await env.DB.prepare("SELECT input_tokens,output_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20, output_tokens: 10 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: answered ? 1 : 0 });
 	});
 	it("falls back on 429 and prices each attempt at its own rates", async () => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
