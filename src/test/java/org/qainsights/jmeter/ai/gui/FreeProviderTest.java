@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.gui;
 
 import org.apache.jmeter.util.JMeterUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -17,6 +18,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class FreeProviderTest {
+    @BeforeAll static void initJMeter() {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+    }
+
     @Test void defaultsToFreeOnlyWhenNoOtherModelIsAvailable() {
         assertEquals(StarterAiService.MODEL_ID, Models.defaultChatModel(List.of(StarterAiService.MODEL_ID), "claude-default"));
         assertEquals("openai:gpt-4o", Models.defaultChatModel(List.of(StarterAiService.MODEL_ID, "openai:gpt-4o"), "claude-default"));

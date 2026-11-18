@@ -1,6 +1,9 @@
 package org.qainsights.jmeter.ai.service;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.utils.AiConfig;
@@ -107,7 +110,38 @@ public final class ProviderStatus {
         }
         String access = AiConfig.getProperty("bedrock.aws.access.key", "");
         String secret = AiConfig.getProperty("bedrock.aws.secret.key", "");
-        return isUsableSecret(access) && isUsableSecret(secret);
+        return (isUsableSecret(access) && isUsableSecret(secret))
+                || hasLocalAwsCredentials(System::getenv, System::getProperty,
+                        Path.of(System.getProperty("user.home")));
+    }
+
+    static boolean hasLocalAwsCredentials(Function<String, String> env, Function<String, String> properties,
+                                          Path home) {
+        if (isUsableSecret(properties.apply("aws.profile"))
+                || isUsableSecret(env.apply("AWS_PROFILE"))
+                || isUsableSecret(env.apply("AWS_BEARER_TOKEN_BEDROCK"))
+                || isUsableSecret(properties.apply("aws.bearerTokenBedrock"))
+                || (isUsableSecret(env.apply("AWS_ACCESS_KEY_ID")) && isUsableSecret(env.apply("AWS_SECRET_ACCESS_KEY")))
+                || (isUsableSecret(properties.apply("aws.accessKeyId")) && isUsableSecret(properties.apply("aws.secretAccessKey")))
+                || (isUsableSecret(env.apply("AWS_WEB_IDENTITY_TOKEN_FILE")) && isUsableSecret(env.apply("AWS_ROLE_ARN")))
+                || (isUsableSecret(properties.apply("aws.webIdentityTokenFile")) && isUsableSecret(properties.apply("aws.roleArn")))
+                || isUsableSecret(env.apply("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"))
+                || isUsableSecret(env.apply("AWS_CONTAINER_CREDENTIALS_FULL_URI"))) {
+            return true;
+        }
+        return hasAwsFile(properties.apply("aws.sharedCredentialsFile"), env.apply("AWS_SHARED_CREDENTIALS_FILE"),
+                home.resolve(".aws/credentials"))
+                || hasAwsFile(properties.apply("aws.configFile"), env.apply("AWS_CONFIG_FILE"), home.resolve(".aws/config"));
+    }
+
+    private static boolean hasAwsFile(String property, String environment, Path fallback) {
+        try {
+            Path path = isUsableSecret(property) ? Path.of(property)
+                    : isUsableSecret(environment) ? Path.of(environment) : fallback;
+            return Files.isRegularFile(path) && Files.isReadable(path);
+        } catch (IllegalArgumentException | SecurityException e) {
+            return false;
+        }
     }
 
     /**
