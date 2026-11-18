@@ -20,11 +20,11 @@ import java.util.Set;
 public final class ExtractPlacement {
 
     /** Values shorter than this are too likely to appear by accident to replace. */
-    static final int MIN_REPLACE_LENGTH = 4;
+    public static final int MIN_REPLACE_LENGTH = 4;
 
     private static final Set<String> SKIPPED = new HashSet<>(List.of(
             TestElement.NAME, TestElement.GUI_CLASS, TestElement.TEST_CLASS, TestElement.ENABLED,
-            TestElement.COMMENTS));
+            TestElement.COMMENTS, "Argument.name", "Header.name"));
 
     private ExtractPlacement() {
     }
@@ -73,7 +73,8 @@ public final class ExtractPlacement {
      * contain {@code value}. Variables are per thread, so other Thread Groups never see the extracted value.
      */
     public static List<JMeterTreeNode> laterUses(JMeterTreeNode root, JMeterTreeNode source, String value) {
-        if (root == null || source == null || value == null || value.length() < MIN_REPLACE_LENGTH) {
+        if (root == null || source == null || value == null || value.length() < MIN_REPLACE_LENGTH
+                || value.contains("${")) {
             return Collections.emptyList();
         }
         JMeterTreeNode group = threadGroupOf(source);
@@ -107,6 +108,9 @@ public final class ExtractPlacement {
 
     /** Replaces {@code value} with {@code ${var}} in each node; returns how many properties changed. */
     public static int replace(List<JMeterTreeNode> nodes, String value, String var) {
+        if (value == null || value.length() < MIN_REPLACE_LENGTH || value.contains("${")) {
+            return 0;
+        }
         int changed = 0;
         for (JMeterTreeNode node : nodes) {
             changed += replaceIn(node.getTestElement().propertyIterator(), value, "${" + var + "}");
@@ -128,7 +132,8 @@ public final class ExtractPlacement {
                 if (containsIn(((MultiProperty) p).iterator(), value)) {
                     return true;
                 }
-            } else if (p instanceof StringProperty && p.getStringValue().contains(value)) {
+            } else if (p instanceof StringProperty
+                    && !p.getStringValue().equals(replaceLiteral(p.getStringValue(), value, "${preview}"))) {
                 return true;
             }
         }
@@ -145,11 +150,36 @@ public final class ExtractPlacement {
             if (p instanceof MultiProperty) {
                 changed += replaceIn(((MultiProperty) p).iterator(), value, replacement);
             } else if (p instanceof StringProperty && p.getStringValue().contains(value)) {
-                p.setObjectValue(p.getStringValue().replace(value, replacement));
-                changed++;
+                String before = p.getStringValue();
+                String after = replaceLiteral(before, value, replacement);
+                if (!before.equals(after)) {
+                    p.setObjectValue(after);
+                    changed++;
+                }
             }
         }
         return changed;
+    }
+
+    private static String replaceLiteral(String text, String value, String replacement) {
+        StringBuilder result = new StringBuilder();
+        int start = 0;
+        while (start < text.length()) {
+            int variable = text.indexOf("${", start);
+            if (variable < 0) {
+                result.append(text.substring(start).replace(value, replacement));
+                break;
+            }
+            result.append(text.substring(start, variable).replace(value, replacement));
+            int end = ReplacementExpressions.end(text, variable);
+            if (end < 0) {
+                result.append(text.substring(variable));
+                break;
+            }
+            result.append(text, variable, end);
+            start = end;
+        }
+        return result.toString();
     }
 
     private static List<JMeterTreeNode> preorder(JMeterTreeNode root) {

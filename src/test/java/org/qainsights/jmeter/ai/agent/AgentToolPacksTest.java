@@ -35,6 +35,9 @@ class AgentToolPacksTest {
                 .contains(GetTestResultsHandler.GET_TEST_RESULTS));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.CORRELATE)
                 .contains(ApplyCorrelationHandler.APPLY_CORRELATION));
+        assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.CORRELATE).contains("parameterize_values"));
+        assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.EDIT_TEST_PLAN).contains("parameterize_values"));
+        assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.PLAN_FILES).contains("parameterize_values"));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.PLAN_FILES)
                 .contains(OpenPlanHandler.OPEN_PLAN));
         for (AgentRequestRouter.Route route : List.of(

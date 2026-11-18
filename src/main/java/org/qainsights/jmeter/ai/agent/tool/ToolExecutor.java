@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.tool;
 
 import org.qainsights.jmeter.ai.telemetry.Telemetry;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ParameterizeValuesHandler;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -77,6 +78,8 @@ public final class ToolExecutor {
         }
 
         if (confirmationGate != null && confirmationRequiredTools.contains(toolName)
+                && (!ParameterizeValuesHandler.PARAMETERIZE_VALUES.equals(toolName)
+                        || ParameterizeValuesHandler.writesFile(args))
                 && !confirmationGate.confirm(toolName, args)) {
             Telemetry.recordToolDeclined();
             return ToolResult.error(ERR_DECLINED, "The user declined to confirm '" + toolName
