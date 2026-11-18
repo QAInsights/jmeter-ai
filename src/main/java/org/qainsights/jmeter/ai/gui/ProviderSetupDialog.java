@@ -301,7 +301,8 @@ final class ProviderSetupDialog extends JDialog {
         title.setFont(UiTokens.title(title.getFont()));
         title.setForeground(ThemeColors.foreground());
         JLabel subtitle = new JLabel(
-                "Paste a key and Feather Wand saves it to JMeter's user.properties. "
+                "Start with Feather Wand Free: 10 chat messages, no key needed. "
+                        + "Or paste a provider key and Feather Wand saves it to JMeter's user.properties. "
                         + "It works right away, no restart needed.");
         subtitle.setFont(UiTokens.body(subtitle.getFont()));
         subtitle.setForeground(ThemeColors.secondaryText());
