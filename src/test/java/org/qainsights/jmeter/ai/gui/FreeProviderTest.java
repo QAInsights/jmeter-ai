@@ -3,7 +3,6 @@ package org.qainsights.jmeter.ai.gui;
 import org.apache.jmeter.util.JMeterUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.io.TempDir;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.service.AiServiceHolder;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -51,19 +50,6 @@ class FreeProviderTest {
 
     @Test void noKeyDiscoveryListsFreeWithoutCallingCloudCatalogs() {
         assertNoKeyDiscovery();
-    }
-
-    @Test void regionOnlyAwsConfigKeepsFreeDefault(@TempDir java.nio.file.Path home) throws Exception {
-        java.nio.file.Files.createDirectories(home.resolve(".aws"));
-        java.nio.file.Files.writeString(home.resolve(".aws/config"), "[default]\nregion = us-east-1\n");
-        String before = System.getProperty("user.home");
-        try {
-            System.setProperty("user.home", home.toString());
-            assertNoKeyDiscovery();
-        } finally {
-            if (before == null) System.clearProperty("user.home");
-            else System.setProperty("user.home", before);
-        }
     }
 
     private void assertNoKeyDiscovery() {

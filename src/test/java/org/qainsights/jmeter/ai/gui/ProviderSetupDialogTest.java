@@ -58,7 +58,9 @@ class ProviderSetupDialogTest {
     @Test void freeSetupRecordsSaveBeforeInvokingCallback() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless());
         try (var telemetry = org.mockito.Mockito.mockStatic(org.qainsights.jmeter.ai.telemetry.Telemetry.class)) {
+            java.util.concurrent.atomic.AtomicBoolean called = new java.util.concurrent.atomic.AtomicBoolean();
             ProviderSetupDialog dialog = new ProviderSetupDialog(null, option -> {
+                called.set(true);
                 assertEquals(ProviderSetupOption.FREE, option);
                 telemetry.verify(() -> org.qainsights.jmeter.ai.telemetry.Telemetry.recordSetupSave("FREE"));
             }, false, new ProviderConnectionTester(request -> {
@@ -69,6 +71,7 @@ class ProviderSetupDialogTest {
                 Method save = ProviderSetupDialog.class.getDeclaredMethod("saveOrTest");
                 save.setAccessible(true);
                 save.invoke(dialog);
+                assertTrue(called.get());
             } finally { dialog.dispose(); }
         }
     }

@@ -180,6 +180,9 @@ class TranscriptViewTest {
         assertEquals(1, clicks.get());
         view.clearTranscript();
         view.addConnectProviderAction(clicks::incrementAndGet);
-        assertEquals(1, java.util.Arrays.stream(view.getComponents()).filter(QuietButton.class::isInstance).count());
+        buttons = java.util.Arrays.stream(view.getComponents()).filter(QuietButton.class::isInstance).toList();
+        assertEquals(1, buttons.size());
+        ((QuietButton) buttons.get(0)).doClick();
+        assertEquals(2, clicks.get());
     }
 }
