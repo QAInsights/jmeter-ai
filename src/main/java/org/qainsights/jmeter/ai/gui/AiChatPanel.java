@@ -53,6 +53,7 @@ import org.qainsights.jmeter.ai.service.CodexAiService;
 import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.opencode.OpenCodeCliProvider;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
+import org.qainsights.jmeter.ai.service.StarterAiService;
 import org.qainsights.jmeter.ai.service.attach.AttachmentRegistry;
 import org.qainsights.jmeter.ai.service.attach.FileContentPreparer;
 import org.qainsights.jmeter.ai.service.prefs.ModelSelectorPreferences;
@@ -136,6 +137,7 @@ public class AiChatPanel
     private ClaudeCodeAiService claudeCodeService;
     private OpenCodeAiService openCodeService;
     private AppleFoundationAiService appleFoundationAiService;
+    private StarterAiService starterService;
     private TreeNavigationButtons treeNavigationButtons;
     private JPanel navigationPanel; // Added field for navigation panel
     private JPanel headerPanel;
@@ -264,6 +266,7 @@ public class AiChatPanel
         claudeCodeService = new ClaudeCodeAiService();
         openCodeService = new OpenCodeAiService();
         appleFoundationAiService = new AppleFoundationAiService();
+        starterService = StarterAiService.isEnabled() ? new StarterAiService() : null;
 
         String googleApiKey = AiConfig.getProperty("google.api.key", "");
         googleService = null;
@@ -338,6 +341,7 @@ public class AiChatPanel
 
     /** Shares the session usage accumulator with every service (context-stats label). */
     private void injectUsageStats() {
+        if (starterService != null) starterService.setUsageStats(usageStats);
         claudeService.setUsageStats(usageStats);
         openAiService.setUsageStats(usageStats);
         ollamaService.setUsageStats(usageStats);
@@ -388,7 +392,7 @@ public class AiChatPanel
         log.info("Model selected: {}", selectedModel);
         if (interactionModeSelector != null && selectedModel != null) {
             interactionModeSelector.setModelSupportsAgent(
-                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+                    supportsAgent(selectedModel));
         }
         resolveAiService(selectedModel);
         reasoningControls.updateForModel(selectedModel);
@@ -709,7 +713,7 @@ public class AiChatPanel
         String selectedModel = modelSelectorPanel.getSelectedModel();
         if (selectedModel != null) {
             interactionModeSelector.setModelSupportsAgent(
-                    !selectedModel.startsWith(AppleFoundationAiService.MODEL_PREFIX));
+                    supportsAgent(selectedModel));
         }
         inputOptionsRow = new InputOptionsRow(
                 this, attachmentBar, attachButton, interactionModeSelector, this::sendMessage);
@@ -872,6 +876,7 @@ public class AiChatPanel
         holder.setClaudeCodeService(claudeCodeService);
         holder.setOpenCodeService(openCodeService);
         holder.setAppleFoundationAiService(appleFoundationAiService);
+        holder.setStarterService(starterService);
         return holder;
     }
 
@@ -902,7 +907,7 @@ public class AiChatPanel
                                     || model.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)
                                     || model.startsWith(OpenCodeCliProvider.MODEL_PREFIX));
                     // Get the default model ID
-                    String defaultModelId = claudeService.getCurrentModel();
+                    String defaultModelId = Models.defaultChatModel(models, claudeService.getCurrentModel());
                     log.info("Default model ID: {}", defaultModelId);
                     List<String> featuredModels = new ArrayList<>(openRouterService == null
                             ? List.of() : openRouterService.featuredModelIds());
@@ -996,6 +1001,7 @@ public class AiChatPanel
 
     private static boolean modelBelongsToProvider(String model, ProviderSetupOption option) {
         return switch (option) {
+            case FREE -> model.startsWith(StarterAiService.MODEL_PREFIX);
             case ANTHROPIC -> !model.contains(":");
             case OPENAI -> model.startsWith("openai:");
             case GEMINI -> model.startsWith("google:");
@@ -1042,7 +1048,8 @@ public class AiChatPanel
             return;
         }
         boolean showConnect = !providerStatus().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
+        String welcome = showConnect && StarterAiService.isEnabled() ? WelcomeMessages.freeWelcome()
+                : WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (!welcome.equals(lastShownWelcome) || showConnect != lastWelcomeHasConnectButton) {
             if (showConnect) {
                 Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
@@ -1057,7 +1064,8 @@ public class AiChatPanel
 
     private void showWelcomeForCurrentConfig() {
         boolean showConnect = !providerStatus().isReady();
-        String welcome = WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
+        String welcome = showConnect && StarterAiService.isEnabled() ? WelcomeMessages.freeWelcome()
+                : WelcomeMessages.forCurrentConfig(ollamaDetected, cliProviderReady);
         if (showConnect) {
             Telemetry.record(TelemetryFeature.WELCOME_NO_PROVIDER);
         }
@@ -1435,6 +1443,7 @@ public class AiChatPanel
             // Re-render the streamed card with full markdown so code blocks
             // get their styled panel with the Copy button.
             transcript.completeStream(fullResponse);
+            showFreeConnectAction();
             ChatScroller.scrollToBottomIfPinned(scrollPane, wasPinned);
             firstTokenReceived = false;
             hideStopButton();
@@ -1472,6 +1481,7 @@ public class AiChatPanel
         java.util.function.Consumer<Exception> onError
     ) {
         int generation = beginStream();
+        showFreePrivacyNotice();
         java.util.function.Consumer<String> reasoning = this::appendReasoningToken;
         Runnable cancelHandle = aiResponseRouter.generateStreamResponse(
             modelSelectorPanel.getSelectedModel(),
@@ -1599,6 +1609,7 @@ public class AiChatPanel
      */
     @Override
     public String getAiResponse(String message) {
+        showFreePrivacyNotice();
         log.info("Getting AI response for message: {}", message);
         return aiResponseRouter.getAiResponse(
             modelSelectorPanel.getSelectedModel(),
@@ -1765,6 +1776,7 @@ public class AiChatPanel
         runOnEdt(() -> transcript.finishReasoning());
         showNonStreamReasoning();
         processAiResponse(response);
+        runOnEdt(this::showFreeConnectAction);
         playResponseChime();
         setInputEnabled(true);
     }
@@ -1782,6 +1794,26 @@ public class AiChatPanel
         String reasoning = service.consumeLastReasoning();
         if (reasoning != null && !reasoning.isBlank()) {
             runOnEdt(() -> transcript.addReasoningBlock(reasoning));
+        }
+    }
+
+    static boolean supportsAgent(String model) {
+        return model != null && !model.startsWith(AppleFoundationAiService.MODEL_PREFIX)
+                && !model.startsWith(StarterAiService.MODEL_PREFIX);
+    }
+
+    private void showFreePrivacyNotice() {
+        String model = getSelectedModel();
+        if (model != null && model.startsWith(StarterAiService.MODEL_PREFIX)
+                && starterService != null && starterService.showPrivacyNotice()) {
+            runOnEdt(() -> transcript.addSystemMessage(StarterAiService.PRIVACY_NOTICE, null));
+        }
+    }
+
+    private void showFreeConnectAction() {
+        String model = getSelectedModel();
+        if (model != null && model.startsWith(StarterAiService.MODEL_PREFIX)) {
+            transcript.addConnectProviderAction(this::openProviderSetup);
         }
     }
 

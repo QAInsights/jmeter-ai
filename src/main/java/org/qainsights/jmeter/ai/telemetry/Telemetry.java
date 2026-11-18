@@ -26,7 +26,7 @@ public final class Telemetry {
     private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
     private static final Set<String> SETUP_OPTIONS = Set.of(
             "anthropic", "openai", "gemini", "deepseek", "grok", "metamuse",
-            "openrouter", "opencode", "ollama", "smartrouting", "appleondevice");
+            "openrouter", "opencode", "ollama", "smartrouting", "appleondevice", "free");
     private static final Set<String> SETUP_OUTCOMES = Set.of(
             "ok", "auth_rejected", "rate_limited", "http_error", "network_error");
     private static final Set<String> DECISION_BACKENDS = Set.of("typesafe", "openai", "openrouter");

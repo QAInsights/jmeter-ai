@@ -357,6 +357,10 @@ final class ProviderSetupDialog extends JDialog {
     static List<ProviderSetupOption> navigationProviderOptions(BooleanSupplier appleSupported) {
         java.util.ArrayList<ProviderSetupOption> options = new java.util.ArrayList<>();
         for (ProviderSetupOption option : ProviderSetupOption.values()) {
+            if (option == ProviderSetupOption.FREE
+                    && !org.qainsights.jmeter.ai.service.StarterAiService.isEnabled()) {
+                continue;
+            }
             if (option.isChatProvider()) {
                 options.add(option);
             } else if (option == ProviderSetupOption.APPLE_ON_DEVICE
@@ -923,7 +927,7 @@ final class ProviderSetupDialog extends JDialog {
         fields.setLayout(new BoxLayout(fields, BoxLayout.Y_AXIS));
         if (option.requiresKey()) {
             fields.add(buildKeyFields(option));
-        } else {
+        } else if (option != ProviderSetupOption.FREE) {
             fields.add(buildOllamaFields());
         }
         fields.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1641,6 +1645,11 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private void saveOrTest() {
+        if (selectedOption == ProviderSetupOption.FREE) {
+            onSaved.accept(selectedOption);
+            dispose();
+            return;
+        }
         if (selectedOption == ProviderSetupOption.OPENCODE) {
             if (openCodeDetecting || testing || !openCodeDetected) {
                 return;
@@ -1909,6 +1918,13 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     private void updateActionButtons() {
+        if (selectedOption == ProviderSetupOption.FREE) {
+            testButton.setVisible(false);
+            closeButton.setEnabled(true);
+            saveButton.setText("Use Feather Wand Free");
+            saveButton.setEnabled(org.qainsights.jmeter.ai.service.StarterAiService.isEnabled());
+            return;
+        }
         boolean smart = selectedOption == ProviderSetupOption.SMART_ROUTING;
         boolean apple = selectedOption == ProviderSetupOption.APPLE_ON_DEVICE;
         boolean openCode = selectedOption == ProviderSetupOption.OPENCODE;
@@ -1992,6 +2008,9 @@ final class ProviderSetupDialog extends JDialog {
     }
 
     static boolean isConfigured(ProviderSetupOption option) {
+        if (option == ProviderSetupOption.FREE) {
+            return org.qainsights.jmeter.ai.service.StarterAiService.isEnabled();
+        }
         if (option == ProviderSetupOption.OPENCODE) {
             return Boolean.parseBoolean(AiConfig.getProperty(OpenCodeCliProvider.ENABLED_KEY, "false"));
         }

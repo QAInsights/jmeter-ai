@@ -52,8 +52,8 @@ class InteractionModeSelectorTest {
 
         assertTrue(selector.chatButton().isSelected());
         assertFalse(selector.agentButton().isEnabled());
-        assertEquals("Agent mode isn't available for Apple's on-device model. "
-                + "Pick a cloud model, Codex, Claude Code or OpenCode to use Agent",
+        assertEquals("Agent mode isn't available for this chat-only model. "
+                + "Pick a tool-capable cloud model, Codex, Claude Code or OpenCode to use Agent",
                 selector.agentButton().getToolTipText());
         selector.agentButton().doClick();
         assertTrue(selector.chatButton().isSelected());

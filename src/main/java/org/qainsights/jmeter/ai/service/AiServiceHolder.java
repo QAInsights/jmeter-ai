@@ -5,6 +5,12 @@ package org.qainsights.jmeter.ai.service;
  * This keeps constructor parameter lists short (<= 5) and simplifies wiring.
  */
 public class AiServiceHolder {
+    private StarterAiService starterService;
+
+    public StarterAiService getStarterService() { return starterService; }
+
+    public void setStarterService(StarterAiService starterService) { this.starterService = starterService; }
+
     private ClaudeService claudeService;
     private OpenAiService openAiService;
     private OllamaAiService ollamaService;

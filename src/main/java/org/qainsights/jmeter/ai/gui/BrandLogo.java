@@ -91,6 +91,7 @@ final class BrandLogo {
             return null;
         }
         return switch (option) {
+            case FREE -> null;
             case ANTHROPIC -> "anthropic";
             case OPENAI -> "openai";
             case GEMINI -> "gemini";

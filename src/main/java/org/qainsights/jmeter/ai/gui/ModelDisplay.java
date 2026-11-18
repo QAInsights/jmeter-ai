@@ -38,6 +38,9 @@ final class ModelDisplay {
      * {@code "claude-sonnet" -> ["claude-sonnet", "Anthropic"]}.
      */
     static String[] parse(String modelId) {
+        if (org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID.equals(modelId)) {
+            return new String[] { "Feather Wand Free", "Feather Wand" };
+        }
         if (modelId == null || modelId.isEmpty()) {
             return new String[] { "Loading available models\u2026", "" };
         }

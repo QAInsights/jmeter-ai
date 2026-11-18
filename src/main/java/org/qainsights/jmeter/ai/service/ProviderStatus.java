@@ -101,7 +101,7 @@ public final class ProviderStatus {
         return isUsableSecret(value);
     }
 
-    static boolean isBedrockConfigured() {
+    public static boolean isBedrockConfigured() {
         if (isApiKeyConfigured("bedrock.api.key")) {
             return true;
         }

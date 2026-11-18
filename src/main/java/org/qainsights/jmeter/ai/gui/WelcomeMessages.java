@@ -92,6 +92,13 @@ public final class WelcomeMessages {
         return setupWelcome(false);
     }
 
+    public static String freeWelcome() {
+            return "# Welcome to Feather Wand\n\n"
+                    + "Try **Feather Wand Free**: 10 free chat messages, no key needed. Just type a message below.\n\n"
+                    + org.qainsights.jmeter.ai.service.StarterAiService.PRIVACY_NOTICE + "\n\n"
+                    + "Connect a provider for unlimited use and Agent Mode.\n\n";
+    }
+
     public static String setupWelcome(boolean ollamaDetected) {
         return "# Welcome to Feather Wand\n\n"
                 + "Your AI assistant for Apache JMeter is installed. No provider is connected yet.\n\n"
