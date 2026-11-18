@@ -187,6 +187,29 @@ class StarterAiServiceTest {
         } finally { executor.shutdownNow(); }
     }
 
+    @Test void reusesAReadableIdWhenTheDirectoryIsReadOnly() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.getFileStore(home).supportsFileAttributeView("posix"));
+        Path directory = Files.createDirectory(home.resolve("read-only"));
+        Path path = Files.writeString(directory.resolve("starter-id"), UUID.randomUUID().toString());
+        String id = Files.readString(path);
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"));
+        try {
+            org.junit.jupiter.api.Assumptions.assumeFalse(Files.isWritable(directory));
+            assertEquals(id, StarterId.load(path));
+            assertEquals(id, StarterId.load(path));
+            assertFalse(Files.exists(directory.resolve("starter-id.lock")));
+            assertThrows(java.io.IOException.class, () -> StarterId.load(directory.resolve("missing-id")));
+        } finally { Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------")); }
+    }
+
+    @Test void reusesAReadableIdWhenTheLockCannotBeOpened() throws Exception {
+        Path path = Files.writeString(home.resolve("starter-id"), UUID.randomUUID().toString());
+        Files.createDirectory(home.resolve("starter-id.lock"));
+        assertEquals(Files.readString(path), StarterId.load(path));
+        Files.writeString(path, "incomplete");
+        assertThrows(java.io.IOException.class, () -> StarterId.load(path));
+    }
+
     @Test void streamFailuresInvokeErrorWithoutCompletingOrSavingErrorTokens() throws Exception {
         for (String body : List.of("not json", "data: {broken}\n\n", "data: {\"error\":{\"message\":\"private\"}}\n\n", "data: [DONE]\n\n")) {
             status = body.equals("not json") ? 503 : 200;

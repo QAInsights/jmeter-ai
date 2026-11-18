@@ -15,6 +15,19 @@ final class StarterId {
 
     static synchronized String load(Path path) throws IOException {
         path = path.toAbsolutePath();
+        try {
+            return loadPersisted(path);
+        } catch (IOException | SecurityException error) {
+            try {
+                return UUID.fromString(Files.readString(path).trim()).toString();
+            } catch (IOException | IllegalArgumentException | SecurityException ignored) {
+                if (error instanceof IOException) throw (IOException) error;
+                throw new IOException("Could not persist Feather Wand starter ID.", error);
+            }
+        }
+    }
+
+    private static String loadPersisted(Path path) throws IOException {
         Path parent = path.getParent();
         Files.createDirectories(parent);
         var attributes = Files.getFileStore(parent).supportsFileAttributeView(PosixFileAttributeView.class)
