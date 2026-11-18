@@ -13,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Persisted telemetry state at {@code ~/.jmeter-ai/telemetry.json}. A missing or
@@ -30,6 +31,8 @@ public class TelemetryState {
     private String installId;
     private String lastPingDay;
     private boolean firstPingSent;
+    private final AtomicBoolean firstChatMessageSent = new AtomicBoolean();
+    private final AtomicBoolean firstAgentRunSent = new AtomicBoolean();
     private Map<String, Integer> pendingFeatures = new LinkedHashMap<>();
 
     private TelemetryState(Path dir) {
@@ -50,6 +53,8 @@ public class TelemetryState {
                     state.installId = stored.installId;
                     state.lastPingDay = stored.lastPingDay;
                     state.firstPingSent = stored.firstPingSent;
+                    state.firstChatMessageSent.set(stored.firstChatMessageSent);
+                    state.firstAgentRunSent.set(stored.firstAgentRunSent);
                     if (stored.pendingFeatures != null) {
                         state.pendingFeatures = new LinkedHashMap<>(stored.pendingFeatures);
                     }
@@ -76,6 +81,8 @@ public class TelemetryState {
             stored.installId = installId;
             stored.lastPingDay = lastPingDay;
             stored.firstPingSent = firstPingSent;
+            stored.firstChatMessageSent = firstChatMessageSent.get();
+            stored.firstAgentRunSent = firstAgentRunSent.get();
             stored.pendingFeatures = pendingFeatures;
             Path tmp = file.resolveSibling(FILE_NAME + ".tmp");
             MAPPER.writeValue(tmp.toFile(), stored);
@@ -113,6 +120,16 @@ public class TelemetryState {
         return new LinkedHashMap<>(pendingFeatures);
     }
 
+    boolean recordFirstUse(TelemetryFeature feature) {
+        if (feature == TelemetryFeature.CHAT_MESSAGE) {
+            return firstChatMessageSent.compareAndSet(false, true);
+        }
+        if (feature == TelemetryFeature.AGENT_RUN) {
+            return firstAgentRunSent.compareAndSet(false, true);
+        }
+        return false;
+    }
+
     public void setPendingFeatures(Map<String, Integer> pendingFeatures) {
         this.pendingFeatures = pendingFeatures == null ? new LinkedHashMap<>() : new LinkedHashMap<>(pendingFeatures);
     }
@@ -127,6 +144,8 @@ public class TelemetryState {
         public String installId;
         public String lastPingDay;
         public boolean firstPingSent;
+        public boolean firstChatMessageSent;
+        public boolean firstAgentRunSent;
         public Map<String, Integer> pendingFeatures;
     }
 }

@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.*;
 import org.apache.jmeter.control.TransactionController;
 import org.apache.jmeter.gui.GuiPackage;
@@ -162,6 +163,7 @@ public class AiChatPanel
     private boolean lastWelcomeHasConnectButton;
     private boolean ollamaDetected;
     private volatile boolean cliProviderReady;
+    private volatile boolean modelsDiscovered;
     private boolean ollamaProbeStarted;
     private ProviderSetupOption pendingProviderSelection;
     private final AtomicInteger modelLoadGeneration = new AtomicInteger();
@@ -249,6 +251,31 @@ public class AiChatPanel
         if (!restoreLastSessionIfEnabled()) {
             displayWelcomeMessage();
         }
+        addHierarchyListener(event -> {
+            if ((event.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                maybeAutoOpenProviderSetup();
+            }
+        });
+    }
+
+    private static final AtomicBoolean SETUP_AUTO_OPENED = new AtomicBoolean();
+
+    static boolean shouldAutoOpenProviderSetup(boolean providerReady, boolean welcomeShowing,
+                                              boolean interactive, boolean modelsDiscovered,
+                                              AtomicBoolean alreadyOpened) {
+        return interactive && modelsDiscovered && welcomeShowing && !providerReady
+                && alreadyOpened.compareAndSet(false, true);
+    }
+
+    private void maybeAutoOpenProviderSetup() {
+        SwingUtilities.invokeLater(() -> {
+            if (shouldAutoOpenProviderSetup(providerStatus().isReady(), transcript.isWelcomeShowing(),
+                    isShowing() && !GraphicsEnvironment.isHeadless() && GuiPackage.getInstance() != null,
+                    modelsDiscovered, SETUP_AUTO_OPENED)) {
+                Telemetry.record(TelemetryFeature.SETUP_AUTO_OPEN);
+                openProviderSetup();
+            }
+        });
     }
 
     private void initProviderServices() {
@@ -884,6 +911,7 @@ public class AiChatPanel
 
     private void loadModelsInBackground(String modelToPreserve) {
         int generation = modelLoadGeneration.incrementAndGet();
+        modelsDiscovered = false;
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() {
@@ -923,6 +951,11 @@ public class AiChatPanel
                     refreshWelcomeIfReady();
                 } catch (Exception e) {
                     log.error("Failed to load models", e);
+                } finally {
+                    if (generation == modelLoadGeneration.get()) {
+                        modelsDiscovered = true;
+                        maybeAutoOpenProviderSetup();
+                    }
                 }
             }
         }

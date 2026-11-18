@@ -52,6 +52,28 @@ class TelemetryStateTest {
     }
 
     @Test
+    void firstUseFlagsSurviveReload() {
+        TelemetryState state = TelemetryState.load(dir);
+        assertTrue(state.recordFirstUse(TelemetryFeature.CHAT_MESSAGE));
+        assertTrue(state.recordFirstUse(TelemetryFeature.AGENT_RUN));
+        state.save();
+        TelemetryState reloaded = TelemetryState.load(dir);
+        assertFalse(reloaded.recordFirstUse(TelemetryFeature.CHAT_MESSAGE));
+        assertFalse(reloaded.recordFirstUse(TelemetryFeature.AGENT_RUN));
+    }
+
+    @Test
+    void oldStateDefaultsToNoFirstUse() throws Exception {
+        Files.writeString(dir.resolve("telemetry.json"),
+                "{\"installId\":\"existing\",\"firstPingSent\":true}");
+        TelemetryState state = TelemetryState.load(dir);
+        assertEquals("existing", state.getInstallId());
+        assertTrue(state.recordFirstUse(TelemetryFeature.CHAT_MESSAGE));
+        assertTrue(state.recordFirstUse(TelemetryFeature.AGENT_RUN));
+        assertFalse(state.recordFirstUse(TelemetryFeature.PANEL_OPEN));
+    }
+
+    @Test
     void atomicWriteLeavesNoTempFile() {
         TelemetryState s = TelemetryState.load(dir);
         s.save();
