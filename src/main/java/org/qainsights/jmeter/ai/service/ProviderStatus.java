@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.service;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.IOException;
+import java.util.Locale;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import org.qainsights.jmeter.ai.agent.AgentJudgmentConfig;
@@ -138,8 +140,18 @@ public final class ProviderStatus {
         try {
             Path path = isUsableSecret(property) ? Path.of(property)
                     : isUsableSecret(environment) ? Path.of(environment) : fallback;
-            return Files.isRegularFile(path) && Files.isReadable(path);
-        } catch (IllegalArgumentException | SecurityException e) {
+            if (!Files.isRegularFile(path) || !Files.isReadable(path)) return false;
+            try (var lines = Files.lines(path)) {
+                return lines.anyMatch(line -> {
+                    String[] setting = line.trim().split("=", 2);
+                    if (setting.length != 2 || !isUsableSecret(setting[1])
+                            || setting[1].trim().startsWith("#") || setting[1].trim().startsWith(";")) return false;
+                    String key = setting[0].trim().toLowerCase(Locale.ROOT);
+                    return key.equals("aws_access_key_id") || key.equals("credential_process")
+                            || key.startsWith("sso_") || key.equals("role_arn") || key.equals("web_identity_token_file");
+                });
+            }
+        } catch (IOException | java.io.UncheckedIOException | IllegalArgumentException | SecurityException e) {
             return false;
         }
     }

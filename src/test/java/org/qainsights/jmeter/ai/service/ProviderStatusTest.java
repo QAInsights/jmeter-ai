@@ -193,15 +193,15 @@ class ProviderStatusTest {
     }
 
     @Test
-    void localAwsDetectionAcceptsSharedFilesAndOverridesWithoutReadingSecrets() throws Exception {
+    void localAwsDetectionAcceptsCredentialSettingsInSharedFilesAndOverrides() throws Exception {
         Files.createDirectories(home.resolve(".aws"));
         for (String file : java.util.List.of("credentials", "config")) {
             Path path = home.resolve(".aws").resolve(file);
-            Files.createFile(path);
+            Files.writeString(path, "[default]\naws_access_key_id = access\n");
             assertTrue(ProviderStatus.hasLocalAwsCredentials(key -> null, key -> null, home));
             Files.delete(path);
         }
-        Path custom = Files.createFile(home.resolve("custom-aws"));
+        Path custom = Files.writeString(home.resolve("custom-aws"), "[default]\ncredential_process = local-helper\n");
         for (String key : java.util.List.of("AWS_SHARED_CREDENTIALS_FILE", "AWS_CONFIG_FILE")) {
             assertTrue(ProviderStatus.hasLocalAwsCredentials(Map.of(key, custom.toString())::get, k -> null, home));
         }
@@ -210,5 +210,27 @@ class ProviderStatusTest {
         }
         assertFalse(ProviderStatus.hasLocalAwsCredentials(
                 Map.of("AWS_CONFIG_FILE", home.resolve("missing").toString())::get, key -> null, home));
+    }
+
+    @Test
+    void localAwsDetectionRejectsFilesWithoutCredentialSettings() throws Exception {
+        Files.createDirectories(home.resolve(".aws"));
+        for (String content : java.util.List.of("", "[default]\nregion = us-east-1\n",
+                "[profile work]\nregion = us-west-2\noutput = json\n",
+                "# aws_access_key_id = access\n; credential_process = helper\n",
+                "[default]\naws_access_key_id = \ncredential_process = # not configured\n")) {
+            Files.writeString(home.resolve(".aws/config"), content);
+            assertFalse(ProviderStatus.hasLocalAwsCredentials(key -> null, key -> null, home));
+        }
+    }
+
+    @Test
+    void localAwsDetectionAcceptsEachSupportedCredentialSetting() throws Exception {
+        Files.createDirectories(home.resolve(".aws"));
+        for (String key : java.util.List.of("aws_access_key_id", "credential_process", "sso_session",
+                "sso_start_url", "sso_account_id", "role_arn", "web_identity_token_file")) {
+            Files.writeString(home.resolve(".aws/config"), "[profile work]\n" + key + " = configured\n");
+            assertTrue(ProviderStatus.hasLocalAwsCredentials(k -> null, k -> null, home), key);
+        }
     }
 }
