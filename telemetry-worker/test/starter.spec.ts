@@ -206,7 +206,7 @@ describe("starter chat", () => {
 		env.STARTER_MONTHLY_BUDGET_USD = "0.01";
 		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ usage: { prompt_tokens: 10000 } }, { status: 429 }));
 		const res = await chat();
-		expect(res.status).toBe(503);
+		expect(res.status, await res.clone().text()).toBe(503);
 		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 		expect(spy).toHaveBeenCalledTimes(1);
 	});
@@ -294,6 +294,66 @@ describe("starter chat", () => {
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations WHERE expires_at > ?")
 			.bind(Date.now()).first()).toEqual({ n: 1 });
 		await waitOnExecutionContext(ctx);
+	});
+	it.each([{}, { prompt_tokens: "bad", completion_tokens: -1 }])("uses the paid cost bound for malformed usage %j", async usage => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({
+			choices: [{ message: { content: "Hello" } }], usage,
+		})));
+		env.STARTER_INPUT_USD_PER_MTOK = "1";
+		env.STARTER_OUTPUT_USD_PER_MTOK = "1";
+		const res = await chat();
+		expect(res.status, await res.clone().text()).toBe(200);
+		const cost = await env.DB.prepare("SELECT cost_usd AS cost FROM starter_usage").first<{ cost: number }>();
+		expect(cost!.cost).toBeGreaterThan(0);
+	});
+	it.each([false, true])("refunds admission write errors even when committed=%s", async committed => {
+		const ctx = createExecutionContext();
+		const db = new Proxy(env.DB, { get(target, key) {
+			if (key === "batch") return target.batch.bind(target);
+			if (key !== "prepare") return Reflect.get(target, key);
+			return (sql: string) => {
+				const statement = target.prepare(sql);
+				if (!sql.includes("INSERT INTO starter_budget_reservations")) return statement;
+				return { bind: (...args: any[]) => ({ run: async () => {
+					if (committed) await statement.bind(...args).run();
+					throw new Error("admission failed");
+				} }) };
+			};
+		} });
+		const fetch = vi.spyOn(globalThis, "fetch");
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, DB: db, STARTER_INPUT_USD_PER_MTOK: "1" }, ctx, UUID_RE);
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(fetch).not.toHaveBeenCalled();
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations").first()).toEqual({ n: 0 });
+	});
+	it("refunds a disconnect before answer text without waiting for the attempt deadline", async () => {
+		const ctx = createExecutionContext();
+		const disconnect = new AbortController();
+		let started!: () => void;
+		const ready = new Promise<void>(resolve => { started = resolve; });
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+			return new Response(new ReadableStream({ start(controller) {
+				init!.signal!.addEventListener("abort", () => controller.error(new Error("disconnected")), { once: true });
+				started();
+			} }));
+		});
+		const pending = handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", signal: disconnect.signal,
+			headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }], stream: true }),
+		}), env, ctx, UUID_RE);
+		await ready;
+		disconnect.abort();
+		const res = await pending;
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(502);
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
 	});
 	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";

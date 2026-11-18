@@ -125,16 +125,30 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		const reservedCost = (inputBound * upstream.input + outputBound * upstream.output) / 1e6;
 		if (paid) {
 			const now = Date.now();
-			const admitted = await env.DB.prepare(`INSERT INTO starter_budget_reservations(id,month,cost_usd,expires_at)
+			let admitted: D1Result;
+			try {
+				admitted = await env.DB.prepare(`INSERT INTO starter_budget_reservations(id,month,cost_usd,expires_at)
 			 SELECT ?,?,?,? WHERE (SELECT COALESCE(SUM(cost_usd),0) FROM starter_usage WHERE month = ?)
 			 + (SELECT COALESCE(SUM(cost_usd),0) FROM starter_budget_reservations WHERE month = ? AND expires_at > ?) + ? <= ?`)
 				.bind(attemptId, month, reservedCost, now + 600_000, month, month, now, reservedCost, budget).run();
+			} catch {
+				const release = () => env.DB.batch([
+					env.DB.prepare("DELETE FROM starter_budget_reservations WHERE id = ?").bind(attemptId),
+					env.DB.prepare("DELETE FROM starter_messages WHERE id = ?").bind(id),
+				]);
+				try { await release(); await refreshRemaining(); }
+				catch { ctx.waitUntil(release().catch(() => {})); }
+				return error(502, "starter_upstream_error", "Starter budget admission is unavailable. Please try again.");
+			}
 			if (!admitted.meta.changes) continue;
 		}
 		const record = async (usage: any) => {
 			const tokens = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
 			const input = tokens(usage?.prompt_tokens), output = tokens(usage?.completion_tokens);
-			const cost = usage ? (input * upstream.input + output * upstream.output) / 1e6 : reservedCost;
+			const validUsage = [usage?.prompt_tokens, usage?.completion_tokens]
+				.every(v => typeof v === "number" && Number.isFinite(v) && v >= 0);
+			const reportedCost = (input * upstream.input + output * upstream.output) / 1e6;
+			const cost = validUsage ? reportedCost : Math.max(reportedCost, reservedCost);
 			const write = () => env.DB.batch([
 				env.DB.prepare(`INSERT INTO starter_usage(month,install_id,upstream,input_tokens,output_tokens,cost_usd,attempt_id) VALUES (?,?,?,?,?,?,?)
 				 ON CONFLICT(attempt_id) DO NOTHING`)
@@ -146,6 +160,13 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		};
 		const abort = new AbortController();
 		const timer = setTimeout(() => abort.abort(), 120_000);
+		const disconnect = () => abort.abort();
+		request.signal.addEventListener("abort", disconnect, { once: true });
+		if (request.signal.aborted) disconnect();
+		const finishAttempt = () => {
+			clearTimeout(timer);
+			request.signal.removeEventListener("abort", disconnect);
+		};
 		let response: Response;
 		try {
 			const openRouter = new URL(upstream.url).hostname === "openrouter.ai";
@@ -158,7 +179,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 				...(openRouter ? { "HTTP-Referer": "https://jmeter.ai", "X-Title": "Feather Wand" } : {}),
 			}, body: JSON.stringify({ ...body, ...routing, model: upstream.model }), signal: abort.signal });
 		} catch {
-			clearTimeout(timer);
+			finishAttempt();
 			await record(null);
 			if (i + 1 < upstreams.length) continue;
 			await refund();
@@ -167,7 +188,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		if (!response.ok) {
 			let usage;
 			try { usage = (await response.json() as any)?.usage; } catch { /* No usage in provider error. */ }
-			clearTimeout(timer);
+			finishAttempt();
 			await record(usage);
 			if (([401, 402, 403, 429].includes(response.status) || response.status >= 500) && i + 1 < upstreams.length) continue;
 			await refund();
@@ -176,11 +197,11 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		if (!body.stream) {
 			let result: any;
 			try { result = await response.json(); } catch {
-				clearTimeout(timer);
+				finishAttempt();
 				await record(null); await refund();
 				return error(502, "starter_upstream_error", "Invalid provider response.");
 			}
-			clearTimeout(timer);
+			finishAttempt();
 			await record(result?.usage);
 			if (result?.error || typeof result?.choices?.[0]?.message?.content !== "string"
 				|| !result.choices[0].message.content.trim()) {
@@ -189,7 +210,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 			}
 			return new Response(JSON.stringify(result), { headers: { ...headers(), "Content-Type": "application/json" } });
 		}
-		if (!response.body) { clearTimeout(timer); await record(null); await refund(); return error(502, "starter_upstream_error", "Empty provider stream."); }
+		if (!response.body) { finishAttempt(); await record(null); await refund(); return error(502, "starter_upstream_error", "Empty provider stream."); }
 		const [client, accounting] = response.body.tee();
 		let answered = false;
 		let ready!: () => void;
@@ -225,7 +246,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 				consume(pending.trim());
 			} catch { /* The client receives the upstream stream error. */ }
 			finally {
-				clearTimeout(timer);
+				finishAttempt();
 				try { await record(usage); }
 				finally {
 					try { if (!answered) await refund(); }
