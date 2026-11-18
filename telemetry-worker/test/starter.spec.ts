@@ -51,7 +51,7 @@ describe("starter chat", () => {
 		for (let i = 0; i < 30; i++) expect((await chat(undefined, crypto.randomUUID())).status).toBe(200);
 		expect((await chat(undefined, crypto.randomUUID())).status).toBe(402);
 	});
-	it.each([500, 429, 402])("refunds on upstream %s without a fallback", async status => {
+	it.each([500, 429, 402, 401, 403])("refunds on upstream %s without a fallback", async status => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("failed", { status }));
 		const res = await chat();
 		expect(res.status).toBe(502);
@@ -175,15 +175,18 @@ describe("starter chat", () => {
 		expect(await env.DB.prepare("SELECT input_tokens,output_tokens FROM starter_usage").first()).toEqual({ input_tokens: 20, output_tokens: 10 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: answered ? 1 : 0 });
 	});
-	it("falls back on 429 and prices each attempt at its own rates", async () => {
+	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
 		env.STARTER_INPUT_USD_PER_MTOK = "1";
 		env.STARTER_OUTPUT_USD_PER_MTOK = "2";
 		const spy = vi.spyOn(globalThis, "fetch")
-			.mockResolvedValueOnce(new Response(JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5 } }), { status: 429 }))
+			.mockResolvedValueOnce(new Response(JSON.stringify({ usage: { prompt_tokens: 10, completion_tokens: 5 } }), { status }))
 			.mockImplementation(async () => completion());
-		expect((await chat()).status).toBe(200);
+		const res = await chat();
+		expect(res.status).toBe(200);
+		expect(await res.json()).toMatchObject({ choices: [{ message: { content: "Hi" } }] });
 		expect(spy).toHaveBeenCalledTimes(2);
+		expect(String(spy.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
 		expect(JSON.parse(String(spy.mock.calls[1][1]?.body)).model).toBe("gemini-2.5-flash-lite");
 		const rows = (await env.DB.prepare("SELECT upstream,cost_usd FROM starter_usage ORDER BY id").all()).results;
 		expect(rows[0].upstream).toBe("primary"); expect(rows[0].cost_usd).toBeCloseTo(0.00002);

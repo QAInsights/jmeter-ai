@@ -28,7 +28,7 @@ npx wrangler secret put STARTER_FALLBACK_API_KEY
 
 Primary defaults to OpenRouter `nvidia/nemotron-3.5-lightning:free` (zero token cost).
 Fallback defaults to Gemini `gemini-2.5-flash-lite` ($0.10/$0.40 per million
-input/output tokens). Network failures, 402, 429, and 5xx trigger one fallback
+input/output tokens). Network failures, 401, 402, 403, 429, and 5xx trigger one fallback
 attempt before streaming begins. With only one secret, only that provider is used.
 URLs, models, token limits, prices and budgets are configurable via the
 `STARTER_*` vars in `wrangler.jsonc`; secrets must never be added there.

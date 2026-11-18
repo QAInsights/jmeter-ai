@@ -149,7 +149,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 			let usage;
 			try { usage = (await response.json() as any)?.usage; } catch { /* No usage in provider error. */ }
 			await record(usage);
-			if ((response.status === 429 || response.status === 402 || response.status >= 500) && i + 1 < upstreams.length) continue;
+			if (([401, 402, 403, 429].includes(response.status) || response.status >= 500) && i + 1 < upstreams.length) continue;
 			await refund();
 			return error(502, "starter_upstream_error", "Starter provider rejected the request. Please try again or connect your own provider.");
 		}
