@@ -56,6 +56,8 @@ public enum TelemetryFeature {
     TRIAGE_RUN("triage_run"),
     TRIAGE_UNCLASSIFIED("triage_unclassified"),
     EXTRACT_ADDED("extract_added"),
+    PARAM_OPENED("param_opened"),
+    PARAM_APPLIED("param_applied"),
     OUTCOME_CANCELLED("outcome_cancelled"),
     AGENT_STEPS_1_5("agent_steps_1_5"),
     AGENT_STEPS_6_15("agent_steps_6_15"),
