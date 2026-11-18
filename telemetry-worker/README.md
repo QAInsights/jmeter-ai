@@ -10,8 +10,9 @@ plugin/JMeter/Java version, OS name, CPU arch, AI provider name, agent-mode
 enabled flag, first-run flag, coarse feature usage counts, and the country code
 Cloudflare reports for the request. Day and timestamp are assigned server side.
 IP addresses are used for burst rate limiting and starter lifetime quotas, and
-are never stored in plaintext. Starter quota records retain a SHA-256 IP hash
-for the lifetime of the quota, alongside the independent starter UUID.
+are never stored in plaintext. Starter quota records retain an HMAC-SHA-256 IP
+hash keyed by `STARTER_IP_HASH_SECRET` for the lifetime of the quota, alongside
+the independent starter UUID.
 
 ## Starter chat
 
@@ -21,9 +22,11 @@ starter UUID as the bearer API key (separate from its telemetry ID). No user pro
 functions, client model fallbacks and paid plugins are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
 clamped to 2048 tokens by default. Both JSON and SSE streaming are supported.
 
-Configure either or both provider secrets before deployment:
+Configure the required IP-hashing secret (choose a long random value) and either
+or both provider secrets before deployment:
 
 ```bash
+npx wrangler secret put STARTER_IP_HASH_SECRET
 npx wrangler secret put STARTER_API_KEY
 npx wrangler secret put STARTER_FALLBACK_API_KEY
 ```
@@ -31,7 +34,10 @@ npx wrangler secret put STARTER_FALLBACK_API_KEY
 Primary defaults to OpenRouter `nvidia/nemotron-3.5-lightning:free` (zero token cost).
 Fallback defaults to Gemini `gemini-2.5-flash-lite` ($0.10/$0.40 per million
 input/output tokens). Network failures, 401, 402, 403, 429, and 5xx trigger one fallback
-attempt before streaming begins. With only one secret, only that provider is used.
+attempt before streaming begins. With only one provider secret, only that provider is used.
+If the IP-hashing secret or all provider secrets are missing, starter requests
+return 503 `starter_unavailable`. Keep the IP-hashing secret stable: rotating it
+changes the per-IP quota identities.
 URLs, models, token limits, prices and budgets are configurable via the
 `STARTER_*` vars in `wrangler.jsonc`; secrets must never be added there.
 
@@ -45,7 +51,7 @@ unset and is sent as the `provider` field only to the primary upstream when its
 host is `openrouter.ai`; invalid JSON is ignored. In `wrangler.jsonc`, encode it
 as `"STARTER_PROVIDER": "{\"only\":[\"deepinfra\"],\"data_collection\":\"deny\"}"`.
 
-D1 migration 0003 stores lifetime reservations per install UUID and SHA-256 IP
+D1 migration 0003 stores lifetime reservations per install UUID and HMAC-SHA-256 IP
 hash (not raw IP), plus UTC-month usage, upstream name and estimated cost. It
 never stores chat content. Default lifetime allowances are 10 per install and 30
 per IP; failed requests with no answer text refund the message. A stream that
@@ -89,7 +95,13 @@ npx wrangler d1 migrations apply feather-wand-telemetry --remote
 # 3. Set the stats bearer token (choose a long random value).
 npx wrangler secret put STATS_TOKEN
 
-# 4. Deploy.
+# 4. Enable starter chat: choose a long random IP-hashing secret and set
+#    at least one provider key (both enable primary/fallback routing).
+npx wrangler secret put STARTER_IP_HASH_SECRET
+npx wrangler secret put STARTER_API_KEY
+npx wrangler secret put STARTER_FALLBACK_API_KEY
+
+# 5. Deploy.
 npx wrangler deploy
 ```
 

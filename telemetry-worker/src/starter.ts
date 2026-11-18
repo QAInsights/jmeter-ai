@@ -3,6 +3,7 @@ export interface StarterEnv {
 	STARTER_LIMITER: RateLimit;
 	STARTER_API_KEY?: string;
 	STARTER_FALLBACK_API_KEY?: string;
+	STARTER_IP_HASH_SECRET?: string;
 	STARTER_UPSTREAM_URL?: string;
 	STARTER_MODEL?: string;
 	STARTER_PROVIDER?: string;
@@ -60,7 +61,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		{ name: "fallback", key: env.STARTER_FALLBACK_API_KEY, url: env.STARTER_FALLBACK_UPSTREAM_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 			model: env.STARTER_FALLBACK_MODEL ?? "gemini-2.5-flash-lite", input: number(env.STARTER_FALLBACK_INPUT_USD_PER_MTOK, 0.10), output: number(env.STARTER_FALLBACK_OUTPUT_USD_PER_MTOK, 0.40) },
 	].filter(u => u.key);
-	if (!upstreams.length) return error(503, "starter_unavailable", "Starter chat is unavailable. Connect your own provider.");
+	if (!upstreams.length || !env.STARTER_IP_HASH_SECRET) return error(503, "starter_unavailable", "Starter chat is unavailable. Connect your own provider.");
 	const budget = number(env.STARTER_MONTHLY_BUDGET_USD, 50);
 	let body: Record<string, unknown>;
 	try {
@@ -97,7 +98,9 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 	}
 	if (body.max_tokens === undefined && body.max_completion_tokens === undefined) body.max_tokens = max;
 	if (body.stream) body.stream_options = { include_usage: true };
-	const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip));
+	const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.STARTER_IP_HASH_SECRET),
+		{ name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+	const hash = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(ip));
 	const ipHash = Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
 	const id = crypto.randomUUID();
 	const reservation = await env.DB.prepare(`INSERT INTO starter_messages(id, install_id, ip_hash)

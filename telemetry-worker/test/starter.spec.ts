@@ -16,6 +16,7 @@ function completion() {
 beforeEach(async () => {
 	await env.DB.exec("DELETE FROM starter_messages; DELETE FROM starter_usage; DELETE FROM starter_budget_reservations;");
 	env.STARTER_API_KEY = "test-primary";
+	env.STARTER_IP_HASH_SECRET = "test-ip-hash-secret";
 	env.STARTER_FALLBACK_API_KEY = "";
 	env.STARTER_MONTHLY_BUDGET_USD = "50";
 	env.STARTER_INPUT_USD_PER_MTOK = "0";
@@ -28,6 +29,36 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("starter chat", () => {
+	it.each([undefined, ""])("requires an IP hash secret (value=%s)", async secret => {
+		const ctx = createExecutionContext();
+		const fetch = vi.spyOn(globalThis, "fetch");
+		const res = await handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, STARTER_IP_HASH_SECRET: secret }, ctx, UUID_RE);
+		await waitOnExecutionContext(ctx);
+		expect(res.status).toBe(503);
+		expect(await res.json()).toMatchObject({ error: { code: "starter_unavailable" } });
+		expect(res.headers.get("X-Starter-Remaining")).toBe("10");
+		expect(res.headers.get("X-Starter-Limit")).toBe("10");
+		expect(fetch).not.toHaveBeenCalled();
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: 0 });
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: 0 });
+	});
+	it("stores stable HMAC-SHA-256 IP identities that depend on the secret", async () => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
+		const address = "203.0.113.42";
+		expect((await chat(undefined, UUID, address)).status).toBe(200);
+		expect((await chat(undefined, crypto.randomUUID(), address)).status).toBe(200);
+		const rows = await env.DB.prepare("SELECT ip_hash FROM starter_messages").all();
+		expect(rows.results).toEqual([
+			{ ip_hash: "7a13c1f1fdcc1fdfb801882293b00dc75579a8fa917c0168c99d3b0453f8eef9" },
+			{ ip_hash: "7a13c1f1fdcc1fdfb801882293b00dc75579a8fa917c0168c99d3b0453f8eef9" },
+		]);
+		env.STARTER_IP_HASH_SECRET = "another-test-ip-hash-secret";
+		expect((await chat(undefined, crypto.randomUUID(), address)).status).toBe(200);
+		expect(await env.DB.prepare("SELECT COUNT(DISTINCT ip_hash) AS n FROM starter_messages").first()).toEqual({ n: 2 });
+	});
 	it("rejects invalid authentication", async () => {
 		const spy = vi.spyOn(globalThis, "fetch");
 		const res = await chat(undefined, "not-a-uuid");
