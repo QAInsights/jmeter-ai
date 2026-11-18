@@ -137,7 +137,6 @@ public final class StarterAiService implements AiService {
                     output.accept(completion.path("choices").path(0).path("message").path("content").asText("No response received."));
                     recordUsage(completion);
                 }
-                if (!remainingMessage.isEmpty()) output.accept("\n\n" + remainingMessage);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

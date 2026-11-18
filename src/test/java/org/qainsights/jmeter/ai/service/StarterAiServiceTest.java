@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.qainsights.jmeter.ai.load.WorkloadAiAssistant;
 
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
@@ -77,7 +78,7 @@ class StarterAiServiceTest {
 
     @Test void parsesRemainingAndUsesTextChatWireFormat() {
         StarterAiService service = service();
-        assertEquals("Hello\n\n7 of 10 free messages left. Connect a provider for unlimited use.",
+        assertEquals("Hello",
                 service.generateResponse(List.of("Hi", "Hello", "How are you?")));
         assertEquals("user", request.get().path("messages").path(2).path("role").asText());
         assertFalse(request.get().has("tools"));
@@ -112,13 +113,26 @@ class StarterAiServiceTest {
         assertTrue(service().generateResponse(List.of("Hi")).contains("Try later or connect a provider"));
     }
 
-    @Test void streamsTokensAndAppendsAllowance() throws Exception {
+    @Test void structuredResponsesRemainParseableWithoutAllowanceText() throws Exception {
+        String suggestion = "{\"target_type\":\"users\",\"target_value\":10,\"summary\":\"Ten users\"}";
+        response = new ObjectMapper().writeValueAsString(java.util.Map.of("choices",
+                List.of(java.util.Map.of("message", java.util.Map.of("content", suggestion)))));
+        StarterAiService service = service();
+        String answer = service.generateResponse(List.of("Suggest a workload"));
+        assertEquals(suggestion, answer);
+        assertEquals(10, WorkloadAiAssistant.parse(answer).targetValue());
+        assertTrue(service.getRemainingMessage().startsWith("7 of 10"));
+    }
+
+    @Test void streamsOnlyModelTokensAndExposesAllowanceSeparately() throws Exception {
         response = "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n\n";
         StringBuilder output = new StringBuilder();
         CountDownLatch done = new CountDownLatch(1);
-        service().generateStreamResponse(List.of("Hi"), null, output::append, done::countDown, error -> fail(error));
+        StarterAiService service = service();
+        service.generateStreamResponse(List.of("Hi"), null, output::append, done::countDown, error -> fail(error));
         assertTrue(done.await(5, TimeUnit.SECONDS));
-        assertTrue(output.toString().startsWith("Hello\n\n7 of 10"));
+        assertEquals("Hello", output.toString());
+        assertTrue(service.getRemainingMessage().startsWith("7 of 10"));
         assertTrue(request.get().path("stream").asBoolean());
     }
 

@@ -1813,6 +1813,9 @@ public class AiChatPanel
     private void showFreeConnectAction() {
         String model = getSelectedModel();
         if (model != null && model.startsWith(StarterAiService.MODEL_PREFIX)) {
+            if (starterService != null && !starterService.getRemainingMessage().isEmpty()) {
+                transcript.addSystemMessage(starterService.getRemainingMessage(), null);
+            }
             transcript.addConnectProviderAction(this::openProviderSetup);
         }
     }
