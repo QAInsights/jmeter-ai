@@ -20,6 +20,7 @@ beforeEach(async () => {
 	env.STARTER_MONTHLY_BUDGET_USD = "50";
 	env.STARTER_INPUT_USD_PER_MTOK = "0";
 	env.STARTER_OUTPUT_USD_PER_MTOK = "0";
+	env.STARTER_MAX_OUTPUT_TOKENS = "2048";
 	env.STARTER_PROVIDER = "";
 	env.STARTER_UPSTREAM_URL = "https://openrouter.ai/api/v1/chat/completions";
 	ip = crypto.randomUUID();
@@ -69,10 +70,16 @@ describe("starter chat", () => {
 		const init = spy.mock.calls[0][1]!;
 		const body = JSON.parse(String(init.body));
 		expect(body.model).toBe("nvidia/nemotron-3.5-lightning:free");
-		expect(body.max_tokens).toBe(1024);
-		expect(body.max_completion_tokens).toBe(1024);
+		expect(body.max_tokens).toBe(2048);
+		expect(body.max_completion_tokens).toBe(2048);
 		for (const key of ["tools", "tool_choice", "functions", "function_call"]) expect(body).not.toHaveProperty(key);
 		expect(init.headers).toMatchObject({ "HTTP-Referer": "https://jmeter.ai", "X-Title": "Feather Wand" });
+	});
+	it.each([undefined, "512"])("uses the default or configured cap when token limits are omitted (%s)", async cap => {
+		env.STARTER_MAX_OUTPUT_TOKENS = cap;
+		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => completion());
+		expect((await chat()).status).toBe(200);
+		expect(JSON.parse(String(spy.mock.calls[0][1]?.body)).max_tokens).toBe(cap === undefined ? 2048 : 512);
 	});
 	it.each([["0.06", "0.16"], ["0", "0.16"], ["0.06", "0"]])("blocks paid upstreams at exhausted monthly budgets (%s/%s)", async (input, output) => {
 		env.STARTER_INPUT_USD_PER_MTOK = input;

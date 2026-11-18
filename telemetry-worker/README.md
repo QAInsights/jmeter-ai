@@ -17,7 +17,7 @@ IP addresses are used only for rate limiting and are never stored in plaintext.
 Use SDK base URL `https://telemetry.jmeter.ai/v1/starter` and the plugin's random
 starter UUID as the bearer API key (separate from its telemetry ID). No user provider key is required. Agent tools and
 functions are stripped; 1–100 messages and a 64 KiB body are allowed. Output is
-clamped to 1024 tokens by default. Both JSON and SSE streaming are supported.
+clamped to 2048 tokens by default. Both JSON and SSE streaming are supported.
 
 Configure either or both provider secrets before deployment:
 

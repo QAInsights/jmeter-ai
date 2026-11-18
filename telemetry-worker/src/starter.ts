@@ -95,7 +95,7 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		}
 	} catch { return error(400, "invalid_request", "Expected a JSON chat with 1–100 text messages, at most 64 KB."); }
 	for (const field of ["tools", "tool_choice", "functions", "function_call", "n", "provider"]) delete body[field];
-	const max = Math.max(1, Math.floor(number(env.STARTER_MAX_OUTPUT_TOKENS, 1024)));
+	const max = Math.max(1, Math.floor(number(env.STARTER_MAX_OUTPUT_TOKENS, 2048)));
 	for (const field of ["max_tokens", "max_completion_tokens"]) {
 		if (body[field] !== undefined) body[field] = Math.max(1, Math.min(max, Math.floor(Number(body[field])) || max));
 	}
