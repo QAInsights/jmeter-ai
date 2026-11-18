@@ -585,7 +585,7 @@ As a manual alternative, set `jmeter.ai.opencode.enabled=true` and optionally `j
 
 ### OpenCode permissions
 
-Each request runs in a new empty temporary directory with `--pure` and a permission configuration that allows read-only discovery tools while denying file writes, shell, web tools, and reads outside that directory. The temporary directory is removed after the request. In Agent Mode, Feather Wand's own JMeter tools perform plan edits; OpenCode itself cannot write to the plan files.
+Each request runs in a new empty temporary working directory (and passes `--pure --dir <empty temp dir>` when OpenCode V1 is detected) with a permission configuration that allows read-only discovery tools while denying file writes, shell, web tools, and reads outside that directory. The temporary directory is removed after the request. In Agent Mode, Feather Wand's own JMeter tools perform plan edits; OpenCode itself cannot write to the plan files.
 
 ### What Feather Wand runs
 
@@ -593,7 +593,7 @@ Each request runs in a new empty temporary directory with `--pure` and a permiss
 |----------|-------------------------|----------------|
 | **ChatGPT / Codex** | `codex login status`, `codex login`, `codex logout` | `codex exec` with the prompt on UTF-8 stdin, the configured sandbox, optional `--model`, and a clean last-message output file |
 | **Claude Code** | `claude auth status --json`, `claude auth login --claudeai`, `claude auth logout` | `claude -p --output-format text` with the prompt on UTF-8 stdin and optional `--model` |
-| **OpenCode** | `opencode --version`; provider sign-in is done manually in the AI CLI terminal | `opencode run --pure --format json --dir <empty temp dir>` with the prompt on UTF-8 stdin, `OPENCODE_CONFIG_CONTENT`, and optional `-m provider/model` |
+| **OpenCode** | `opencode --version`; provider sign-in is done manually in the AI CLI terminal | `opencode run --format json` in `<empty temp dir>` (with `--pure --dir <empty temp dir>` when OpenCode V1 is detected) with the prompt on UTF-8 stdin, `OPENCODE_CONFIG_CONTENT`, and optional `-m provider/model` |
 
 Commands are launched directly with `ProcessBuilder`, never through a shell, and prompt text is never interpolated into the command line. Standard output and error are drained concurrently off the Swing event thread. Each request has a hard timeout; timeout or **Stop** terminates the CLI process and its descendants.
 

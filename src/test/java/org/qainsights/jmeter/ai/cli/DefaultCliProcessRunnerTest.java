@@ -89,6 +89,32 @@ class DefaultCliProcessRunnerTest {
     }
 
     @Test
+    void runsInWorkingDirectoryAndUpdatesPwd(@TempDir Path dir) throws IOException {
+        Path workDir = Files.createDirectory(dir.resolve("child-cwd"));
+        Path program = program(dir, "WorkingDir", """
+                import java.nio.file.Path;
+
+                public class WorkingDir {
+                    public static void main(String[] args) throws Exception {
+                        System.out.println(Path.of("").toRealPath());
+                        System.out.println(System.getenv("PWD"));
+                        System.out.println(System.getenv("X"));
+                    }
+                }
+                """);
+
+        CliProcessResult result = runReliably(
+                javaCommand(program), null, Duration.ofSeconds(60), workDir, Map.of("X", "with-cwd"));
+
+        assertTrue(result.isSuccess(), describe(result));
+        List<String> lines = result.getStdout().trim().lines().toList();
+        assertEquals(List.of(
+                workDir.toRealPath().toString(),
+                workDir.toAbsolutePath().toString(),
+                "with-cwd"), lines);
+    }
+
+    @Test
     void killsAProcessThatOutlivesTheTimeout(@TempDir Path dir) throws IOException {
         Path program = program(dir, "Sleeper", """
                 public class Sleeper {
@@ -165,6 +191,14 @@ class DefaultCliProcessRunnerTest {
                 () -> runner.run(List.of(), null, Duration.ofSeconds(5)));
     }
 
+    @Test
+    void defaultRunnerRejectsWorkingDirectoryWhenNotOverridden(@TempDir Path dir) {
+        CliProcessRunner minimal = (command, stdin, timeout) -> CliProcessResult.of(0, "ok");
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> minimal.run(List.of("echo"), null, Duration.ofSeconds(5), dir, Map.of()));
+    }
+
     /**
      * Runs the command, retrying when the child exhibits a launch flake: a
      * non-zero exit in under a second. A freshly written {@code .java} file can
@@ -178,11 +212,20 @@ class DefaultCliProcessRunnerTest {
 
     private CliProcessResult runReliably(List<String> command, String stdin, Duration timeout,
                                        Map<String, String> environment) {
+        return runReliably(command, stdin, timeout, null, environment);
+    }
+
+    private CliProcessResult runReliably(List<String> command, String stdin, Duration timeout,
+                                       Path workingDirectory, Map<String, String> environment) {
         CliProcessResult result = null;
         for (int attempt = 0; attempt < 4; attempt++) {
-            result = environment.isEmpty()
-                    ? runner.run(command, stdin, timeout)
-                    : runner.run(command, stdin, timeout, environment);
+            if (workingDirectory != null) {
+                result = runner.run(command, stdin, timeout, workingDirectory, environment);
+            } else {
+                result = environment.isEmpty()
+                        ? runner.run(command, stdin, timeout)
+                        : runner.run(command, stdin, timeout, environment);
+            }
             if (result.isTimedOut() || result.getExitCode() == 0
                     || result.getDurationMillis() >= 1_000) {
                 return result;

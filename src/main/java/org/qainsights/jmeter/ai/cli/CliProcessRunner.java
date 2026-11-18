@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.cli;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,22 @@ public interface CliProcessRunner {
     default CliProcessResult run(List<String> command, String stdin, Duration timeout,
                                  Map<String, String> environment) {
         return run(command, stdin, timeout);
+    }
+
+    /**
+     * Runs {@code command} inside {@code workingDirectory} with additional
+     * environment variables for the child process. Runners that do not
+     * implement working-directory isolation fail fast rather than silently
+     * spawning in the parent process working directory.
+     *
+     * @throws UnsupportedOperationException when this runner does not support
+     *                                       running inside an explicit working
+     *                                       directory
+     */
+    default CliProcessResult run(List<String> command, String stdin, Duration timeout,
+                                 Path workingDirectory, Map<String, String> environment) {
+        throw new UnsupportedOperationException(
+                "Working directory override is not supported by this CliProcessRunner.");
     }
 
     /**
