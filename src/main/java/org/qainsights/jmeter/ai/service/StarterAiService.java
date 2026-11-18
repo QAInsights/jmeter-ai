@@ -135,11 +135,18 @@ public final class StarterAiService implements AiService {
                 messages.addObject().put("role", i % 2 == 0 ? "user" : "assistant")
                         .put("content", history.get(i));
             }
+            byte[] encoded = mapper.writeValueAsBytes(body);
+            while (encoded.length > 65_536 && messages.size() > 1) {
+                int remove = Math.min(2, messages.size() - 1);
+                for (int i = 0; i < remove; i++) messages.remove(0);
+                encoded = mapper.writeValueAsBytes(body);
+            }
+            if (encoded.length > 65_536) throw new Failure(errorMessage(400, "invalid_request"), null);
             HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/chat/completions"))
                     .timeout(Duration.ofSeconds(120))
                     .header("Authorization", "Bearer " + StarterId.load(idPath))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(encoded)).build();
             HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
             remainingMessage = remaining(response.headers().firstValue("X-Starter-Remaining").orElse(""),
                     response.headers().firstValue("X-Starter-Limit").orElse("10"));
@@ -214,6 +221,9 @@ public final class StarterAiService implements AiService {
     }
 
     static String errorMessage(int status, String code) {
+        if (status == 413 || status == 400 && "invalid_request".equals(code)) {
+            return "This conversation is too long for Free. Start a new chat or send a shorter message.";
+        }
         if (status == 402 && "starter_quota_exhausted".equals(code)) {
             return "Your free messages are used up. Connect a provider to keep chatting with Feather Wand.";
         }

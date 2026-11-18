@@ -38,6 +38,9 @@ final class StarterId {
                 java.util.Set.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE), attributes);
              var lock = channel.lock()) {
             if (Files.exists(path)) {
+                if (!Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Starter ID path is not a regular file.");
+                }
                 if (attributes.length > 0) Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
                 try {
                     return UUID.fromString(Files.readString(path).trim()).toString();

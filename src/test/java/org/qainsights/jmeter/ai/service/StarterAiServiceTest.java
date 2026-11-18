@@ -78,6 +78,31 @@ class StarterAiServiceTest {
                 home.resolve(".jmeter-ai/starter-id"));
     }
 
+    @Test void boundsSerializedHistoryByBytesWithoutTruncatingTheCurrentMessage() {
+        service().generateResponse(List.of("🤖".repeat(20_000), "Old answer", "New question"));
+        assertEquals(1, request.get().path("messages").size());
+        assertEquals("New question", request.get().path("messages").path(0).path("content").asText());
+    }
+
+    @Test void reportsOversizeCurrentMessagesAndWorkerSizeRejections() {
+        var failure = assertThrows(StarterAiService.Failure.class,
+                () -> service().generateResponse(List.of("x".repeat(70_000))));
+        assertTrue(failure.getMessage().contains("too long"));
+        assertNull(request.get());
+        status = 400;
+        response = "{\"error\":{\"code\":\"invalid_request\"}}";
+        failure = assertThrows(StarterAiService.Failure.class, () -> service().generateResponse(List.of("Hello")));
+        assertTrue(failure.getMessage().contains("Start a new chat"));
+    }
+
+    @Test void doesNotChangePermissionsWhenTheIdPathIsADirectory() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.getFileStore(home).supportsFileAttributeView("posix"));
+        Path path = Files.createDirectory(home.resolve("starter-id"));
+        var before = Files.getPosixFilePermissions(path);
+        assertThrows(java.io.IOException.class, () -> StarterId.load(path));
+        assertEquals(before, Files.getPosixFilePermissions(path));
+    }
+
     @Test void starterIdPersistsIndependentlyOfTelemetry() throws Exception {
         Path path = home.resolve(".jmeter-ai/starter-id");
         String id = StarterId.load(path);
