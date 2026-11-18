@@ -62,6 +62,10 @@ conservative text-token bound (UTF-8 bytes of the request) plus the requested
 output limit. Admission includes recorded spend and outstanding reservations,
 so a paid request can be refused just below the cap. Reported usage replaces
 the reservation atomically; missing usage retains its conservative cost estimate.
+In-flight reservations expire after ten minutes (longer than the attempt
+deadline), so an accounting outage cannot block paid fallbacks indefinitely.
+If both accounting writes fail, the unrecorded attempt stops gating paid calls
+at expiry; this recovery tradeoff can leave that attempt's cost uncounted.
 Failed upstream
 attempts count in monthly request totals; any reported usage is priced at that
 upstream's configured rates. The JSON stats include a `starter` summary and

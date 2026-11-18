@@ -124,10 +124,11 @@ export async function handleStarter(request: Request, env: StarterEnv, ctx: Exec
 		const outputBound = Math.max(Number(body.max_tokens) || 0, Number(body.max_completion_tokens) || 0);
 		const reservedCost = (inputBound * upstream.input + outputBound * upstream.output) / 1e6;
 		if (paid) {
-			const admitted = await env.DB.prepare(`INSERT INTO starter_budget_reservations(id,month,cost_usd)
-			 SELECT ?,?,? WHERE (SELECT COALESCE(SUM(cost_usd),0) FROM starter_usage WHERE month = ?)
-			 + (SELECT COALESCE(SUM(cost_usd),0) FROM starter_budget_reservations WHERE month = ?) + ? <= ?`)
-				.bind(attemptId, month, reservedCost, month, month, reservedCost, budget).run();
+			const now = Date.now();
+			const admitted = await env.DB.prepare(`INSERT INTO starter_budget_reservations(id,month,cost_usd,expires_at)
+			 SELECT ?,?,?,? WHERE (SELECT COALESCE(SUM(cost_usd),0) FROM starter_usage WHERE month = ?)
+			 + (SELECT COALESCE(SUM(cost_usd),0) FROM starter_budget_reservations WHERE month = ? AND expires_at > ?) + ? <= ?`)
+				.bind(attemptId, month, reservedCost, now + 600_000, month, month, now, reservedCost, budget).run();
 			if (!admitted.meta.changes) continue;
 		}
 		const record = async (usage: any) => {

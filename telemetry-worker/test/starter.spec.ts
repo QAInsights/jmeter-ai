@@ -271,6 +271,30 @@ describe("starter chat", () => {
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_messages").first()).toEqual({ n: fallback ? 1 : 0 });
 		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_usage").first()).toEqual({ n: fallback ? 2 : 1 });
 	});
+	it("expires paid reservations when both accounting writes fail", async () => {
+		const ctx = createExecutionContext();
+		const batch = vi.fn().mockRejectedValue(new Error("accounting unavailable"));
+		const db = new Proxy(env.DB, { get(target, key) {
+			return key === "batch" ? batch : key === "prepare" ? target.prepare.bind(target) : Reflect.get(target, key);
+		} });
+		const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async url =>
+			String(url).includes("openrouter.ai") ? new Response("limited", { status: 429 }) : completion());
+		const directChat = () => handleStarter(new Request("https://example.com/v1/starter/chat/completions", {
+			method: "POST", headers: { Authorization: `Bearer ${UUID}`, "CF-Connecting-IP": ip },
+			body: JSON.stringify({ messages: [{ role: "user", content: "Hi" }] }),
+		}), { ...env, DB: db, STARTER_FALLBACK_API_KEY: "fallback", STARTER_MONTHLY_BUDGET_USD: "0.001" }, ctx, UUID_RE);
+		expect((await directChat()).status).toBe(200);
+		await waitOnExecutionContext(ctx);
+		expect(batch).toHaveBeenCalledTimes(4);
+		expect((await directChat()).status).toBe(503);
+		expect(spy).toHaveBeenCalledTimes(3);
+		vi.spyOn(Date, "now").mockReturnValue(Date.now() + 600_001);
+		expect((await directChat()).status).toBe(200);
+		expect(spy).toHaveBeenCalledTimes(5);
+		expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM starter_budget_reservations WHERE expires_at > ?")
+			.bind(Date.now()).first()).toEqual({ n: 1 });
+		await waitOnExecutionContext(ctx);
+	});
 	it.each([429, 401, 403])("falls back on %s and prices each attempt at its own rates", async status => {
 		env.STARTER_FALLBACK_API_KEY = "test-fallback";
 		env.STARTER_INPUT_USD_PER_MTOK = "1";
