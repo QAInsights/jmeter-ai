@@ -5,6 +5,14 @@ import org.apache.jmeter.gui.MainFrame;
 import org.apache.jmeter.gui.util.JMeterToolBar;
 import com.google.genai.Client;
 import org.qainsights.jmeter.ai.service.AiService;
+import org.qainsights.jmeter.ai.service.AiServiceHolder;
+import org.qainsights.jmeter.ai.service.GrokAiService;
+import org.qainsights.jmeter.ai.service.OpenRouterAiService;
+import org.qainsights.jmeter.ai.service.MetaMuseAiService;
+import org.qainsights.jmeter.ai.service.BedrockAiService;
+import org.qainsights.jmeter.ai.service.CodexAiService;
+import org.qainsights.jmeter.ai.service.ClaudeCodeAiService;
+import org.qainsights.jmeter.ai.service.OpenCodeAiService;
 import org.qainsights.jmeter.ai.apple.AppleFoundationHelper;
 import org.qainsights.jmeter.ai.service.AppleFoundationAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
@@ -57,6 +65,7 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
             }
 
             org.qainsights.jmeter.ai.extract.ExtractThisMenu.install();
+            org.qainsights.jmeter.ai.param.ParameterizeThisMenu.install();
 
             // Add tree selection listener to detect when components are selected in JMeter
             // tree
@@ -220,6 +229,102 @@ public class AiMenuItem extends JMenuItem implements ActionListener {
         if (item != null && item.ensureAiChatPanelOpen()) {
             item.currentChatPanel.runCommand(command);
         }
+    }
+
+    static void parameterizationApplied() {
+        AiMenuItem item = liveInstance;
+        if (item != null && item.currentChatPanel != null) {
+            item.currentChatPanel.setLastCommandType("PARAMETERIZE");
+        }
+    }
+
+    static java.util.function.Function<String, String> sampleRowsAiCall() {
+        AiMenuItem item = liveInstance;
+        return sampleRowsAiCall(item == null ? null : item.currentChatPanel);
+    }
+
+    static java.util.function.Function<String, String> sampleRowsAiCall(AiChatPanel panel) {
+        if (panel != null) {
+            java.util.function.Function<String, String> selected =
+                    CommandDispatcher.workloadAiCall(panel.getSelectedModel(), panel::resolveAiService);
+            if (selected != null) {
+                return selected;
+            }
+        }
+        AiService service = configuredSampleService(AiConfig.getProperty("jmeter.ai.service.type", "openai"));
+        return service == null ? null : prompt -> service.generateResponse(java.util.List.of(prompt));
+    }
+
+    static AiService configuredSampleService(String type) {
+        AiService basic = createAiService(type);
+        if (basic != null) {
+            return basic;
+        }
+        AiServiceHolder holder = new AiServiceHolder();
+        String model;
+        switch (type.toLowerCase(java.util.Locale.ROOT)) {
+            case "grok":
+                if (!sampleApiKey("grok")) {
+                    return null;
+                }
+                GrokAiService grok = new GrokAiService();
+                holder.setGrokService(grok);
+                model = "grok:" + grok.getCurrentModel();
+                break;
+            case "openrouter":
+                if (!sampleApiKey("openrouter")) {
+                    return null;
+                }
+                OpenRouterAiService openRouter = new OpenRouterAiService();
+                holder.setOpenRouterService(openRouter);
+                model = OpenRouterAiService.MODEL_PREFIX + openRouter.getCurrentModel();
+                break;
+            case "meta":
+                if (!sampleApiKey("meta")) {
+                    return null;
+                }
+                MetaMuseAiService meta = new MetaMuseAiService();
+                holder.setMetaMuseService(meta);
+                model = "meta:" + meta.getCurrentModel();
+                break;
+            case "bedrock":
+                BedrockAiService bedrock = new BedrockAiService();
+                holder.setBedrockService(bedrock);
+                model = "bedrock:" + bedrock.getCurrentModel();
+                break;
+            case "codex":
+                CodexAiService codex = new CodexAiService();
+                if (!codex.getProvider().isEnabled()) {
+                    return null;
+                }
+                holder.setCodexService(codex);
+                model = "codex:" + codex.getCurrentModel();
+                break;
+            case "claude-code":
+                ClaudeCodeAiService claudeCode = new ClaudeCodeAiService();
+                if (!claudeCode.getProvider().isEnabled()) {
+                    return null;
+                }
+                holder.setClaudeCodeService(claudeCode);
+                model = "claude-code:" + claudeCode.getCurrentModel();
+                break;
+            case "opencode":
+                OpenCodeAiService openCode = new OpenCodeAiService();
+                if (!openCode.getProvider().isEnabled()) {
+                    return null;
+                }
+                holder.setOpenCodeService(openCode);
+                model = "opencode:" + openCode.getCurrentModel();
+                break;
+            default:
+                return null;
+        }
+        return new AiResponseRouter(holder).resolveAiService(model);
+    }
+
+    private static boolean sampleApiKey(String provider) {
+        String key = AiConfig.getProperty(provider + ".api.key", "");
+        return !key.isBlank() && !key.startsWith("YOUR_");
     }
 
     private void openAiChatPanel() {

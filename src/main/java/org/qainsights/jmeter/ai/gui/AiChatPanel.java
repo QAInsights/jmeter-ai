@@ -192,9 +192,12 @@ public class AiChatPanel
         WRAP,
         SLA,
         LOAD,
+        PARAMETERIZE,
     }
 
-    private LastCommandType lastCommandType = LastCommandType.NONE;
+    private LastCommandType lastCommandType =
+            org.qainsights.jmeter.ai.param.ParameterPlacement.hasUndo()
+                    ? LastCommandType.PARAMETERIZE : LastCommandType.NONE;
 
     /**
      * Tracks whether the system IME (Input Method Editor) is currently composing
@@ -508,6 +511,9 @@ public class AiChatPanel
                         case LOAD:
                             undoRedoDispatcher.undoLastLoad();
                             break;
+                        case PARAMETERIZE:
+                            undoRedoDispatcher.undoLastParameterize();
+                            break;
                         case LINT:
                             undoLastRename();
                             break;
@@ -548,6 +554,9 @@ public class AiChatPanel
                             break;
                         case LOAD:
                             appendMessageToChat("Redo isn't available for `@load`. Run the command again instead.");
+                            break;
+                        case PARAMETERIZE:
+                            appendMessageToChat("Redo isn't available for Parameterize. Open the dialog again instead.");
                             break;
                         case LINT:
                             redoLastUndo();
@@ -1633,6 +1642,9 @@ public class AiChatPanel
                 break;
             case "LOAD":
                 lastCommandType = LastCommandType.LOAD;
+                break;
+            case "PARAMETERIZE":
+                lastCommandType = LastCommandType.PARAMETERIZE;
                 break;
             default:
                 lastCommandType = LastCommandType.NONE;
