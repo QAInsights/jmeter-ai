@@ -232,9 +232,11 @@ class AgentToolExpanderTest {
         live.register(expander.tool());
         AtomicReference<List<ToolSpec>> pushed = new AtomicReference<>();
         expander.bindSpecSink(pushed::set);
+        List<ToolSpec> initial = live.getSpecs();
 
         expander.expand("need everything");
 
+        assertEquals(initial, pushed.get().subList(0, initial.size()));
         assertEquals(live.getSpecs().stream().map(ToolSpec::getName).toList(),
                 pushed.get().stream().map(ToolSpec::getName).toList());
         assertTrue(pushed.get().stream().anyMatch(s -> RunTestHandler.RUN_TEST.equals(s.getName())));

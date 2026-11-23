@@ -157,4 +157,59 @@ class ClaudeChatModelTest {
         assertTrue(captured.get(1).tools().isPresent());
         assertEquals("run_test", captured.get(1).tools().get().get(0).asTool().name());
     }
+
+    @Test
+    void cacheBreakpointsPreserveSystemToolsAndConversationPrefix() {
+        var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
+        List<com.fasterxml.jackson.databind.JsonNode> requests = new ArrayList<>();
+        var read = ToolSpec.builder("get_tree_state").description("Reads the plan").build();
+        var inspect = ToolSpec.builder("inspect").description("Reads an element").build();
+        var run = ToolSpec.builder("run_test").description("Runs the plan").build();
+        var model = new ClaudeChatModel(params -> {
+            requests.add(mapper.valueToTree(params._body()));
+            return toolMessage("tu_" + requests.size(), "get_tree_state");
+        }, new ClaudeToolAdapter(), List.of(read, inspect), "system", "claude", 1024);
+
+        model.start("inspect");
+        model.next(List.of(new ToolOutcome("tu_1", "get_tree_state", "tree", false)));
+        model.updateToolSpecs(List.of(read, inspect, run));
+        model.next(List.of(new ToolOutcome("tu_2", "get_tree_state", "updated tree", false)));
+
+        var first = requests.get(0);
+        var second = requests.get(1);
+        var expanded = requests.get(2);
+        assertEquals("ephemeral", first.at("/cache_control/type").asText());
+        assertEquals("system", first.at("/system/0/text").asText());
+        assertEquals("ephemeral", first.at("/system/0/cache_control/type").asText());
+        assertTrue(first.at("/tools/0/cache_control").isMissingNode());
+        assertEquals("ephemeral", first.at("/tools/1/cache_control/type").asText());
+        assertEquals(first.path("tools").toString(), second.path("tools").toString());
+        assertEquals(first.path("system").toString(), expanded.path("system").toString());
+        assertEquals(first.at("/messages/0").toString(), second.at("/messages/0").toString());
+        for (int i = 0; i < second.path("messages").size(); i++) {
+            assertEquals(second.path("messages").get(i).toString(), expanded.path("messages").get(i).toString());
+        }
+        assertEquals(first.at("/tools/0").toString(), expanded.at("/tools/0").toString());
+        assertEquals(first.at("/tools/1/input_schema").toString(), expanded.at("/tools/1/input_schema").toString());
+        assertTrue(expanded.at("/tools/1/cache_control").isMissingNode());
+        assertEquals("ephemeral", expanded.at("/tools/2/cache_control/type").asText());
+    }
+
+    @Test
+    void compatibleEndpointKeepsUnannotatedRequest() {
+        var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
+        List<com.fasterxml.jackson.databind.JsonNode> requests = new ArrayList<>();
+        var model = new ClaudeChatModel(params -> {
+            requests.add(mapper.valueToTree(params._body()));
+            return textMessage("done");
+        }, new ClaudeToolAdapter(), List.of(ToolSpec.builder("inspect").description("Reads the plan").build()),
+                "system", "claude", 1024, List.of(), null, null, false);
+
+        model.start("inspect");
+
+        var request = requests.get(0);
+        assertEquals("system", request.path("system").asText());
+        assertTrue(request.path("cache_control").isMissingNode());
+        assertTrue(request.at("/tools/0/cache_control").isMissingNode());
+    }
 }

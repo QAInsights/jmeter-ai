@@ -13,10 +13,12 @@ import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
+import com.anthropic.models.messages.TextBlockParam;
 import com.anthropic.models.messages.ThinkingConfigAdaptive;
 import com.anthropic.models.messages.ThinkingConfigEnabled;
 
@@ -30,6 +32,7 @@ import com.anthropic.models.messages.ThinkingConfigEnabled;
 public final class ClaudeChatModel implements ChatModel {
 
     private static final Logger log = LoggerFactory.getLogger(ClaudeChatModel.class);
+    private static final CacheControlEphemeral EPHEMERAL = CacheControlEphemeral.builder().build();
 
     /** Seam over {@code client.messages().create(params)} for testability. */
     @FunctionalInterface
@@ -45,6 +48,7 @@ public final class ClaudeChatModel implements ChatModel {
     private final long maxTokens;
     private final Long thinkingBudget;
     private final String thinkingEffort;
+    private final boolean promptCaching;
     private final List<MessageParam> history;
     private final TokenUsageTracker usage = new TokenUsageTracker("anthropic");
     private String lastReasoning;
@@ -85,6 +89,12 @@ public final class ClaudeChatModel implements ChatModel {
     public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
                            String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory,
                            Long thinkingBudget, String thinkingEffort) {
+        this(service, adapter, specs, systemPrompt, model, maxTokens, seedHistory, thinkingBudget, thinkingEffort, true);
+    }
+
+    public ClaudeChatModel(MessageService service, ClaudeToolAdapter adapter, List<ToolSpec> specs,
+                           String systemPrompt, String model, long maxTokens, List<MessageParam> seedHistory,
+                           Long thinkingBudget, String thinkingEffort, boolean promptCaching) {
         this.service = service;
         this.adapter = adapter;
         this.specs = new ArrayList<>(specs);
@@ -93,6 +103,7 @@ public final class ClaudeChatModel implements ChatModel {
         this.maxTokens = maxTokens;
         this.thinkingBudget = thinkingBudget;
         this.thinkingEffort = thinkingEffort;
+        this.promptCaching = promptCaching;
         this.history = new ArrayList<>(seedHistory);
     }
 
@@ -161,8 +172,14 @@ public final class ClaudeChatModel implements ChatModel {
         MessageCreateParams.Builder params = MessageCreateParams.builder()
                 .model(model)
                 .maxTokens(thinkingOn && !adaptive ? Math.max(maxTokens, thinkingBudget + 1024) : maxTokens)
-                .system(systemPrompt)
                 .messages(history);
+        if (promptCaching) {
+            params.system(MessageCreateParams.System.ofTextBlockParams(List.of(
+                    TextBlockParam.builder().text(systemPrompt).cacheControl(EPHEMERAL).build())));
+            params.cacheControl(EPHEMERAL);
+        } else {
+            params.system(systemPrompt);
+        }
         if (adaptive) {
             params.thinking(ThinkingConfigAdaptive.builder()
                     .display(ThinkingConfigAdaptive.Display.SUMMARIZED)
@@ -179,8 +196,9 @@ public final class ClaudeChatModel implements ChatModel {
             params.thinking(ThinkingConfigEnabled.builder().budgetTokens(thinkingBudget).build());
             log.info("Agent run: thinking ENABLED for model {} with budget {} tokens", model, thinkingBudget);
         }
-        for (ToolSpec spec : specs) {
-            params.addTool(adapter.toAnthropicTool(spec));
+        for (int i = 0; i < specs.size(); i++) {
+            var tool = adapter.toAnthropicTool(specs.get(i));
+            params.addTool(promptCaching && i == specs.size() - 1 ? tool.toBuilder().cacheControl(EPHEMERAL).build() : tool);
         }
 
         MessageCreateParams request = params.build();
