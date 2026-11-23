@@ -149,6 +149,42 @@ class AgentLoopTest {
     }
 
     @Test
+    void run_keepsSameTurnTreeResultsInCallOrder() {
+        String treeTool = ReadToolHandlers.GET_TREE_STATE;
+        String snapshot = "tree".repeat(1024);
+        AtomicInteger executions = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder(treeTool).description("tree").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                executions.incrementAndGet();
+                return ToolResult.ok(snapshot);
+            }
+        });
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn("", List.of(
+                new AssistantTurn.ToolCall("tree-z", treeTool, Map.of()),
+                new AssistantTurn.ToolCall("tree-a", treeTool, Map.of()))));
+        model.turns.add(new AssistantTurn("Done.", List.of()));
+
+        var result = new AgentLoop(model, new ToolExecutor(registry), 3).run("inspect", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(2, executions.get());
+        assertEquals(1, model.received.size());
+        List<ToolOutcome> batch = model.received.get(0);
+        assertEquals(List.of("tree-z", "tree-a"), batch.stream().map(ToolOutcome::getToolCallId).toList());
+        assertEquals(List.of(snapshot, "Tree snapshot unchanged; identical to the latest full get_tree_state result above."),
+                batch.stream().map(ToolOutcome::getContent).toList());
+        assertTrue(batch.stream().noneMatch(ToolOutcome::isError));
+    }
+
+    @Test
     void run_withOnToolCallStartedListener_isNotifiedForEachToolCallBeforeExecution() {
         ScriptedModel model = new ScriptedModel();
         model.turns.add(toolTurn("tu_1"));
