@@ -8,6 +8,7 @@ import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.assertions.SizeAssertion;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.extractor.RegexExtractor;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.testelement.TestElement;
@@ -18,6 +19,7 @@ import org.apache.jmeter.testelement.property.FloatProperty;
 import org.apache.jmeter.testelement.property.IntegerProperty;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.LongProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
 import org.apache.jmeter.testelement.schema.BooleanPropertyDescriptor;
 import org.apache.jmeter.testelement.schema.DoublePropertyDescriptor;
 import org.apache.jmeter.testelement.schema.FloatPropertyDescriptor;
@@ -32,6 +34,7 @@ enum ScalarPropertyType {
     STRING("text"),
     BOOLEAN("true or false"),
     INTEGER("a 32-bit integer"),
+    LOOP_COUNT("a 32-bit integer"),
     LONG("a 64-bit integer"),
     FLOAT("a finite number"),
     DOUBLE("a finite number");
@@ -54,6 +57,9 @@ enum ScalarPropertyType {
         if (element instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)
                 && (HTTPSamplerBase.CONNECT_TIMEOUT.equals(key) || HTTPSamplerBase.RESPONSE_TIMEOUT.equals(key))) {
             return INTEGER;
+        }
+        if (element instanceof LoopController && LoopController.LOOPS.equals(key)) {
+            return LOOP_COUNT;
         }
 
         TestElementSchema schema = element.getSchema();
@@ -109,7 +115,11 @@ enum ScalarPropertyType {
             return;
         }
         if (value.isEmpty()) {
-            target.removeProperty(key);
+            if (this == LOOP_COUNT) {
+                target.setProperty(key, LoopController.INFINITE_LOOP_COUNT);
+            } else {
+                target.removeProperty(key);
+            }
             return;
         }
         JMeterProperty parsed;
@@ -122,6 +132,11 @@ enum ScalarPropertyType {
                     yield new BooleanProperty(key, Boolean.parseBoolean(literal));
                 }
                 case INTEGER -> new IntegerProperty(key, Integer.parseInt(literal));
+                case LOOP_COUNT -> {
+                    int count = Integer.parseInt(literal);
+                    yield count < 0 ? new IntegerProperty(key, LoopController.INFINITE_LOOP_COUNT)
+                            : new StringProperty(key, literal.startsWith("-") ? "0" : literal);
+                }
                 case LONG -> new LongProperty(key, Long.parseLong(literal));
                 case FLOAT -> {
                     float number = Float.parseFloat(literal);

@@ -7,6 +7,7 @@ import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.control.gui.IfControllerPanel;
+import org.apache.jmeter.control.gui.LoopControlPanel;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
@@ -244,8 +245,28 @@ class JMeterTreeMutatorRealElementsTest {
         assertTrue(mutator.updateProperty(model, node, "LoopController.loops", "-1"));
 
         assertEquals(-1, loopController.getLoops());
+        assertInstanceOf(IntegerProperty.class, loopController.getProperty(LoopController.LOOPS));
         // The write must not have created a decoy top-level property on the ThreadGroup itself.
         assertTrue(threadGroup.getProperty("LoopController.loops") instanceof NullProperty);
+    }
+
+    @Test
+    void finiteLoopCountIsWrittenAsTextLikeTheNativeEditor() {
+        LoopControlPanel editor = new LoopControlPanel();
+        LoopController loopController = (LoopController) editor.createTestElement();
+        JMeterTreeNode node = new JMeterTreeNode(loopController, null);
+
+        assertTrue(mutator.updateProperty(model, node, LoopController.LOOPS, "5"));
+        assertInstanceOf(StringProperty.class, loopController.getProperty(LoopController.LOOPS));
+
+        editor.configure(loopController);
+        editor.modifyTestElement(loopController);
+        assertInstanceOf(StringProperty.class, loopController.getProperty(LoopController.LOOPS));
+        assertEquals(5, loopController.getLoops());
+
+        assertTrue(mutator.updateProperty(model, node, LoopController.LOOPS, ""));
+        assertInstanceOf(IntegerProperty.class, loopController.getProperty(LoopController.LOOPS));
+        assertEquals(LoopController.INFINITE_LOOP_COUNT, loopController.getLoops());
     }
 
     @Test
