@@ -81,6 +81,42 @@ class AgentProviderUsageTest {
         assertEquals(390, model.usageTracker().totalTokens());
     }
 
+    @Test
+    void geminiKeepsReportedUsageWhenPromptIsBlocked() {
+        var reply = GenerateContentResponse.fromJson("""
+                {"promptFeedback":{"blockReason":"SAFETY"},
+                 "usageMetadata":{"promptTokenCount":100,"cachedContentTokenCount":20,"totalTokenCount":100}}
+                """);
+        var model = new GoogleChatModel((id, contents, config) -> reply,
+                new GoogleToolAdapter(), TOOLS, "system", "gemini", 500);
+        assertRejectedUsage(model, "Gemini blocked the agent request", "80 | 20 | - | - | -", 100);
+    }
+
+    @Test
+    void openAiKeepsReportedUsageWhenChoicesAreEmpty() throws Exception {
+        var reply = com.openai.core.ObjectMappers.jsonMapper().readValue("""
+                {"id":"c","object":"chat.completion","created":0,"model":"gpt-4o","choices":[],
+                 "usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105,
+                          "prompt_tokens_details":{"cached_tokens":20}}}
+                """, ChatCompletion.class);
+        var model = new OpenAiChatModel(params -> reply, new OpenAiToolAdapter(), TOOLS, "system", "gpt-4o", 500);
+        assertRejectedUsage(model, "OpenAI returned no choices", "80 | 20 | - | 5 | -", 105);
+    }
+
+    private static void assertRejectedUsage(ChatModel model, String message, String counts, long total) {
+        var exception = assertThrows(IllegalStateException.class, () -> new AgentLoop(model, null, 1).run("request", null));
+        assertTrue(exception.getMessage().contains(message), exception.getMessage());
+        var usage = model.usageTracker();
+        assertEquals(1, usage.turns());
+        assertEquals(0, usage.unreportedTurns());
+        assertEquals(total, usage.totalTokens());
+        String summary = usage.summary();
+        String row = summary.lines().filter(line -> line.startsWith("1 | ")).findFirst().orElseThrow();
+        assertTrue(row.startsWith("1 | " + counts + " | 1 | "), summary);
+        assertTrue(row.endsWith(" | failed"), summary);
+        assertTrue(summary.contains("total | " + counts), summary);
+    }
+
     private static ChatModel openAi(String usage) throws Exception {
         var reply = com.openai.core.ObjectMappers.jsonMapper().readValue("""
                 {"id":"c","object":"chat.completion","created":0,"model":"gpt-4o",

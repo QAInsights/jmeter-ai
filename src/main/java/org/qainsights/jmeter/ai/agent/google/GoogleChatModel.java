@@ -163,12 +163,14 @@ public final class GoogleChatModel implements ChatModel {
         var request = mapper.createObjectNode().put("model", model);
         request.set("contents", mapper.valueToTree(contents));
         request.setAll(mapper.<com.fasterxml.jackson.databind.node.ObjectNode>valueToTree(settings));
-        GenerateContentResponse response = usage.track(
+        return usage.track(
                 TokenUsageTracker.RequestSize.json(mapper, request, specs.size()),
                 () -> service.generate(model, contents, settings), reply -> reply.usageMetadata()
                         .map(value -> ProviderTokenUsage.gemini(mapper.valueToTree(value)))
-                        .orElse(TokenUsageTracker.Counts.UNREPORTED));
+                        .orElse(TokenUsageTracker.Counts.UNREPORTED), this::acceptResponse);
+    }
 
+    private AssistantTurn acceptResponse(GenerateContentResponse response) {
         response.promptFeedback().flatMap(feedback -> feedback.blockReason()).ifPresent(reason -> {
             throw new IllegalStateException("Gemini blocked the agent request: " + reason);
         });

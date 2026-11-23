@@ -185,10 +185,13 @@ public final class ClaudeChatModel implements ChatModel {
 
         MessageCreateParams request = params.build();
         var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
-        Message response = usage.track(TokenUsageTracker.RequestSize.json(mapper, request._body(), specs.size()),
+        return usage.track(TokenUsageTracker.RequestSize.json(mapper, request._body(), specs.size()),
                 () -> service.create(request), reply -> reply._usage().asKnown()
                         .map(value -> ProviderTokenUsage.anthropic(mapper.valueToTree(value)))
-                        .orElse(TokenUsageTracker.Counts.UNREPORTED));
+                        .orElse(TokenUsageTracker.Counts.UNREPORTED), this::acceptResponse);
+    }
+
+    private AssistantTurn acceptResponse(Message response) {
         history.add(response.toParam());
         lastReasoning = org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking
                 .extractThinking(response.content());

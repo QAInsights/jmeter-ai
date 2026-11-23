@@ -71,23 +71,24 @@ public final class TokenUsageTracker {
         recordTurn(new RequestSize(0, null, null), Counts.UNREPORTED, null);
     }
 
-    public <T> T track(RequestSize request, Supplier<T> send, Function<T, Counts> readUsage) {
-        T response;
-        try {
-            response = send.get();
-        } catch (RuntimeException | Error e) {
-            recordTurn(request, Counts.UNREPORTED, e.getClass());
-            throw e;
-        }
+    public <T, R> R track(RequestSize request, Supplier<T> send, Function<T, Counts> readUsage,
+                          Function<T, R> acceptResponse) {
         Counts counts = Counts.UNREPORTED;
+        Class<? extends Throwable> failure = null;
         try {
-            counts = readUsage.apply(response);
-        } catch (IllegalArgumentException e) {
-            // Usage decoding must not turn a successful model call into a failure.
+            T response = send.get();
+            try {
+                counts = readUsage.apply(response);
+            } catch (IllegalArgumentException e) {
+                // Usage decoding must not turn a successful model call into a failure.
+            }
+            return acceptResponse.apply(response);
+        } catch (RuntimeException | Error e) {
+            failure = e.getClass();
+            throw e;
         } finally {
-            recordTurn(request, counts, null);
+            recordTurn(request, counts, failure);
         }
-        return response;
     }
 
     private void recordTurn(RequestSize request, Counts counts, Class<? extends Throwable> failure) {

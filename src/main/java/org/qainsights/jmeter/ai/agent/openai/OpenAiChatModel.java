@@ -147,10 +147,13 @@ public final class OpenAiChatModel implements ChatModel {
 
         ChatCompletionCreateParams request = params.build();
         var mapper = com.openai.core.ObjectMappers.jsonMapper();
-        ChatCompletion completion = usage.track(TokenUsageTracker.RequestSize.json(mapper, request._body(), specs.size()),
+        return usage.track(TokenUsageTracker.RequestSize.json(mapper, request._body(), specs.size()),
                 () -> service.create(request), reply -> reply._usage().asKnown()
                         .map(value -> ProviderTokenUsage.openAi(mapper.valueToTree(value)))
-                        .orElse(TokenUsageTracker.Counts.UNREPORTED));
+                        .orElse(TokenUsageTracker.Counts.UNREPORTED), this::acceptResponse);
+    }
+
+    private AssistantTurn acceptResponse(ChatCompletion completion) {
         if (completion.choices().isEmpty()) {
             throw new IllegalStateException("OpenAI returned no choices for the agent request");
         }
