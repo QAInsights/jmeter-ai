@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
+import com.sun.net.httpserver.HttpServer;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.ConfigTestElement;
@@ -15,11 +16,17 @@ import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.testelement.property.NullProperty;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.util.JMeterUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -262,6 +269,7 @@ class JMeterTreeMutatorRealElementsTest {
         HTTPArgument arg = (HTTPArgument) stored;
         assertEquals("newOrder", arg.getName());
         assertEquals("confirmed", arg.getValue());
+        assertTrue(arg.isAlwaysEncoded());
         assertEquals("newOrder=confirmed", sampler.getQueryString("UTF-8"));
     }
 
@@ -278,6 +286,119 @@ class JMeterTreeMutatorRealElementsTest {
         assertEquals(1, sampler.getArguments().getArguments().size());
         HTTPArgument arg = (HTTPArgument) sampler.getArguments().getArguments().get(0).getObjectValue();
         assertEquals("B", arg.getName());
+    }
+
+    @Test
+    void httpSamplerProxy_rawModeAfterArguments_updatesEncodingInBothDirections() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("item", "A+B %"))));
+        HTTPArgument argument = (HTTPArgument) sampler.getArguments().getArgument(0);
+        assertTrue(argument.isAlwaysEncoded());
+        assertEquals("item=A%2BB+%25", sampler.getQueryString("UTF-8"));
+
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "true"));
+        assertTrue(sampler.getPostBodyRaw());
+        assertFalse(argument.isAlwaysEncoded());
+
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "false"));
+        assertFalse(sampler.getPostBodyRaw());
+        assertTrue(argument.isAlwaysEncoded());
+        assertEquals("item=A%2BB+%25", sampler.getQueryString("UTF-8"));
+    }
+
+    @Test
+    void httpSamplerProxy_clearingRawMode_keepsUnnamedBodyUnencoded() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        String json = "{\"item\":\"A+B %\"}";
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "true"));
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("", json))));
+
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "false"));
+
+        assertFalse(sampler.getPostBodyRaw());
+        assertTrue(sampler.getSendParameterValuesAsPostBody());
+        HTTPArgument argument = (HTTPArgument) sampler.getArguments().getArgument(0);
+        assertFalse(argument.isAlwaysEncoded());
+        assertEquals(json, argument.getEncodedValue());
+    }
+
+    @Test
+    void httpSamplerProxy_replacingArgumentsAfterClearingRawMode_keepsUnnamedBodyUnencoded() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "true"));
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("", "{\"count\":1}"))));
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "false"));
+
+        String json = "{\"item\":\"A+B %\"}";
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("", json))));
+
+        assertFalse(sampler.getPostBodyRaw());
+        assertTrue(sampler.getSendParameterValuesAsPostBody());
+        HTTPArgument argument = (HTTPArgument) sampler.getArguments().getArgument(0);
+        assertFalse(argument.isAlwaysEncoded());
+        assertEquals(json, argument.getEncodedValue());
+    }
+
+    @Test
+    void httpSamplerProxy_editingExistingRawSampler_disablesArgumentEncoding() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        sampler.setPostBodyRaw(true);
+        HTTPArgument argument = new HTTPArgument("", "{\"count\":1}");
+        sampler.getArguments().addArgument(argument);
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        assertTrue(argument.isAlwaysEncoded());
+
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.PATH, "/cart"));
+
+        assertFalse(argument.isAlwaysEncoded());
+        assertEquals("{\"count\":1}", argument.getValue());
+    }
+
+    @Test
+    void httpSamplerProxy_rawModeBeforeArguments_sendsLiteralBody() throws IOException {
+        if (JMeterUtils.getJMeterProperties() == null) {
+            JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        }
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicReference<byte[]> received = new AtomicReference<>();
+        server.createContext("/cart", exchange -> {
+            try {
+                received.set(exchange.getRequestBody().readAllBytes());
+                exchange.sendResponseHeaders(200, -1);
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        try {
+            HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+            sampler.setImplementation("HttpClient4");
+            sampler.setDomain("127.0.0.1");
+            sampler.setPort(server.getAddress().getPort());
+            sampler.setPath("/cart");
+            sampler.setMethod("POST");
+            sampler.setConnectTimeout("5000");
+            sampler.setResponseTimeout("5000");
+            JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+            String json = "{\"item\":\"A+B %\"}";
+
+            assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "true"));
+            assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                    List.of(nameValue("", json))));
+
+            assertFalse(((HTTPArgument) sampler.getArguments().getArgument(0)).isAlwaysEncoded());
+            assertEquals("200", sampler.sample().getResponseCode());
+            assertArrayEquals(json.getBytes(StandardCharsets.UTF_8), received.get());
+        } finally {
+            server.stop(0);
+        }
     }
 
     private static Map<String, String> nameValue(String name, String value) {

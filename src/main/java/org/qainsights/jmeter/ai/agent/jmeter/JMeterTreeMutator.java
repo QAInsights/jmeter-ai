@@ -81,7 +81,16 @@ public final class JMeterTreeMutator {
                         property, target.getClass().getSimpleName());
                 return false;
             }
+            HTTPSamplerBase sampler = target instanceof HTTPSamplerBase ? (HTTPSamplerBase) target : null;
+            boolean wasRaw = sampler != null && HTTPSamplerBase.POST_BODY_RAW.equals(property)
+                    && sampler.getPostBodyRaw();
             target.setProperty(property, safeValue);
+            if (sampler != null) {
+                boolean raw = sampler.getPostBodyRaw();
+                if (raw || wasRaw) {
+                    normalizeHttpArgumentEncoding(sampler.getArguments(), raw);
+                }
+            }
             model.nodeChanged(node);
             return true;
         });
@@ -242,7 +251,23 @@ public final class JMeterTreeMutator {
             sampler.setArguments(arguments);
         }
         arguments.setProperty(new CollectionProperty(Arguments.ARGUMENTS, built));
+        normalizeHttpArgumentEncoding(arguments, sampler.getPostBodyRaw());
         return true;
+    }
+
+    private static void normalizeHttpArgumentEncoding(Arguments arguments, boolean raw) {
+        if (arguments == null) {
+            return;
+        }
+        for (JMeterProperty property : arguments.getArguments()) {
+            if (property.getObjectValue() instanceof HTTPArgument argument) {
+                String name = argument.getName();
+                boolean encode = !raw && name != null && !name.isEmpty();
+                if (argument.isAlwaysEncoded() != encode) {
+                    argument.setAlwaysEncoded(encode);
+                }
+            }
+        }
     }
 
     /** Builds every entry via {@link #buildStructuredEntry}, or {@code null} if any is invalid. */
@@ -285,11 +310,7 @@ public final class JMeterTreeMutator {
             return new Argument(field(entry, "name"), field(entry, "value"));
         }
         if (HTTPSamplerBase.ARGUMENTS.equals(property)) {
-            // HTTPSamplerBase.getQueryString() casts each entry to HTTPArgument (falling back to
-            // wrapping a plain Argument with a logged warning) - build the real type directly so an
-            // HTTP Request's own parameters (as opposed to a standalone Arguments/UDV element,
-            // handled above) are set exactly as JMeter's own "Add" button in the Parameters table
-            // would produce.
+            // HTTPSamplerBase.getQueryString() expects HTTPArgument and logs a warning for plain Argument.
             return new HTTPArgument(field(entry, "name"), field(entry, "value"));
         }
         if (AUTH_LIST.equals(property)) {
