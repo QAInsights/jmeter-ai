@@ -81,7 +81,16 @@ public final class JMeterTreeMutator {
                         property, target.getClass().getSimpleName());
                 return false;
             }
+            HTTPSamplerBase sampler = target instanceof HTTPSamplerBase ? (HTTPSamplerBase) target : null;
+            boolean wasRaw = sampler != null && HTTPSamplerBase.POST_BODY_RAW.equals(property)
+                    && sampler.getPostBodyRaw();
             target.setProperty(property, safeValue);
+            if (sampler != null) {
+                boolean raw = sampler.getPostBodyRaw();
+                if (raw || wasRaw) {
+                    setHttpArgumentEncoding(sampler.getArguments(), !raw);
+                }
+            }
             model.nodeChanged(node);
             return true;
         });
@@ -242,7 +251,21 @@ public final class JMeterTreeMutator {
             sampler.setArguments(arguments);
         }
         arguments.setProperty(new CollectionProperty(Arguments.ARGUMENTS, built));
+        if (sampler.getPostBodyRaw()) {
+            setHttpArgumentEncoding(arguments, false);
+        }
         return true;
+    }
+
+    private static void setHttpArgumentEncoding(Arguments arguments, boolean encode) {
+        if (arguments == null) {
+            return;
+        }
+        for (JMeterProperty property : arguments.getArguments()) {
+            if (property.getObjectValue() instanceof HTTPArgument argument && argument.isAlwaysEncoded() != encode) {
+                argument.setAlwaysEncoded(encode);
+            }
+        }
     }
 
     /** Builds every entry via {@link #buildStructuredEntry}, or {@code null} if any is invalid. */
