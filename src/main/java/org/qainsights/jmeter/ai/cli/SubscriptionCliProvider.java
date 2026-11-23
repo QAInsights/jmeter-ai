@@ -2,6 +2,8 @@ package org.qainsights.jmeter.ai.cli;
 
 import java.util.List;
 
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
+
 /**
  * A locally installed coding-agent CLI (OpenAI Codex, Claude Code, OpenCode) used as an
  * AI backend through the subscription the user already signed into with that
@@ -42,6 +44,12 @@ public interface SubscriptionCliProvider {
 
     default String execute(String prompt, String model) {
         return execute(prompt);
+    }
+
+    record AgentReply(String text, Counts usage) { }
+
+    default AgentReply executeForAgent(String prompt, String model) {
+        return new AgentReply(execute(prompt, model), Counts.UNREPORTED);
     }
 
     /** One-line hint on how to install the CLI, shown when it is missing. */

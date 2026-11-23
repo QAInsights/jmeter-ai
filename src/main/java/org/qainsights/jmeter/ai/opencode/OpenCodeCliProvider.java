@@ -273,6 +273,11 @@ public final class OpenCodeCliProvider implements SubscriptionCliProvider {
 
     @Override
     public String execute(String prompt, String model) {
+        return executeForAgent(prompt, model).text();
+    }
+
+    @Override
+    public AgentReply executeForAgent(String prompt, String model) {
         String exe = executable();
         if (exe == null) {
             throw new CliProviderException("The OpenCode CLI was not found. " + installHint());

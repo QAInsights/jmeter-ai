@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -18,5 +20,19 @@ class TokenUsageTrackerTest {
         assertEquals(9500, tracker.promptTokens());
         assertEquals(200, tracker.completionTokens());
         assertEquals(9700, tracker.totalTokens());
+    }
+
+    @Test
+    void preservesRequestSizesForFailedCallsAndDistinguishesUnknownCounts() {
+        TokenUsageTracker tracker = new TokenUsageTracker("example");
+        tracker.track(new TokenUsageTracker.RequestSize(1, 20, 120), () -> "reply",
+                reply -> new TokenUsageTracker.Counts(10L, 0L, null, 5L, 2L));
+        assertThrows(IllegalStateException.class, () -> tracker.track(
+                new TokenUsageTracker.RequestSize(2, 35, 200), () -> { throw new IllegalStateException(); },
+                reply -> TokenUsageTracker.Counts.UNREPORTED));
+        String summary = tracker.summary();
+        assertTrue(summary.contains("1 | 10 | 0 | - | 5 | 2 | 1 | 20 | 120"), summary);
+        assertTrue(summary.contains("2 | - | - | - | - | - | 2 | 35 | 200"), summary);
+        assertTrue(summary.contains("total | 10 | 0 | - | 5 | 2 | 3 | 55 | 320"), summary);
     }
 }

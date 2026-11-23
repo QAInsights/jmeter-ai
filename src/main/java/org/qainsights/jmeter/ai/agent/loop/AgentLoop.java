@@ -28,6 +28,7 @@ public final class AgentLoop {
         private final boolean completed;
         private final String finalText;
         private final int iterations;
+        private String usageSummary = "";
 
         private AgentResult(boolean completed, String finalText, int iterations) {
             this.completed = completed;
@@ -54,6 +55,10 @@ public final class AgentLoop {
 
         public int getIterations() {
             return iterations;
+        }
+
+        public String getUsageSummary() {
+            return usageSummary;
         }
     }
 
@@ -110,6 +115,24 @@ public final class AgentLoop {
     public AgentResult run(String userMessage, Consumer<String> progress,
                             Consumer<AssistantTurn.ToolCall> onToolCallStarted,
                             Consumer<String> reasoning) {
+        TokenUsageTracker usage = model.usageTracker();
+        AgentResult result = null;
+        try {
+            result = runTurns(userMessage, progress, onToolCallStarted, reasoning);
+            return result;
+        } finally {
+            if (usage != null && usage.turns() > 0) {
+                String summary = usage.summary();
+                log.info("{}", summary);
+                if (result != null) {
+                    result.usageSummary = summary;
+                }
+            }
+        }
+    }
+
+    private AgentResult runTurns(String userMessage, Consumer<String> progress,
+                                 Consumer<AssistantTurn.ToolCall> onToolCallStarted, Consumer<String> reasoning) {
         Consumer<String> sink = progress == null ? s -> { } : progress;
         Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
         Consumer<String> reasoningSink = reasoning == null ? s -> { } : reasoning;

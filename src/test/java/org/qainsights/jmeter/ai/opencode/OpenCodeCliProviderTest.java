@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
 import org.qainsights.jmeter.ai.claudecode.OpenCodeCliAdapter;
 import org.qainsights.jmeter.ai.cli.CliProcessResult;
 import org.qainsights.jmeter.ai.cli.CliProcessRunner;
@@ -373,6 +374,20 @@ class OpenCodeCliProviderTest {
         provider.refresh();
 
         assertTrue(runner.commands.isEmpty());
+    }
+
+    @Test
+    void agentReplyAccumulatesReportedTokensAcrossSteps() {
+        queueAfterVersion(CliProcessResult.of(0, """
+                {"type":"step_start"}
+                {"type":"step_finish","part":{"tokens":{"input":100,"output":10,"reasoning":5,"cache":{"read":20,"write":8}}}}
+                {"type":"step_start"}
+                {"type":"text","part":{"text":"final answer"}}
+                {"type":"step_finish","part":{"tokens":{"input":200,"output":15,"cache":{"read":40}}}}
+                """));
+        var reply = provider("opencode").executeForAgent("prompt", "provider/model");
+        assertEquals("final answer", reply.text());
+        assertEquals(new Counts(300L, 60L, 8L, 30L, 5L), reply.usage());
     }
 
     private OpenCodeCliProvider provider(String binary) {

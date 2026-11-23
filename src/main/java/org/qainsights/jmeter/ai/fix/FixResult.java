@@ -33,6 +33,7 @@ public final class FixResult {
     private File reportFile;
     private List<Failure> beforeFailures = List.of();
     private List<String> roundSummaries = List.of();
+    private List<String> agentUsage = List.of();
     private List<String> deterministicHints = List.of();
     private List<String> skippedPageChecks = List.of();
 
@@ -109,6 +110,10 @@ public final class FixResult {
     public List<String> roundSummaries() { return roundSummaries; }
     public void setRoundSummaries(List<String> roundSummaries) {
         this.roundSummaries = List.copyOf(roundSummaries);
+    }
+    public List<String> agentUsage() { return agentUsage; }
+    public void setAgentUsage(List<String> agentUsage) {
+        this.agentUsage = List.copyOf(agentUsage);
     }
     public List<String> deterministicHints() { return deterministicHints; }
     public void setDeterministicHints(List<String> deterministicHints) {

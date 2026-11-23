@@ -21,6 +21,10 @@ public interface ChatModel {
     /** Sends the outcomes of the previous turn's tool calls and returns the next turn. */
     AssistantTurn next(List<ToolOutcome> toolOutcomes);
 
+    default TokenUsageTracker usageTracker() {
+        return null;
+    }
+
     /**
      * Returns and clears the reasoning text captured from the most recent turn's
      * response (e.g. a Claude thinking block), or null when there was none. The
