@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.gui;
 
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.SwingUtilities;
 
 import org.apache.jmeter.gui.GuiPackage;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -103,14 +106,20 @@ class AiChatPanelTest {
     private boolean restoreSessions;
 
     private void onEdtWithPanelConfig(Executable action) throws Exception {
-        FutureTask<Void> task = new FutureTask<>(() -> {
+        callOnEdtWithPanelConfig(() -> {
+            action.execute();
+            return null;
+        });
+    }
+
+    private <T> T callOnEdtWithPanelConfig(ThrowingSupplier<T> action) throws Exception {
+        FutureTask<T> task = new FutureTask<>(() -> {
             try (MockedStatic<AiConfig> config = mockPanelConfig()) {
-                assertDoesNotThrow(action);
-                return null;
+                return assertDoesNotThrow(action);
             }
         });
         SwingUtilities.invokeAndWait(task);
-        task.get();
+        return task.get();
     }
 
     @Test
@@ -775,13 +784,24 @@ class AiChatPanelTest {
     }
 
     @Test void freeStreamReadsTheOriginalServicesAllowanceAfterReload() throws Exception {
-        onEdtWithPanelConfig(this::verifyFreeStreamAllowance);
+        AtomicReference<Runnable> complete = new AtomicReference<>();
+        TranscriptView transcript = callOnEdtWithPanelConfig(() -> startFreeStreamAndSwapRouter(complete));
+
+        assertNotNull(complete.get());
+        FutureTask<Void> completion = new FutureTask<>(complete.get(), null);
+        Thread worker = new Thread(completion, "test-starter-stream");
+        worker.setDaemon(true);
+        worker.start();
+        completion.get(5, TimeUnit.SECONDS);
+
+        SwingUtilities.invokeAndWait(() -> assertTrue(java.util.Arrays.stream(transcript.getComponents())
+                .filter(javax.swing.JTextArea.class::isInstance)
+                .map(javax.swing.JTextArea.class::cast).anyMatch(text -> text.getText().contains("7 of 10"))));
     }
 
-    private void verifyFreeStreamAllowance() throws Exception {
+    private TranscriptView startFreeStreamAndSwapRouter(AtomicReference<Runnable> complete) throws Exception {
         AiChatPanel panel = new AiChatPanel();
         org.qainsights.jmeter.ai.service.StarterAiService original = org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class);
-        java.util.concurrent.atomic.AtomicReference<Runnable> complete = new java.util.concurrent.atomic.AtomicReference<>();
         org.mockito.Mockito.when(original.getRemainingMessage()).thenReturn("7 of 10 free messages left.");
         org.mockito.Mockito.when(original.generateStreamResponse(org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
@@ -792,26 +812,24 @@ class AiChatPanelTest {
                 org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
         panel.getAiStreamResponse("Hi", token -> { }, () -> { }, e -> fail(e));
         installFreeRouter(panel, org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class));
-        complete.get().run();
-        TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
-        assertTrue(java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
-                .map(javax.swing.JTextArea.class::cast).anyMatch(text -> text.getText().contains("7 of 10")));
+        return (TranscriptView) panelField(panel, "transcript");
     }
 
     @Test void localCommandSuccessDoesNotShowAFreeConnectAction() throws Exception {
-        onEdtWithPanelConfig(this::verifyLocalCommandTranscript);
+        TranscriptView transcript = callOnEdtWithPanelConfig(this::completeLocalCommand);
+        SwingUtilities.invokeAndWait(() -> assertFalse(java.util.Arrays.stream(transcript.getComponents())
+                .filter(QuietButton.class::isInstance)
+                .map(QuietButton.class::cast).anyMatch(button -> "Connect a provider".equals(button.getText()))));
     }
 
-    private void verifyLocalCommandTranscript() throws Exception {
+    private TranscriptView completeLocalCommand() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         installFreeRouter(panel, org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class));
         ModelSelectorPanel selector = (ModelSelectorPanel) panelField(panel, "modelSelectorPanel");
         selector.setModels(java.util.List.of(org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID),
                 org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
         panel.onWorkerSuccess("Local @this information");
-        TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
-        assertFalse(java.util.Arrays.stream(transcript.getComponents()).filter(QuietButton.class::isInstance)
-                .map(QuietButton.class::cast).anyMatch(button -> "Connect a provider".equals(button.getText())));
+        return (TranscriptView) panelField(panel, "transcript");
     }
 
     private static Object panelField(AiChatPanel panel, String name) throws Exception {
