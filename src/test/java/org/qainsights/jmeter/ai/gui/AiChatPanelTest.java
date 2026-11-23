@@ -1,9 +1,14 @@
 package org.qainsights.jmeter.ai.gui;
 
+import java.util.concurrent.FutureTask;
+import javax.swing.SwingUtilities;
+
+import org.apache.jmeter.gui.GuiPackage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.Executable;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.qainsights.jmeter.ai.service.ProviderSetupOption;
@@ -52,8 +57,12 @@ class AiChatPanelTest {
         System.setProperty(ConversationStore.DIR_PROPERTY,
                 tempDir.resolve("sessions").toString());
         restoreSessions = false;
-        aiConfigMockedStatic = mockStatic(AiConfig.class);
-        aiConfigMockedStatic.when(() -> AiConfig.getProperty(anyString(), anyString())).thenAnswer(invocation -> {
+        aiConfigMockedStatic = mockPanelConfig();
+    }
+
+    private MockedStatic<AiConfig> mockPanelConfig() {
+        MockedStatic<AiConfig> config = mockStatic(AiConfig.class);
+        config.when(() -> AiConfig.getProperty(anyString(), anyString())).thenAnswer(invocation -> {
             String key = invocation.getArgument(0);
             String defaultValue = invocation.getArgument(1);
             if (key.equals("jmeter.ai.service.type")) return "openai";
@@ -62,6 +71,7 @@ class AiChatPanelTest {
             if (key.equals(ConversationStore.RESTORE_PROPERTY)) return String.valueOf(restoreSessions);
             return defaultValue;
         });
+        return config;
     }
 
     @AfterEach
@@ -92,6 +102,17 @@ class AiChatPanelTest {
 
     private boolean restoreSessions;
 
+    private void onEdtWithPanelConfig(Executable action) throws Exception {
+        FutureTask<Void> task = new FutureTask<>(() -> {
+            try (MockedStatic<AiConfig> config = mockPanelConfig()) {
+                assertDoesNotThrow(action);
+                return null;
+            }
+        });
+        SwingUtilities.invokeAndWait(task);
+        task.get();
+    }
+
     @Test
     void startersLiveOutsideTranscriptAndFollowWelcomeLifecycle() throws Exception {
         AiChatPanel panel = new AiChatPanel();
@@ -116,9 +137,14 @@ class AiChatPanelTest {
 
     @Test
     void starterPrefillsWithoutSendingOrOverwritingADraft() throws Exception {
-        AiChatPanel panel = new AiChatPanel();
-        try (MockedStatic<org.qainsights.jmeter.ai.telemetry.Telemetry> telemetry =
+        onEdtWithPanelConfig(this::verifyStarterPrefill);
+    }
+
+    private void verifyStarterPrefill() throws Exception {
+        try (MockedStatic<GuiPackage> gui = mockStatic(GuiPackage.class);
+             MockedStatic<org.qainsights.jmeter.ai.telemetry.Telemetry> telemetry =
                 mockStatic(org.qainsights.jmeter.ai.telemetry.Telemetry.class)) {
+            AiChatPanel panel = new AiChatPanel();
             java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("messageField");
             field.setAccessible(true);
             javax.swing.JTextArea input = (javax.swing.JTextArea) field.get(panel);
@@ -343,7 +369,11 @@ class AiChatPanelTest {
     }
 
     @Test
-    void agentModeIsPreselectedAndAppearsBeforeAttachmentAction() {
+    void agentModeIsPreselectedAndAppearsBeforeAttachmentAction() throws Exception {
+        onEdtWithPanelConfig(this::verifyInitialAgentModeAndLayout);
+    }
+
+    private void verifyInitialAgentModeAndLayout() {
         AiChatPanel panel = new AiChatPanel();
         InteractionModeSelector selector = findComponent(panel, InteractionModeSelector.class);
         javax.swing.JButton attach = findButton(
@@ -359,13 +389,16 @@ class AiChatPanelTest {
 
     @Test
     void modelThinkingEffortAndFavoriteShareOneRow() throws Exception {
+        onEdtWithPanelConfig(this::verifyReasoningRow);
+    }
+
+    private void verifyReasoningRow() {
         AiChatPanel panel = new AiChatPanel();
         ModelSelectorPanel selector = findComponent(panel, ModelSelectorPanel.class);
         ReasoningControls reasoning = findComponent(panel, ReasoningControls.class);
         assertNotNull(selector);
         assertNotNull(reasoning);
         selector.setModels(java.util.List.of("claude-sonnet-4-6"), "claude-sonnet-4-6");
-        flushEdt();
         panel.setSize(500, 760);
         layoutRecursively(panel);
 
