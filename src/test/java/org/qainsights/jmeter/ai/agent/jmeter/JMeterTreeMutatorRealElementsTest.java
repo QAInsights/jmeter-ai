@@ -327,6 +327,26 @@ class JMeterTreeMutatorRealElementsTest {
     }
 
     @Test
+    void httpSamplerProxy_replacingArgumentsAfterClearingRawMode_keepsUnnamedBodyUnencoded() {
+        HTTPSamplerProxy sampler = new HTTPSamplerProxy();
+        JMeterTreeNode node = new JMeterTreeNode(sampler, null);
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "true"));
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("", "{\"count\":1}"))));
+        assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.POST_BODY_RAW, "false"));
+
+        String json = "{\"item\":\"A+B %\"}";
+        assertTrue(mutator.replaceStructuredPropertyList(model, node, HTTPSamplerBase.ARGUMENTS,
+                List.of(nameValue("", json))));
+
+        assertFalse(sampler.getPostBodyRaw());
+        assertTrue(sampler.getSendParameterValuesAsPostBody());
+        HTTPArgument argument = (HTTPArgument) sampler.getArguments().getArgument(0);
+        assertFalse(argument.isAlwaysEncoded());
+        assertEquals(json, argument.getEncodedValue());
+    }
+
+    @Test
     void httpSamplerProxy_editingExistingRawSampler_disablesArgumentEncoding() {
         HTTPSamplerProxy sampler = new HTTPSamplerProxy();
         sampler.setPostBodyRaw(true);
