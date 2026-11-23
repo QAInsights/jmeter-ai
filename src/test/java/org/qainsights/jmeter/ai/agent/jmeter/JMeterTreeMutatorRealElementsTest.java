@@ -62,6 +62,17 @@ class JMeterTreeMutatorRealElementsTest {
     private final JMeterTreeModel model = mock(JMeterTreeModel.class);
 
     @Test
+    void blankTypedValueRemovesTheProperty() {
+        ThreadGroup group = new ThreadGroup();
+        group.setDelay(5L);
+        JMeterTreeNode node = new JMeterTreeNode(group, null);
+
+        assertTrue(mutator.updateProperty(model, node, ThreadGroup.DELAY, ""));
+
+        assertInstanceOf(NullProperty.class, group.getProperty(ThreadGroup.DELAY));
+    }
+
+    @Test
     void scalarEditsRetainNativeAndExpressionTypesAfterSaveAndReload(@TempDir Path directory) throws Exception {
         Path aliases = directory.resolve("saveservice.properties");
         try (var input = getClass().getResourceAsStream("/scalar-saveservice.properties")) {

@@ -96,6 +96,10 @@ enum ScalarPropertyType {
             target.setProperty(key, value);
             return;
         }
+        if (value.isEmpty()) {
+            target.removeProperty(key);
+            return;
+        }
         JMeterProperty parsed;
         try {
             parsed = switch (this) {
