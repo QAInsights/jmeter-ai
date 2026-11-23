@@ -15,6 +15,7 @@ import org.qainsights.jmeter.ai.service.OpenRouterAiService;
 import org.qainsights.jmeter.ai.service.MetaMuseAiService;
 import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import com.anthropic.client.AnthropicClient;
 import com.google.genai.Client;
@@ -30,7 +31,8 @@ final class JMeterAgentProviderResolver {
         AnthropicClient client = claude.getClient();
         ClaudeChatModel.MessageService service = params -> client.messages().create(params);
         return new JMeterAgent(JMeterAgent.claudeFactory(service, claude.getCurrentModel(), maxTokens,
-                claude.getReasoningSettings()), JMeterAgent.maxIterations(), destructiveGate());
+                claude.getReasoningSettings(), !GatewayConfig.isAnthropicGateway()),
+                JMeterAgent.maxIterations(), destructiveGate());
     }
 
     static JMeterAgent forOpenAi(OpenAiService openAi) {
@@ -114,7 +116,7 @@ final class JMeterAgentProviderResolver {
             ClaudeService claude = (ClaudeService) service;
             AnthropicClient client = claude.getClient();
             return JMeterAgent.claudeFactory(params -> client.messages().create(params),
-                    claude.getCurrentModel(), maxTokens, claude.getReasoningSettings());
+                    claude.getCurrentModel(), maxTokens, claude.getReasoningSettings(), !GatewayConfig.isAnthropicGateway());
         }
         if (service instanceof OpenAiService) {
             OpenAiService openAi = (OpenAiService) service;
@@ -155,7 +157,7 @@ final class JMeterAgentProviderResolver {
         if (deepseek.isAnthropicFormat()) {
             AnthropicClient client = deepseek.getAnthropicClient();
             return JMeterAgent.claudeFactory(params -> client.messages().create(params),
-                    deepseek.getCurrentModel(), maxTokens, null);
+                    deepseek.getCurrentModel(), maxTokens, null, false);
         }
         return JMeterAgent.openAiCompatibleFactory(deepseek.getClient(), deepseek.getCurrentModel(), maxTokens);
     }

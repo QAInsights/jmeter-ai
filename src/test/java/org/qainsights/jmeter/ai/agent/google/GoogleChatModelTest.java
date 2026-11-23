@@ -83,13 +83,16 @@ class GoogleChatModelTest {
         responses.add(toolResponse("get_tree_state"));
         responses.add(textResponse("All set."));
         List<List<Content>> captured = new ArrayList<>();
+        List<GenerateContentConfig> configs = new ArrayList<>();
         GoogleChatModel.GenerateService service = (model, contents, config) -> {
             captured.add(contents);
+            configs.add(config);
             return responses.removeFirst();
         };
 
+        var read = ToolSpec.builder("get_tree_state").description("Reads the tree").build();
         GoogleChatModel model = new GoogleChatModel(service, new GoogleToolAdapter(),
-                Collections.<ToolSpec>emptyList(), "system", "gemini-2.5-flash", 1024);
+                List.of(read), "system", "gemini-2.5-flash", 1024);
 
         model.start("inspect");
         AssistantTurn turn = model.next(Collections.singletonList(
@@ -100,6 +103,8 @@ class GoogleChatModelTest {
         // History on the 2nd call: user + model(functionCall) + user(functionResponse) = 3.
         assertTrue(captured.get(1).size() > captured.get(0).size());
         assertEquals(3, captured.get(1).size());
+        assertEquals(configs.get(0).toJson(), configs.get(1).toJson());
+        assertEquals(captured.get(0).get(0).toJson(), captured.get(1).get(0).toJson());
     }
 
     @Test

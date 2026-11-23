@@ -110,7 +110,9 @@ class OpenAiChatModelTest {
             return responses.removeFirst();
         };
 
-        OpenAiChatModel chat = model(service);
+        var read = ToolSpec.builder("get_tree_state").description("Reads the tree").build();
+        OpenAiChatModel chat = new OpenAiChatModel(service, new OpenAiToolAdapter(),
+                List.of(read), "system", "gpt-4o", 1024);
         chat.start("inspect");
         AssistantTurn turn = chat.next(Collections.singletonList(
                 new ToolOutcome("call_1", "get_tree_state", "tree", false)));
@@ -121,6 +123,12 @@ class OpenAiChatModelTest {
         assertEquals(4, captured.get(1).messages().size());
         assertTrue(captured.get(1).messages().get(2).isAssistant());
         assertTrue(captured.get(1).messages().get(3).isTool());
+        var mapper = com.openai.core.ObjectMappers.jsonMapper();
+        var first = mapper.<com.fasterxml.jackson.databind.JsonNode>valueToTree(captured.get(0)._body());
+        var second = mapper.<com.fasterxml.jackson.databind.JsonNode>valueToTree(captured.get(1)._body());
+        assertEquals(first.path("tools").toString(), second.path("tools").toString());
+        assertEquals(first.at("/messages/0").toString(), second.at("/messages/0").toString());
+        assertEquals(first.at("/messages/1").toString(), second.at("/messages/1").toString());
     }
 
     @Test
