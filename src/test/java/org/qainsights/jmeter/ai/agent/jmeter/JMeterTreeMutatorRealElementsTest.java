@@ -4,7 +4,9 @@ import com.sun.net.httpserver.HttpServer;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.Arguments;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.control.gui.IfControllerPanel;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.AuthManager;
@@ -14,18 +16,31 @@ import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.protocol.http.util.HTTPArgument;
+import org.apache.jmeter.save.SaveService;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.LongProperty;
 import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
 import org.apache.jmeter.threads.ThreadGroup;
+import org.apache.jmeter.threads.gui.ThreadGroupGui;
+import org.apache.jmeter.timers.ConstantTimer;
+import org.apache.jmeter.timers.gui.ConstantTimerGui;
 import org.apache.jmeter.util.JMeterUtils;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.jorphan.collections.HashTree;
+import org.apache.jorphan.collections.ListedHashTree;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,6 +60,85 @@ class JMeterTreeMutatorRealElementsTest {
 
     private final JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
     private final JMeterTreeModel model = mock(JMeterTreeModel.class);
+
+    @Test
+    void scalarEditsRetainNativeAndExpressionTypesAfterSaveAndReload(@TempDir Path directory) throws Exception {
+        Path aliases = directory.resolve("saveservice.properties");
+        try (var input = getClass().getResourceAsStream("/scalar-saveservice.properties")) {
+            Files.copy(input, aliases);
+        }
+        Path log = directory.resolve("round-trip.log");
+        Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+        String classpath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
+        // SaveService loads its aliases once per JVM; the rest of the suite runs without them.
+        Process process = new ProcessBuilder(java.toString(), "-Dsaveservice_properties=" + aliases,
+                "-cp", classpath, getClass().getName(), directory.toString())
+                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS), () -> "JMX round trip timed out; see " + log);
+            assertEquals(0, process.exitValue(), Files.readString(log));
+        } finally {
+            process.destroyForcibly();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        JMeterUtils.loadJMeterProperties("nonexistent.properties");
+        verifyScalarRoundTrip(Path.of(args[0]));
+    }
+
+    private static void verifyScalarRoundTrip(Path directory) throws Exception {
+        JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
+        JMeterTreeModel model = new JMeterTreeModel();
+        IfController controller = (IfController) new IfControllerPanel().createTestElement();
+        ThreadGroup group = (ThreadGroup) new ThreadGroupGui().createTestElement();
+        ConstantTimer timer = (ConstantTimer) new ConstantTimerGui().createTestElement();
+        JMeterTreeNode controllerNode = new JMeterTreeNode(controller, null);
+        JMeterTreeNode groupNode = new JMeterTreeNode(group, null);
+        JMeterTreeNode timerNode = new JMeterTreeNode(timer, null);
+        String useExpression = "IfController.useExpression";
+        String evaluateAll = "IfController.evaluateAll";
+        String expression = "prefix-${flag}";
+        controller.setProperty(useExpression, "false");
+        group.removeProperty(ThreadGroup.DURATION);
+        group.setProperty(ThreadGroup.DELAY, "${oldDelay}");
+
+        assertTrue(mutator.updateProperty(model, controllerNode, useExpression, "true"));
+        controller.setEvaluateAll(true);
+        assertTrue(mutator.updateProperty(model, controllerNode, evaluateAll, expression));
+        assertTrue(mutator.updateProperty(model, groupNode, ThreadGroup.DURATION, "3000000000"));
+        assertTrue(mutator.updateProperty(model, groupNode, ThreadGroup.DELAY, "5"));
+        assertTrue(mutator.updateProperty(model, timerNode, ConstantTimer.DELAY, "0015"));
+
+        Path saved = directory.resolve("scalars.jmx");
+        HashTree tree = new ListedHashTree();
+        tree.add(group).add(controller).add(timer);
+        try (var output = Files.newOutputStream(saved)) {
+            SaveService.saveTree(tree, output);
+        }
+        String xml = Files.readString(saved);
+        assertTrue(xml.contains("<boolProp name=\"IfController.useExpression\">true</boolProp>"), xml);
+        assertTrue(xml.contains("<longProp name=\"ThreadGroup.duration\">3000000000</longProp>"), xml);
+        assertTrue(xml.contains("<longProp name=\"ThreadGroup.delay\">5</longProp>"), xml);
+        assertTrue(xml.contains("<stringProp name=\"IfController.evaluateAll\">prefix-${flag}</stringProp>"), xml);
+        assertTrue(xml.contains("<stringProp name=\"ConstantTimer.delay\">0015</stringProp>"), xml);
+
+        HashTree reopened = SaveService.loadTree(saved.toFile());
+        ThreadGroup reopenedGroup = (ThreadGroup) reopened.list().iterator().next();
+        HashTree groupChildren = reopened.getTree(reopenedGroup);
+        IfController reopenedController = (IfController) groupChildren.list().iterator().next();
+        TestElement reopenedTimer = (TestElement) groupChildren.getTree(reopenedController).list().iterator().next();
+        assertInstanceOf(BooleanProperty.class, reopenedController.getProperty(useExpression));
+        assertTrue(reopenedController.isUseExpression());
+        assertInstanceOf(StringProperty.class, reopenedController.getProperty(evaluateAll));
+        assertEquals(expression, reopenedController.getPropertyAsString(evaluateAll));
+        assertInstanceOf(LongProperty.class, reopenedGroup.getProperty(ThreadGroup.DURATION));
+        assertInstanceOf(LongProperty.class, reopenedGroup.getProperty(ThreadGroup.DELAY));
+        assertEquals(3_000_000_000L, reopenedGroup.getDuration());
+        assertEquals(5, reopenedGroup.getDelay());
+        assertInstanceOf(StringProperty.class, reopenedTimer.getProperty(ConstantTimer.DELAY));
+        assertEquals("0015", reopenedTimer.getPropertyAsString(ConstantTimer.DELAY));
+    }
 
     @Test
     void responseAssertion_testStrings_isRejectedAndStaysReadable() {

@@ -118,7 +118,13 @@ public final class UpdateElementPropertyHandler {
         if (invalidValueHint.isPresent()) {
             return ToolResult.error(ERR_INVALID_PROPERTY, invalidValueHint.get());
         }
-        if (!updater.update(node, property, value)) {
+        boolean updated;
+        try {
+            updated = updater.update(node, property, value);
+        } catch (JMeterTreeMutator.InvalidScalarValueException e) {
+            return ToolResult.error(ERR_INVALID_PROPERTY, e.getMessage());
+        }
+        if (!updated) {
             return ToolResult.error(ERR_UPDATE_FAILED,
                     "Could not set '" + property + "' on '" + elementId + "'. If this property holds a list or "
                             + "table (e.g. an assertion's patterns, a header/argument list), it cannot be set as "
@@ -194,7 +200,7 @@ public final class UpdateElementPropertyHandler {
             if (isCurrent) {
                 edt.run(gui::updateCurrentNode);
             }
-            if (!mutator.updateProperty(gui.getTreeModel(), node, property, value)) {
+            if (!mutator.updatePropertyOrThrow(gui.getTreeModel(), node, property, value)) {
                 return false;
             }
             edt.run(() -> reloadPanel(gui, node, isCurrent));

@@ -5,17 +5,23 @@ import java.util.Map;
 
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
+import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
 import org.qainsights.jmeter.ai.agent.jmeter.PropertyUpdater;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /** Unit tests for {@link UpdateElementPropertyHandler} using an in-memory tree and fake updater. */
 class UpdateElementPropertyHandlerTest {
@@ -152,6 +158,29 @@ class UpdateElementPropertyHandlerTest {
         assertTrue(r.isSuccess());
         assertSame(realThreadGroup, updater.lastNode);
         assertEquals("LoopController.loops", updater.lastProperty);
+    }
+
+    @Test
+    void update_invalidBooleanReturnsUsefulErrorWithoutChangingTheElement() {
+        String key = "IfController.useExpression";
+        IfController controller = new IfController();
+        controller.setName("Check flag");
+        controller.setUseExpression(true);
+        root.add(new JMeterTreeNode(controller, null));
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
+        Tool realTool = new UpdateElementPropertyHandler(() -> (JMeterTreeNode) root.getParent(),
+                new ElementIdResolver(),
+                (node, property, value) -> mutator.updatePropertyOrThrow(model, node, property, value)).tool();
+
+        ToolResult result = realTool.execute(args("Test Plan/Check flag", key, "yes"));
+
+        assertFalse(result.isSuccess());
+        assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, result.getErrorCode());
+        assertEquals("Invalid value 'yes' for IfController.useExpression. Expected true or false.",
+                result.getMessage());
+        assertTrue(controller.isUseExpression());
+        verifyNoInteractions(model);
     }
 
     @Test

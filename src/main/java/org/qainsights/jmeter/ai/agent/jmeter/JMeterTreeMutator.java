@@ -56,7 +56,7 @@ public final class JMeterTreeMutator {
     }
 
     /**
-     * Sets a string property on the node's test element. Refuses to overwrite a
+     * Sets a scalar property on the node's test element. Refuses to overwrite a
      * property that is currently a collection/map/nested element (e.g. an
      * assertion's pattern list or a header manager's headers) - doing so would
      * replace it with a plain {@code StringProperty} of the same name and
@@ -70,13 +70,24 @@ public final class JMeterTreeMutator {
      * the same name that JMeter never reads.
      */
     public boolean updateProperty(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
+        try {
+            return updatePropertyOrThrow(model, node, property, value);
+        } catch (InvalidScalarValueException e) {
+            return false;
+        }
+    }
+
+    /** Updates a scalar, distinguishing invalid literals from other mutation failures. */
+    public boolean updatePropertyOrThrow(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
         if (!isValid(model, node) || property == null || property.trim().isEmpty()) {
             return false;
         }
         String safeValue = value == null ? "" : value;
-        return mutate(() -> {
+        AtomicReference<InvalidScalarValueException> invalidValue = new AtomicReference<>();
+        boolean updated = mutate(() -> {
             TestElement target = resolvePropertyOwner(node.getTestElement(), property);
-            if (isNonScalar(target.getProperty(property))) {
+            JMeterProperty existing = target.getProperty(property);
+            if (isNonScalar(existing)) {
                 log.warn("Refusing to overwrite non-scalar property '{}' on {} with a plain string value",
                         property, target.getClass().getSimpleName());
                 return false;
@@ -84,7 +95,12 @@ public final class JMeterTreeMutator {
             HTTPSamplerBase sampler = target instanceof HTTPSamplerBase ? (HTTPSamplerBase) target : null;
             boolean wasRaw = sampler != null && HTTPSamplerBase.POST_BODY_RAW.equals(property)
                     && sampler.getPostBodyRaw();
-            target.setProperty(property, safeValue);
+            try {
+                ScalarPropertyType.resolve(target, property, existing).write(target, property, safeValue);
+            } catch (InvalidScalarValueException e) {
+                invalidValue.set(e);
+                return false;
+            }
             if (sampler != null) {
                 boolean raw = sampler.getPostBodyRaw();
                 if (raw || wasRaw) {
@@ -94,6 +110,16 @@ public final class JMeterTreeMutator {
             model.nodeChanged(node);
             return true;
         });
+        if (invalidValue.get() != null) {
+            throw invalidValue.get();
+        }
+        return updated;
+    }
+
+    public static final class InvalidScalarValueException extends IllegalArgumentException {
+        InvalidScalarValueException(String message) {
+            super(message);
+        }
     }
 
     /**
