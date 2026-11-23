@@ -7,6 +7,9 @@ import java.util.Locale;
 
 import org.qainsights.jmeter.ai.cli.CliProcessResult;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
+import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider.AgentReply;
+import org.qainsights.jmeter.ai.agent.loop.ProviderTokenUsage;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,7 +23,7 @@ final class OpenCodeOutputParser {
     private OpenCodeOutputParser() {
     }
 
-    static String readAnswer(CliProcessResult result, Duration timeout, String timeoutKey,
+    static AgentReply readAnswer(CliProcessResult result, Duration timeout, String timeoutKey,
             String model, List<String> discoveredModels, List<String> configuredModels) {
         if (result.isTimedOut()) {
             throw new CliProviderException("OpenCode did not respond within "
@@ -40,7 +43,7 @@ final class OpenCodeOutputParser {
             throw new CliProviderException(
                     "OpenCode returned an empty response. Try rephrasing your request.");
         }
-        return output.answer().trim();
+        return new AgentReply(output.answer().trim(), output.usage());
     }
 
     static String describeError(String errorName, String errorMessage, CliProcessResult result,
@@ -109,10 +112,11 @@ final class OpenCodeOutputParser {
 
     private static ParsedOutput parseOutput(String stdout) {
         if (stdout == null || stdout.isEmpty()) {
-            return new ParsedOutput("", null, null);
+            return new ParsedOutput("", null, null, Counts.UNREPORTED);
         }
         StringBuilder answer = new StringBuilder();
         ParsedOutput errorOutput = null;
+        Counts usage = Counts.UNREPORTED;
         for (String line : stdout.split("\\R")) {
             JsonNode event = parseJsonObject(line);
             if (event == null) {
@@ -128,11 +132,13 @@ final class OpenCodeOutputParser {
                 }
             } else if ("error".equals(type)) {
                 errorOutput = parseErrorEvent(event);
+            } else if ("step_finish".equals(type)) {
+                usage = usage.plusReported(ProviderTokenUsage.openCode(event.path("part").path("tokens")));
             }
         }
         return errorOutput == null
-                ? new ParsedOutput(answer.toString(), null, null)
-                : new ParsedOutput(answer.toString(), errorOutput.errorName(), errorOutput.errorMessage());
+                ? new ParsedOutput(answer.toString(), null, null, usage)
+                : new ParsedOutput(answer.toString(), errorOutput.errorName(), errorOutput.errorMessage(), usage);
     }
 
     private static JsonNode parseJsonObject(String line) {
@@ -157,7 +163,7 @@ final class OpenCodeOutputParser {
         String errorMessage = firstNonBlank(source.path("data").path("message").asText(null),
                 source.path("message").asText(null),
                 event.path("data").path("message").asText(null));
-        return new ParsedOutput("", errorName, errorMessage);
+        return new ParsedOutput("", errorName, errorMessage, Counts.UNREPORTED);
     }
 
     static String firstNonBlank(String... values) {
@@ -169,5 +175,5 @@ final class OpenCodeOutputParser {
         return null;
     }
 
-    private record ParsedOutput(String answer, String errorName, String errorMessage) { }
+    private record ParsedOutput(String answer, String errorName, String errorMessage, Counts usage) { }
 }

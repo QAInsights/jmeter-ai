@@ -83,6 +83,7 @@ public final class FixLoop {
     private Map<String, PlanDiff.ElementSnapshot> startSnapshot = Map.of();
     private final List<PlanDiff> roundDiffs = new ArrayList<>();
     private final List<String> roundSummaries = new ArrayList<>();
+    private final List<String> agentUsage = new ArrayList<>();
     private TestRunSummary concurrencyBefore;
     private TestRunSummary concurrencyAfter;
     private String concurrencyReason = "";
@@ -119,6 +120,7 @@ public final class FixLoop {
         startSnapshot = PlanDiff.liveSnapshot();
         roundDiffs.clear();
         roundSummaries.clear();
+        agentUsage.clear();
         concurrencyBefore = null;
         concurrencyAfter = null;
         concurrencyReason = "";
@@ -217,6 +219,9 @@ public final class FixLoop {
                 used = round;
                 if (agentResult != null) {
                     summaries.add(agentResult.getFinalText());
+                    if (!agentResult.getUsageSummary().isEmpty()) {
+                        agentUsage.add("Round " + round + "\n" + agentResult.getUsageSummary());
+                    }
                 }
                 roundDiffs.add(PlanDiff.between(roundBefore, PlanDiff.liveSnapshot()));
                 if (isCancelled()) {
@@ -519,6 +524,7 @@ public final class FixLoop {
                     concurrencyAfter == null ? 0 : concurrencyAfter.getTotalSamples());
             result.setBeforeFailures(before == null ? List.of() : before.getFailures());
             result.setRoundSummaries(roundSummaries);
+            result.setAgentUsage(agentUsage);
             result.setConcurrencyReason(concurrencyReason);
             result.setDeterministicHints(deterministicHints(before));
             result.setSkippedPageChecks(skippedPageChecks);

@@ -108,6 +108,10 @@ public final class FixReport {
         } else {
             text.append("Not run.\n");
         }
+        if (!result.agentUsage().isEmpty()) {
+            text.append("\n## Agent turn usage\n");
+            result.agentUsage().forEach(usage -> text.append("\n```text\n").append(usage).append("```\n"));
+        }
         return text.toString();
     }
 

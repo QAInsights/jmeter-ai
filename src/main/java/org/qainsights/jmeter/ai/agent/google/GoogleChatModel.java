@@ -7,6 +7,8 @@ import java.util.Optional;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
+import org.qainsights.jmeter.ai.agent.loop.ProviderTokenUsage;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.qainsights.jmeter.ai.service.reasoning.GoogleThinking;
@@ -50,6 +52,7 @@ public final class GoogleChatModel implements ChatModel {
     private final int maxOutputTokens;
     private final ReasoningSettings reasoningSettings;
     private final List<Content> history;
+    private final TokenUsageTracker usage = new TokenUsageTracker("gemini");
     private String lastReasoning;
 
     public GoogleChatModel(GenerateService service, GoogleToolAdapter adapter, List<ToolSpec> specs,
@@ -90,6 +93,11 @@ public final class GoogleChatModel implements ChatModel {
         String reasoning = lastReasoning;
         lastReasoning = null;
         return reasoning;
+    }
+
+    @Override
+    public TokenUsageTracker usageTracker() {
+        return usage;
     }
 
     /**
@@ -149,8 +157,20 @@ public final class GoogleChatModel implements ChatModel {
         // A defensive copy, so the request reflects exactly the history at call time even
         // though this method keeps mutating the `history` field afterwards (appending the
         // model's reply, and later the next turn's tool outcomes).
-        GenerateContentResponse response = service.generate(model, new ArrayList<>(history), config.build());
+        List<Content> contents = new ArrayList<>(history);
+        GenerateContentConfig settings = config.build();
+        var mapper = com.google.genai.JsonSerializable.objectMapper();
+        var request = mapper.createObjectNode().put("model", model);
+        request.set("contents", mapper.valueToTree(contents));
+        request.setAll(mapper.<com.fasterxml.jackson.databind.node.ObjectNode>valueToTree(settings));
+        return usage.track(
+                TokenUsageTracker.RequestSize.json(mapper, request, specs.size()),
+                () -> service.generate(model, contents, settings), reply -> reply.usageMetadata()
+                        .map(value -> ProviderTokenUsage.gemini(mapper.valueToTree(value)))
+                        .orElse(TokenUsageTracker.Counts.UNREPORTED), this::acceptResponse);
+    }
 
+    private AssistantTurn acceptResponse(GenerateContentResponse response) {
         response.promptFeedback().flatMap(feedback -> feedback.blockReason()).ifPresent(reason -> {
             throw new IllegalStateException("Gemini blocked the agent request: " + reason);
         });

@@ -7,6 +7,7 @@ import java.util.List;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
 import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker;
+import org.qainsights.jmeter.ai.agent.loop.ProviderTokenUsage;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.slf4j.Logger;
@@ -182,11 +183,23 @@ public final class ClaudeChatModel implements ChatModel {
             params.addTool(adapter.toAnthropicTool(spec));
         }
 
-        Message response = service.create(params.build());
-        usage.record(response.usage().inputTokens(), response.usage().outputTokens());
+        MessageCreateParams request = params.build();
+        var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
+        return usage.track(TokenUsageTracker.RequestSize.json(mapper, request._body(), specs.size()),
+                () -> service.create(request), reply -> reply._usage().asKnown()
+                        .map(value -> ProviderTokenUsage.anthropic(mapper.valueToTree(value)))
+                        .orElse(TokenUsageTracker.Counts.UNREPORTED), this::acceptResponse);
+    }
+
+    private AssistantTurn acceptResponse(Message response) {
         history.add(response.toParam());
         lastReasoning = org.qainsights.jmeter.ai.service.reasoning.AnthropicThinking
                 .extractThinking(response.content());
         return adapter.toAssistantTurn(response.content());
+    }
+
+    @Override
+    public TokenUsageTracker usageTracker() {
+        return usage;
     }
 }

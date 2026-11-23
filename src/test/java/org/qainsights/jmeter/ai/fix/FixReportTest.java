@@ -23,6 +23,7 @@ class FixReportTest {
                 null, List.of("NEEDS USER: provide a test account"), List.of(),
                 FixLoop.CONCURRENCY_PARTIAL_REASON, diff, List.of(diff), true, 3, 8, 1, 8);
         result.setRoundSummaries(List.of("Round 1 targeted 2 of 4 failures; 1 of 4 remained."));
+        result.setAgentUsage(List.of("Round 1\nAgent token usage [test]\ntotal | 20 | 0 | - | 10 | -\n"));
         result.setDeterministicHints(List.of(
                 "Move literal password, passwd, or pwd argument values to User Defined Variables or a CSV Data Set."));
         result.setBeforeFailures(List.of(new org.qainsights.jmeter.ai.agent.jmeter.TestRunSummary.Failure(
@@ -38,6 +39,8 @@ class FixReportTest {
         assertTrue(markdown.contains("NEEDS USER: provide a test account"));
         assertTrue(markdown.contains("Move literal password"));
         assertTrue(markdown.contains("Plan/Request"));
+        assertTrue(markdown.contains("## Agent turn usage"));
+        assertTrue(markdown.contains("Round 1\nAgent token usage [test]\ntotal | 20 | 0 | - | 10 | -"));
         assertTrue(markdown.contains("Soft failure: page title indicates an error"));
     }
 
