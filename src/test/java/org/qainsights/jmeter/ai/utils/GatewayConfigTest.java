@@ -60,12 +60,14 @@ class GatewayConfigTest {
     void equivalentAnthropicUrlsStillIdentifyTheVendorEndpoint() {
         try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
             config.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
-                    .thenReturn("https://api.anthropic.com/", "HTTPS://API.ANTHROPIC.COM:443///",
+                    .thenReturn("https://api.anthropic.com/", "HTTPS://API.ANTHROPIC.COM:443/",
+                            "https://api.anthropic.com///",
                             "https://api.anthropic.com/proxy/", "https://api.anthropic.com:8443/",
                             "https://api.anthropic.com.example.org/");
 
             assertFalse(GatewayConfig.isAnthropicGateway());
             assertFalse(GatewayConfig.isAnthropicGateway());
+            assertTrue(GatewayConfig.isAnthropicGateway());
             assertTrue(GatewayConfig.isAnthropicGateway());
             assertTrue(GatewayConfig.isAnthropicGateway());
             assertTrue(GatewayConfig.isAnthropicGateway());

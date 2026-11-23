@@ -40,10 +40,11 @@ public final class GatewayConfig {
     public static boolean isAnthropicGateway() {
         try {
             URI url = URI.create(anthropicBaseUrl());
+            String path = url.getRawPath();
             return !("https".equalsIgnoreCase(url.getScheme())
                     && "api.anthropic.com".equalsIgnoreCase(url.getHost())
                     && (url.getPort() == -1 || url.getPort() == 443)
-                    && url.getRawPath().matches("/*")
+                    && ("".equals(path) || "/".equals(path))
                     && url.getRawUserInfo() == null
                     && url.getRawQuery() == null
                     && url.getRawFragment() == null);
