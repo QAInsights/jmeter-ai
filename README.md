@@ -469,7 +469,7 @@ What helps, roughly in order of impact:
 - **Lower `jmeter.ai.agent.max.tokens`** (e.g. `1024`) if your gateway reserves `max_tokens` up front.
 - **Start a new chat** per task: up to 10 prior turn pairs are re-sent with each agent request.
 - **Use plain chat** (deselect Agent Mode) for questions and snippets; it sends no tool schemas or hierarchy and costs a fraction per request.
-- **Measure**: each agent turn logs `Agent token usage [...] prompt=... completion=... | run total: ...` in `jmeter.log`, so you can compare a run against your quota before asking for a larger tier.
+- **Measure**: each model call logs `Agent token usage [...] turn N: prompt=... completion=... | run total: ...` in `jmeter.log`. The prompt count includes reported cached input. If the provider returns no counts, the line says `not reported by provider` and the running total stays unchanged. The [end-of-run usage table](#-context--cost-stats) breaks down the reported counts by turn and cache status.
 
 If the quota is fixed at a few thousand tokens per window, Agent Mode will not fit; ask the gateway team for a larger allocation for the Feather Wand client.
 

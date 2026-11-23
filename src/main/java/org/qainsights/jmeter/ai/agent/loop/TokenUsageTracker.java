@@ -7,14 +7,20 @@ import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Usage and request sizes for one agent run. Null token counts denote unreported fields.
  */
 public final class TokenUsageTracker {
 
+    private static final Logger log = LoggerFactory.getLogger(TokenUsageTracker.class);
+
     private final String provider;
     private final List<Turn> turns = new ArrayList<>();
+    private Counts totals = Counts.UNREPORTED;
+    private int unreportedTurns;
 
     public record Counts(Long fresh, Long cacheRead, Long cacheWrite, Long output, Long reasoning) {
         public static final Counts UNREPORTED = new Counts(null, null, null, null, null);
@@ -22,6 +28,10 @@ public final class TokenUsageTracker {
         public Counts plusReported(Counts other) {
             return new Counts(add(fresh, other.fresh), add(cacheRead, other.cacheRead),
                     add(cacheWrite, other.cacheWrite), add(output, other.output), add(reasoning, other.reasoning));
+        }
+
+        private Long prompt() {
+            return add(add(fresh, cacheRead), cacheWrite);
         }
 
         private static Long add(Long left, Long right) {
@@ -53,12 +63,12 @@ public final class TokenUsageTracker {
     }
 
     public void record(long prompt, long completion) {
-        turns.add(new Turn(new RequestSize(0, null, null), new Counts(prompt, null, null, completion, null)));
+        recordTurn(new RequestSize(0, null, null), new Counts(prompt, null, null, completion, null));
     }
 
     /** Records a turn whose response carried no usage block (some gateways strip it). */
     public void recordUnreported() {
-        turns.add(new Turn(new RequestSize(0, null, null), Counts.UNREPORTED));
+        recordTurn(new RequestSize(0, null, null), Counts.UNREPORTED);
     }
 
     public <T> T track(RequestSize request, Supplier<T> send, Function<T, Counts> readUsage) {
@@ -72,12 +82,28 @@ public final class TokenUsageTracker {
             }
             return response;
         } finally {
-            turns.add(new Turn(request, counts));
+            recordTurn(request, counts);
+        }
+    }
+
+    private void recordTurn(RequestSize request, Counts counts) {
+        turns.add(new Turn(request, counts));
+        totals = totals.plusReported(counts);
+        if (Counts.UNREPORTED.equals(counts)) {
+            unreportedTurns++;
+            log.info("Agent token usage [{}] turn {}: not reported by provider | run total: prompt={} completion={} total={} ({} turn(s) unreported)",
+                    provider, turns(), promptTokens(), completionTokens(), totalTokens(), unreportedTurns);
+        } else {
+            Long prompt = counts.prompt();
+            Long completion = counts.output();
+            log.info("Agent token usage [{}] turn {}: prompt={} completion={} | run total: prompt={} completion={} total={}",
+                    provider, turns(), prompt == null ? "-" : prompt, completion == null ? "-" : completion,
+                    promptTokens(), completionTokens(), totalTokens());
         }
     }
 
     public int unreportedTurns() {
-        return (int) turns.stream().filter(turn -> Counts.UNREPORTED.equals(turn.counts())).count();
+        return unreportedTurns;
     }
 
     public int turns() {
@@ -85,20 +111,16 @@ public final class TokenUsageTracker {
     }
 
     public long promptTokens() {
-        return sum(Counts::fresh) + sum(Counts::cacheRead) + sum(Counts::cacheWrite);
+        Long prompt = totals.prompt();
+        return prompt == null ? 0 : prompt;
     }
 
     public long completionTokens() {
-        return sum(Counts::output);
+        return totals.output() == null ? 0 : totals.output();
     }
 
     public long totalTokens() {
         return promptTokens() + completionTokens();
-    }
-
-    private long sum(Function<Counts, Long> field) {
-        return turns.stream().map(turn -> field.apply(turn.counts())).filter(java.util.Objects::nonNull)
-                .mapToLong(Long::longValue).sum();
     }
 
     public String summary() {
@@ -115,14 +137,10 @@ public final class TokenUsageTracker {
             row(text, i + 1, c.fresh(), c.cacheRead(), c.cacheWrite(), c.output(), c.reasoning(),
                     s.tools(), s.schemaChars(), s.requestChars());
         }
-        row(text, "total", total(Counts::fresh), total(Counts::cacheRead), total(Counts::cacheWrite),
-                total(Counts::output), total(Counts::reasoning), turns.stream().mapToLong(t -> t.size().tools()).sum(),
+        row(text, "total", totals.fresh(), totals.cacheRead(), totals.cacheWrite(),
+                totals.output(), totals.reasoning(), turns.stream().mapToLong(t -> t.size().tools()).sum(),
                 sizeTotal(RequestSize::schemaChars), sizeTotal(RequestSize::requestChars));
         return text.toString();
-    }
-
-    private Long total(Function<Counts, Long> field) {
-        return turns.stream().anyMatch(t -> field.apply(t.counts()) != null) ? sum(field) : null;
     }
 
     private Long sizeTotal(Function<RequestSize, Integer> field) {

@@ -35,4 +35,19 @@ class TokenUsageTrackerTest {
         assertTrue(summary.contains("2 | - | - | - | - | - | 2 | 35 | 200"), summary);
         assertTrue(summary.contains("total | 10 | 0 | - | 5 | 2 | 3 | 55 | 320"), summary);
     }
+
+    @Test
+    void runningTotalsIncludeCachedInputAndSkipUnreportedTurns() {
+        TokenUsageTracker tracker = new TokenUsageTracker("example");
+        tracker.track(new TokenUsageTracker.RequestSize(1, 20, 120), () -> "reply",
+                reply -> new TokenUsageTracker.Counts(10L, 3L, 2L, 5L, 2L));
+        assertEquals(15, tracker.promptTokens());
+        assertEquals(5, tracker.completionTokens());
+        assertEquals(20, tracker.totalTokens());
+
+        tracker.track(new TokenUsageTracker.RequestSize(0, 0, 120), () -> "reply",
+                reply -> TokenUsageTracker.Counts.UNREPORTED);
+        assertEquals(1, tracker.unreportedTurns());
+        assertEquals(20, tracker.totalTokens());
+    }
 }
