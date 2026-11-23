@@ -47,7 +47,8 @@ enum ScalarPropertyType {
     static ScalarPropertyType resolve(TestElement element, String key, JMeterProperty existing) {
         if ((element instanceof ConstantTimer && ConstantTimer.DELAY.equals(key))
                 || (element instanceof SizeAssertion && "SizeAssertion.size".equals(key))
-                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))) {
+                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))
+                || isHttpPort(element, key)) {
             return STRING;
         }
         if (element instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)
@@ -92,10 +93,18 @@ enum ScalarPropertyType {
         return STRING;
     }
 
+    private static boolean isHttpPort(TestElement target, String key) {
+        return HTTPSamplerBase.PORT.equals(key) && (target instanceof HTTPSamplerBase
+                || (target instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)));
+    }
+
     void write(TestElement target, String key, String value) {
         String literal = value.trim();
-        if (this == STRING || EXPRESSION.matcher(value).find()
-                || (target instanceof HTTPSamplerBase && HTTPSamplerBase.PORT.equals(key) && literal.isEmpty())) {
+        if (value.isEmpty() && isHttpPort(target, key)) {
+            target.removeProperty(key);
+            return;
+        }
+        if (this == STRING || EXPRESSION.matcher(value).find()) {
             target.setProperty(key, value);
             return;
         }

@@ -96,6 +96,25 @@ class JMeterTreeMutatorRealElementsTest {
     }
 
     @Test
+    void httpPortTextAndBlankMatchBothNativeEditors() {
+        for (JMeterGUIComponent editor : List.of(new HttpTestSampleGui(), new HttpDefaultsGui())) {
+            TestElement element = editor.createTestElement();
+            JMeterTreeNode node = new JMeterTreeNode(element, null);
+            assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.PORT, "08081"));
+            assertInstanceOf(StringProperty.class, element.getProperty(HTTPSamplerBase.PORT));
+            assertEquals("08081", element.getPropertyAsString(HTTPSamplerBase.PORT));
+
+            editor.configure(element);
+            editor.modifyTestElement(element);
+            assertInstanceOf(StringProperty.class, element.getProperty(HTTPSamplerBase.PORT));
+            assertEquals("08081", element.getPropertyAsString(HTTPSamplerBase.PORT));
+
+            assertTrue(mutator.updateProperty(model, node, HTTPSamplerBase.PORT, ""));
+            assertInstanceOf(NullProperty.class, element.getProperty(HTTPSamplerBase.PORT));
+        }
+    }
+
+    @Test
     void scalarEditsRetainNativeAndExpressionTypesAfterSaveAndReload(@TempDir Path directory) throws Exception {
         Path aliases = directory.resolve("saveservice.properties");
         try (var input = getClass().getResourceAsStream("/scalar-saveservice.properties")) {
