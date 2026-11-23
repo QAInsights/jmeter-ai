@@ -10,10 +10,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
-import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.NullProperty;
-import org.apache.jmeter.testelement.property.PropertyIterator;
-import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
 import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
@@ -136,19 +133,9 @@ public final class UpdateElementPropertyHandler {
     }
 
     static Optional<String> unknownKeyHint(TestElement element, String property) {
-        if (!(element.getProperty(property) instanceof NullProperty)) {
+        if (JMeterTreeMutator.resolvePropertyOwner(element, property) != element
+                || !(element.getProperty(property) instanceof NullProperty)) {
             return Optional.empty();
-        }
-
-        PropertyIterator it = element.propertyIterator();
-        while (it.hasNext()) {
-            JMeterProperty candidate = it.next();
-            if (candidate instanceof TestElementProperty) {
-                TestElement nested = ((TestElementProperty) candidate).getElement();
-                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
-                    return Optional.empty();
-                }
-            }
         }
 
         String type = element.getClass().getSimpleName();

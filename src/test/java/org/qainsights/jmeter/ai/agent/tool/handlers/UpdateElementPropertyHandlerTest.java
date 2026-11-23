@@ -9,6 +9,8 @@ import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.NullProperty;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -181,6 +183,27 @@ class UpdateElementPropertyHandlerTest {
                 result.getMessage());
         assertTrue(controller.isUseExpression());
         verifyNoInteractions(model);
+    }
+
+    @Test
+    void update_absentContinueForeverStillTargetsTheNestedLoopController() {
+        String key = "LoopController.continue_forever";
+        ThreadGroup group = (ThreadGroup) realThreadGroup.getTestElement();
+        LoopController controller = (LoopController) group.getSamplerController();
+        controller.removeProperty(key);
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        ToolResult result = realTool(model).execute(args("Test Plan/Real Thread Group", key, "false"));
+
+        assertTrue(result.isSuccess(), result.getMessage());
+        assertInstanceOf(BooleanProperty.class, controller.getProperty(key));
+        assertFalse(controller.getPropertyAsBoolean(key));
+        assertInstanceOf(NullProperty.class, group.getProperty(key));
+    }
+
+    private Tool realTool(JMeterTreeModel model) {
+        JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
+        return new UpdateElementPropertyHandler(() -> (JMeterTreeNode) root.getParent(), new ElementIdResolver(),
+                (node, property, value) -> mutator.updatePropertyOrThrow(model, node, property, value)).tool();
     }
 
     @Test

@@ -20,6 +20,7 @@ import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.TestElementSchema;
 import org.apache.jmeter.testelement.property.CollectionProperty;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.MapProperty;
@@ -123,28 +124,35 @@ public final class JMeterTreeMutator {
     }
 
     /**
-     * Returns the element that actually owns {@code property}: {@code element}
-     * itself, unless the property is absent there but present on a nested
-     * {@code TestElementProperty} child - in which case that nested element is
-     * returned instead. Falls back to {@code element} when no owner is found
-     * (e.g. {@code property} is genuinely new), preserving the ability to set
-     * brand-new top-level properties.
+     * Resolves a property by its stored value or native schema, including keys
+     * absent from a nested element because it is using its default.
      */
-    private static TestElement resolvePropertyOwner(TestElement element, String property) {
-        if (!(element.getProperty(property) instanceof NullProperty)) {
+    public static TestElement resolvePropertyOwner(TestElement element, String property) {
+        if (!(element.getProperty(property) instanceof NullProperty) || declaresProperty(element, property)) {
             return element;
         }
+        TestElement declaredOwner = element;
         PropertyIterator it = element.propertyIterator();
         while (it.hasNext()) {
             JMeterProperty candidate = it.next();
             if (candidate instanceof TestElementProperty) {
                 TestElement nested = ((TestElementProperty) candidate).getElement();
-                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
-                    return nested;
+                if (nested != null) {
+                    if (!(nested.getProperty(property) instanceof NullProperty)) {
+                        return nested;
+                    }
+                    if (declaredOwner == element && declaresProperty(nested, property)) {
+                        declaredOwner = nested;
+                    }
                 }
             }
         }
-        return element;
+        return declaredOwner;
+    }
+
+    private static boolean declaresProperty(TestElement element, String property) {
+        TestElementSchema schema = element.getSchema();
+        return schema != null && schema.getProperties().containsKey(property);
     }
 
     /**
