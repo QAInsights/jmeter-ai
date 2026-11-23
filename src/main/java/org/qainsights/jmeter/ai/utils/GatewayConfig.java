@@ -5,6 +5,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,7 +38,18 @@ public final class GatewayConfig {
     }
 
     public static boolean isAnthropicGateway() {
-        return !ANTHROPIC_DEFAULT_BASE_URL.equals(anthropicBaseUrl());
+        try {
+            URI url = URI.create(anthropicBaseUrl());
+            return !("https".equalsIgnoreCase(url.getScheme())
+                    && "api.anthropic.com".equalsIgnoreCase(url.getHost())
+                    && (url.getPort() == -1 || url.getPort() == 443)
+                    && url.getRawPath().matches("/*")
+                    && url.getRawUserInfo() == null
+                    && url.getRawQuery() == null
+                    && url.getRawFragment() == null);
+        } catch (IllegalArgumentException invalidUrl) {
+            return true;
+        }
     }
 
     /**
