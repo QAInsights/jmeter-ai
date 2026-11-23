@@ -266,7 +266,7 @@ class JMeterTreeMutatorRealElementsTest {
 
         assertTrue(mutator.updateProperty(model, node, LoopController.LOOPS, ""));
         assertInstanceOf(IntegerProperty.class, loopController.getProperty(LoopController.LOOPS));
-        assertEquals(LoopController.INFINITE_LOOP_COUNT, loopController.getLoops());
+        assertEquals(LoopController.INFINITE_LOOP_COUNT, loopController.getPropertyAsInt(LoopController.LOOPS));
     }
 
     @Test
