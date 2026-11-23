@@ -67,6 +67,20 @@ class AgentProviderUsageTest {
         assertUsage(model, "200 | 100 | - | 60 | 20");
     }
 
+    @Test
+    void geminiCountsToolUsePromptTokensAsFreshInput() {
+        var reply = GenerateContentResponse.fromJson("""
+                {"candidates":[{"content":{"role":"model","parts":[{"text":"done"}]}}],
+                 "usageMetadata":{"promptTokenCount":300,"cachedContentTokenCount":100,
+                                  "toolUsePromptTokenCount":30,"candidatesTokenCount":40,
+                                  "thoughtsTokenCount":20,"totalTokenCount":390}}
+                """);
+        var model = new GoogleChatModel((id, contents, config) -> reply,
+                new GoogleToolAdapter(), TOOLS, "system", "gemini", 500);
+        assertUsage(model, "230 | 100 | - | 60 | 20");
+        assertEquals(390, model.usageTracker().totalTokens());
+    }
+
     private static ChatModel openAi(String usage) throws Exception {
         var reply = com.openai.core.ObjectMappers.jsonMapper().readValue("""
                 {"id":"c","object":"chat.completion","created":0,"model":"gpt-4o",

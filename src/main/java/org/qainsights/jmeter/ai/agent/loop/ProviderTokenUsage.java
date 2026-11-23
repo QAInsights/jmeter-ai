@@ -30,12 +30,16 @@ public final class ProviderTokenUsage {
 
     public static Counts gemini(JsonNode usage) {
         Long read = number(usage, "cachedContentTokenCount");
+        Long fresh = subtract(number(usage, "promptTokenCount"), read, null);
+        if (fresh != null) {
+            fresh += orZero(number(usage, "toolUsePromptTokenCount"));
+        }
         Long reasoning = number(usage, "thoughtsTokenCount");
         Long output = number(usage, "candidatesTokenCount");
         if (output != null) {
             output += orZero(reasoning);
         }
-        return new Counts(subtract(number(usage, "promptTokenCount"), read, null), read, null, output, reasoning);
+        return new Counts(fresh, read, null, output, reasoning);
     }
 
     public static Counts openCode(JsonNode tokens) {
