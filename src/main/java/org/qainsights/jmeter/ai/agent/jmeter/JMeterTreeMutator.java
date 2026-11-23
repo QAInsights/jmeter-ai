@@ -257,13 +257,17 @@ public final class JMeterTreeMutator {
         return true;
     }
 
-    private static void setHttpArgumentEncoding(Arguments arguments, boolean encode) {
+    private static void setHttpArgumentEncoding(Arguments arguments, boolean encodeNamed) {
         if (arguments == null) {
             return;
         }
         for (JMeterProperty property : arguments.getArguments()) {
-            if (property.getObjectValue() instanceof HTTPArgument argument && argument.isAlwaysEncoded() != encode) {
-                argument.setAlwaysEncoded(encode);
+            if (property.getObjectValue() instanceof HTTPArgument argument) {
+                String name = argument.getName();
+                boolean encode = encodeNamed && name != null && !name.isEmpty();
+                if (argument.isAlwaysEncoded() != encode) {
+                    argument.setAlwaysEncoded(encode);
+                }
             }
         }
     }
