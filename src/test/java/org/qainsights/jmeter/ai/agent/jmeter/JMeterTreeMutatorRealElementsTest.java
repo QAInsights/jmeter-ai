@@ -7,18 +7,22 @@ import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.control.gui.IfControllerPanel;
+import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.config.gui.HttpDefaultsGui;
 import org.apache.jmeter.protocol.http.control.AuthManager;
 import org.apache.jmeter.protocol.http.control.Authorization;
 import org.apache.jmeter.protocol.http.control.Header;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
 import org.apache.jmeter.testelement.property.LongProperty;
 import org.apache.jmeter.testelement.property.NullProperty;
 import org.apache.jmeter.testelement.property.StringProperty;
@@ -70,6 +74,25 @@ class JMeterTreeMutatorRealElementsTest {
         assertTrue(mutator.updateProperty(model, node, ThreadGroup.DELAY, ""));
 
         assertInstanceOf(NullProperty.class, group.getProperty(ThreadGroup.DELAY));
+    }
+
+    @Test
+    void httpTimeoutLiteralsMatchBothNativeEditors() {
+        for (JMeterGUIComponent editor : List.of(new HttpTestSampleGui(), new HttpDefaultsGui())) {
+            TestElement element = editor.createTestElement();
+            JMeterTreeNode node = new JMeterTreeNode(element, null);
+            for (String key : List.of(HTTPSamplerBase.CONNECT_TIMEOUT, HTTPSamplerBase.RESPONSE_TIMEOUT)) {
+                assertTrue(mutator.updateProperty(model, node, key, "250"));
+                assertInstanceOf(IntegerProperty.class, element.getProperty(key));
+                assertEquals(250, element.getPropertyAsInt(key));
+            }
+
+            editor.configure(element);
+            editor.modifyTestElement(element);
+
+            assertInstanceOf(IntegerProperty.class, element.getProperty(HTTPSamplerBase.CONNECT_TIMEOUT));
+            assertInstanceOf(IntegerProperty.class, element.getProperty(HTTPSamplerBase.RESPONSE_TIMEOUT));
+        }
     }
 
     @Test

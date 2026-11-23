@@ -7,6 +7,7 @@ import org.apache.jmeter.assertions.JSONPathAssertion;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.assertions.SizeAssertion;
 import org.apache.jmeter.config.CSVDataSet;
+import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.extractor.RegexExtractor;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.testelement.TestElement;
@@ -46,10 +47,12 @@ enum ScalarPropertyType {
     static ScalarPropertyType resolve(TestElement element, String key, JMeterProperty existing) {
         if ((element instanceof ConstantTimer && ConstantTimer.DELAY.equals(key))
                 || (element instanceof SizeAssertion && "SizeAssertion.size".equals(key))
-                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))
-                || (element instanceof HTTPSamplerBase && (HTTPSamplerBase.CONNECT_TIMEOUT.equals(key)
-                        || HTTPSamplerBase.RESPONSE_TIMEOUT.equals(key)))) {
+                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))) {
             return STRING;
+        }
+        if (element instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)
+                && (HTTPSamplerBase.CONNECT_TIMEOUT.equals(key) || HTTPSamplerBase.RESPONSE_TIMEOUT.equals(key))) {
+            return INTEGER;
         }
 
         TestElementSchema schema = element.getSchema();

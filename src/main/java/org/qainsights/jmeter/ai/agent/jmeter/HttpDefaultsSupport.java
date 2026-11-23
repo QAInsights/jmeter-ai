@@ -55,7 +55,7 @@ public final class HttpDefaultsSupport {
         }
     }
 
-    private static boolean isHttpDefaults(ConfigTestElement element) {
+    static boolean isHttpDefaults(ConfigTestElement element) {
         return HttpDefaultsGui.class.getName().equals(
                 element.getPropertyAsString(TestElement.GUI_CLASS));
     }
