@@ -115,6 +115,10 @@ class AiChatPanelTest {
 
     @Test
     void startersLiveOutsideTranscriptAndFollowWelcomeLifecycle() throws Exception {
+        onEdtWithPanelConfig(this::verifyStarterLifecycle);
+    }
+
+    private void verifyStarterLifecycle() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         java.lang.reflect.Field startersField = AiChatPanel.class.getDeclaredField("starterSuggestions");
         startersField.setAccessible(true);
@@ -355,7 +359,11 @@ class AiChatPanelTest {
     // --- F9: context stats ---------------------------------------------------
 
     @Test
-    void modelSelectorAndSendActionStayInsideComposer() {
+    void modelSelectorAndSendActionStayInsideComposer() throws Exception {
+        onEdtWithPanelConfig(this::verifyComposerControls);
+    }
+
+    private void verifyComposerControls() {
         AiChatPanel panel = new AiChatPanel();
         GeminiBorderPanel composer = findComponent(panel, GeminiBorderPanel.class);
         ModelSelectorPanel selector = findComponent(panel, ModelSelectorPanel.class);
@@ -476,29 +484,35 @@ class AiChatPanelTest {
     }
 
     @Test
-    void freshConversationUsesDedicatedWelcomeState() {
-        AiChatPanel panel = new AiChatPanel();
-        assertNotNull(findComponent(panel, WelcomePanel.class));
+    void freshConversationUsesDedicatedWelcomeState() throws Exception {
+        onEdtWithPanelConfig(() -> {
+            AiChatPanel panel = new AiChatPanel();
+            assertNotNull(findComponent(panel, WelcomePanel.class));
+        });
     }
 
     @Test
-    void contextStatsLabelIsInstalledInOptionsRow() {
-        AiChatPanel panel = new AiChatPanel();
-        ContextStatsLabel found = findContextStatsLabel(panel);
-        assertNotNull(found, "the input options row should carry the context-stats label");
+    void contextStatsLabelIsInstalledInOptionsRow() throws Exception {
+        onEdtWithPanelConfig(() -> {
+            AiChatPanel panel = new AiChatPanel();
+            ContextStatsLabel found = findContextStatsLabel(panel);
+            assertNotNull(found, "the input options row should carry the context-stats label");
+        });
     }
 
     @Test
     void contextStatsResetOnNewConversation() throws Exception {
+        onEdtWithPanelConfig(this::verifyContextStatsReset);
+    }
+
+    private void verifyContextStatsReset() {
         AiChatPanel panel = new AiChatPanel();
         panel.addToConversationHistory("hello");
-        flushEdt();
         ContextStatsLabel label = findContextStatsLabel(panel);
         assertNotNull(label);
         assertTrue(label.getText().startsWith("ctx ~"), "estimate shows after a user turn: " + label.getText());
 
         panel.startNewConversation();
-        flushEdt();
         assertEquals("", label.getText(), "label clears for the new conversation");
     }
 
@@ -657,8 +671,10 @@ class AiChatPanelTest {
             panel.onStreamComplete("partial and the rest");
             panel.stopCurrentResponse();
         });
-        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+        onEdtWithPanelConfig(() -> verifyStoppedStreamTranscript(panel));
+    }
 
+    private void verifyStoppedStreamTranscript(AiChatPanel panel) throws Exception {
         java.lang.reflect.Field field = AiChatPanel.class.getDeclaredField("transcript");
         field.setAccessible(true);
         TranscriptView transcript = (TranscriptView) field.get(panel);
@@ -730,6 +746,10 @@ class AiChatPanelTest {
     }
 
     @Test void commandRequestsShowPrivacyAndAllowanceWithoutChangingTheWelcomeOnSelection() throws Exception {
+        onEdtWithPanelConfig(this::verifyFreeCommandTranscript);
+    }
+
+    private void verifyFreeCommandTranscript() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         org.qainsights.jmeter.ai.service.StarterAiService service = org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class);
         org.mockito.Mockito.when(service.showPrivacyNotice()).thenReturn(true, false);
@@ -744,7 +764,6 @@ class AiChatPanelTest {
         panel.onWorkerSuccess("Lint result");
         commandService.generateResponse(java.util.List.of("Optimize this"));
         panel.onWorkerSuccess("Optimization result");
-        javax.swing.SwingUtilities.invokeAndWait(() -> { });
         TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
         long notices = java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
                 .map(javax.swing.JTextArea.class::cast).filter(text -> text.getText().contains(
@@ -756,6 +775,10 @@ class AiChatPanelTest {
     }
 
     @Test void freeStreamReadsTheOriginalServicesAllowanceAfterReload() throws Exception {
+        onEdtWithPanelConfig(this::verifyFreeStreamAllowance);
+    }
+
+    private void verifyFreeStreamAllowance() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         org.qainsights.jmeter.ai.service.StarterAiService original = org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class);
         java.util.concurrent.atomic.AtomicReference<Runnable> complete = new java.util.concurrent.atomic.AtomicReference<>();
@@ -770,20 +793,22 @@ class AiChatPanelTest {
         panel.getAiStreamResponse("Hi", token -> { }, () -> { }, e -> fail(e));
         installFreeRouter(panel, org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class));
         complete.get().run();
-        javax.swing.SwingUtilities.invokeAndWait(() -> { });
         TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
         assertTrue(java.util.Arrays.stream(transcript.getComponents()).filter(javax.swing.JTextArea.class::isInstance)
                 .map(javax.swing.JTextArea.class::cast).anyMatch(text -> text.getText().contains("7 of 10")));
     }
 
     @Test void localCommandSuccessDoesNotShowAFreeConnectAction() throws Exception {
+        onEdtWithPanelConfig(this::verifyLocalCommandTranscript);
+    }
+
+    private void verifyLocalCommandTranscript() throws Exception {
         AiChatPanel panel = new AiChatPanel();
         installFreeRouter(panel, org.mockito.Mockito.mock(org.qainsights.jmeter.ai.service.StarterAiService.class));
         ModelSelectorPanel selector = (ModelSelectorPanel) panelField(panel, "modelSelectorPanel");
         selector.setModels(java.util.List.of(org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID),
                 org.qainsights.jmeter.ai.service.StarterAiService.MODEL_ID);
         panel.onWorkerSuccess("Local @this information");
-        javax.swing.SwingUtilities.invokeAndWait(() -> { });
         TranscriptView transcript = (TranscriptView) panelField(panel, "transcript");
         assertFalse(java.util.Arrays.stream(transcript.getComponents()).filter(QuietButton.class::isInstance)
                 .map(QuietButton.class::cast).anyMatch(button -> "Connect a provider".equals(button.getText())));
