@@ -20,6 +20,7 @@ import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.protocol.http.util.HTTPArgument;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.TestElementSchema;
 import org.apache.jmeter.testelement.property.CollectionProperty;
 import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.MapProperty;
@@ -56,7 +57,7 @@ public final class JMeterTreeMutator {
     }
 
     /**
-     * Sets a string property on the node's test element. Refuses to overwrite a
+     * Sets a scalar property on the node's test element. Refuses to overwrite a
      * property that is currently a collection/map/nested element (e.g. an
      * assertion's pattern list or a header manager's headers) - doing so would
      * replace it with a plain {@code StringProperty} of the same name and
@@ -70,13 +71,24 @@ public final class JMeterTreeMutator {
      * the same name that JMeter never reads.
      */
     public boolean updateProperty(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
+        try {
+            return updatePropertyOrThrow(model, node, property, value);
+        } catch (InvalidScalarValueException e) {
+            return false;
+        }
+    }
+
+    /** Updates a scalar, distinguishing invalid literals from other mutation failures. */
+    public boolean updatePropertyOrThrow(JMeterTreeModel model, JMeterTreeNode node, String property, String value) {
         if (!isValid(model, node) || property == null || property.trim().isEmpty()) {
             return false;
         }
         String safeValue = value == null ? "" : value;
-        return mutate(() -> {
+        AtomicReference<InvalidScalarValueException> invalidValue = new AtomicReference<>();
+        boolean updated = mutate(() -> {
             TestElement target = resolvePropertyOwner(node.getTestElement(), property);
-            if (isNonScalar(target.getProperty(property))) {
+            JMeterProperty existing = target.getProperty(property);
+            if (isNonScalar(existing)) {
                 log.warn("Refusing to overwrite non-scalar property '{}' on {} with a plain string value",
                         property, target.getClass().getSimpleName());
                 return false;
@@ -84,7 +96,12 @@ public final class JMeterTreeMutator {
             HTTPSamplerBase sampler = target instanceof HTTPSamplerBase ? (HTTPSamplerBase) target : null;
             boolean wasRaw = sampler != null && HTTPSamplerBase.POST_BODY_RAW.equals(property)
                     && sampler.getPostBodyRaw();
-            target.setProperty(property, safeValue);
+            try {
+                ScalarPropertyType.resolve(target, property, existing).write(target, property, safeValue);
+            } catch (InvalidScalarValueException e) {
+                invalidValue.set(e);
+                return false;
+            }
             if (sampler != null) {
                 boolean raw = sampler.getPostBodyRaw();
                 if (raw || wasRaw) {
@@ -94,31 +111,48 @@ public final class JMeterTreeMutator {
             model.nodeChanged(node);
             return true;
         });
+        if (invalidValue.get() != null) {
+            throw invalidValue.get();
+        }
+        return updated;
+    }
+
+    public static final class InvalidScalarValueException extends IllegalArgumentException {
+        InvalidScalarValueException(String message) {
+            super(message);
+        }
     }
 
     /**
-     * Returns the element that actually owns {@code property}: {@code element}
-     * itself, unless the property is absent there but present on a nested
-     * {@code TestElementProperty} child - in which case that nested element is
-     * returned instead. Falls back to {@code element} when no owner is found
-     * (e.g. {@code property} is genuinely new), preserving the ability to set
-     * brand-new top-level properties.
+     * Resolves a property by its stored value or native schema, including keys
+     * absent from a nested element because it is using its default.
      */
-    private static TestElement resolvePropertyOwner(TestElement element, String property) {
-        if (!(element.getProperty(property) instanceof NullProperty)) {
+    public static TestElement resolvePropertyOwner(TestElement element, String property) {
+        if (!(element.getProperty(property) instanceof NullProperty) || declaresProperty(element, property)) {
             return element;
         }
+        TestElement declaredOwner = element;
         PropertyIterator it = element.propertyIterator();
         while (it.hasNext()) {
             JMeterProperty candidate = it.next();
             if (candidate instanceof TestElementProperty) {
                 TestElement nested = ((TestElementProperty) candidate).getElement();
-                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
-                    return nested;
+                if (nested != null) {
+                    if (!(nested.getProperty(property) instanceof NullProperty)) {
+                        return nested;
+                    }
+                    if (declaredOwner == element && declaresProperty(nested, property)) {
+                        declaredOwner = nested;
+                    }
                 }
             }
         }
-        return element;
+        return declaredOwner;
+    }
+
+    private static boolean declaresProperty(TestElement element, String property) {
+        TestElementSchema schema = element.getSchema();
+        return schema != null && schema.getProperties().containsKey(property);
     }
 
     /**

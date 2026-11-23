@@ -1,21 +1,36 @@
 package org.qainsights.jmeter.ai.agent.tool.handlers;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.jmeter.assertions.SizeAssertion;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigTestElement;
+import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.config.gui.HttpDefaultsGui;
+import org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
+import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
 import org.qainsights.jmeter.ai.agent.jmeter.PropertyUpdater;
 import org.qainsights.jmeter.ai.agent.tool.Tool;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /** Unit tests for {@link UpdateElementPropertyHandler} using an in-memory tree and fake updater. */
 class UpdateElementPropertyHandlerTest {
@@ -152,6 +167,112 @@ class UpdateElementPropertyHandlerTest {
         assertTrue(r.isSuccess());
         assertSame(realThreadGroup, updater.lastNode);
         assertEquals("LoopController.loops", updater.lastProperty);
+    }
+
+    @Test
+    void update_invalidBooleanReturnsUsefulErrorWithoutChangingTheElement() {
+        String key = "IfController.useExpression";
+        IfController controller = new IfController();
+        controller.setName("Check flag");
+        controller.setUseExpression(true);
+        root.add(new JMeterTreeNode(controller, null));
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
+        Tool realTool = new UpdateElementPropertyHandler(() -> (JMeterTreeNode) root.getParent(),
+                new ElementIdResolver(),
+                (node, property, value) -> mutator.updatePropertyOrThrow(model, node, property, value)).tool();
+
+        ToolResult result = realTool.execute(args("Test Plan/Check flag", key, "yes"));
+
+        assertFalse(result.isSuccess());
+        assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, result.getErrorCode());
+        assertEquals("Invalid value 'yes' for IfController.useExpression. Expected true or false.",
+                result.getMessage());
+        assertTrue(controller.isUseExpression());
+        verifyNoInteractions(model);
+    }
+
+    @Test
+    void update_absentContinueForeverStillTargetsTheNestedLoopController() {
+        String key = "LoopController.continue_forever";
+        ThreadGroup group = (ThreadGroup) realThreadGroup.getTestElement();
+        LoopController controller = (LoopController) group.getSamplerController();
+        controller.removeProperty(key);
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        ToolResult result = realTool(model).execute(args("Test Plan/Real Thread Group", key, "false"));
+
+        assertTrue(result.isSuccess(), result.getMessage());
+        assertInstanceOf(BooleanProperty.class, controller.getProperty(key));
+        assertFalse(controller.getPropertyAsBoolean(key));
+        assertInstanceOf(NullProperty.class, group.getProperty(key));
+    }
+
+    private Tool realTool(JMeterTreeModel model) {
+        JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
+        return new UpdateElementPropertyHandler(() -> (JMeterTreeNode) root.getParent(), new ElementIdResolver(),
+                (node, property, value) -> mutator.updatePropertyOrThrow(model, node, property, value)).tool();
+    }
+
+    @Test
+    void update_blankRequiredScalarsReturnsInvalidPropertyAndKeepsExistingValues() {
+        String continueForever = "LoopController.continue_forever";
+        String operator = "SizeAssertion.operator";
+        String groupId = "Test Plan/Real Thread Group";
+        ThreadGroup group = (ThreadGroup) realThreadGroup.getTestElement();
+        LoopController controller = (LoopController) group.getSamplerController();
+        controller.setProperty(continueForever, true);
+        group.setDuration(60L);
+        SizeAssertion assertion = new SizeAssertion();
+        assertion.setName("Check size");
+        assertion.setCompOper(SizeAssertion.EQUAL);
+        root.add(new JMeterTreeNode(assertion, null));
+
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        Tool realTool = realTool(model);
+        assertCannotClear(realTool, groupId, continueForever);
+        assertCannotClear(realTool, groupId, LoopController.LOOPS);
+        assertCannotClear(realTool, groupId, ThreadGroup.DURATION);
+        assertCannotClear(realTool, "Test Plan/Check size", operator);
+
+        assertTrue(controller.getPropertyAsBoolean(continueForever));
+        assertEquals(1, controller.getPropertyAsInt(LoopController.LOOPS));
+        assertEquals(60L, group.getDuration());
+        assertEquals(SizeAssertion.EQUAL, assertion.getCompOper());
+        verifyNoInteractions(model);
+    }
+
+    private static void assertCannotClear(Tool tool, String id, String key) {
+        ToolResult result = tool.execute(args(id, key, ""));
+        assertFalse(result.isSuccess());
+        assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, result.getErrorCode());
+        assertTrue(result.getMessage().startsWith("Cannot clear " + key + " with a blank value."),
+                result.getMessage());
+    }
+
+    @Test
+    void update_httpPortsRejectMalformedLiteralsButAcceptExpressionsAndBlank() {
+        TestElement sampler = new HttpTestSampleGui().createTestElement();
+        TestElement defaults = new HttpDefaultsGui().createTestElement();
+        sampler.setName("Sampler");
+        defaults.setName("Defaults");
+        Tool realTool = realTool(mock(JMeterTreeModel.class));
+        String key = HTTPSamplerBase.PORT;
+        for (TestElement element : List.of(sampler, defaults)) {
+            root.add(new JMeterTreeNode(element, null));
+            String id = "Test Plan/" + element.getName();
+            assertTrue(realTool.execute(args(id, key, "8080")).isSuccess());
+            ToolResult invalid = realTool.execute(args(id, key, "8080/tcp"));
+            assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, invalid.getErrorCode());
+            assertTrue(invalid.getMessage().contains("Expected a numeric port or a JMeter expression."),
+                    invalid.getMessage());
+            assertEquals("8080", element.getPropertyAsString(key));
+
+            assertTrue(realTool.execute(args(id, key, "${port}")).isSuccess());
+            assertInstanceOf(StringProperty.class, element.getProperty(key));
+            assertEquals("${port}", element.getPropertyAsString(key));
+            assertTrue(realTool.execute(args(id, key, "")).isSuccess());
+            assertInstanceOf(NullProperty.class, element.getProperty(key));
+        }
     }
 
     @Test

@@ -4,6 +4,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
 import org.apache.jmeter.testelement.property.MapProperty;
 import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,7 +115,8 @@ class JMeterTreeMutatorTest {
 
         assertTrue(mutator.updateProperty(model, node, "LoopController.loops", "-1"));
 
-        verify(nested).setProperty("LoopController.loops", "-1");
+        verify(nested).setProperty(argThat(property -> property instanceof IntegerProperty
+                && "LoopController.loops".equals(property.getName()) && property.getIntValue() == -1));
         verify(element, never()).setProperty(anyString(), anyString());
         verify(model).nodeChanged(node);
     }

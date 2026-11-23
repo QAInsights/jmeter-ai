@@ -10,10 +10,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.testelement.TestElement;
-import org.apache.jmeter.testelement.property.JMeterProperty;
 import org.apache.jmeter.testelement.property.NullProperty;
-import org.apache.jmeter.testelement.property.PropertyIterator;
-import org.apache.jmeter.testelement.property.TestElementProperty;
 import org.qainsights.jmeter.ai.agent.jmeter.EdtExecutor;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
 import org.qainsights.jmeter.ai.agent.jmeter.JMeterTreeMutator;
@@ -70,7 +67,8 @@ public final class UpdateElementPropertyHandler {
                         .description("JMeter property key, e.g. HTTPSampler.path or HTTPSampler.domain.")
                         .required(true).build())
                 .addParameter(ToolParameter.builder("value", ParamType.STRING)
-                        .description("New value for the property; empty string clears it.")
+                        .description("New value for the property. Blank is allowed for text and some optional settings "
+                                + "(e.g. HTTP port or ThreadGroup.delay); required numeric and boolean keys need a value.")
                         .required(true).build())
                 .addPrecondition("element_id must reference an element returned by get_tree_state")
                 .addPrecondition("property must be a valid property key for that element type (see get_element_schema)")
@@ -118,7 +116,13 @@ public final class UpdateElementPropertyHandler {
         if (invalidValueHint.isPresent()) {
             return ToolResult.error(ERR_INVALID_PROPERTY, invalidValueHint.get());
         }
-        if (!updater.update(node, property, value)) {
+        boolean updated;
+        try {
+            updated = updater.update(node, property, value);
+        } catch (JMeterTreeMutator.InvalidScalarValueException e) {
+            return ToolResult.error(ERR_INVALID_PROPERTY, e.getMessage());
+        }
+        if (!updated) {
             return ToolResult.error(ERR_UPDATE_FAILED,
                     "Could not set '" + property + "' on '" + elementId + "'. If this property holds a list or "
                             + "table (e.g. an assertion's patterns, a header/argument list), it cannot be set as "
@@ -130,19 +134,9 @@ public final class UpdateElementPropertyHandler {
     }
 
     static Optional<String> unknownKeyHint(TestElement element, String property) {
-        if (!(element.getProperty(property) instanceof NullProperty)) {
+        if (JMeterTreeMutator.resolvePropertyOwner(element, property) != element
+                || !(element.getProperty(property) instanceof NullProperty)) {
             return Optional.empty();
-        }
-
-        PropertyIterator it = element.propertyIterator();
-        while (it.hasNext()) {
-            JMeterProperty candidate = it.next();
-            if (candidate instanceof TestElementProperty) {
-                TestElement nested = ((TestElementProperty) candidate).getElement();
-                if (nested != null && !(nested.getProperty(property) instanceof NullProperty)) {
-                    return Optional.empty();
-                }
-            }
         }
 
         String type = element.getClass().getSimpleName();
@@ -194,7 +188,7 @@ public final class UpdateElementPropertyHandler {
             if (isCurrent) {
                 edt.run(gui::updateCurrentNode);
             }
-            if (!mutator.updateProperty(gui.getTreeModel(), node, property, value)) {
+            if (!mutator.updatePropertyOrThrow(gui.getTreeModel(), node, property, value)) {
                 return false;
             }
             edt.run(() -> reloadPanel(gui, node, isCurrent));
