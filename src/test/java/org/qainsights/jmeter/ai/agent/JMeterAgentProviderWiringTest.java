@@ -62,6 +62,21 @@ class JMeterAgentProviderWiringTest {
     }
 
     @Test
+    void claudeFactory_allowsInjectedServicesToDisableCaching() {
+        var finished = new IllegalStateException("captured request");
+        AgentChatModelFactory factory = JMeterAgent.claudeFactory(params -> {
+            var request = com.anthropic.core.ObjectMappers.jsonMapper()
+                    .<com.fasterxml.jackson.databind.JsonNode>valueToTree(params._body());
+            assertEquals("system", request.path("system").asText());
+            assertTrue(request.path("cache_control").isMissingNode());
+            throw finished;
+        }, "claude", 1024, null, false);
+
+        var model = factory.create(List.of(), "system", List.of());
+        assertSame(finished, assertThrows(IllegalStateException.class, () -> model.start("inspect")));
+    }
+
+    @Test
     void openAiFactory_buildsAChatModelPerRun() {
         AgentChatModelFactory factory = JMeterAgent.openAiFactory(params -> {
             throw new IllegalStateException("not called");

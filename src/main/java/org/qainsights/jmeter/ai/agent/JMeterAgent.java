@@ -139,9 +139,10 @@ public final class JMeterAgent {
         return claudeFactory(service, model, maxTokens, reasoningSettings, true);
     }
 
-    static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
-                                               long maxTokens, ReasoningSettings reasoningSettings,
-                                               boolean promptCaching) {
+    /** Allows an injected Anthropic-compatible service to opt out of prompt caching. */
+    public static AgentChatModelFactory claudeFactory(ClaudeChatModel.MessageService service, String model,
+                                                      long maxTokens, ReasoningSettings reasoningSettings,
+                                                      boolean promptCaching) {
         Long thinkingBudget = thinkingBudgetFor(reasoningSettings, model);
         String effort = thinkingBudget == null ? null : effectiveAgentEffort(reasoningSettings);
         return (specs, systemPrompt, priorTurns) -> new ClaudeChatModel(service, new ClaudeToolAdapter(),
