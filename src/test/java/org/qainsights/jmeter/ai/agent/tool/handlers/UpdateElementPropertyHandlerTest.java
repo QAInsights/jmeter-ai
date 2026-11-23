@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.tool.handlers;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.jmeter.assertions.SizeAssertion;
@@ -10,8 +11,13 @@ import org.apache.jmeter.control.IfController;
 import org.apache.jmeter.control.LoopController;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.config.gui.HttpDefaultsGui;
+import org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.property.BooleanProperty;
 import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -241,6 +247,32 @@ class UpdateElementPropertyHandlerTest {
         assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, result.getErrorCode());
         assertTrue(result.getMessage().startsWith("Cannot clear " + key + " with a blank value."),
                 result.getMessage());
+    }
+
+    @Test
+    void update_httpPortsRejectMalformedLiteralsButAcceptExpressionsAndBlank() {
+        TestElement sampler = new HttpTestSampleGui().createTestElement();
+        TestElement defaults = new HttpDefaultsGui().createTestElement();
+        sampler.setName("Sampler");
+        defaults.setName("Defaults");
+        Tool realTool = realTool(mock(JMeterTreeModel.class));
+        String key = HTTPSamplerBase.PORT;
+        for (TestElement element : List.of(sampler, defaults)) {
+            root.add(new JMeterTreeNode(element, null));
+            String id = "Test Plan/" + element.getName();
+            assertTrue(realTool.execute(args(id, key, "8080")).isSuccess());
+            ToolResult invalid = realTool.execute(args(id, key, "8080/tcp"));
+            assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, invalid.getErrorCode());
+            assertTrue(invalid.getMessage().contains("Expected a numeric port or a JMeter expression."),
+                    invalid.getMessage());
+            assertEquals("8080", element.getPropertyAsString(key));
+
+            assertTrue(realTool.execute(args(id, key, "${port}")).isSuccess());
+            assertInstanceOf(StringProperty.class, element.getProperty(key));
+            assertEquals("${port}", element.getPropertyAsString(key));
+            assertTrue(realTool.execute(args(id, key, "")).isSuccess());
+            assertInstanceOf(NullProperty.class, element.getProperty(key));
+        }
     }
 
     @Test

@@ -35,6 +35,7 @@ enum ScalarPropertyType {
     STRING("text"),
     BOOLEAN("true or false"),
     INTEGER("a 32-bit integer"),
+    HTTP_PORT("a numeric port or a JMeter expression"),
     LOOP_COUNT("a 32-bit integer"),
     LONG("a 64-bit integer"),
     FLOAT("a finite number"),
@@ -51,9 +52,11 @@ enum ScalarPropertyType {
     static ScalarPropertyType resolve(TestElement element, String key, JMeterProperty existing) {
         if ((element instanceof ConstantTimer && ConstantTimer.DELAY.equals(key))
                 || (element instanceof SizeAssertion && "SizeAssertion.size".equals(key))
-                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))
-                || isHttpPort(element, key)) {
+                || (element instanceof RegexExtractor && "RegexExtractor.match_number".equals(key))) {
             return STRING;
+        }
+        if (HTTPSamplerBase.PORT.equals(key) && isHttpElement(element)) {
+            return HTTP_PORT;
         }
         if (isHttpElement(element) && isHttpTimeout(key)) {
             return INTEGER;
@@ -99,10 +102,6 @@ enum ScalarPropertyType {
         return STRING;
     }
 
-    private static boolean isHttpPort(TestElement target, String key) {
-        return HTTPSamplerBase.PORT.equals(key) && isHttpElement(target);
-    }
-
     private static boolean isHttpElement(TestElement target) {
         return target instanceof HTTPSamplerBase
                 || (target instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config));
@@ -141,6 +140,10 @@ enum ScalarPropertyType {
                     yield new BooleanProperty(key, Boolean.parseBoolean(literal));
                 }
                 case INTEGER -> new IntegerProperty(key, Integer.parseInt(literal));
+                case HTTP_PORT -> {
+                    Integer.parseInt(literal);
+                    yield new StringProperty(key, value);
+                }
                 case LOOP_COUNT -> {
                     int count = Integer.parseInt(literal);
                     yield count < 0 ? new IntegerProperty(key, LoopController.INFINITE_LOOP_COUNT)
