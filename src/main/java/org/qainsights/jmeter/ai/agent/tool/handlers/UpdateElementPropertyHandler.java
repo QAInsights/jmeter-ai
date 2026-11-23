@@ -67,7 +67,8 @@ public final class UpdateElementPropertyHandler {
                         .description("JMeter property key, e.g. HTTPSampler.path or HTTPSampler.domain.")
                         .required(true).build())
                 .addParameter(ToolParameter.builder("value", ParamType.STRING)
-                        .description("New value for the property; empty string clears it.")
+                        .description("New value for the property. Blank is allowed for text and some optional settings "
+                                + "(e.g. HTTP port or ThreadGroup.delay); required numeric and boolean keys need a value.")
                         .required(true).build())
                 .addPrecondition("element_id must reference an element returned by get_tree_state")
                 .addPrecondition("property must be a valid property key for that element type (see get_element_schema)")

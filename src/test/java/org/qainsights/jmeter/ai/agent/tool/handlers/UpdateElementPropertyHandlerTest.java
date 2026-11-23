@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent.tool.handlers;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.jmeter.assertions.SizeAssertion;
 import org.apache.jmeter.config.CSVDataSet;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.control.IfController;
@@ -204,6 +205,42 @@ class UpdateElementPropertyHandlerTest {
         JMeterTreeMutator mutator = new JMeterTreeMutator(EdtExecutor.direct());
         return new UpdateElementPropertyHandler(() -> (JMeterTreeNode) root.getParent(), new ElementIdResolver(),
                 (node, property, value) -> mutator.updatePropertyOrThrow(model, node, property, value)).tool();
+    }
+
+    @Test
+    void update_blankRequiredScalarsReturnsInvalidPropertyAndKeepsExistingValues() {
+        String continueForever = "LoopController.continue_forever";
+        String operator = "SizeAssertion.operator";
+        String groupId = "Test Plan/Real Thread Group";
+        ThreadGroup group = (ThreadGroup) realThreadGroup.getTestElement();
+        LoopController controller = (LoopController) group.getSamplerController();
+        controller.setProperty(continueForever, true);
+        group.setDuration(60L);
+        SizeAssertion assertion = new SizeAssertion();
+        assertion.setName("Check size");
+        assertion.setCompOper(SizeAssertion.EQUAL);
+        root.add(new JMeterTreeNode(assertion, null));
+
+        JMeterTreeModel model = mock(JMeterTreeModel.class);
+        Tool realTool = realTool(model);
+        assertCannotClear(realTool, groupId, continueForever);
+        assertCannotClear(realTool, groupId, LoopController.LOOPS);
+        assertCannotClear(realTool, groupId, ThreadGroup.DURATION);
+        assertCannotClear(realTool, "Test Plan/Check size", operator);
+
+        assertTrue(controller.getPropertyAsBoolean(continueForever));
+        assertEquals(1, controller.getPropertyAsInt(LoopController.LOOPS));
+        assertEquals(60L, group.getDuration());
+        assertEquals(SizeAssertion.EQUAL, assertion.getCompOper());
+        verifyNoInteractions(model);
+    }
+
+    private static void assertCannotClear(Tool tool, String id, String key) {
+        ToolResult result = tool.execute(args(id, key, ""));
+        assertFalse(result.isSuccess());
+        assertEquals(UpdateElementPropertyHandler.ERR_INVALID_PROPERTY, result.getErrorCode());
+        assertTrue(result.getMessage().startsWith("Cannot clear " + key + " with a blank value."),
+                result.getMessage());
     }
 
     @Test

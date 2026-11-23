@@ -27,6 +27,7 @@ import org.apache.jmeter.testelement.schema.IntegerPropertyDescriptor;
 import org.apache.jmeter.testelement.schema.LongPropertyDescriptor;
 import org.apache.jmeter.testelement.schema.PropertyDescriptor;
 import org.apache.jmeter.testelement.schema.StringPropertyDescriptor;
+import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jmeter.timers.ConstantThroughputTimer;
 import org.apache.jmeter.timers.ConstantTimer;
 
@@ -54,8 +55,7 @@ enum ScalarPropertyType {
                 || isHttpPort(element, key)) {
             return STRING;
         }
-        if (element instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)
-                && (HTTPSamplerBase.CONNECT_TIMEOUT.equals(key) || HTTPSamplerBase.RESPONSE_TIMEOUT.equals(key))) {
+        if (isHttpElement(element) && isHttpTimeout(key)) {
             return INTEGER;
         }
         if (element instanceof LoopController && LoopController.LOOPS.equals(key)) {
@@ -100,13 +100,26 @@ enum ScalarPropertyType {
     }
 
     private static boolean isHttpPort(TestElement target, String key) {
-        return HTTPSamplerBase.PORT.equals(key) && (target instanceof HTTPSamplerBase
-                || (target instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config)));
+        return HTTPSamplerBase.PORT.equals(key) && isHttpElement(target);
+    }
+
+    private static boolean isHttpElement(TestElement target) {
+        return target instanceof HTTPSamplerBase
+                || (target instanceof ConfigTestElement config && HttpDefaultsSupport.isHttpDefaults(config));
+    }
+
+    private static boolean isHttpTimeout(String key) {
+        return HTTPSamplerBase.CONNECT_TIMEOUT.equals(key) || HTTPSamplerBase.RESPONSE_TIMEOUT.equals(key);
+    }
+
+    private static boolean canRemoveOnBlank(TestElement target, String key) {
+        return (target instanceof ThreadGroup && (ThreadGroup.DELAY.equals(key) || ThreadGroup.RAMP_TIME.equals(key)))
+                || (isHttpElement(target) && (HTTPSamplerBase.PORT.equals(key) || isHttpTimeout(key)));
     }
 
     void write(TestElement target, String key, String value) {
         String literal = value.trim();
-        if (value.isEmpty() && isHttpPort(target, key)) {
+        if (literal.isEmpty() && canRemoveOnBlank(target, key)) {
             target.removeProperty(key);
             return;
         }
@@ -114,13 +127,9 @@ enum ScalarPropertyType {
             target.setProperty(key, value);
             return;
         }
-        if (value.isEmpty()) {
-            if (this == LOOP_COUNT) {
-                target.setProperty(key, LoopController.INFINITE_LOOP_COUNT);
-            } else {
-                target.removeProperty(key);
-            }
-            return;
+        if (literal.isEmpty()) {
+            throw new JMeterTreeMutator.InvalidScalarValueException(
+                    "Cannot clear " + key + " with a blank value. Expected " + expected + ".");
         }
         JMeterProperty parsed;
         try {
