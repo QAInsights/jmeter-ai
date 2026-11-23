@@ -56,40 +56,47 @@ public final class TokenUsageTracker {
         }
     }
 
-    private record Turn(RequestSize size, Counts counts) { }
+    private record Turn(RequestSize size, Counts counts, boolean failed) { }
 
     public TokenUsageTracker(String provider) {
         this.provider = provider;
     }
 
     public void record(long prompt, long completion) {
-        recordTurn(new RequestSize(0, null, null), new Counts(prompt, null, null, completion, null));
+        recordTurn(new RequestSize(0, null, null), new Counts(prompt, null, null, completion, null), null);
     }
 
     /** Records a turn whose response carried no usage block (some gateways strip it). */
     public void recordUnreported() {
-        recordTurn(new RequestSize(0, null, null), Counts.UNREPORTED);
+        recordTurn(new RequestSize(0, null, null), Counts.UNREPORTED, null);
     }
 
     public <T> T track(RequestSize request, Supplier<T> send, Function<T, Counts> readUsage) {
+        T response;
+        try {
+            response = send.get();
+        } catch (RuntimeException | Error e) {
+            recordTurn(request, Counts.UNREPORTED, e.getClass());
+            throw e;
+        }
         Counts counts = Counts.UNREPORTED;
         try {
-            T response = send.get();
-            try {
-                counts = readUsage.apply(response);
-            } catch (IllegalArgumentException e) {
-                // Usage decoding must not turn a successful model call into a failure.
-            }
-            return response;
+            counts = readUsage.apply(response);
+        } catch (IllegalArgumentException e) {
+            // Usage decoding must not turn a successful model call into a failure.
         } finally {
-            recordTurn(request, counts);
+            recordTurn(request, counts, null);
         }
+        return response;
     }
 
-    private void recordTurn(RequestSize request, Counts counts) {
-        turns.add(new Turn(request, counts));
+    private void recordTurn(RequestSize request, Counts counts, Class<? extends Throwable> failure) {
+        turns.add(new Turn(request, counts, failure != null));
         totals = totals.plusReported(counts);
-        if (Counts.UNREPORTED.equals(counts)) {
+        if (failure != null) {
+            log.info("Agent token usage [{}] turn {}: call failed: {} | run total: prompt={} completion={} total={}",
+                    provider, turns(), failure.getName(), promptTokens(), completionTokens(), totalTokens());
+        } else if (Counts.UNREPORTED.equals(counts)) {
             unreportedTurns++;
             log.info("Agent token usage [{}] turn {}: not reported by provider | run total: prompt={} completion={} total={} ({} turn(s) unreported)",
                     provider, turns(), promptTokens(), completionTokens(), totalTokens(), unreportedTurns);
@@ -129,17 +136,17 @@ public final class TokenUsageTracker {
         }
         StringBuilder text = new StringBuilder("Agent token usage [").append(provider)
                 .append("] (reported totals; - = unavailable; reasoning included in output)\n")
-                .append("turn | fresh | cache read | cache write | output | reasoning | tools | schema chars | request chars\n");
+                .append("turn | fresh | cache read | cache write | output | reasoning | tools | schema chars | request chars | status\n");
         for (int i = 0; i < turns.size(); i++) {
             Turn turn = turns.get(i);
             Counts c = turn.counts();
             RequestSize s = turn.size();
             row(text, i + 1, c.fresh(), c.cacheRead(), c.cacheWrite(), c.output(), c.reasoning(),
-                    s.tools(), s.schemaChars(), s.requestChars());
+                    s.tools(), s.schemaChars(), s.requestChars(), turn.failed() ? "failed" : "ok");
         }
         row(text, "total", totals.fresh(), totals.cacheRead(), totals.cacheWrite(),
                 totals.output(), totals.reasoning(), turns.stream().mapToLong(t -> t.size().tools()).sum(),
-                sizeTotal(RequestSize::schemaChars), sizeTotal(RequestSize::requestChars));
+                sizeTotal(RequestSize::schemaChars), sizeTotal(RequestSize::requestChars), null);
         return text.toString();
     }
 
@@ -148,9 +155,9 @@ public final class TokenUsageTracker {
         return sizes.isEmpty() ? null : sizes.stream().mapToLong(Integer::longValue).sum();
     }
 
-    private static void row(StringBuilder text, Object label, Number... fields) {
+    private static void row(StringBuilder text, Object label, Object... fields) {
         text.append(label);
-        for (Number field : fields) {
+        for (Object field : fields) {
             text.append(" | ").append(field == null ? "-" : field);
         }
         text.append('\n');

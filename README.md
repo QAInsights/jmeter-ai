@@ -469,7 +469,7 @@ What helps, roughly in order of impact:
 - **Lower `jmeter.ai.agent.max.tokens`** (e.g. `1024`) if your gateway reserves `max_tokens` up front.
 - **Start a new chat** per task: up to 10 prior turn pairs are re-sent with each agent request.
 - **Use plain chat** (deselect Agent Mode) for questions and snippets; it sends no tool schemas or hierarchy and costs a fraction per request.
-- **Measure**: each model call logs `Agent token usage [...] turn N: prompt=... completion=... | run total: ...` in `jmeter.log`. The prompt count includes reported cached input. If the provider returns no counts, the line says `not reported by provider` and the running total stays unchanged. The [end-of-run usage table](#-context--cost-stats) breaks down the reported counts by turn and cache status.
+- **Measure**: each model call logs `Agent token usage [...] turn N: prompt=... completion=... | run total: ...` in `jmeter.log`. The prompt count includes reported cached input. Successful calls without counts log `not reported by provider`; failed calls log `call failed` and the exception class, without the exception message. Neither changes the running token total. The [end-of-run usage table](#-context--cost-stats) breaks down the reported counts by turn and cache status.
 
 If the quota is fixed at a few thousand tokens per window, Agent Mode will not fit; ask the gateway team for a larger allocation for the Feather Wand client.
 
@@ -1226,7 +1226,7 @@ The one-shot CLI providers do not feed token usage into the chat's session-cost 
 
 Hover the label for the exact breakdown: precise context count and percentage, session input/output tokens over N responses, and the exact estimated cost. The denominator hides for models with unknown context windows (e.g. local Ollama models), and the label resets when you start a new conversation.
 
-At the end of an Agent Mode run, the per-turn usage table appears in `jmeter.log`. It is also included for completed repair rounds in the Make it pass reports in `~/.jmeter-ai/fix-reports/`. `turn` is the model call number, starting at 1. `fresh` counts uncached input tokens; `cache read` and `cache write` count input tokens read from and written to the provider's cache. `output` counts generated tokens, including `reasoning` tokens when reported. `tools` is the number of tool definitions sent, `schema chars` is their approximate character count, and `request chars` is the approximate character count of the whole request. A `-` marks an unavailable count. The Codex and Claude Code CLI adapters report no token counts.
+At the end of an Agent Mode run, the per-turn usage table appears in `jmeter.log`. It is also included for completed repair rounds in the Make it pass reports in `~/.jmeter-ai/fix-reports/`. `turn` is the model call number, starting at 1. `fresh` counts uncached input tokens; `cache read` and `cache write` count input tokens read from and written to the provider's cache. `output` counts generated tokens, including `reasoning` tokens when reported. `tools` is the number of tool definitions sent, `schema chars` is their approximate character count, and `request chars` is the approximate character count of the whole request. `status` distinguishes successful calls (`ok`) from failed calls (`failed`). A `-` in a count column means the count is unavailable. The Codex and Claude Code CLI adapters report no token counts.
 
 ## 🎬 Browser Recording
 

@@ -1,6 +1,8 @@
 package org.qainsights.jmeter.ai.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,5 +51,22 @@ class TokenUsageTrackerTest {
                 reply -> TokenUsageTracker.Counts.UNREPORTED);
         assertEquals(1, tracker.unreportedTurns());
         assertEquals(20, tracker.totalTokens());
+    }
+
+    @Test
+    void distinguishesFailedCallsFromSuccessfulCallsWithoutUsage() {
+        TokenUsageTracker tracker = new TokenUsageTracker("example");
+        var request = new TokenUsageTracker.RequestSize(1, 20, 120);
+        var failure = new IllegalStateException("private diagnostic");
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> tracker.track(
+                request, () -> { throw failure; }, reply -> TokenUsageTracker.Counts.UNREPORTED)));
+        tracker.track(request, () -> "reply", reply -> TokenUsageTracker.Counts.UNREPORTED);
+
+        assertEquals(1, tracker.unreportedTurns());
+        String summary = tracker.summary();
+        assertTrue(summary.contains("request chars | status"), summary);
+        assertTrue(summary.contains("1 | - | - | - | - | - | 1 | 20 | 120 | failed"), summary);
+        assertTrue(summary.contains("2 | - | - | - | - | - | 1 | 20 | 120 | ok"), summary);
+        assertFalse(summary.contains(failure.getMessage()), summary);
     }
 }
