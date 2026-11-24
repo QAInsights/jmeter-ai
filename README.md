@@ -1230,6 +1230,8 @@ At the end of an Agent Mode run, the per-turn usage table appears in `jmeter.log
 
 Agent Mode requests sent directly to Anthropic use a five-minute prompt cache for eligible tools, system instructions, and conversation history. This does not shorten the prompt or change what the model is asked to do. Check `cache read` and `cache write` in the usage table to see whether caching applied. The first turn can cost more because it writes the cache; later turns can reuse it until it expires or the tool set changes. Custom Anthropic gateways keep their existing request format.
 
+Agent Mode sends a short unchanged notice when a large tree snapshot exactly matches the latest full snapshot in the same run. The full snapshot remains in the conversation, and changed snapshots are sent in full. This reduces repeat input without rewriting the cached prefix.
+
 ## 🎬 Browser Recording
 
 Record a real browser session into a JMeter test plan without leaving the chat. Recording is **off by default**; enabling it adds a recording control panel to the chat panel. Traffic is captured through JMeter's built-in proxy recorder into a *Recording Controller* (the same shape as JMeter's `recording.jmx` template, with its suggested excludes), then finalized into a proper plan - think-time injection and artifact cleanup included.

@@ -16,6 +16,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -97,6 +98,90 @@ class AgentLoopTest {
         assertEquals(1, model.received.size());
         assertEquals("echoed", model.received.get(0).get(0).getContent());
         assertFalse(progress.isEmpty());
+    }
+
+    @Test
+    void run_reusesOnlyTheLatestFullTreeForLargeExactRepeats() {
+        String treeTool = ReadToolHandlers.GET_TREE_STATE;
+        String first = "a".repeat(2048);
+        String changed = "b" + first.substring(1);
+        String small = first.substring(1);
+        String unchanged = "Tree snapshot unchanged; identical to the latest full get_tree_state result above.";
+        Deque<ToolResult> toolResults = new ArrayDeque<>(List.of(
+                ToolResult.ok(first), ToolResult.ok(first), ToolResult.ok(changed),
+                ToolResult.error("unavailable", "Tree unavailable"), ToolResult.ok(changed),
+                ToolResult.ok(small), ToolResult.ok(small), ToolResult.ok(changed)));
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder(treeTool).description("tree").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                return toolResults.removeFirst();
+            }
+        });
+
+        ScriptedModel model = new ScriptedModel();
+        List<String> expected = List.of(first, unchanged, changed, "ERROR [unavailable] Tree unavailable",
+                unchanged, small, small, changed);
+        for (int i = 0; i < expected.size(); i++) {
+            model.turns.add(new AssistantTurn("", List.of(
+                    new AssistantTurn.ToolCall("tree-" + i, treeTool, Map.of()))));
+        }
+        model.turns.add(new AssistantTurn("Done.", List.of()));
+
+        var result = new AgentLoop(model, new ToolExecutor(registry), 10).run("inspect", null);
+
+        assertTrue(result.isCompleted());
+        assertTrue(toolResults.isEmpty());
+        assertEquals(expected.size(), model.received.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(1, model.received.get(i).size());
+            ToolOutcome outcome = model.received.get(i).get(0);
+            assertEquals("tree-" + i, outcome.getToolCallId());
+            assertEquals(treeTool, outcome.getName());
+            assertEquals(expected.get(i), outcome.getContent());
+            assertEquals(i == 3, outcome.isError());
+        }
+    }
+
+    @Test
+    void run_keepsSameTurnTreeResultsInCallOrder() {
+        String treeTool = ReadToolHandlers.GET_TREE_STATE;
+        String snapshot = "tree".repeat(1024);
+        AtomicInteger executions = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder(treeTool).description("tree").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                executions.incrementAndGet();
+                return ToolResult.ok(snapshot);
+            }
+        });
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn("", List.of(
+                new AssistantTurn.ToolCall("tree-z", treeTool, Map.of()),
+                new AssistantTurn.ToolCall("tree-a", treeTool, Map.of()))));
+        model.turns.add(new AssistantTurn("Done.", List.of()));
+
+        var result = new AgentLoop(model, new ToolExecutor(registry), 3).run("inspect", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(2, executions.get());
+        assertEquals(1, model.received.size());
+        List<ToolOutcome> batch = model.received.get(0);
+        assertEquals(List.of("tree-z", "tree-a"), batch.stream().map(ToolOutcome::getToolCallId).toList());
+        assertEquals(List.of(snapshot, "Tree snapshot unchanged; identical to the latest full get_tree_state result above."),
+                batch.stream().map(ToolOutcome::getContent).toList());
+        assertTrue(batch.stream().noneMatch(ToolOutcome::isError));
     }
 
     @Test

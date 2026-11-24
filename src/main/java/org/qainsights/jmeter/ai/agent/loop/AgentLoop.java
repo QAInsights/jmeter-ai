@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 
 import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 public final class AgentLoop {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLoop.class);
+    private static final int MIN_REPEATABLE_TREE_CHARS = 2048;
 
     /** Outcome of a full run. */
     public static final class AgentResult {
@@ -136,6 +138,7 @@ public final class AgentLoop {
         Consumer<String> sink = progress == null ? s -> { } : progress;
         Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
         Consumer<String> reasoningSink = reasoning == null ? s -> { } : reasoning;
+        String latestTreeSnapshot = null;
 
         AssistantTurn turn = model.start(userMessage);
         forwardReasoning(reasoningSink);
@@ -166,9 +169,19 @@ public final class AgentLoop {
                     return AgentResult.exhausted(turn.getText(), iterations);
                 }
                 ToolOutcome outcome = ToolOutcome.from(call, result);
-                outcomes.add(outcome);
                 sink.accept("\u2190 " + (outcome.isError() ? outcome.getContent()
                         : truncate(outcome.getContent())));
+                if (!outcome.isError() && ReadToolHandlers.GET_TREE_STATE.equals(outcome.getName())) {
+                    String snapshot = outcome.getContent();
+                    if (snapshot.length() >= MIN_REPEATABLE_TREE_CHARS && snapshot.equals(latestTreeSnapshot)) {
+                        outcome = new ToolOutcome(outcome.getToolCallId(), outcome.getName(),
+                                "Tree snapshot unchanged; identical to the latest full get_tree_state result above.",
+                                false);
+                    } else {
+                        latestTreeSnapshot = snapshot;
+                    }
+                }
+                outcomes.add(outcome);
             }
 
             if (stopped()) {
