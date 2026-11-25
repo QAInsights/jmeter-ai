@@ -81,7 +81,6 @@ public class CommandDispatcher {
         log.info("Sending user message: {}", message);
         cb.appendUserMessage("You: " + message);
         cb.addToConversationHistory(message);
-        cb.clearMessageField();
         cb.appendLoadingIndicator();
 
         // An armed Record Mode session consumes the next message as its recording brief.
