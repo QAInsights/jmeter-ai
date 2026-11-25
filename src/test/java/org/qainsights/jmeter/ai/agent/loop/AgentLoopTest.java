@@ -146,6 +146,21 @@ class AgentLoopTest {
     }
 
     @Test
+    void run_successfulExpandToolsDoesNotPreventRawJmxNudge() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("expand-1", "expand_tools"));
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+        model.turns.add(new AssistantTurn("Plan applied.", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho("expand_tools"), 5)
+                .run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("Plan applied.", result.getFinalText());
+        assertEquals(List.of(AgentLoop.RAW_JMX_NUDGE), model.followUps);
+    }
+
+    @Test
     void run_successfulReadToolDoesNotPreventRawJmxNudge() {
         ScriptedModel model = new ScriptedModel();
         model.turns.add(toolTurn("tree-1", ReadToolHandlers.GET_TREE_STATE));
