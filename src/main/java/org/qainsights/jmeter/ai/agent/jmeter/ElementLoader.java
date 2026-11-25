@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.swing.SwingUtilities;
+
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.action.ActionNames;
@@ -90,6 +92,7 @@ public interface ElementLoader {
                 AtomicReference<IOException> ioError = new AtomicReference<>();
                 AtomicReference<IllegalUserActionException> actionError = new AtomicReference<>();
                 AtomicBoolean loaded = new AtomicBoolean(false);
+                AtomicReference<Boolean> dirtyAfterDispatch = new AtomicReference<>();
                 edt.run(() -> {
                     try {
                         HashTree tree = SaveService.loadTree(file);
@@ -104,13 +107,15 @@ public interface ElementLoader {
                                 gui.setTestPlanFile(null);
                                 ActionRouter.getInstance().actionPerformed(new ActionEvent(
                                         new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
-                                gui.setDirty(true);
+                                dirtyAfterDispatch.set(true);
                             } catch (IllegalUserActionException e) {
                                 restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                dirtyAfterDispatch.set(previousDirty);
                                 actionError.set(e);
                                 return;
                             } catch (RuntimeException e) {
                                 restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                dirtyAfterDispatch.set(previousDirty);
                                 String message = e.getMessage();
                                 actionError.set(new IllegalUserActionException(
                                         message == null || message.isBlank() ? e.getClass().getSimpleName() : message,
@@ -132,6 +137,14 @@ public interface ElementLoader {
                         actionError.set(e);
                     }
                 });
+                Boolean dirty = dirtyAfterDispatch.get();
+                if (dirty != null) {
+                    if (SwingUtilities.isEventDispatchThread()) {
+                        SwingUtilities.invokeLater(() -> gui.setDirty(dirty));
+                    } else {
+                        edt.run(() -> gui.setDirty(dirty));
+                    }
+                }
                 IOException ioFailure = ioError.get();
                 if (ioFailure != null) {
                     throw ioFailure;
@@ -158,11 +171,6 @@ public interface ElementLoader {
         }
         try {
             gui.setTestPlanFile(previousFile);
-        } catch (RuntimeException restoreFailure) {
-            logRestoreFailure(importFailure, restoreFailure);
-        }
-        try {
-            gui.setDirty(previousDirty);
         } catch (RuntimeException restoreFailure) {
             logRestoreFailure(importFailure, restoreFailure);
         }
