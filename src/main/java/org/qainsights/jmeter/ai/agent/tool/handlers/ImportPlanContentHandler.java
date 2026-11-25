@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -186,8 +187,8 @@ public final class ImportPlanContentHandler {
             if (!"jmeterTestPlan".equals(rootName)) {
                 return "Expected root element <jmeterTestPlan>, found <" + rootName + ">.";
             }
-            Element hashTree = root.getFirstElementChild();
-            Element firstElement = hashTree == null ? null : hashTree.getFirstElementChild();
+            Element hashTree = firstElementChild(root);
+            Element firstElement = hashTree == null ? null : firstElementChild(hashTree);
             if (hashTree == null || !"hashTree".equals(hashTree.getTagName())
                     || firstElement == null || !"TestPlan".equals(firstElement.getTagName())) {
                 return "Expected a complete test plan: the first element under <jmeterTestPlan><hashTree> "
@@ -198,6 +199,17 @@ public final class ImportPlanContentHandler {
             String message = e.getMessage();
             return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
         }
+    }
+
+    private static Element firstElementChild(Element parent) {
+        Node child = parent.getFirstChild();
+        while (child != null) {
+            if (child instanceof Element element) {
+                return element;
+            }
+            child = child.getNextSibling();
+        }
+        return null;
     }
 
     private static Path createTempFile() throws IOException {
