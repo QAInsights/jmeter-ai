@@ -70,6 +70,8 @@ public final class OpenAiReasoning {
                 return ReasoningEffort.HIGH;
             case "xhigh":
                 return ReasoningEffort.XHIGH;
+            case "max":
+                return ReasoningEffort.MAX;
             default:
                 return ReasoningEffort.MEDIUM;
         }

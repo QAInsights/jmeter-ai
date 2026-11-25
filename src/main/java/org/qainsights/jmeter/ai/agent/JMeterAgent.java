@@ -21,6 +21,7 @@ import org.qainsights.jmeter.ai.agent.loop.AgentLoop;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ChatModel;
 import org.qainsights.jmeter.ai.agent.openai.OpenAiChatModel;
+import org.qainsights.jmeter.ai.agent.openai.OpenAiResponsesModel;
 import org.qainsights.jmeter.ai.agent.openai.OpenAiToolAdapter;
 import org.qainsights.jmeter.ai.agent.schema.SchemaGrounding;
 import org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry;
@@ -194,6 +195,25 @@ public final class JMeterAgent {
                                                       long maxTokens, ReasoningSettings reasoningSettings) {
         return (specs, systemPrompt, priorTurns) -> new OpenAiChatModel(service, new OpenAiToolAdapter(),
                 specs, systemPrompt, model, maxTokens, OpenAiChatModel.toSeedHistory(priorTurns), reasoningSettings);
+    }
+
+    /**
+     * Builds a factory that uses the Responses API when the selected reasoning
+     * effort requires it, and otherwise keeps the Chat Completions transport.
+     */
+    public static AgentChatModelFactory openAiFactory(OpenAiChatModel.CompletionService chatService,
+                                                      OpenAiResponsesModel.ResponseService responsesService,
+                                                      String model, long maxTokens,
+                                                      ReasoningSettings reasoningSettings) {
+        return (specs, systemPrompt, priorTurns) -> {
+            OpenAiToolAdapter adapter = new OpenAiToolAdapter();
+            if (OpenAiResponsesModel.applies(model, reasoningSettings)) {
+                return new OpenAiResponsesModel(responsesService, adapter, specs, systemPrompt, model, maxTokens,
+                        OpenAiResponsesModel.toSeedHistory(priorTurns), reasoningSettings);
+            }
+            return new OpenAiChatModel(chatService, adapter, specs, systemPrompt, model, maxTokens,
+                    OpenAiChatModel.toSeedHistory(priorTurns), reasoningSettings);
+        };
     }
 
     /**
