@@ -23,6 +23,7 @@ import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseIncludable;
 import com.openai.models.responses.ResponseInputItem;
 import com.openai.models.responses.ResponseOutputItem;
+import com.openai.models.responses.ResponseStatus;
 
 /**
  * OpenAI Responses API-backed {@link ChatModel}. The Chat Completions API does
@@ -122,6 +123,14 @@ public final class OpenAiResponsesModel implements ChatModel {
     }
 
     private AssistantTurn acceptResponse(Response response) {
+        if (response.status().isPresent()
+                && !ResponseStatus.COMPLETED.asString().equals(response.status().get().asString())) {
+            String reason = response.incompleteDetails()
+                    .flatMap(details -> details.reason().map(Object::toString))
+                    .orElse("no completion reason reported");
+            throw new IllegalStateException("OpenAI Responses API returned status "
+                    + response.status().get().asString() + ": " + reason);
+        }
         if (response.output().isEmpty()) {
             throw new IllegalStateException("OpenAI Responses API returned no output for the agent request");
         }
