@@ -96,7 +96,7 @@ class GoogleAiServiceHttpStreamingTest {
                 chunk("[{\"text\":\"Add a \"}]",
                         "{\"promptTokenCount\":33,\"candidatesTokenCount\":2,\"totalTokenCount\":35}"),
                 chunk("[{\"text\":\"Gaussian Timer.\"}]",
-                        "{\"promptTokenCount\":33,\"candidatesTokenCount\":7,\"totalTokenCount\":40}")));
+                        "{\"promptTokenCount\":33,\"candidatesTokenCount\":7,\"thoughtsTokenCount\":20,\"totalTokenCount\":60}")));
         UsageStats usage = mock(UsageStats.class);
         service.setUsageStats(usage);
         service.setReasoningSettings(new ReasoningSettings(true, "low"));
@@ -110,7 +110,7 @@ class GoogleAiServiceHttpStreamingTest {
         assertEquals(List.of("Think about pacing."), callbacks.reasoning);
         assertEquals(List.of("Add a ", "Gaussian Timer."), callbacks.tokens);
         assertEquals(1, callbacks.completions.get());
-        verify(usage).record("google:" + MODEL, 33, 7);
+        verify(usage).record("google:" + MODEL, 33, 27);
 
         StreamingFixtureServer.RecordedRequest request = fixture.onlyRequest();
         assertEquals(STREAM, request.path());

@@ -142,7 +142,7 @@ public class GoogleAiService implements AiService {
                 response.usageMetadata().ifPresent(usage ->
                         usageStats.record("google:" + modelToUse,
                                 usage.promptTokenCount().orElse(0),
-                                usage.candidatesTokenCount().orElse(0)));
+                                outputTokenCount(usage)));
             }
 
             lastReasoning = extractThoughts(response);
@@ -193,7 +193,7 @@ public class GoogleAiService implements AiService {
                 if (usageStats != null && lastUsage[0] != null) {
                     usageStats.record("google:" + modelToUse,
                             lastUsage[0].promptTokenCount().orElse(0),
-                            lastUsage[0].candidatesTokenCount().orElse(0));
+                            outputTokenCount(lastUsage[0]));
                 }
 
                 javax.swing.SwingUtilities.invokeLater(onComplete);
@@ -211,6 +211,10 @@ public class GoogleAiService implements AiService {
                 streamThread.interrupt();
             }
         };
+    }
+
+    private static int outputTokenCount(GenerateContentResponseUsageMetadata usage) {
+        return usage.candidatesTokenCount().orElse(0) + usage.thoughtsTokenCount().orElse(0);
     }
 
     /** Concatenated thought-part text from a non-streaming response, or null. */
