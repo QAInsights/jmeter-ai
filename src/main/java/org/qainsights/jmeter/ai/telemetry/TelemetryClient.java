@@ -25,6 +25,7 @@ public class TelemetryClient {
     private static final Logger log = LoggerFactory.getLogger(TelemetryClient.class);
     static final int MAX_FEATURES = 100;
     static final int MAX_PAYLOAD_BYTES = 8000;
+    private static final long MAX_TOKEN_COUNT = 1_000_000_000L;
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String VERSION_RESOURCE =
             "org/qainsights/jmeter/ai/telemetry/version.properties";
@@ -63,7 +64,7 @@ public class TelemetryClient {
             if (today.equals(state.getLastPingDay())) {
                 return;
             }
-            TelemetryTokenCounters.Snapshot tokenSnapshot = tokenCounters.snapshot();
+            TelemetryTokenCounters.Snapshot tokenSnapshot = limitTokens(tokenCounters.snapshot());
             Map<String, Integer> snapshot = limitPayload(counters.snapshot(), tokenSnapshot);
             String json = buildPayload(snapshot, tokenSnapshot);
             if (json.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
@@ -83,6 +84,12 @@ public class TelemetryClient {
         } catch (Throwable t) {
             log.debug("Telemetry tick failed", t);
         }
+    }
+
+    private static TelemetryTokenCounters.Snapshot limitTokens(TelemetryTokenCounters.Snapshot snapshot) {
+        return new TelemetryTokenCounters.Snapshot(
+                Math.min(snapshot.inputTokens(), MAX_TOKEN_COUNT),
+                Math.min(snapshot.outputTokens(), MAX_TOKEN_COUNT));
     }
 
     String buildPayload(Map<String, Integer> features, TelemetryTokenCounters.Snapshot tokenSnapshot) {

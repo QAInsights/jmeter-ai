@@ -241,6 +241,20 @@ class TelemetryClientTest {
     }
 
     @Test
+    void tokenUsageAboveThePerPingLimitStaysPending() throws Exception {
+        tokenCounters.add(1_500_000_000L, 100);
+        client(clockAt("2026-01-05")).tick();
+
+        JsonNode p = MAPPER.readTree(sent.get(0));
+        assertEquals(1_000_000_000L, p.get("inputTokens").asLong());
+        assertEquals(100, p.get("outputTokens").asLong());
+        assertEquals(500_000_000L, tokenCounters.snapshot().inputTokens());
+        assertEquals(0, tokenCounters.snapshot().outputTokens());
+        assertEquals(500_000_000L, state.getPendingInputTokens());
+        assertEquals(0, state.getPendingOutputTokens());
+    }
+
+    @Test
     void failedSendKeepsTokenTotalsPending() throws Exception {
         tokenCounters.add(700, 100);
         sendResult = false;

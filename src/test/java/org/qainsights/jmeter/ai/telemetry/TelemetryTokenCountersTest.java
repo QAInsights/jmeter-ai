@@ -30,12 +30,11 @@ class TelemetryTokenCountersTest {
     }
 
     @Test
-    void capsPendingTotalsAtTheWorkerLimit() {
+    void keepsTotalsAboveThePerPingWorkerLimitPending() {
         TelemetryTokenCounters counters = new TelemetryTokenCounters();
-        counters.add(999_999_999, 999_999_999);
-        counters.add(2, 2);
+        counters.add(1_000_000_001, 1_000_000_001);
 
-        assertEquals(1_000_000_000, counters.snapshot().inputTokens());
-        assertEquals(1_000_000_000, counters.snapshot().outputTokens());
+        assertEquals(1_000_000_001, counters.snapshot().inputTokens());
+        assertEquals(1_000_000_001, counters.snapshot().outputTokens());
     }
 }
