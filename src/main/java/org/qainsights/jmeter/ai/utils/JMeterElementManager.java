@@ -464,6 +464,7 @@ public class JMeterElementManager {
                 Class<?> elementClass = Class.forName(classInfo.modelClassName);
                 Class<? extends JMeterGUIComponent> guiClass = Class.forName(classInfo.guiClassName)
                         .asSubclass(JMeterGUIComponent.class);
+                guiPackage.updateCurrentNode();
                 TestElement newElement = guiPackage.createTestElement(guiClass, elementClass);
                 newElement.setProperty(TestElement.TEST_CLASS, elementClass.getName());
                 newElement.setProperty(TestElement.GUI_CLASS, guiClass.getName());

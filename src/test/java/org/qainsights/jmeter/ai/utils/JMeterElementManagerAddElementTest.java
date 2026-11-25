@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.utils;
 
+import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.control.gui.LoopControlPanel;
 import org.apache.jmeter.control.gui.TestPlanGui;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
@@ -225,6 +227,18 @@ class JMeterElementManagerAddElementTest {
                     TestElement foreachController = ((JMeterTreeNode) threadGroupNode
                             .getChildAt(threadGroupNode.getChildCount() - 1)).getTestElement();
                     assertTrue(foreachController.getProperty("ForeachController.useSeparator").getBooleanValue());
+
+                    LoopController parentLoop = new LoopController();
+                    parentLoop.setLoops("5");
+                    parentLoop.setProperty(TestElement.TEST_CLASS, LoopController.class.getName());
+                    parentLoop.setProperty(TestElement.GUI_CLASS, LoopControlPanel.class.getName());
+                    JMeterTreeNode parentLoopNode = treeModel.addComponent(parentLoop, threadGroupNode);
+                    tree.setSelectionPath(new TreePath(parentLoopNode.getPath()));
+                    GuiPackage.getInstance().updateCurrentGui();
+                    assertSame(parentLoopNode, treeListener.getCurrentNode());
+
+                    assertTrue(JMeterElementManager.addElement("loopcontroller", null));
+                    assertEquals(5, parentLoop.getLoops());
                 } catch (Exception e) {
                     throw new IllegalStateException(e);
                 }
