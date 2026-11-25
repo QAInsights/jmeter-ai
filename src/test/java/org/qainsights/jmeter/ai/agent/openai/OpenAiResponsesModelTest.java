@@ -27,11 +27,18 @@ import static org.junit.jupiter.api.Assertions.*;
 class OpenAiResponsesModelTest {
 
     private static Response response(List<Object> outputItems) {
+        return response(outputItems, "completed");
+    }
+
+    private static Response response(List<Object> outputItems, String status) {
         Map<String, Object> json = new LinkedHashMap<>();
         json.put("id", "resp_1");
         json.put("object", "response");
         json.put("model", "gpt-6.1-terra");
-        json.put("status", "completed");
+        json.put("status", status);
+        if ("incomplete".equals(status)) {
+            json.put("incomplete_details", Map.of("reason", "max_output_tokens"));
+        }
         json.put("output", outputItems);
         json.put("usage", Map.of(
                 "input_tokens", 10,
@@ -53,6 +60,15 @@ class OpenAiResponsesModelTest {
         item.put("role", "assistant");
         item.put("status", "completed");
         item.put("content", List.of(content));
+        return item;
+    }
+
+    private static Map<String, Object> reasoningItem() {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", "rs_1");
+        item.put("type", "reasoning");
+        item.put("summary", List.of());
+        item.put("encrypted_content", "encrypted");
         return item;
     }
 
@@ -123,7 +139,8 @@ class OpenAiResponsesModelTest {
     @Test
     void next_replaysFunctionCallAndAddsFunctionCallOutput() {
         Deque<Response> responses = new ArrayDeque<>();
-        responses.add(response(List.of(functionCallItem("call_1", "get_tree_state", "{\"detail\":\"full\"}"))));
+        responses.add(response(List.of(reasoningItem(),
+                functionCallItem("call_1", "get_tree_state", "{\"detail\":\"full\"}"))));
         responses.add(response(List.of(messageItem("All set."))));
         List<ResponseCreateParams> captured = new ArrayList<>();
         OpenAiResponsesModel.ResponseService service = params -> {
@@ -142,11 +159,24 @@ class OpenAiResponsesModelTest {
 
         JsonNode input = body(captured.get(1)).path("input");
         assertEquals("user", input.get(0).path("role").asText());
-        assertEquals("function_call", input.get(1).path("type").asText());
-        assertEquals("call_1", input.get(1).path("call_id").asText());
-        assertEquals("function_call_output", input.get(2).path("type").asText());
+        assertEquals("reasoning", input.get(1).path("type").asText());
+        assertEquals("encrypted", input.get(1).path("encrypted_content").asText());
+        assertEquals("function_call", input.get(2).path("type").asText());
         assertEquals("call_1", input.get(2).path("call_id").asText());
-        assertEquals("tree", input.get(2).path("output").asText());
+        assertEquals("function_call_output", input.get(3).path("type").asText());
+        assertEquals("call_1", input.get(3).path("call_id").asText());
+        assertEquals("tree", input.get(3).path("output").asText());
+    }
+
+    @Test
+    void incompleteResponseIsRejectedInsteadOfCompletingTheRun() {
+        OpenAiResponsesModel.ResponseService service = params -> response(List.of(reasoningItem()), "incomplete");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> model(service).start("inspect"));
+
+        assertTrue(error.getMessage().contains("incomplete"), error.getMessage());
+        assertTrue(error.getMessage().contains("max_output_tokens"), error.getMessage());
     }
 
     @Test
