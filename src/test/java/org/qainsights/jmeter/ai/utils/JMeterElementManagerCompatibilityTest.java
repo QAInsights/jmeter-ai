@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -100,10 +101,6 @@ class JMeterElementManagerCompatibilityTest {
                 .map(type -> Arguments.of(parent.get()[0], parent.get()[1], type)));
     }
 
-    private static Stream<String> allTypes() {
-        return ALL_TYPES.stream();
-    }
-
     private static Stream<String> nonStructuralTypes() {
         return ALL_TYPES.stream().filter(t -> !STRUCTURAL_TYPES.contains(t));
     }
@@ -115,9 +112,18 @@ class JMeterElementManagerCompatibilityTest {
     }
 
     @ParameterizedTest(name = "test plan accepts {0}")
-    @MethodSource("allTypes")
-    void testPlanAcceptsEveryElementType(String elementType) {
+    @ValueSource(strings = {"threadgroup", "constanttimer", "jsr223preprocessor", "regexextractor", "headermanager",
+            "csvdataset", "httpdefaults", "ftprequestdefaults", "viewresultstree", "aggregatereport",
+            "responseassert", "jsonassertion"})
+    void testPlanAcceptsNonExecutableElements(String elementType) {
         assertTrue(JMeterElementManager.isNodeCompatible(testPlanNode(), elementType));
+    }
+
+    @ParameterizedTest(name = "test plan rejects {0}")
+    @ValueSource(strings = {"httpsampler", "httprequest", "jsr223sampler", "debugsampler", "loopcontroller",
+            "simplecontroller", "ifcontroller", "transactioncontroller", "modulecontroller"})
+    void testPlanRejectsSamplersAndControllers(String elementType) {
+        assertFalse(JMeterElementManager.isNodeCompatible(testPlanNode(), elementType));
     }
 
     @ParameterizedTest(name = "thread group accepts {0}")

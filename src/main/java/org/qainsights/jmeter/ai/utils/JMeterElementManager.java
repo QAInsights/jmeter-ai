@@ -3,8 +3,12 @@ package org.qainsights.jmeter.ai.utils;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.control.Controller;
+import org.apache.jmeter.control.TestFragmentController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
+import org.apache.jmeter.samplers.Sampler;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.threads.AbstractThreadGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -860,8 +864,7 @@ public class JMeterElementManager {
 
         // Apply JMeter hierarchy rules
         if (isTestPlan) {
-            // Test plan can have all types of elements
-            return true;
+            return canAddToTestPlan(normalizedType);
         } else if (isThreadGroup) {
             // Thread group can have all types of elements, except test plan and another
             // thread group
@@ -889,6 +892,25 @@ public class JMeterElementManager {
         // conservative and return false
         log.info("Could not determine compatibility for node type: {} and element type: {}", nodeType, normalizedType);
         return false;
+    }
+
+    private static boolean canAddToTestPlan(String normalizedType) {
+        ElementClassInfo classInfo = ELEMENT_CLASS_MAP.get(normalizedType);
+        if (classInfo == null) {
+            return true;
+        }
+
+        try {
+            Class<?> modelClass = Class.forName(classInfo.modelClassName);
+            if (Sampler.class.isAssignableFrom(modelClass)) {
+                return false;
+            }
+            return !Controller.class.isAssignableFrom(modelClass)
+                    || AbstractThreadGroup.class.isAssignableFrom(modelClass)
+                    || TestFragmentController.class.isAssignableFrom(modelClass);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return true;
+        }
     }
 
     /**
