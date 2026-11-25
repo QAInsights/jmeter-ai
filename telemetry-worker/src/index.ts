@@ -939,7 +939,7 @@ ${table("Token usage reported by plugins (30d)", ["Metric", "Value"], [
 	["Output tokens", tokens.outputTokens],
 	["Total tokens", tokens.totalTokens],
 	["Installs reporting usage", tokens.installs],
-], { note: "Aggregate usage since each install's previous successful ping, attributed to the ping day. Counts are provider-reported, or local estimates when a provider omits usage. Older plugin versions do not report token usage." })}
+], { note: "Aggregate usage since each install's previous successful ping, attributed to the ping day. Counts are provider-reported, or local estimates in some chat paths when a provider omits usage. Agent turns and providers without usage data, and older plugin versions, are omitted." })}
 ${table("Feature usage (30d)", usageHead("Feature"), usageRows(usage))}
 ${table("Chat messages by provider (30d)", usageHead("Provider"), usageRows(chatProviders, "msg_"))}
 ${table("Make it pass (30d)", usageHead("Event"), usageRows(fixUsage, "fix_"))}
