@@ -235,8 +235,21 @@ describe("POST /v1/ping new fields", () => {
 
 	it("stores nulls when an older plugin omits them", async () => {
 		expect((await postPing(pingBody())).status).toBe(204);
-		const row = await env.DB.prepare("SELECT judgment_provider, model FROM pings").first<any>();
-		expect(row).toEqual({ judgment_provider: null, model: null });
+		const row = await env.DB.prepare("SELECT judgment_provider, model, input_tokens, output_tokens FROM pings").first<any>();
+		expect(row).toEqual({ judgment_provider: null, model: null, input_tokens: null, output_tokens: null });
+	});
+
+	it("stores aggregate input and output token counts", async () => {
+		expect((await postPing(pingBody({ inputTokens: 12500, outputTokens: 2400 }))).status).toBe(204);
+		const row = await env.DB.prepare("SELECT input_tokens, output_tokens FROM pings").first<any>();
+		expect(row).toEqual({ input_tokens: 12500, output_tokens: 2400 });
+	});
+
+	it("rejects malformed token counts", async () => {
+		for (const value of [-1, 1.5, "100", 1_000_000_001]) {
+			expect((await postPing(pingBody({ inputTokens: value }))).status).toBe(400);
+			expect((await postPing(pingBody({ outputTokens: value }))).status).toBe(400);
+		}
 	});
 
 	it("rejects an overlong model", async () => {

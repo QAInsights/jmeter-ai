@@ -14,6 +14,7 @@ export interface Env extends StarterEnv {
 const MAX_BODY_BYTES = 8192;
 const MAX_STRING_FIELD = 64;
 const MAX_FEATURES = 100;
+const MAX_TOKEN_COUNT = 1_000_000_000;
 const FEATURE_KEY_RE = /^[a-z0-9_]{1,40}$/;
 export const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const STRING_FIELDS = [
@@ -81,6 +82,8 @@ interface Ping {
 	provider?: string;
 	judgmentProvider?: string;
 	model?: string;
+	inputTokens?: number;
+	outputTokens?: number;
 	agentEnabled?: boolean;
 	firstRun?: boolean;
 	features?: Record<string, number>;
@@ -102,6 +105,12 @@ function validate(body: unknown): Ping | Response {
 		const v = b[f];
 		if (v !== undefined && (typeof v !== "string" || v.length > MAX_STRING_FIELD)) {
 			return badRequest(`${f} must be a string of at most ${MAX_STRING_FIELD} characters`);
+		}
+	}
+	for (const f of ["inputTokens", "outputTokens"] as const) {
+		const v = b[f];
+		if (v !== undefined && (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0 || v > MAX_TOKEN_COUNT)) {
+			return badRequest(`${f} must be an integer between 0 and ${MAX_TOKEN_COUNT}`);
 		}
 	}
 	for (const f of ["agentEnabled", "firstRun"] as const) {
@@ -166,8 +175,8 @@ async function handlePing(request: Request, env: Env, ctx: ExecutionContext): Pr
 	const ins = await env.DB.prepare(
 		`INSERT OR IGNORE INTO pings
 		 (install_id, day, ts, event, plugin_version, jmeter_version, java_version,
-		  os, arch, provider, agent_enabled, first_run, country, judgment_provider, model)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		  os, arch, provider, agent_enabled, first_run, country, judgment_provider, model, input_tokens, output_tokens)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	).bind(
 		p.installId, day, ts, p.event,
 		p.pluginVersion ?? null, p.jmeterVersion ?? null, p.javaVersion ?? null,
@@ -175,7 +184,8 @@ async function handlePing(request: Request, env: Env, ctx: ExecutionContext): Pr
 		p.agentEnabled === undefined ? null : p.agentEnabled ? 1 : 0,
 		p.firstRun === undefined ? null : p.firstRun ? 1 : 0,
 		country,
-		p.judgmentProvider ?? null, p.model ?? null
+		p.judgmentProvider ?? null, p.model ?? null,
+		p.inputTokens ?? null, p.outputTokens ?? null
 	).run();
 
 	if (ins.meta.changes === 1 && p.features) {
@@ -204,6 +214,8 @@ async function handlePing(request: Request, env: Env, ctx: ExecutionContext): Pr
 				provider: p.provider,
 				judgmentProvider: p.judgmentProvider,
 				model: p.model,
+				inputTokens: p.inputTokens,
+				outputTokens: p.outputTokens,
 				agentEnabled: p.agentEnabled,
 				firstRun: p.firstRun,
 			}, p.features ?? {});
@@ -229,6 +241,8 @@ interface BackfillPingRow {
 	provider: string | null;
 	judgment_provider: string | null;
 	model: string | null;
+	input_tokens: number | null;
+	output_tokens: number | null;
 	agent_enabled: number | null;
 	first_run: number | null;
 }
@@ -267,7 +281,7 @@ async function handlePostHogBackfill(request: Request, env: Env): Promise<Respon
 
 	const rows = (await env.DB.prepare(
 		`SELECT install_id, day, ts, plugin_version, jmeter_version, java_version, os, arch, provider,
-		        judgment_provider, model, agent_enabled, first_run
+		        judgment_provider, model, input_tokens, output_tokens, agent_enabled, first_run
 		 FROM pings
 		 WHERE (day > ?1 OR (day = ?1 AND install_id > ?2))
 		   AND install_id NOT IN (${TEST_INSTALLS})
@@ -310,6 +324,8 @@ async function handlePostHogBackfill(request: Request, env: Env): Promise<Respon
 			provider: row.provider ?? undefined,
 			judgmentProvider: row.judgment_provider ?? undefined,
 			model: row.model ?? undefined,
+			inputTokens: row.input_tokens ?? undefined,
+			outputTokens: row.output_tokens ?? undefined,
 			agentEnabled: row.agent_enabled === null ? undefined : row.agent_enabled === 1,
 			firstRun: row.first_run === null ? undefined : row.first_run === 1,
 		};
@@ -423,6 +439,16 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 		 FROM feature_counts WHERE day >= ? AND feature IN ('chat_message', 'agent_run') AND ${REAL}`
 	).bind(mauSince).first<{ total: number; installs: number }>();
 
+	const tokenUsage = await env.DB.prepare(
+		`SELECT COALESCE(SUM(input_tokens), 0) AS inputTokens,
+		        COALESCE(SUM(output_tokens), 0) AS outputTokens,
+		        COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) AS totalTokens,
+		        COUNT(DISTINCT CASE WHEN COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) > 0 THEN install_id END) AS installs
+		 FROM pings WHERE day >= ? AND ${REAL}`
+	).bind(mauSince).first<{
+		inputTokens: number; outputTokens: number; totalTokens: number; installs: number;
+	}>();
+
 	const versionAdoption = (await env.DB.prepare(
 		`SELECT day, plugin_version AS version, COUNT(DISTINCT install_id) AS installs
 		 FROM pings WHERE day >= ? AND ${REAL} GROUP BY day, plugin_version ORDER BY day, installs DESC`
@@ -433,6 +459,7 @@ async function gatherStats(env: Env): Promise<Record<string, unknown>> {
 		starter: await starterStats(env),
 		growth: { newThisWeek, newPrevWeek, wau, wauPrev },
 		engagement: { messages: messagers?.total ?? 0, messagingInstalls: messagers?.installs ?? 0, activeInstalls: mau },
+		tokenUsage: tokenUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, installs: 0 },
 		dailyActive, newInstalls, retention, versionAdoption,
 		breakdowns: {
 			pluginVersion: pluginVersions,
@@ -842,6 +869,7 @@ function statsPage(s: Record<string, unknown>): string {
 	const retention = s.retention as { days: number; cohort: number; retained: number }[];
 	const g = s.growth as { newThisWeek: number; newPrevWeek: number; wau: number; wauPrev: number };
 	const e = s.engagement as { messages: number; messagingInstalls: number; activeInstalls: number };
+	const tokens = s.tokenUsage as { inputTokens: number; outputTokens: number; totalTokens: number; installs: number };
 	const today = String(s.today);
 	const messagesPerActive = e.activeInstalls > 0 ? (e.messages / e.activeInstalls).toFixed(1) : "-";
 	const nav = [["overview", "Overview"], ["audience", "Audience"], ["setup", "Setup"], ["usage", "Usage"],
@@ -905,7 +933,13 @@ ${breakdown("JSR223 Refactor provider setting (30d)", "Provider setting", bd.pro
 		"This is the provider setting for JSR223 Refactor, not the chat provider.")}
 ${table("Provider setup funnel (30d)", ["Event", "Option", "Outcome", "Total", "Installs"], setupRows, { numFrom: 4, span2: true })}
 ${table("Model picker (30d)", usageHead("Action"), usageRows(picker, "picker_"))}`)}
-${group("usage", "Usage", "Feature counters summed over the window.", `
+${group("usage", "Usage", "Feature counters and aggregate token usage summed over the window.", `
+${table("Token usage reported by plugins (30d)", ["Metric", "Value"], [
+	["Input tokens", tokens.inputTokens],
+	["Output tokens", tokens.outputTokens],
+	["Total tokens", tokens.totalTokens],
+	["Installs reporting usage", tokens.installs],
+], { note: "Aggregate usage since each install's previous successful ping, attributed to the ping day. Counts are provider-reported, or local estimates when a provider omits usage. Older plugin versions do not report token usage." })}
 ${table("Feature usage (30d)", usageHead("Feature"), usageRows(usage))}
 ${table("Chat messages by provider (30d)", usageHead("Provider"), usageRows(chatProviders, "msg_"))}
 ${table("Make it pass (30d)", usageHead("Event"), usageRows(fixUsage, "fix_"))}

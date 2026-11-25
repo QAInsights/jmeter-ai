@@ -7,7 +7,7 @@ Cloudflare Worker + D1. Endpoint: `POST https://telemetry.jmeter.ai/v1/ping`.
 
 Each install can send one ping per UTC day. Stored fields: a random install UUID,
 plugin/JMeter/Java version, OS name, CPU arch, AI provider name, agent-mode
-enabled flag, first-run flag, coarse feature usage counts, and the country code
+enabled flag, first-run flag, aggregate input/output token counts, coarse feature usage counts, and the country code
 Cloudflare reports for the request. Day and timestamp are assigned server side.
 IP addresses are used for burst rate limiting and starter lifetime quotas, and
 are never stored in plaintext. Starter quota records retain an HMAC-SHA-256 IP
@@ -162,8 +162,8 @@ Older plugin versions keep working: new ping fields are optional and unknown fie
 
 Each newly accepted daily ping is forwarded to PostHog US as a `daily_ping` event, with one
 `feature_used` event for each positive feature count. The forwarded fields are the install ID,
-day, versions, OS, architecture, provider, decisions backend, model, agent-mode and first-run
-flags, and feature counts. No IP address or country/location is sent. An empty or missing
+day, versions, OS, architecture, provider, decisions backend, model, aggregate input/output token counts,
+agent-mode and first-run flags, and feature counts. No IP address or country/location is sent. An empty or missing
 `POSTHOG_KEY` disables forwarding. No D1 migration is needed; deploy the Worker with
 `npx wrangler deploy`.
 
@@ -196,7 +196,9 @@ Every number leaves out installs that ever reported a tool from `TEST_ONLY_FEATU
 the plugin's Surefire config set `DO_NOT_TRACK=1`, each `mvn verify` run (CI included) pinged as a fresh install.
 The plugin now also skips telemetry in any JUnit Platform test JVM (Maven, Gradle or an IDE). The filter is a lower
 bound: an old test run that pinged before reaching a fake tool is still counted.
-The page shows how many were hidden, plus week-over-week growth and messages per active install.
+The page shows how many were hidden, plus week-over-week growth, messages per active install,
+and 30-day token usage reported by plugins. Token totals are separate from the starter cost accounting:
+starter tokens can appear in both places because one measures product usage and the other measures upstream spend.
 
 ## Testing
 

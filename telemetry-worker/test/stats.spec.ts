@@ -147,6 +147,26 @@ describe("extended stats", () => {
 		expect(s.breakdowns.model).toContainEqual({ value: "gpt-4o-mini", installs: 1 });
 	});
 
+	it("sums plugin-reported token usage in the 30 day window", async () => {
+		await insertPing("a", day(0));
+		await insertPing("b", day(5));
+		await insertPing("old", day(40));
+		await insertPing("none", day(1));
+		await env.DB.prepare("UPDATE pings SET input_tokens = 1000, output_tokens = 200 WHERE install_id = 'a'").run();
+		await env.DB.prepare("UPDATE pings SET input_tokens = 500, output_tokens = 100 WHERE install_id = 'b'").run();
+		await env.DB.prepare("UPDATE pings SET input_tokens = 9000, output_tokens = 900 WHERE install_id = 'old'").run();
+
+		const s = await (await stats(`/v1/stats?token=${TOKEN}`)).json() as any;
+
+		expect(s.tokenUsage).toEqual({ inputTokens: 1500, outputTokens: 300, totalTokens: 1800, installs: 2 });
+		const html = await (await stats(`/stats?token=${TOKEN}`)).text();
+		expect(html).toContain("Token usage reported by plugins (30d)");
+		expect(html).toContain("<td>Input tokens</td><td>1,500</td>");
+		expect(html).toContain("<td>Output tokens</td><td>300</td>");
+		expect(html).toContain("<td>Total tokens</td><td>1,800</td>");
+		expect(html).toContain("<td>Installs reporting usage</td><td>2</td>");
+	});
+
 	it("adds an Other column to the adoption table beyond the six most common versions", async () => {
 		const versions = ["3.8.1", "3.8.2", "3.8.3", "3.8.4", "3.8.5", "3.8.6", "3.8.7"];
 		for (const [i, v] of versions.entries()) await insertPing(`v${i}`, day(0), { plugin_version: v });

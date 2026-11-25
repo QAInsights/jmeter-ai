@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.service.usage;
 
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 
 /**
  * Session-scoped token/cost accumulator for the chat panel's context-stats
@@ -49,6 +50,7 @@ public final class UsageStats {
         totalOutput += outputTokens;
         lastInputTokens = inputTokens;
         calls++;
+        Telemetry.recordTokenUsage(inputTokens, outputTokens);
 
         var caps = ModelCapabilityCatalog.getInstance().capabilities(model);
         if (caps.isPresent() && caps.get().hasCost()) {

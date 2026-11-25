@@ -13,6 +13,8 @@ const ping: PingRecord = {
 	provider: "anthropic",
 	judgmentProvider: "openrouter:microsoft",
 	model: "gpt-4o",
+	inputTokens: 12500,
+	outputTokens: 2400,
 	agentEnabled: true,
 	firstRun: false,
 };
@@ -34,6 +36,8 @@ describe("posthogEvents", () => {
 				provider: "anthropic",
 				judgment_provider: "openrouter:microsoft",
 				model: "gpt-4o",
+				input_tokens: 12500,
+				output_tokens: 2400,
 				agent_enabled: true,
 				first_run: false,
 				day: "2026-10-30",

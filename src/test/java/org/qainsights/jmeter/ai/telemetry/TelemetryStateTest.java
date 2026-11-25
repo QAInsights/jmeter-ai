@@ -31,6 +31,7 @@ class TelemetryStateTest {
         first.setLastPingDay("2026-01-01");
         first.setFirstPingSent(true);
         first.setPendingFeatures(Map.of("chat_message", 3));
+        first.setPendingTokens(1200, 300);
         first.save();
 
         TelemetryState second = TelemetryState.load(dir);
@@ -39,6 +40,8 @@ class TelemetryStateTest {
         assertEquals("2026-01-01", second.getLastPingDay());
         assertTrue(second.isFirstPingSent());
         assertEquals(Map.of("chat_message", 3), second.getPendingFeatures());
+        assertEquals(1200, second.getPendingInputTokens());
+        assertEquals(300, second.getPendingOutputTokens());
     }
 
     @Test

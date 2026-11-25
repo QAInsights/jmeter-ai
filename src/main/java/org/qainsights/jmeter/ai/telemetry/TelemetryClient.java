@@ -32,20 +32,24 @@ public class TelemetryClient {
     private final TelemetryConfig config;
     private final TelemetryState state;
     private final TelemetryCounters counters;
+    private final TelemetryTokenCounters tokenCounters;
     private final TelemetrySender sender;
     private final Clock clock;
 
     public TelemetryClient(TelemetryConfig config, TelemetryState state,
-                           TelemetryCounters counters, TelemetrySender sender) {
-        this(config, state, counters, sender, Clock.systemUTC());
+                           TelemetryCounters counters, TelemetryTokenCounters tokenCounters,
+                           TelemetrySender sender) {
+        this(config, state, counters, tokenCounters, sender, Clock.systemUTC());
     }
 
     /** Package-private seam for tests. */
     TelemetryClient(TelemetryConfig config, TelemetryState state,
-                    TelemetryCounters counters, TelemetrySender sender, Clock clock) {
+                    TelemetryCounters counters, TelemetryTokenCounters tokenCounters,
+                    TelemetrySender sender, Clock clock) {
         this.config = config;
         this.state = state;
         this.counters = counters;
+        this.tokenCounters = tokenCounters;
         this.sender = sender;
         this.clock = clock;
     }
@@ -59,17 +63,21 @@ public class TelemetryClient {
             if (today.equals(state.getLastPingDay())) {
                 return;
             }
-            Map<String, Integer> snapshot = limitPayload(counters.snapshot());
-            String json = buildPayload(snapshot);
+            TelemetryTokenCounters.Snapshot tokenSnapshot = tokenCounters.snapshot();
+            Map<String, Integer> snapshot = limitPayload(counters.snapshot(), tokenSnapshot);
+            String json = buildPayload(snapshot, tokenSnapshot);
             if (json.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
                 log.debug("Telemetry payload exceeds the byte budget");
                 return;
             }
             if (sender.send(json)) {
                 counters.subtract(snapshot);
+                tokenCounters.subtract(tokenSnapshot);
                 state.setLastPingDay(today);
                 state.setFirstPingSent(true);
                 state.setPendingFeatures(counters.snapshot());
+                TelemetryTokenCounters.Snapshot pendingTokens = tokenCounters.snapshot();
+                state.setPendingTokens(pendingTokens.inputTokens(), pendingTokens.outputTokens());
                 state.save();
             }
         } catch (Throwable t) {
@@ -77,7 +85,7 @@ public class TelemetryClient {
         }
     }
 
-    String buildPayload(Map<String, Integer> features) {
+    String buildPayload(Map<String, Integer> features, TelemetryTokenCounters.Snapshot tokenSnapshot) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("installId", state.getInstallId());
         root.put("event", "daily");
@@ -92,6 +100,8 @@ public class TelemetryClient {
         root.put("model", TelemetryModels.publicName(selected != null ? selected : TelemetryModels.configuredModel()));
         root.put("agentEnabled", JMeterAgent.isEnabled());
         root.put("firstRun", !state.isFirstPingSent());
+        root.put("inputTokens", tokenSnapshot.inputTokens());
+        root.put("outputTokens", tokenSnapshot.outputTokens());
         ObjectNode f = root.putObject("features");
         features.forEach((k, v) -> {
             if (v != null && v > 0) {
@@ -114,9 +124,10 @@ public class TelemetryClient {
         return kept;
     }
 
-    Map<String, Integer> limitPayload(Map<String, Integer> snapshot) {
+    Map<String, Integer> limitPayload(Map<String, Integer> snapshot,
+                                      TelemetryTokenCounters.Snapshot tokenSnapshot) {
         Map<String, Integer> kept = new LinkedHashMap<>(limit(snapshot));
-        while (!kept.isEmpty() && payloadBytes(kept) > MAX_PAYLOAD_BYTES) {
+        while (!kept.isEmpty() && payloadBytes(kept, tokenSnapshot) > MAX_PAYLOAD_BYTES) {
             Map.Entry<String, Integer> leastUsed = null;
             for (Map.Entry<String, Integer> entry : kept.entrySet()) {
                 if (leastUsed == null || entry.getValue() < leastUsed.getValue()) {
@@ -131,8 +142,8 @@ public class TelemetryClient {
         return kept;
     }
 
-    private int payloadBytes(Map<String, Integer> features) {
-        return buildPayload(features).getBytes(StandardCharsets.UTF_8).length;
+    private int payloadBytes(Map<String, Integer> features, TelemetryTokenCounters.Snapshot tokenSnapshot) {
+        return buildPayload(features, tokenSnapshot).getBytes(StandardCharsets.UTF_8).length;
     }
 
     public static String pluginVersion() {
