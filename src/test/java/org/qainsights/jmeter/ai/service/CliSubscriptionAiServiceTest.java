@@ -54,6 +54,7 @@ class CliSubscriptionAiServiceTest {
 
         assertEquals(15, stats.snapshot().totalInput());
         assertEquals(5, stats.snapshot().totalOutput());
+        assertEquals(0, stats.lastInputTokens());
     }
 
     @Test

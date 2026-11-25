@@ -34,6 +34,18 @@ class UsageStatsTest {
     }
 
     @Test
+    void multiRequestTotalsDoNotBecomeTheNextContextSize() {
+        UsageStats stats = new UsageStats();
+        stats.record("openai:gpt-5.1", 1000, 200);
+        stats.recordMultiRequest("opencode:provider/model", 1500, 300);
+
+        UsageStats.Snapshot snap = stats.snapshot();
+        assertEquals(2500, snap.totalInput());
+        assertEquals(500, snap.totalOutput());
+        assertEquals(0, stats.lastInputTokens());
+    }
+
+    @Test
     void pricesEachCallAtCatalogListPrice() {
         UsageStats stats = new UsageStats();
         // gpt-5.1: $1.25/Mtok in, $10/Mtok out in the vendored catalog

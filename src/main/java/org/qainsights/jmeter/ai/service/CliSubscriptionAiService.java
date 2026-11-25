@@ -78,7 +78,7 @@ public abstract class CliSubscriptionAiService implements AiService {
         }
         long input = orZero(counts.fresh()) + orZero(counts.cacheRead()) + orZero(counts.cacheWrite());
         long output = orZero(counts.output());
-        stats.record(provider.modelPrefix() + (requestModel == null ? "" : requestModel), input, output);
+        stats.recordMultiRequest(provider.modelPrefix() + (requestModel == null ? "" : requestModel), input, output);
     }
 
     private static long orZero(Long value) {
