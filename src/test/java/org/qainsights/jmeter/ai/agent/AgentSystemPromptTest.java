@@ -27,6 +27,7 @@ class AgentSystemPromptTest {
         assertTrue(prompt.contains("call get_tree_state and confirm"));
         assertTrue(prompt.contains("call get_element_config on each element"));
         assertTrue(prompt.contains("call save_plan last"));
+        assertTrue(prompt.contains("save at that point"));
         assertTrue(prompt.contains("does not make their requests"));
         assertTrue(prompt.contains("save_plan returned success"));
         assertTrue(prompt.contains("ThreadGroup.ramp_time"));
