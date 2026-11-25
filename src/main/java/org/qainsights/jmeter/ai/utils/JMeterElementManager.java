@@ -335,34 +335,35 @@ public class JMeterElementManager {
                 new ElementClassInfo("org.apache.jmeter.control.TransactionController",
                         "org.apache.jmeter.control.gui.TransactionControllerGui"));
         ELEMENT_CLASS_MAP.put("simplecontroller", new ElementClassInfo("org.apache.jmeter.control.GenericController",
-                "org.apache.jmeter.control.gui.LogicControllerPanel"));
+                "org.apache.jmeter.control.gui.LogicControllerGui"));
         ELEMENT_CLASS_MAP.put("onceonlycontroller", new ElementClassInfo("org.apache.jmeter.control.OnceOnlyController",
-                "org.apache.jmeter.control.gui.OnceOnlyControllerPanel"));
+                "org.apache.jmeter.control.gui.OnceOnlyControllerGui"));
         ELEMENT_CLASS_MAP.put("interleavecontroller", new ElementClassInfo(
-                "org.apache.jmeter.control.InterleaveControl", "org.apache.jmeter.control.gui.InterleaveControlPanel"));
+                "org.apache.jmeter.control.InterleaveControl", "org.apache.jmeter.control.gui.InterleaveControlGui"));
         ELEMENT_CLASS_MAP.put("randomcontroller", new ElementClassInfo("org.apache.jmeter.control.RandomController",
-                "org.apache.jmeter.control.gui.RandomControlPanel"));
+                "org.apache.jmeter.control.gui.RandomControlGui"));
         ELEMENT_CLASS_MAP.put("randomordercontroller",
                 new ElementClassInfo("org.apache.jmeter.control.RandomOrderController",
-                        "org.apache.jmeter.control.gui.RandomOrderControllerPanel"));
+                        "org.apache.jmeter.control.gui.RandomOrderControllerGui"));
         ELEMENT_CLASS_MAP.put("throughputcontroller",
                 new ElementClassInfo("org.apache.jmeter.control.ThroughputController",
-                        "org.apache.jmeter.control.gui.ThroughputControllerPanel"));
+                        "org.apache.jmeter.control.gui.ThroughputControllerGui"));
         ELEMENT_CLASS_MAP.put("runtimecontroller",
                 new ElementClassInfo("org.apache.jmeter.control.RunTime", "org.apache.jmeter.control.gui.RunTimeGui"));
         ELEMENT_CLASS_MAP.put("switchcontroller", new ElementClassInfo("org.apache.jmeter.control.SwitchController",
-                "org.apache.jmeter.control.gui.SwitchControllerPanel"));
+                "org.apache.jmeter.control.gui.SwitchControllerGui"));
         ELEMENT_CLASS_MAP.put("foreachcontroller", new ElementClassInfo("org.apache.jmeter.control.ForeachController",
                 "org.apache.jmeter.control.gui.ForeachControlPanel"));
         ELEMENT_CLASS_MAP.put("modulecontroller", new ElementClassInfo("org.apache.jmeter.control.ModuleController",
                 "org.apache.jmeter.control.gui.ModuleControllerGui"));
         ELEMENT_CLASS_MAP.put("includecontroller", new ElementClassInfo("org.apache.jmeter.control.IncludeController",
-                "org.apache.jmeter.control.gui.IncludeControllerPanel"));
+                "org.apache.jmeter.control.gui.IncludeControllerGui"));
         ELEMENT_CLASS_MAP.put("recordingcontroller", new ElementClassInfo(
-                "org.apache.jmeter.control.RecordingController", "org.apache.jmeter.control.gui.RecordController"));
+                "org.apache.jmeter.protocol.http.control.RecordingController",
+                "org.apache.jmeter.protocol.http.control.gui.RecordController"));
         ELEMENT_CLASS_MAP.put("criticalsectioncontroller",
                 new ElementClassInfo("org.apache.jmeter.control.CriticalSectionController",
-                        "org.apache.jmeter.control.gui.CriticalSectionControllerPanel"));
+                        "org.apache.jmeter.control.gui.CriticalSectionControllerGui"));
 
         // Additional Listeners
         ELEMENT_CLASS_MAP.put("sampleresultsaveconfiguration",

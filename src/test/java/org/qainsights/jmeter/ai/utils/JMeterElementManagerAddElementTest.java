@@ -13,9 +13,11 @@ import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.ThreadGroup;
 import org.apache.jmeter.threads.gui.ThreadGroupGui;
 import org.apache.jmeter.util.JMeterUtils;
+import org.qainsights.jmeter.ai.agent.schema.SchemaGrounding;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -42,13 +45,17 @@ import static org.mockito.Mockito.when;
 class JMeterElementManagerAddElementTest {
 
     /**
-     * Entries shipped by ApacheJMeter_core/_http/_java (the only JMeter modules on this
-     * project's classpath) that {@code addElement} must be able to instantiate.
+     * Entries shipped by the JMeter modules on this project's classpath that {@code addElement} must be able to
+     * instantiate.
      */
     private static final Set<String> CORE_ENTRIES = Set.of(
             "httpsampler", "httptestsample", "httprequest", "graphqlhttprequest", "ajpsampler", "javarequest",
+            "jdbcrequest", "tcpsampler", "ftprequest", "osprocesssampler",
             "jsr223sampler", "beanshellsampler", "debugsampler", "flowcontrolaction", "threadgroup",
             "loopcontroller", "ifcontroller", "whilecontroller", "transactioncontroller", "foreachcontroller",
+            "simplecontroller", "onceonlycontroller", "interleavecontroller", "randomcontroller",
+            "randomordercontroller", "throughputcontroller", "switchcontroller", "includecontroller",
+            "criticalsectioncontroller", "recordingcontroller",
             "modulecontroller", "runtimecontroller", "responseassert", "jsonassertion", "durationassertion",
             "sizeassertion", "xpathassertion", "jsr223assertion", "constanttimer", "uniformrandomtimer",
             "gaussianrandomtimer", "poissonrandomtimer", "jsr223timer", "jsr223preprocessor", "userparameters",
@@ -73,6 +80,11 @@ class JMeterElementManagerAddElementTest {
 
     private static Stream<String> coreEntries() {
         return CORE_ENTRIES.stream().sorted();
+    }
+
+    private static Stream<Arguments> schemaElementTypes() {
+        return new SchemaGrounding().all().stream()
+                .map(elementType -> arguments(elementType.getType(), elementType.getAddAlias()));
     }
 
     /** Resolves a class, or returns null when it is not loadable on this classpath. */
@@ -132,6 +144,28 @@ class JMeterElementManagerAddElementTest {
         assertNotNull(tryLoad(info.modelClassName), key + ": model class " + info.modelClassName + " not found");
         assertNotNull(tryLoad(info.guiClassName), key + ": GUI class " + info.guiClassName + " not found");
         assertNotNull(JMeterElementManager.getJMeterGuiClass(key));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("schemaElementTypes")
+    void schemaAddAliasesResolveOnTheClasspath(String schemaType, String addAlias) {
+        JMeterElementManager.ElementClassInfo info = JMeterElementManager.getElementClassMap().get(addAlias);
+        assertNotNull(info, schemaType + " add_element alias '" + addAlias + "' is missing from ELEMENT_CLASS_MAP");
+        assertNotNull(tryLoad(info.modelClassName),
+                schemaType + " (" + addAlias + "): model class " + info.modelClassName + " not found");
+        assertNotNull(tryLoad(info.guiClassName),
+                schemaType + " (" + addAlias + "): GUI class " + info.guiClassName + " not found");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"simplecontroller", "onceonlycontroller"})
+    void controllerGuiCreatesItsModelElement(String key) throws ReflectiveOperationException {
+        JMeterElementManager.ElementClassInfo info = JMeterElementManager.getElementClassMap().get(key);
+        Class<?> modelClass = Class.forName(info.modelClassName);
+        Class<?> guiClass = Class.forName(info.guiClassName);
+        JMeterGUIComponent gui = (JMeterGUIComponent) guiClass.getDeclaredConstructor().newInstance();
+
+        assertInstanceOf(modelClass, gui.createTestElement());
     }
 
     @ParameterizedTest(name = "{0}")
