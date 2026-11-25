@@ -9,8 +9,10 @@ import org.qainsights.jmeter.ai.service.reasoning.OpenAiReasoning;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 
 /**
- * Decides the {@code reasoning_effort} an agent (tool-calling) request must send
- * for a given OpenAI model.
+ * Decides the {@code reasoning_effort} a Chat Completions agent (tool-calling)
+ * request must send for a given OpenAI model. {@link OpenAiResponsesModel} does
+ * not apply this restriction because the Responses API accepts function tools
+ * together with reasoning effort.
  * <p>
  * The gpt-5.1-and-later reasoning models reject function tools on
  * {@code /v1/chat/completions} unless reasoning is explicitly switched off:

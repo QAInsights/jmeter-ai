@@ -23,6 +23,10 @@ import com.openai.models.chat.completions.ChatCompletionMessage;
 import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall;
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall;
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam;
+import com.openai.models.responses.FunctionTool;
+import com.openai.models.responses.ResponseFunctionToolCall;
+import com.openai.models.responses.ResponseInputItem;
+import com.openai.models.responses.ResponseOutputMessage;
 
 /**
  * Translates between our provider-neutral tool model and the OpenAI
@@ -58,6 +62,43 @@ public final class OpenAiToolAdapter {
                 .build();
 
         return ChatCompletionFunctionTool.builder().function(function).build();
+    }
+
+    /** Converts a provider-neutral spec into a Responses API function-tool definition. */
+    public FunctionTool toResponsesTool(ToolSpec spec) {
+        FunctionTool.Parameters parameters = FunctionTool.Parameters.builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(JsonSchemaMapper.properties(spec)))
+                .putAdditionalProperty("required", JsonValue.from(JsonSchemaMapper.required(spec)))
+                .build();
+        return FunctionTool.builder()
+                .name(spec.getName())
+                .description(spec.getDescription())
+                .parameters(parameters)
+                .strict(false)
+                .build();
+    }
+
+    /** Flattens a Responses API function call into the neutral tool-call shape. */
+    public AssistantTurn.ToolCall toToolCall(ResponseFunctionToolCall call) {
+        return new AssistantTurn.ToolCall(call.callId(), call.name(), toArguments(call.arguments()));
+    }
+
+    /** Extracts the visible text fragments from a Responses API output message. */
+    public String outputText(ResponseOutputMessage message) {
+        StringBuilder text = new StringBuilder();
+        for (ResponseOutputMessage.Content content : message.content()) {
+            content.outputText().ifPresent(part -> text.append(part.text()));
+        }
+        return text.toString();
+    }
+
+    /** Builds the Responses API input item that carries a tool outcome back to the model. */
+    public ResponseInputItem toFunctionCallOutput(ToolOutcome outcome) {
+        return ResponseInputItem.ofFunctionCallOutput(ResponseInputItem.FunctionCallOutput.builder()
+                .callId(outcome.getToolCallId())
+                .output(outcome.getContent())
+                .build());
     }
 
     /**

@@ -1507,6 +1507,15 @@
         "costIn" : 2.0,
         "costOut" : 12.0
       },
+      "gpt-6.1-terra" : {
+        "reasoning" : true,
+        "effort" : [ "none", "low", "medium", "high", "xhigh", "max" ],
+        "vision" : true,
+        "pdf" : true,
+        "contextWindow" : 1050000,
+        "costIn" : 1.0,
+        "costOut" : 5.0
+      },
       "gpt-6-astra" : {
         "reasoning" : true,
         "effort" : [ "low", "medium", "high", "xhigh", "max" ],
