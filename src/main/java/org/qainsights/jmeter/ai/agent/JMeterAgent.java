@@ -47,6 +47,7 @@ import org.qainsights.jmeter.ai.service.OpenAiService;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
 import org.qainsights.jmeter.ai.service.TypeSafeJudgmentProvider.JudgmentException;
 import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -210,7 +211,7 @@ public final class JMeterAgent {
                                                       ReasoningSettings reasoningSettings) {
         return (specs, systemPrompt, priorTurns) -> {
             OpenAiToolAdapter adapter = new OpenAiToolAdapter();
-            if (OpenAiResponsesModel.applies(model, reasoningSettings)) {
+            if (!GatewayConfig.isOpenAiGateway() && OpenAiResponsesModel.applies(model, reasoningSettings)) {
                 return new OpenAiResponsesModel(responsesService, adapter, specs, systemPrompt, model, maxTokens,
                         OpenAiResponsesModel.toSeedHistory(priorTurns), reasoningSettings);
             }
