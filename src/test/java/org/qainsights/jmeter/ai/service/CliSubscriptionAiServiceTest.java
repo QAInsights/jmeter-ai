@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mockStatic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,13 +16,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
 import org.qainsights.jmeter.ai.cli.CliAuthState;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
 import org.qainsights.jmeter.ai.service.usage.UsageStats;
-import org.qainsights.jmeter.ai.utils.AiConfig;
 
 class CliSubscriptionAiServiceTest {
 
@@ -267,17 +264,6 @@ class CliSubscriptionAiServiceTest {
                 CliSubscriptionAiService.buildPrompt("SYS", List.of("q0", "a1", "q2"), 0));
         assertEquals("SYS\n\nUser: q2\n\nAnswer the last user message. Reply with the answer text only.",
                 CliSubscriptionAiService.buildPrompt("SYS", List.of("q0", "a1", "q2"), -5));
-    }
-
-    @Test
-    void historyForPromptUsesTheConfiguredTail() {
-        try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
-            config.when(() -> AiConfig.getProperty(CliSubscriptionAiService.MAX_HISTORY_KEY, "10"))
-                    .thenReturn("3");
-
-            assertEquals(List.of("q2", "a2", "q3"), CliSubscriptionAiService.historyForPrompt(
-                    List.of("q1", "a1", "q2", "a2", "q3")));
-        }
     }
 
     @Test

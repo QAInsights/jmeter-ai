@@ -125,11 +125,6 @@ public abstract class CliSubscriptionAiService implements AiService {
         return model == null ? provider.getModel() : model;
     }
 
-    /** The conversation tail that a CLI request replays, using the configured history limit. */
-    public static List<String> historyForPrompt(List<String> conversation) {
-        return limit(conversation, maxHistorySize());
-    }
-
     /**
      * Flattens the alternating user/assistant history into a single transcript
      * prompt, prefixed with the JMeter system prompt. Only the last
