@@ -1,5 +1,7 @@
 package org.qainsights.jmeter.ai.utils;
 
+import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.control.gui.LoopControlPanel;
 import org.apache.jmeter.control.gui.TestPlanGui;
 import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
@@ -24,6 +26,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.tree.TreePath;
+import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -168,6 +174,80 @@ class JMeterElementManagerAddElementTest {
         JMeterGUIComponent gui = (JMeterGUIComponent) guiClass.getDeclaredConstructor().newInstance();
 
         assertEquals(modelClass, gui.createTestElement().getClass());
+    }
+
+    @Test
+    void addElementUsesJMeterGuiDefaults() throws Exception {
+        Field guiPackageInstance = GuiPackage.class.getDeclaredField("guiPack");
+        guiPackageInstance.setAccessible(true);
+        GuiPackage previousGuiPackage = (GuiPackage) guiPackageInstance.get(null);
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                try {
+                    JMeterTreeModel treeModel = new JMeterTreeModel();
+                    JMeterTreeListener treeListener = new JMeterTreeListener(treeModel);
+                    JTree tree = new JTree(treeModel);
+                    treeListener.setJTree(tree);
+                    treeListener.setActionHandler(event -> {
+                    });
+                    tree.addTreeSelectionListener(treeListener);
+                    GuiPackage.initInstance(treeListener, treeModel);
+
+                    JMeterTreeNode testPlanNode = (JMeterTreeNode) treeModel.getRoot();
+                    tree.setSelectionPath(new TreePath(testPlanNode.getPath()));
+
+                    ThreadGroup threadGroup = new ThreadGroup();
+                    threadGroup.setProperty(TestElement.TEST_CLASS, ThreadGroup.class.getName());
+                    threadGroup.setProperty(TestElement.GUI_CLASS, ThreadGroupGui.class.getName());
+                    threadGroup.setName("Thread Group");
+                    JMeterElementManager.initializeThreadGroupDefaults(threadGroup);
+                    JMeterTreeNode threadGroupNode = treeModel.addComponent(threadGroup, testPlanNode);
+                    tree.setSelectionPath(new TreePath(threadGroupNode.getPath()));
+                    assertSame(threadGroupNode, treeListener.getCurrentNode());
+
+                    assertTrue(JMeterElementManager.addElement("constanttimer", null));
+                    TestElement constantTimer = ((JMeterTreeNode) threadGroupNode
+                            .getChildAt(threadGroupNode.getChildCount() - 1)).getTestElement();
+                    assertEquals("300", constantTimer.getPropertyAsString("ConstantTimer.delay"));
+
+                    assertTrue(JMeterElementManager.addElement("responseassert", null));
+                    TestElement responseAssertion = ((JMeterTreeNode) threadGroupNode
+                            .getChildAt(threadGroupNode.getChildCount() - 1)).getTestElement();
+                    assertEquals("Assertion.response_data",
+                            responseAssertion.getPropertyAsString("Assertion.test_field"));
+                    assertEquals(16, responseAssertion.getProperty("Assertion.test_type").getIntValue());
+
+                    assertTrue(JMeterElementManager.addElement("interleavecontroller", null));
+                    TestElement interleaveController = ((JMeterTreeNode) threadGroupNode
+                            .getChildAt(threadGroupNode.getChildCount() - 1)).getTestElement();
+                    assertEquals(1, interleaveController.getProperty("InterleaveControl.style").getIntValue());
+
+                    assertTrue(JMeterElementManager.addElement("foreachcontroller", null));
+                    TestElement foreachController = ((JMeterTreeNode) threadGroupNode
+                            .getChildAt(threadGroupNode.getChildCount() - 1)).getTestElement();
+                    assertTrue(foreachController.getProperty("ForeachController.useSeparator").getBooleanValue());
+
+                    LoopController parentLoop = new LoopController();
+                    parentLoop.setLoops("5");
+                    parentLoop.setProperty(TestElement.TEST_CLASS, LoopController.class.getName());
+                    parentLoop.setProperty(TestElement.GUI_CLASS, LoopControlPanel.class.getName());
+                    JMeterTreeNode parentLoopNode = treeModel.addComponent(parentLoop, threadGroupNode);
+                    tree.setSelectionPath(new TreePath(parentLoopNode.getPath()));
+                    GuiPackage.getInstance().updateCurrentGui();
+                    assertSame(parentLoopNode, treeListener.getCurrentNode());
+
+                    assertTrue(JMeterElementManager.addElement("loopcontroller", null));
+                    assertEquals(5, parentLoop.getLoops());
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+            });
+            guiPackageInstance.set(null, previousGuiPackage);
+        }
     }
 
     @ParameterizedTest(name = "{0}")
@@ -334,6 +414,10 @@ class JMeterElementManagerAddElementTest {
             when(guiPackage.getTreeListener()).thenReturn(treeListener);
             when(guiPackage.getTreeModel()).thenReturn(treeModel);
             when(treeListener.getCurrentNode()).thenReturn(currentNode);
+            when(guiPackage.createTestElement(any(), any())).thenAnswer(invocation -> {
+                Class<?> modelClass = invocation.getArgument(1);
+                return (TestElement) modelClass.getDeclaredConstructor().newInstance();
+            });
         }
 
         TestElement addedElement() throws Exception {
@@ -382,6 +466,19 @@ class JMeterElementManagerAddElementTest {
 
             assertFalse(JMeterElementManager.addElement("teleporter", "Beam me up"));
             verify(g.treeModel, never()).addComponent(any(), any());
+        }
+    }
+
+    @Test
+    void addElementRejectsIncompatiblePlacementBeforeCreatingElement() throws Exception {
+        TestPlan plan = new TestPlan();
+        plan.setProperty(TestElement.GUI_CLASS, TestPlanGui.class.getName());
+        Gui g = new Gui(new JMeterTreeNode(plan, null));
+        try (MockedStatic<GuiPackage> gui = mockStatic(GuiPackage.class)) {
+            gui.when(GuiPackage::getInstance).thenReturn(g.guiPackage);
+
+            assertFalse(JMeterElementManager.addElement("httpsampler", "Nested"));
+            verify(g.guiPackage, never()).createTestElement(any(), any());
         }
     }
 

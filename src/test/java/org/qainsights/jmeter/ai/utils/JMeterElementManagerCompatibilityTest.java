@@ -4,8 +4,10 @@ import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.assertions.gui.AssertionGui;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.config.gui.ArgumentsPanel;
+import org.apache.jmeter.control.IncludeController;
 import org.apache.jmeter.control.GenericController;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.control.gui.IncludeControllerGui;
 import org.apache.jmeter.control.gui.LogicControllerGui;
 import org.apache.jmeter.control.gui.LoopControlPanel;
 import org.apache.jmeter.control.gui.TestPlanGui;
@@ -30,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -100,10 +103,6 @@ class JMeterElementManagerCompatibilityTest {
                 .map(type -> Arguments.of(parent.get()[0], parent.get()[1], type)));
     }
 
-    private static Stream<String> allTypes() {
-        return ALL_TYPES.stream();
-    }
-
     private static Stream<String> nonStructuralTypes() {
         return ALL_TYPES.stream().filter(t -> !STRUCTURAL_TYPES.contains(t));
     }
@@ -115,9 +114,18 @@ class JMeterElementManagerCompatibilityTest {
     }
 
     @ParameterizedTest(name = "test plan accepts {0}")
-    @MethodSource("allTypes")
-    void testPlanAcceptsEveryElementType(String elementType) {
+    @ValueSource(strings = {"threadgroup", "constanttimer", "jsr223preprocessor", "regexextractor", "headermanager",
+            "csvdataset", "httpdefaults", "ftprequestdefaults", "viewresultstree", "aggregatereport",
+            "responseassert", "jsonassertion"})
+    void testPlanAcceptsNonExecutableElements(String elementType) {
         assertTrue(JMeterElementManager.isNodeCompatible(testPlanNode(), elementType));
+    }
+
+    @ParameterizedTest(name = "test plan rejects {0}")
+    @ValueSource(strings = {"httpsampler", "httprequest", "jsr223sampler", "debugsampler", "loopcontroller",
+            "simplecontroller", "ifcontroller", "transactioncontroller", "modulecontroller"})
+    void testPlanRejectsSamplersAndControllers(String elementType) {
+        assertFalse(JMeterElementManager.isNodeCompatible(testPlanNode(), elementType));
     }
 
     @ParameterizedTest(name = "thread group accepts {0}")
@@ -193,5 +201,12 @@ class JMeterElementManagerCompatibilityTest {
 
         JMeterTreeNode listener = node(new ResultCollector(), ViewResultsFullVisualizer.class);
         assertFalse(JMeterElementManager.isNodeCompatible(listener, "responseassert"));
+    }
+
+    @ParameterizedTest(name = "include controller rejects {0}")
+    @ValueSource(strings = {"httpsampler", "loopcontroller", "constanttimer", "responseassert"})
+    void includeControllerRejectsChildren(String elementType) {
+        JMeterTreeNode includeController = node(new IncludeController(), IncludeControllerGui.class);
+        assertFalse(JMeterElementManager.isNodeCompatible(includeController, elementType));
     }
 }
