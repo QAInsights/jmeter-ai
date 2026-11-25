@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -237,6 +238,38 @@ class AgentLoopTest {
 
         assertTrue(result.isCompleted());
         assertEquals("<jmeterTestPlan>", result.getFinalText());
+        assertTrue(model.followUps.isEmpty());
+    }
+
+    @Test
+    void run_declinedImportDoesNotTriggerFollowUp() {
+        boolean[] executed = {false};
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new Tool() {
+            @Override
+            public ToolSpec getSpec() {
+                return ToolSpec.builder("import_plan_content").description("Imports a plan").build();
+            }
+
+            @Override
+            public ToolResult execute(Map<String, Object> arguments) {
+                executed[0] = true;
+                return ToolResult.ok("imported");
+            }
+        });
+        ToolExecutor executor = new ToolExecutor(registry, Set.of("import_plan_content"),
+                (toolName, arguments) -> false);
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("import-1", "import_plan_content"));
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executor, 5).run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(RAW_JMX, result.getFinalText());
+        assertFalse(executed[0]);
+        assertTrue(model.received.get(0).get(0).isError());
+        assertTrue(model.received.get(0).get(0).getContent().contains(ToolExecutor.ERR_DECLINED));
         assertTrue(model.followUps.isEmpty());
     }
 

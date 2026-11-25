@@ -173,6 +173,7 @@ public final class AgentLoop {
         String latestTreeSnapshot = null;
         boolean planChanged = false;
         boolean nudged = false;
+        boolean userDeclinedTool = false;
 
         AssistantTurn turn = model.start(userMessage);
         forwardReasoning(reasoningSink);
@@ -180,7 +181,8 @@ public final class AgentLoop {
 
         while (true) {
             if (!turn.hasToolCalls()) {
-                if (!nudged && !planChanged && turn.getText().contains("<jmeterTestPlan")
+                if (!nudged && !planChanged && !userDeclinedTool
+                        && turn.getText().contains("<jmeterTestPlan")
                         && turn.getText().contains("</jmeterTestPlan>")
                         && !stopped() && iterations < maxIterations) {
                     AssistantTurn followUp = model.followUp(RAW_JMX_NUDGE);
@@ -212,6 +214,9 @@ public final class AgentLoop {
                 toolSink.accept(call);
                 sink.accept("\u2192 " + call.getName() + " " + call.getArguments());
                 ToolResult result = executor.execute(call.getName(), call.getArguments());
+                if (ToolExecutor.ERR_DECLINED.equals(result.getErrorCode())) {
+                    userDeclinedTool = true;
+                }
                 if (stopped()) {
                     return AgentResult.exhausted(turn.getText(), iterations);
                 }
