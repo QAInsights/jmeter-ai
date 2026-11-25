@@ -457,6 +457,10 @@ public class JMeterElementManager {
                 log.error("Unknown element type: {}", elementType);
                 return false;
             }
+            if (!isNodeCompatible(currentNode, elementType)) {
+                log.error("Current node is not compatible with element type: {}", elementType);
+                return false;
+            }
             log.info("Attempting to create element of type: {} with model class: {} and GUI class: {}", normalizedType,
                     classInfo.modelClassName, classInfo.guiClassName);
 
@@ -489,12 +493,6 @@ public class JMeterElementManager {
                 }
 
                 log.info("Adding element to node: {}", currentNode.getName());
-
-                // Check if the current node is compatible with the element type
-                if (!isNodeCompatible(currentNode, elementType)) {
-                    log.error("Current node is not compatible with element type: {}", elementType);
-                    return false;
-                }
 
                 log.info("Adding element to node: {}", currentNode.getName());
 

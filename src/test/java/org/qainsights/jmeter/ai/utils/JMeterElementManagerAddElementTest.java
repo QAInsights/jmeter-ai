@@ -470,6 +470,19 @@ class JMeterElementManagerAddElementTest {
     }
 
     @Test
+    void addElementRejectsIncompatiblePlacementBeforeCreatingElement() throws Exception {
+        TestPlan plan = new TestPlan();
+        plan.setProperty(TestElement.GUI_CLASS, TestPlanGui.class.getName());
+        Gui g = new Gui(new JMeterTreeNode(plan, null));
+        try (MockedStatic<GuiPackage> gui = mockStatic(GuiPackage.class)) {
+            gui.when(GuiPackage::getInstance).thenReturn(g.guiPackage);
+
+            assertFalse(JMeterElementManager.addElement("httpsampler", "Nested"));
+            verify(g.guiPackage, never()).createTestElement(any(), any());
+        }
+    }
+
+    @Test
     void addElementReturnsFalseWhenPlacementIsIncompatible() throws Exception {
         Gui g = new Gui(samplerNode());
         try (MockedStatic<GuiPackage> gui = mockStatic(GuiPackage.class)) {
