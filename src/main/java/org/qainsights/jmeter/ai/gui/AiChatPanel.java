@@ -393,23 +393,32 @@ public class AiChatPanel
     private void refreshContextStats() {
         runOnEdt(() -> {
             UsageStats.Snapshot snapshot = usageStats.snapshot();
+            String model = modelSelectorPanel.getSelectedModel();
             long contextTokens;
             boolean estimated;
             if (snapshot.calls() > 0 && snapshot.lastInputTokens() > 0) {
                 contextTokens = snapshot.lastInputTokens();
                 estimated = false;
             } else {
-                contextTokens = ContextEstimator.estimateTokens(
-                        resolveAttachmentMarkers(conversationTracker.historyCopy()));
+                List<String> history = resolveAttachmentMarkers(conversationTracker.historyCopy());
+                if (isCliSubscriptionModel(model)) {
+                    history = CliSubscriptionAiService.historyForPrompt(history);
+                }
+                contextTokens = ContextEstimator.estimateTokens(history);
                 estimated = true;
             }
-            String model = modelSelectorPanel.getSelectedModel();
             long contextWindow = model == null ? 0 : ModelCapabilityCatalog.getInstance()
                     .capabilities(model)
                     .map(ModelCapabilityCatalog.CapabilityInfo::getContextWindow)
                     .orElse(0L);
             contextStatsLabel.showStats(contextTokens, estimated, contextWindow, snapshot);
         });
+    }
+
+    private static boolean isCliSubscriptionModel(String model) {
+        return model != null && (model.startsWith(CodexCliProvider.MODEL_PREFIX)
+                || model.startsWith(ClaudeCodeCliProvider.MODEL_PREFIX)
+                || model.startsWith(OpenCodeCliProvider.MODEL_PREFIX));
     }
 
     /**
