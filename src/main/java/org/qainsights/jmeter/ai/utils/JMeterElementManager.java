@@ -386,43 +386,6 @@ public class JMeterElementManager {
     }
 
     /**
-     * A generic method to create a test element using its class and GUI class
-     *
-     * @param elementClass The class of the test element
-     * @param guiClass     The GUI class of the test element
-     * @return The created test element
-     */
-    private static <T extends TestElement> T createTestElement(Class<T> elementClass,
-                                                               Class<? extends JMeterGUIComponent> guiClass) {
-        try {
-            log.info("Creating test element of class: {} with GUI class: {}", elementClass.getName(),
-                    guiClass.getName());
-
-            // Create the element instance
-            T element = elementClass.getDeclaredConstructor().newInstance();
-            if (element == null) {
-                log.error("Failed to instantiate element of class: {}", elementClass.getName());
-                throw new RuntimeException("Failed to instantiate element");
-            }
-            // Set the required properties
-            element.setProperty(TestElement.TEST_CLASS, elementClass.getName());
-            element.setProperty(TestElement.GUI_CLASS, guiClass.getName());
-
-            // For thread groups, ensure they have a proper name to avoid NPE
-            if (element.getClass().getSimpleName().contains("ThreadGroup")) {
-                element.setName("Thread Group");
-            }
-
-            log.info("Successfully created element: {}", element.getClass().getSimpleName());
-            return element;
-        } catch (Exception e) {
-            log.error("Failed to create test element of class: {} with GUI class: {}",
-                    elementClass.getName(), guiClass.getName(), e);
-            throw new RuntimeException("Failed to create test element: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * Gives a freshly created Thread Group the same defaults JMeter's own "Add" action
      * gives it: a Loop Controller (1 loop), 1 thread and a 1-second ramp-up. Without the
      * latter two, {@code ThreadGroup.num_threads}/{@code ramp_time} are left unset, which
@@ -496,7 +459,9 @@ public class JMeterElementManager {
                 Class<?> elementClass = Class.forName(classInfo.modelClassName);
                 Class<? extends JMeterGUIComponent> guiClass = Class.forName(classInfo.guiClassName)
                         .asSubclass(JMeterGUIComponent.class);
-                TestElement newElement = createTestElement(elementClass.asSubclass(TestElement.class), guiClass);
+                TestElement newElement = guiPackage.createTestElement(guiClass, elementClass);
+                newElement.setProperty(TestElement.TEST_CLASS, elementClass.getName());
+                newElement.setProperty(TestElement.GUI_CLASS, guiClass.getName());
 
                 // Special handling for Thread Group to ensure it has a controller
                 // This is necessary because JMeter requires a loop controller for Thread Groups

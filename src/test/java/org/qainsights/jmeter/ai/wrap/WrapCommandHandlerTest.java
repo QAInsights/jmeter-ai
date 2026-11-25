@@ -188,6 +188,10 @@ class WrapCommandHandlerTest {
             when(gui.getTreeListener()).thenReturn(treeListener);
             when(gui.getGui(any(TestElement.class))).thenReturn(mock(JMeterGUIComponent.class));
             when(gui.getMainFrame()).thenReturn(mock(MainFrame.class));
+            when(gui.createTestElement(any(), any())).thenAnswer(invocation -> {
+                Class<?> modelClass = invocation.getArgument(1);
+                return (TestElement) modelClass.getDeclaredConstructor().newInstance();
+            });
             when(treeListener.getCurrentNode()).thenReturn(threadGroupNode);
         }
 
