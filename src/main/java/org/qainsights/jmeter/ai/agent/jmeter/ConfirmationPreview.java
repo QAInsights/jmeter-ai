@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import java.util.Map;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 
@@ -74,6 +76,8 @@ public final class ConfirmationPreview {
                 return describeMove(args, root);
             case OpenPlanHandler.OPEN_PLAN:
                 return describeOpenPlan(args);
+            case ImportPlanContentHandler.IMPORT_PLAN_CONTENT:
+                return describeImportPlanContent(args);
             case ApplyCorrelationHandler.APPLY_CORRELATION:
                 return describeCorrelation(args);
             default:
@@ -154,6 +158,22 @@ public final class ConfirmationPreview {
                 : "no - fails if the current plan is dirty"));
         return new Preview("Open '" + (file != null ? file.getName() : orUnknown(path))
                 + "', replacing the current plan?", rows,
+                "The current plan will be replaced. Unsaved changes are lost unless you saved first.",
+                Level.WARN);
+    }
+
+    private Preview describeImportPlanContent(Map<String, Object> args) {
+        String content = str(args.get("jmx_content"));
+        long contentBytes = content == null ? 0 : content.getBytes(StandardCharsets.UTF_8).length;
+        boolean force = Boolean.parseBoolean(str(args.get("force")));
+        List<Row> rows = new ArrayList<>();
+        rows.add(new Row("Content", formatSize(contentBytes)));
+        rows.add(new Row("Force flag", force
+                ? "yes - replace even with unsaved changes"
+                : "no - fails if the current plan is dirty"));
+        rows.add(new Row("Replaces",
+                "the entire current test plan; the imported plan is unsaved until save_plan"));
+        return new Preview("Import provided JMX, replacing the current plan?", rows,
                 "The current plan will be replaced. Unsaved changes are lost unless you saved first.",
                 Level.WARN);
     }

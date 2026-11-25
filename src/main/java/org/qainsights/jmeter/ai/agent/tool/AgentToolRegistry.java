@@ -8,6 +8,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.FindCorrelationCandidatesHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.GetTestResultsHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
@@ -66,6 +67,7 @@ public final class AgentToolRegistry {
         registry.register(new GetTestResultsHandler(triageNotice, testResults).tool());
         registry.register(new SavePlanHandler().tool());
         registry.register(new OpenPlanHandler().tool());
+        registry.register(new ImportPlanContentHandler().tool());
         registry.register(new FindCorrelationCandidatesHandler().tool());
         registry.register(new ApplyCorrelationHandler().tool());
         return registry;

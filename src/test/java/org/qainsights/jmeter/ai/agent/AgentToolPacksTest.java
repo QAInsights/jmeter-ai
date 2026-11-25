@@ -9,6 +9,7 @@ import org.qainsights.jmeter.ai.agent.tool.ToolRegistry;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.GetTestResultsHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 
@@ -31,12 +32,16 @@ class AgentToolPacksTest {
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.INSPECT_EXPLAIN).containsAll(READ_TOOLS));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.EDIT_TEST_PLAN)
                 .contains(DeleteElementHandler.DELETE_ELEMENT));
+        assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.EDIT_TEST_PLAN)
+                .contains(ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.RUN_DIAGNOSE)
                 .contains(GetTestResultsHandler.GET_TEST_RESULTS));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.CORRELATE)
                 .contains(ApplyCorrelationHandler.APPLY_CORRELATION));
         assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.PLAN_FILES)
                 .contains(OpenPlanHandler.OPEN_PLAN));
+        assertTrue(AgentToolPacks.toolNames(AgentRequestRouter.Route.PLAN_FILES)
+                .contains(ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
         for (AgentRequestRouter.Route route : List.of(
                 AgentRequestRouter.Route.INSPECT_EXPLAIN,
                 AgentRequestRouter.Route.EDIT_TEST_PLAN,

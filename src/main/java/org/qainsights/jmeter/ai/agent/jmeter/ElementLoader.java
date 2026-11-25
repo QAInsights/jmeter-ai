@@ -18,10 +18,10 @@ import org.apache.jorphan.collections.HashTree;
  * {@link SaveService#loadTree} plus {@link Load#insertLoadedTree} that
  * JMeter's own Open action uses under the hood (minus the
  * {@code JFileChooser} dialog and the "save first?" prompt, since the agent
- * supplies the path directly and unsaved-changes handling is the
- * {@code open_plan} tool's own {@code force} guard). Kept behind an
- * interface so the {@code open_plan} tool logic can be unit-tested without a
- * running JMeter GUI.
+ * supplies the path directly and unsaved-changes handling is guarded by the
+ * {@code open_plan}/{@code import_plan_content} tools' {@code force} flag). Kept behind an
+ * interface so the {@code open_plan} and {@code import_plan_content} tool logic
+ * can be unit-tested without a running JMeter GUI.
  */
 @FunctionalInterface
 public interface ElementLoader {
@@ -39,6 +39,13 @@ public interface ElementLoader {
     boolean load(File file) throws IOException, IllegalUserActionException;
 
     /**
+     * Loads {@code file} without associating it with the live test plan.
+     */
+    default boolean loadUntitled(File file) throws IOException, IllegalUserActionException {
+        return load(file);
+    }
+
+    /**
      * Checks that the file can be configured by JMeter before a caller replaces
      * the live plan. Test loaders may keep the default no-op implementation.
      */
@@ -51,7 +58,8 @@ public interface ElementLoader {
      * directly - not through the GUI action's file-chooser layer) to clear
      * and replace the current tree, exactly as JMeter's own Open menu item
      * does - performed on the EDT, since it mutates live Swing tree-model
-     * state.
+     * state. Untitled imports do not associate the temporary file with the
+     * plan and leave it dirty.
      */
     static ElementLoader live() {
         EdtExecutor edt = EdtExecutor.swing();
@@ -63,6 +71,15 @@ public interface ElementLoader {
 
             @Override
             public boolean load(File file) throws IOException, IllegalUserActionException {
+                return load(file, false);
+            }
+
+            @Override
+            public boolean loadUntitled(File file) throws IOException, IllegalUserActionException {
+                return load(file, true);
+            }
+
+            private boolean load(File file, boolean untitled) throws IOException, IllegalUserActionException {
                 GuiPackage gui = GuiPackage.getInstance();
                 if (gui == null) {
                     return false;
@@ -74,12 +91,19 @@ public interface ElementLoader {
                     try {
                         HashTree tree = SaveService.loadTree(file);
                         HttpDefaultsSupport.validateTree(tree);
-                        FileServer.getFileServer().setBaseForScript(file);
-                        boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
-                        if (isTestPlan) {
-                            gui.setTestPlanFile(file.getAbsolutePath());
+                        if (!untitled) {
+                            FileServer.getFileServer().setBaseForScript(file);
                         }
-                        gui.setDirty(false);
+                        boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                        if (untitled) {
+                            gui.setTestPlanFile(null);
+                            gui.setDirty(true);
+                        } else if (isTestPlan) {
+                            gui.setTestPlanFile(file.getAbsolutePath());
+                            gui.setDirty(false);
+                        } else {
+                            gui.setDirty(false);
+                        }
                         loaded.set(true);
                     } catch (IOException e) {
                         ioError.set(e);

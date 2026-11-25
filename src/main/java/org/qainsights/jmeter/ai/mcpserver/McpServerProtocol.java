@@ -51,7 +51,8 @@ public final class McpServerProtocol {
             + "user's JMeter GUI. Call get_tree_state first: every element_id is a tree path taken from it, and "
             + "ids change after renames, moves and deletes, so read the tree again after structural edits. "
             + "Use get_element_schema before add_element or update_element_property to learn valid property keys. "
-            + "delete_element, move_element, open_plan and apply_correlation may wait for the user to approve a "
+            + "delete_element, move_element, open_plan, import_plan_content "
+            + "and apply_correlation may wait for the user to approve a "
             + "dialog in JMeter; if a call is declined, do not retry it. get_test_results runs the plan and "
             + "blocks until it finishes. Edits are not written to disk until save_plan is called.";
 

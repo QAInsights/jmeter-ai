@@ -42,6 +42,8 @@ class McpServerProtocolTest {
         assertEquals("feather-wand", result.path("serverInfo").path("name").asText());
         assertEquals("9.9.9", result.path("serverInfo").path("version").asText());
         assertTrue(result.path("instructions").asText().contains("get_tree_state"));
+        assertTrue(result.path("instructions").asText()
+                .contains("open_plan, import_plan_content and apply_correlation"));
     }
 
     @Test

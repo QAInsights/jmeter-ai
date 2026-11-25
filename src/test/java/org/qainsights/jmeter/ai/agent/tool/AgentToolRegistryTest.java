@@ -1,12 +1,14 @@
 package org.qainsights.jmeter.ai.agent.tool;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.FindCorrelationCandidatesHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.GetTestResultsHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
@@ -47,8 +49,10 @@ class AgentToolRegistryTest {
         assertTrue(registry.isRegistered(GetTestResultsHandler.GET_TEST_RESULTS));
         assertTrue(registry.isRegistered(SavePlanHandler.SAVE_PLAN));
         assertTrue(registry.isRegistered(OpenPlanHandler.OPEN_PLAN));
+        assertTrue(registry.isRegistered(ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
         assertTrue(registry.isRegistered(FindCorrelationCandidatesHandler.FIND_CORRELATION_CANDIDATES));
         assertTrue(registry.isRegistered(ApplyCorrelationHandler.APPLY_CORRELATION));
-        assertTrue(registry.size() >= 21);
+        assertTrue(JMeterAgent.destructiveTools().contains(ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
+        assertTrue(registry.size() >= 22);
     }
 }

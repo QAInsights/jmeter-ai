@@ -31,6 +31,8 @@ public final class AgentSystemPrompt {
                 + "8. If a tool returns an error, read the message and self-correct; do not repeat the same failing call.\n"
                 + "9. The plan only changes through tools. Never reply with raw JMX/XML or a pasted test plan in place of\n"
                 + "   tool calls; if something cannot be done with the available tools, say so plainly.\n"
+                + "   To create a whole new plan, you may pass one complete JMX document to "
+                + "import_plan_content instead of many add_element calls; it replaces the current plan.\n"
                 + "10. Before finishing a request that built or changed the plan, call get_tree_state and confirm the\n"
                 + "    requested elements are present, and call get_element_config on each element whose settings you\n"
                 + "    changed to confirm the values; fix anything missing or wrong before you reply.\n"

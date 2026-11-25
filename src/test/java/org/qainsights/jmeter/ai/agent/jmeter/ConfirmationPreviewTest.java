@@ -1,5 +1,6 @@
 package org.qainsights.jmeter.ai.agent.jmeter;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.qainsights.jmeter.ai.agent.jmeter.ConfirmationPreview.Preview;
 import org.qainsights.jmeter.ai.agent.jmeter.ConfirmationPreview.Row;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -119,6 +121,7 @@ class ConfirmationPreviewTest {
     void nullArgsAreTolerated() {
         assertDoesNotThrow(() -> preview.describe("delete_element", null, wrapperRoot));
         assertDoesNotThrow(() -> preview.describe("open_plan", null, wrapperRoot));
+        assertDoesNotThrow(() -> preview.describe(ImportPlanContentHandler.IMPORT_PLAN_CONTENT, null, wrapperRoot));
         assertDoesNotThrow(() -> preview.describe("apply_correlation", null, wrapperRoot));
         assertDoesNotThrow(() -> preview.describe("move_element", null, wrapperRoot));
     }
@@ -179,6 +182,19 @@ class ConfirmationPreviewTest {
         Preview p = preview.describe("open_plan",
                 args("file_path", tempDir.resolve("nope.jmx").toString()), wrapperRoot);
         assertEquals("unknown", rowValue(p, "Size"));
+    }
+
+    @Test
+    void importPlanContentShowsSizeForceAndReplacementDetails() {
+        String content = "<jmeterTestPlan>é</jmeterTestPlan>";
+        Preview p = preview.describe(ImportPlanContentHandler.IMPORT_PLAN_CONTENT,
+                args("jmx_content", content, "force", true), wrapperRoot);
+
+        assertEquals(content.getBytes(StandardCharsets.UTF_8).length + " B", rowValue(p, "Content"));
+        assertTrue(rowValue(p, "Force flag").startsWith("yes"));
+        assertEquals("the entire current test plan; the imported plan is unsaved until save_plan",
+                rowValue(p, "Replaces"));
+        assertEquals(ConfirmationPreview.Level.WARN, p.level());
     }
 
     // --- apply_correlation ---------------------------------------------------
