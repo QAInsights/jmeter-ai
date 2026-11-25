@@ -4,8 +4,10 @@ import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.assertions.gui.AssertionGui;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.config.gui.ArgumentsPanel;
+import org.apache.jmeter.control.IncludeController;
 import org.apache.jmeter.control.GenericController;
 import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.control.gui.IncludeControllerGui;
 import org.apache.jmeter.control.gui.LogicControllerGui;
 import org.apache.jmeter.control.gui.LoopControlPanel;
 import org.apache.jmeter.control.gui.TestPlanGui;
@@ -199,5 +201,12 @@ class JMeterElementManagerCompatibilityTest {
 
         JMeterTreeNode listener = node(new ResultCollector(), ViewResultsFullVisualizer.class);
         assertFalse(JMeterElementManager.isNodeCompatible(listener, "responseassert"));
+    }
+
+    @ParameterizedTest(name = "include controller rejects {0}")
+    @ValueSource(strings = {"httpsampler", "loopcontroller", "constanttimer", "responseassert"})
+    void includeControllerRejectsChildren(String elementType) {
+        JMeterTreeNode includeController = node(new IncludeController(), IncludeControllerGui.class);
+        assertFalse(JMeterElementManager.isNodeCompatible(includeController, elementType));
     }
 }

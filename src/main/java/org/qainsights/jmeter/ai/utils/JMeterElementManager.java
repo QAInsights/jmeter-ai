@@ -4,6 +4,7 @@ import org.apache.jmeter.gui.GuiPackage;
 import org.apache.jmeter.gui.JMeterGUIComponent;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.control.Controller;
+import org.apache.jmeter.control.IncludeController;
 import org.apache.jmeter.control.TestFragmentController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.samplers.Sampler;
@@ -878,6 +879,8 @@ public class JMeterElementManager {
             // element, listener
             return isAddingAssertion || isAddingTimer || isAddingPreProcessor || isAddingPostProcessor
                     || isAddingConfigElement || isAddingListener;
+        } else if (currentNode.getTestElement() instanceof IncludeController) {
+            return false;
         } else if (isController) {
             // Controllers can have all types of elements except test plan and thread group
             return !isAddingTestPlan && !isAddingThreadGroup;
