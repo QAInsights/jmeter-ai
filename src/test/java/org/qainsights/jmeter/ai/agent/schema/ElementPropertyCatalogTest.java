@@ -27,6 +27,12 @@ class ElementPropertyCatalogTest {
     }
 
     @Test
+    void threadGroupRampTimeDescribesStartingAllThreadsAtOnce() {
+        ElementPropertyCatalog.Property rampTime = findProperty("ThreadGroup", "ThreadGroup.ramp_time");
+        assertTrue(rampTime.getDescription().contains("Use 0 to start all threads at once"));
+    }
+
+    @Test
     void propertiesFor_unknownOrNull_isEmpty() {
         assertTrue(ElementPropertyCatalog.propertiesFor("NotARealType").isEmpty());
         assertTrue(ElementPropertyCatalog.propertiesFor(null).isEmpty());

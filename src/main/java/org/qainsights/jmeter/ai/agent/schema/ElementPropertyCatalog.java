@@ -227,7 +227,9 @@ public final class ElementPropertyCatalog {
 
         put(map, "ThreadGroup",
                 p("ThreadGroup.num_threads", "int", "Number of virtual users (threads)."),
-                p("ThreadGroup.ramp_time", "int", "Ramp-up period in seconds."),
+                p("ThreadGroup.ramp_time", "int", "Ramp-up period in seconds: time to start all threads "
+                        + "(about ramp_time/num_threads between starts). Use 0 to start all threads at once, "
+                        + "e.g. when users must run concurrently. Defaults to 1."),
                 p("ThreadGroup.scheduler", "bool", "Enable the scheduler (needed for duration/delay)."),
                 p("ThreadGroup.duration", "int", "Run duration in seconds (scheduler must be true)."),
                 p("ThreadGroup.delay", "int", "Startup delay in seconds (scheduler must be true)."),
