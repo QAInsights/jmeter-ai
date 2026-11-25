@@ -52,10 +52,11 @@ public final class AgentLoop {
             SetStructuredPropertyListHandler.SET_STRUCTURED_PROPERTY_LIST,
             ToggleElementHandler.TOGGLE_ELEMENT,
             UpdateElementPropertyHandler.UPDATE_ELEMENT_PROPERTY);
-    static final String RAW_JMX_NUDGE = "Your reply contains a raw JMX test plan, but nothing in the live JMeter test plan "
-            + "was changed. If the user asked you to build or change the plan, load it now with import_plan_content "
-            + "(pass the complete JMX document as jmx_content) or build it with the element tools, then verify it as "
-            + "usual before replying. If the user only wanted to see the JMX text, repeat your previous answer unchanged.";
+    static final String RAW_JMX_NUDGE = "Your reply contains a raw JMX test plan, but nothing in the live JMeter test "
+            + "plan was changed. If the user asked you to build or change the plan, apply it now with tools: use the "
+            + "element tools to change the current plan, or, to create a whole new plan, pass the complete JMX document "
+            + "to import_plan_content as jmx_content. Then verify it as usual before replying. If the user only wanted "
+            + "to see the JMX text, repeat your previous answer unchanged.";
 
     /** Outcome of a full run. */
     public static final class AgentResult {
