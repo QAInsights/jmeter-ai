@@ -7,6 +7,7 @@ import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +95,12 @@ public final class TokenUsageTracker {
     private void recordTurn(RequestSize request, Counts counts, Class<? extends Throwable> failure) {
         turns.add(new Turn(request, counts, failure != null));
         totals = totals.plusReported(counts);
+        Long prompt = counts.prompt();
+        long input = prompt == null ? 0 : prompt;
+        long output = counts.output() == null ? 0 : counts.output();
+        if (input > 0 || output > 0) {
+            Telemetry.recordTokenUsage(input, output);
+        }
         if (failure != null) {
             log.info("Agent token usage [{}] turn {}: call failed: {} | run total: prompt={} completion={} total={}",
                     provider, turns(), failure.getName(), promptTokens(), completionTokens(), totalTokens());
@@ -102,7 +109,6 @@ public final class TokenUsageTracker {
             log.info("Agent token usage [{}] turn {}: not reported by provider | run total: prompt={} completion={} total={} ({} turn(s) unreported)",
                     provider, turns(), promptTokens(), completionTokens(), totalTokens(), unreportedTurns);
         } else {
-            Long prompt = counts.prompt();
             Long completion = counts.output();
             log.info("Agent token usage [{}] turn {}: prompt={} completion={} | run total: prompt={} completion={} total={}",
                     provider, turns(), prompt == null ? "-" : prompt, completion == null ? "-" : completion,

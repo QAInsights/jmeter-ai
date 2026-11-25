@@ -30,6 +30,8 @@ class TelemetryTest {
 
     private TelemetryCounters counters;
     private TelemetryCounters previous;
+    private TelemetryTokenCounters tokenCounters;
+    private TelemetryTokenCounters previousTokenCounters;
 
     @org.junit.jupiter.api.io.TempDir
     java.nio.file.Path stateDir;
@@ -101,11 +103,14 @@ class TelemetryTest {
     void setUp() {
         counters = new TelemetryCounters();
         previous = Telemetry.swapCountersForTesting(counters);
+        tokenCounters = new TelemetryTokenCounters();
+        previousTokenCounters = Telemetry.swapTokenCountersForTesting(tokenCounters);
     }
 
     @AfterEach
     void tearDown() {
         Telemetry.swapCountersForTesting(previous);
+        Telemetry.swapTokenCountersForTesting(previousTokenCounters);
     }
 
     @Test
@@ -113,6 +118,16 @@ class TelemetryTest {
         for (TelemetryFeature feature : TelemetryFeature.values()) {
             assertTrue(KEY.matcher(feature.wireName()).matches(), feature.name() + ": " + feature.wireName());
         }
+    }
+
+    @Test
+    void tokenUsageAccumulatesWithoutFeatureCounters() {
+        Telemetry.recordTokenUsage(1000, 200);
+        Telemetry.recordTokenUsage(500, 100);
+
+        assertEquals(1500, tokenCounters.snapshot().inputTokens());
+        assertEquals(300, tokenCounters.snapshot().outputTokens());
+        assertTrue(counters.snapshot().isEmpty());
     }
 
     @Test

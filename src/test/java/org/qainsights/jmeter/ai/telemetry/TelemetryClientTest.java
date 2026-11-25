@@ -34,6 +34,7 @@ class TelemetryClientTest {
 
     private TelemetryState state;
     private TelemetryCounters counters;
+    private TelemetryTokenCounters tokenCounters;
     private List<String> sent;
     private boolean sendResult = true;
 
@@ -50,6 +51,7 @@ class TelemetryClientTest {
         props.remove(TelemetryConfig.ENABLED_PROPERTY);
         state = TelemetryState.load(dir);
         counters = new TelemetryCounters();
+        tokenCounters = new TelemetryTokenCounters();
         sent = new ArrayList<>();
         sendResult = true;
     }
@@ -59,7 +61,7 @@ class TelemetryClientTest {
             sent.add(json);
             return sendResult;
         };
-        return new TelemetryClient(new TelemetryConfig(k -> null), state, counters, sender, clock);
+        return new TelemetryClient(new TelemetryConfig(k -> null), state, counters, tokenCounters, sender, clock);
     }
 
     private static Clock clockAt(String day) {
@@ -139,7 +141,7 @@ class TelemetryClientTest {
         JsonNode p = MAPPER.readTree(sent.get(0));
         assertEquals(Set.of("installId", "event", "pluginVersion", "jmeterVersion",
                         "javaVersion", "os", "arch", "provider", "judgmentProvider", "model",
-                        "agentEnabled", "firstRun", "features"),
+                        "agentEnabled", "firstRun", "inputTokens", "outputTokens", "features"),
                 fieldSet(p));
         assertEquals(state.getInstallId(), p.get("installId").asText());
         assertEquals("daily", p.get("event").asText());
@@ -154,7 +156,7 @@ class TelemetryClientTest {
         JsonNode p = MAPPER.readTree(sent.get(0));
         assertEquals("none", p.get("judgmentProvider").asText());
         String model = p.get("model").asText();
-        assertTrue(model.length() <= 64 && model.matches("[a-z0-9.:-]+"), model);
+        assertTrue(model.length() <= 64 && model.matches("[a-z0-9.:/-]+"), model);
     }
 
     @Test
@@ -197,14 +199,14 @@ class TelemetryClientTest {
             pending.put("f" + String.format(Locale.ROOT, "%02d", i) + "_" + "x".repeat(36), i + 1);
         }
         counters.loadPending(pending);
-        TelemetryClient client = new TelemetryClient(new TelemetryConfig(k -> null), state, counters,
+        TelemetryClient client = new TelemetryClient(new TelemetryConfig(k -> null), state, counters, tokenCounters,
                 json -> {
                     sent.add(json);
                     return true;
                 }, clockAt("2026-01-05")) {
             @Override
-            String buildPayload(Map<String, Integer> features) {
-                return super.buildPayload(features) + " ".repeat(4000);
+            String buildPayload(Map<String, Integer> features, TelemetryTokenCounters.Snapshot tokens) {
+                return super.buildPayload(features, tokens) + " ".repeat(4000);
             }
         };
 
@@ -220,6 +222,64 @@ class TelemetryClientTest {
         assertTrue(sentFeatures.has(mostUsed));
         assertEquals(1, counters.snapshot().get(leastUsed));
         assertFalse(counters.snapshot().containsKey(mostUsed));
+    }
+
+    @Test
+    void tokenTotalsAreSentAndSubtractedAfterSuccess() throws Exception {
+        tokenCounters.add(1200, 300);
+        client(clockAt("2026-01-05")).tick();
+
+        JsonNode p = MAPPER.readTree(sent.get(0));
+        assertEquals(1200, p.get("inputTokens").asLong());
+        assertEquals(300, p.get("outputTokens").asLong());
+        assertEquals(0, tokenCounters.snapshot().inputTokens());
+        assertEquals(0, tokenCounters.snapshot().outputTokens());
+
+        TelemetryState reloaded = TelemetryState.load(dir);
+        assertEquals(0, reloaded.getPendingInputTokens());
+        assertEquals(0, reloaded.getPendingOutputTokens());
+    }
+
+    @Test
+    void tokenUsageAboveThePerPingLimitStaysPending() throws Exception {
+        tokenCounters.add(1_500_000_000L, 100);
+        client(clockAt("2026-01-05")).tick();
+
+        JsonNode p = MAPPER.readTree(sent.get(0));
+        assertEquals(1_000_000_000L, p.get("inputTokens").asLong());
+        assertEquals(100, p.get("outputTokens").asLong());
+        assertEquals(500_000_000L, tokenCounters.snapshot().inputTokens());
+        assertEquals(0, tokenCounters.snapshot().outputTokens());
+        assertEquals(500_000_000L, state.getPendingInputTokens());
+        assertEquals(0, state.getPendingOutputTokens());
+    }
+
+    @Test
+    void failedSendKeepsTokenTotalsPending() throws Exception {
+        tokenCounters.add(700, 100);
+        sendResult = false;
+        client(clockAt("2026-01-05")).tick();
+
+        assertEquals(700, tokenCounters.snapshot().inputTokens());
+        assertEquals(100, tokenCounters.snapshot().outputTokens());
+    }
+
+    @Test
+    void tokenUsageRecordedDuringSendStaysPending() {
+        tokenCounters.add(700, 100);
+        TelemetryClient client = new TelemetryClient(new TelemetryConfig(k -> null), state, counters, tokenCounters,
+                json -> {
+                    sent.add(json);
+                    tokenCounters.add(50, 10);
+                    return true;
+                }, clockAt("2026-01-05"));
+
+        client.tick();
+
+        assertEquals(50, tokenCounters.snapshot().inputTokens());
+        assertEquals(10, tokenCounters.snapshot().outputTokens());
+        assertEquals(50, state.getPendingInputTokens());
+        assertEquals(10, state.getPendingOutputTokens());
     }
 
     private static Set<String> fieldSet(JsonNode n) {

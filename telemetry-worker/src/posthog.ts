@@ -12,6 +12,8 @@ export interface PingRecord {
 	provider?: string;
 	judgmentProvider?: string;
 	model?: string;
+	inputTokens?: number;
+	outputTokens?: number;
 	agentEnabled?: boolean;
 	firstRun?: boolean;
 }
@@ -81,6 +83,8 @@ export async function posthogEvents(
 		provider: ping.provider,
 		judgment_provider: ping.judgmentProvider,
 		model: ping.model,
+		input_tokens: ping.inputTokens,
+		output_tokens: ping.outputTokens,
 		agent_enabled: ping.agentEnabled,
 		first_run: ping.firstRun,
 		day: ping.day,

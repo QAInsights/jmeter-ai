@@ -21,6 +21,7 @@ public final class Telemetry {
     private static final AtomicBoolean STARTED = new AtomicBoolean();
 
     private static volatile TelemetryCounters counters;
+    private static volatile TelemetryTokenCounters tokenCounters;
     private static volatile TelemetryState state;
     private static volatile String lastSelectedModel;
     private static final Pattern KEY = Pattern.compile("[a-z0-9_]{1,40}");
@@ -70,18 +71,21 @@ public final class Telemetry {
             TelemetryState loaded = TelemetryState.load();
             TelemetryCounters loadedCounters = new TelemetryCounters();
             loadedCounters.loadPending(loaded.getPendingFeatures());
+            TelemetryTokenCounters loadedTokenCounters = new TelemetryTokenCounters();
+            loadedTokenCounters.loadPending(loaded.getPendingInputTokens(), loaded.getPendingOutputTokens());
             state = loaded;
             counters = loadedCounters;
+            tokenCounters = loadedTokenCounters;
 
             if (loaded.isNewInstall()) {
                 log.info("Feather Wand sends an anonymous daily usage ping "
                         + "(plugin/JMeter/Java version, OS, provider and well-known model name, provider counts per message, "
-                        + "setup test and save outcomes, Decisions call results, UI feature counts, Agent run-size buckets, "
-                        + "cancellation and error counts; no prompts, keys or test plan content). "
+                        + "aggregate input/output token counts, setup test and save outcomes, Decisions call results, "
+                        + "UI feature counts, Agent run-size buckets, cancellation and error counts; no prompts, keys or test plan content). "
                         + "Disable with jmeter.ai.telemetry.enabled=false or DO_NOT_TRACK=1.");
             }
 
-            TelemetryClient client = new TelemetryClient(config, loaded, loadedCounters,
+            TelemetryClient client = new TelemetryClient(config, loaded, loadedCounters, loadedTokenCounters,
                     new HttpTelemetrySender(config.endpoint(), TelemetryClient.pluginVersion()));
 
             ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -95,8 +99,13 @@ public final class Telemetry {
                 try {
                     TelemetryState s = state;
                     TelemetryCounters c = counters;
+                    TelemetryTokenCounters tokens = tokenCounters;
                     if (s != null && c != null) {
                         s.setPendingFeatures(c.snapshot());
+                        if (tokens != null) {
+                            TelemetryTokenCounters.Snapshot pending = tokens.snapshot();
+                            s.setPendingTokens(pending.inputTokens(), pending.outputTokens());
+                        }
                         s.save();
                     }
                 } catch (Throwable t) {
@@ -105,6 +114,18 @@ public final class Telemetry {
             }, "feather-wand-telemetry-shutdown"));
         } catch (Throwable t) {
             log.debug("Telemetry failed to start", t);
+        }
+    }
+
+    /** Adds provider-reported or locally estimated token usage to the aggregate daily ping counters. */
+    public static void recordTokenUsage(long inputTokens, long outputTokens) {
+        try {
+            TelemetryTokenCounters c = tokenCounters;
+            if (c != null) {
+                c.add(inputTokens, outputTokens);
+            }
+        } catch (Throwable t) {
+            // telemetry must never break the plugin
         }
     }
 
@@ -193,6 +214,13 @@ public final class Telemetry {
     static TelemetryCounters swapCountersForTesting(TelemetryCounters replacement) {
         TelemetryCounters previous = counters;
         counters = replacement;
+        return previous;
+    }
+
+    /** Swaps in the token counters that usage recording writes to, returning the previous ones. Tests only. */
+    static TelemetryTokenCounters swapTokenCountersForTesting(TelemetryTokenCounters replacement) {
+        TelemetryTokenCounters previous = tokenCounters;
+        tokenCounters = replacement;
         return previous;
     }
 

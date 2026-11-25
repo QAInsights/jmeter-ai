@@ -16,9 +16,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
 import org.qainsights.jmeter.ai.cli.CliAuthState;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
+import org.qainsights.jmeter.ai.service.usage.UsageStats;
 
 class CliSubscriptionAiServiceTest {
 
@@ -32,6 +34,27 @@ class CliSubscriptionAiServiceTest {
 
         assertEquals("request-model", provider.requestModel.get());
         assertEquals("selected-model", provider.getModel());
+    }
+
+    @Test
+    void providerReportedUsageFeedsSessionUsageStats() {
+        RecordingProvider provider = new RecordingProvider() {
+            @Override
+            public SubscriptionCliProvider.AgentReply executeForAgent(String prompt, String model) {
+                this.prompt.set(prompt);
+                requestModel.set(model);
+                return new SubscriptionCliProvider.AgentReply("ok", new Counts(10L, 3L, 2L, 5L, 1L));
+            }
+        };
+        TestService service = new TestService(provider);
+        UsageStats stats = new UsageStats();
+        service.setUsageStats(stats);
+
+        assertEquals("ok", service.generateResponse(List.of("hello"), "request-model"));
+
+        assertEquals(15, stats.snapshot().totalInput());
+        assertEquals(5, stats.snapshot().totalOutput());
+        assertEquals(0, stats.lastInputTokens());
     }
 
     @Test

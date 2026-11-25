@@ -1,6 +1,7 @@
 package org.qainsights.jmeter.ai.service.usage;
 
 import org.qainsights.jmeter.ai.service.reasoning.ModelCapabilityCatalog;
+import org.qainsights.jmeter.ai.telemetry.Telemetry;
 
 /**
  * Session-scoped token/cost accumulator for the chat panel's context-stats
@@ -42,13 +43,27 @@ public final class UsageStats {
      * count and muddy the label.
      */
     public synchronized void record(String model, long inputTokens, long outputTokens) {
+        record(model, inputTokens, outputTokens, true);
+    }
+
+    /**
+     * Records one user-visible response whose totals may span several provider
+     * requests. The sum is valid for session totals, but not as the context
+     * label's next-request size, so the latest input size is marked unknown.
+     */
+    public synchronized void recordMultiRequest(String model, long inputTokens, long outputTokens) {
+        record(model, inputTokens, outputTokens, false);
+    }
+
+    private void record(String model, long inputTokens, long outputTokens, boolean singleRequest) {
         if (inputTokens < 0 || outputTokens < 0 || (inputTokens == 0 && outputTokens == 0)) {
             return;
         }
         totalInput += inputTokens;
         totalOutput += outputTokens;
-        lastInputTokens = inputTokens;
+        lastInputTokens = singleRequest ? inputTokens : 0;
         calls++;
+        Telemetry.recordTokenUsage(inputTokens, outputTokens);
 
         var caps = ModelCapabilityCatalog.getInstance().capabilities(model);
         if (caps.isPresent() && caps.get().hasCost()) {

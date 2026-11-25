@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import org.qainsights.jmeter.ai.agent.loop.TokenUsageTracker.Counts;
 import org.qainsights.jmeter.ai.cli.CliProviderException;
 import org.qainsights.jmeter.ai.cli.SubscriptionCliProvider;
+import org.qainsights.jmeter.ai.service.usage.UsageStats;
 import org.qainsights.jmeter.ai.utils.AiConfig;
 import org.qainsights.jmeter.ai.utils.Constants;
 import org.slf4j.Logger;
@@ -30,9 +32,15 @@ public abstract class CliSubscriptionAiService implements AiService {
     public static final String MAX_HISTORY_KEY = "jmeter.ai.cli.max.history.size";
 
     private final SubscriptionCliProvider provider;
+    private volatile UsageStats usageStats;
 
     protected CliSubscriptionAiService(SubscriptionCliProvider provider) {
         this.provider = provider;
+    }
+
+    @Override
+    public void setUsageStats(UsageStats stats) {
+        this.usageStats = stats;
     }
 
     /** The underlying CLI provider (also used by the agent wiring and the UI). */
@@ -56,7 +64,25 @@ public abstract class CliSubscriptionAiService implements AiService {
 
     @Override
     public String generateResponse(List<String> conversation, String model) {
-        return provider.execute(buildPrompt(systemPrompt(), conversation, maxHistorySize()), requestModel(model));
+        String requestModel = requestModel(model);
+        SubscriptionCliProvider.AgentReply reply = provider.executeForAgent(
+                buildPrompt(systemPrompt(), conversation, maxHistorySize()), requestModel);
+        recordUsage(reply.usage(), requestModel);
+        return reply.text();
+    }
+
+    private void recordUsage(Counts counts, String requestModel) {
+        UsageStats stats = usageStats;
+        if (stats == null || counts == null) {
+            return;
+        }
+        long input = orZero(counts.fresh()) + orZero(counts.cacheRead()) + orZero(counts.cacheWrite());
+        long output = orZero(counts.output());
+        stats.recordMultiRequest(provider.modelPrefix() + (requestModel == null ? "" : requestModel), input, output);
+    }
+
+    private static long orZero(Long value) {
+        return value == null ? 0 : value;
     }
 
     @Override

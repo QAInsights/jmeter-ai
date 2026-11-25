@@ -1394,6 +1394,7 @@ Starting with v3.8.6, Feather Wand sends one small, anonymous usage ping per day
 | Agent mode enabled | `true` | |
 | Decisions backend | `openrouter:microsoft` | Which backend serves smart routing and failure triage: `none` (off, or its key is blank or a placeholder), `typesafe`, `openai`, `openrouter:` plus the model vendor (the part before `/`), or `ollama` (local embedding routing). |
 | Model | `gpt-4o-mini` | The chat-panel model of your latest Chat or Agent message, or the configured default model before you send one. Only well-known public model ids (GPT, o-series, Claude, Gemini, DeepSeek, Grok, Muse, Llama, Qwen, Mistral and similar) are sent as-is. Fine-tunes, gateway aliases and every other name are sent as `custom`. `unknown` means none is set. |
+| Token usage | `12500`, `2400` | Aggregate input and output tokens not yet acknowledged by an earlier ping; very large backlogs can be split across daily pings. Counts come from provider usage responses, or local estimates in some chat paths when a provider omits usage. Providers and Agent turns that do not report usage are omitted. They are not split by model. |
 | First run | `false` | `true` only on the first ping from a new install. |
 | Feature counts | `{"chat_message": 12, "agent_run": 3}` | How many times each feature was used since the last ping. |
 
@@ -1447,6 +1448,8 @@ A complete ping looks like this:
   "model": "gpt-4o-mini",
   "agentEnabled": true,
   "firstRun": false,
+  "inputTokens": 12500,
+  "outputTokens": 2400,
   "features": { "chat_message": 12, "agent_run": 3, "outcome_completed": 3, "tool_add_element": 5 }
 }
 ```

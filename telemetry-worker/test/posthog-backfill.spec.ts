@@ -7,9 +7,9 @@ async function insertPing(installId: string, day: string, ts: number): Promise<v
 	await env.DB.prepare(
 		`INSERT INTO pings
 		 (install_id, day, ts, event, plugin_version, jmeter_version, java_version, os, arch, provider,
-		  agent_enabled, first_run, judgment_provider, model)
+		  agent_enabled, first_run, judgment_provider, model, input_tokens, output_tokens)
 		 VALUES (?, ?, ?, 'daily', '3.9.0', '5.6.3', '17.0.12', 'Mac OS X', 'aarch64', 'anthropic',
-		  1, 0, 'openrouter:microsoft', 'gpt-4o')`
+		  1, 0, 'openrouter:microsoft', 'gpt-4o', 12500, 2400)`
 	).bind(installId, day, ts).run();
 }
 
@@ -77,6 +77,7 @@ describe("POST /v1/admin/posthog-backfill", () => {
 		const dailyPing = firstBatch.find(event => event.event === "daily_ping");
 		expect(dailyPing?.properties).not.toHaveProperty("$set");
 		expect(dailyPing?.properties).not.toHaveProperty("$set_once");
+		expect(dailyPing?.properties).toMatchObject({ input_tokens: 12500, output_tokens: 2400 });
 		expect(firstBatch.find(event => event.event === "feature_used" && event.distinct_id === "install-a")?.properties)
 			.toMatchObject({ feature: "chat_message", count: 2 });
 		expect(firstBatch.find(event => event.event === "feature_used" && event.distinct_id === "install-b")?.properties)
