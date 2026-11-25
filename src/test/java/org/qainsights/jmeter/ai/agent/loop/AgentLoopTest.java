@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Unit tests for {@link AgentLoop} using a scripted {@link ChatModel} and a fake tool. */
 class AgentLoopTest {
 
-    private static final String RAW_JMX = "<jmeterTestPlan version=\"1.2\"/>";
+    private static final String RAW_JMX = "<jmeterTestPlan version=\"1.2\"></jmeterTestPlan>";
 
     /** Replays a queue of scripted assistant turns regardless of input. */
     private static final class ScriptedModel implements ChatModel {
@@ -225,6 +225,18 @@ class AgentLoopTest {
 
         assertTrue(result.isCompleted());
         assertEquals("Here is how to build a test plan.", result.getFinalText());
+        assertTrue(model.followUps.isEmpty());
+    }
+
+    @Test
+    void run_openJmxTagWithoutClosingTagDoesNotTriggerFollowUp() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn("<jmeterTestPlan>", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5).run("explain", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("<jmeterTestPlan>", result.getFinalText());
         assertTrue(model.followUps.isEmpty());
     }
 

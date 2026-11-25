@@ -181,6 +181,7 @@ public final class AgentLoop {
         while (true) {
             if (!turn.hasToolCalls()) {
                 if (!nudged && !planChanged && turn.getText().contains("<jmeterTestPlan")
+                        && turn.getText().contains("</jmeterTestPlan>")
                         && !stopped() && iterations < maxIterations) {
                     AssistantTurn followUp = model.followUp(RAW_JMX_NUDGE);
                     if (followUp != null) {
