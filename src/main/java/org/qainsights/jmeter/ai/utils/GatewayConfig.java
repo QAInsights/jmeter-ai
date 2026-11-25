@@ -34,7 +34,19 @@ public final class GatewayConfig {
     }
 
     public static boolean isOpenAiGateway() {
-        return !OPENAI_DEFAULT_BASE_URL.equals(openAiBaseUrl());
+        try {
+            URI url = URI.create(openAiBaseUrl());
+            String path = url.getRawPath();
+            return !("https".equalsIgnoreCase(url.getScheme())
+                    && "api.openai.com".equalsIgnoreCase(url.getHost())
+                    && (url.getPort() == -1 || url.getPort() == 443)
+                    && ("/v1".equals(path) || "/v1/".equals(path))
+                    && url.getRawUserInfo() == null
+                    && url.getRawQuery() == null
+                    && url.getRawFragment() == null);
+        } catch (IllegalArgumentException invalidUrl) {
+            return true;
+        }
     }
 
     public static boolean isAnthropicGateway() {

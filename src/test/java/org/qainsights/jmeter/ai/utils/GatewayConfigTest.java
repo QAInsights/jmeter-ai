@@ -57,6 +57,22 @@ class GatewayConfigTest {
     }
 
     @Test
+    void equivalentOpenAiUrlsStillIdentifyTheVendorEndpoint() {
+        try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
+            config.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                    .thenReturn("https://api.openai.com:443/v1", "HTTPS://API.OPENAI.COM/v1/",
+                            "https://api.openai.com/v1/proxy", "https://api.openai.com:8443/v1",
+                            "https://api.openai.com.example.org/v1");
+
+            assertFalse(GatewayConfig.isOpenAiGateway());
+            assertFalse(GatewayConfig.isOpenAiGateway());
+            assertTrue(GatewayConfig.isOpenAiGateway());
+            assertTrue(GatewayConfig.isOpenAiGateway());
+            assertTrue(GatewayConfig.isOpenAiGateway());
+        }
+    }
+
+    @Test
     void equivalentAnthropicUrlsStillIdentifyTheVendorEndpoint() {
         try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
             config.when(() -> AiConfig.getProperty("anthropic.base.url", GatewayConfig.ANTHROPIC_DEFAULT_BASE_URL))
