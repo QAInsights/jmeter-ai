@@ -2,12 +2,26 @@ package org.qainsights.jmeter.ai.agent.loop;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.qainsights.jmeter.ai.agent.tool.ToolExecutor;
 import org.qainsights.jmeter.ai.agent.tool.ToolResult;
+import org.qainsights.jmeter.ai.agent.tool.handlers.AddElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ApplyCorrelationHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
+import org.qainsights.jmeter.ai.agent.tool.handlers.RenameElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ReorderElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.SetPropertyListHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.SetStructuredPropertyListHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ToggleElementHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.UpdateElementPropertyHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +38,25 @@ public final class AgentLoop {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLoop.class);
     private static final int MIN_REPEATABLE_TREE_CHARS = 2048;
+    private static final Set<String> PLAN_EDITING_TOOLS = Set.of(
+            AddElementHandler.ADD_ELEMENT,
+            ApplyCorrelationHandler.APPLY_CORRELATION,
+            DeleteElementHandler.DELETE_ELEMENT,
+            DuplicateElementHandler.DUPLICATE_ELEMENT,
+            ImportPlanContentHandler.IMPORT_PLAN_CONTENT,
+            MoveElementHandler.MOVE_ELEMENT,
+            OpenPlanHandler.OPEN_PLAN,
+            RenameElementHandler.RENAME_ELEMENT,
+            ReorderElementHandler.REORDER_ELEMENT,
+            SetPropertyListHandler.SET_PROPERTY_LIST,
+            SetStructuredPropertyListHandler.SET_STRUCTURED_PROPERTY_LIST,
+            ToggleElementHandler.TOGGLE_ELEMENT,
+            UpdateElementPropertyHandler.UPDATE_ELEMENT_PROPERTY);
+    static final String RAW_JMX_NUDGE = "Your reply contains a raw JMX test plan, but nothing in the live JMeter test "
+            + "plan was changed. If the user asked you to build or change the plan, apply it now with tools: use the "
+            + "element tools to change the current plan, or, to create a whole new plan, pass the complete JMX document "
+            + "to import_plan_content as jmx_content. Then verify it as usual before replying. If the user only wanted "
+            + "to see the JMX text, repeat your previous answer unchanged.";
 
     /** Outcome of a full run. */
     public static final class AgentResult {
@@ -139,6 +172,9 @@ public final class AgentLoop {
         Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
         Consumer<String> reasoningSink = reasoning == null ? s -> { } : reasoning;
         String latestTreeSnapshot = null;
+        boolean planChanged = false;
+        boolean nudged = false;
+        boolean userDeclinedTool = false;
 
         AssistantTurn turn = model.start(userMessage);
         forwardReasoning(reasoningSink);
@@ -146,6 +182,20 @@ public final class AgentLoop {
 
         while (true) {
             if (!turn.hasToolCalls()) {
+                if (!nudged && !planChanged && !userDeclinedTool
+                        && turn.getText().contains("<jmeterTestPlan")
+                        && turn.getText().contains("</jmeterTestPlan>")
+                        && !stopped() && iterations < maxIterations) {
+                    AssistantTurn followUp = model.followUp(RAW_JMX_NUDGE);
+                    if (followUp != null) {
+                        nudged = true;
+                        sink.accept("\u21bb Reply contained raw JMX without changing the plan; asking the Agent to apply it with tools.");
+                        forwardReasoning(reasoningSink);
+                        iterations++;
+                        turn = followUp;
+                        continue;
+                    }
+                }
                 return AgentResult.completed(turn.getText(), iterations);
             }
             if (stopped()) {
@@ -165,12 +215,18 @@ public final class AgentLoop {
                 toolSink.accept(call);
                 sink.accept("\u2192 " + call.getName() + " " + call.getArguments());
                 ToolResult result = executor.execute(call.getName(), call.getArguments());
+                if (ToolExecutor.ERR_DECLINED.equals(result.getErrorCode())) {
+                    userDeclinedTool = true;
+                }
                 if (stopped()) {
                     return AgentResult.exhausted(turn.getText(), iterations);
                 }
                 ToolOutcome outcome = ToolOutcome.from(call, result);
                 sink.accept("\u2190 " + (outcome.isError() ? outcome.getContent()
                         : truncate(outcome.getContent())));
+                if (!outcome.isError() && isPlanEditingTool(outcome.getName())) {
+                    planChanged = true;
+                }
                 if (!outcome.isError() && ReadToolHandlers.GET_TREE_STATE.equals(outcome.getName())) {
                     String snapshot = outcome.getContent();
                     if (snapshot.length() >= MIN_REPEATABLE_TREE_CHARS && snapshot.equals(latestTreeSnapshot)) {
@@ -191,6 +247,10 @@ public final class AgentLoop {
             forwardReasoning(reasoningSink);
             iterations++;
         }
+    }
+
+    private static boolean isPlanEditingTool(String name) {
+        return PLAN_EDITING_TOOLS.contains(name);
     }
 
     private boolean stopped() {

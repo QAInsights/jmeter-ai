@@ -91,6 +91,24 @@ class CliAgentChatModelTest {
     }
 
     @Test
+    void followUp_replaysTheFinalAnswerBeforeTheNewUserMessage() {
+        FakeProvider provider = new FakeProvider(
+                "{\"final\":\"First final answer.\"}",
+                "{\"final\":\"Follow-up answer.\"}");
+        CliAgentChatModel model = new CliAgentChatModel(provider, List.of(SPEC), "system", List.of());
+
+        model.start("initial request");
+        AssistantTurn turn = model.followUp("please apply the plan now");
+
+        assertEquals("Follow-up answer.", turn.getText());
+        String followUpPrompt = provider.prompts.get(1);
+        int finalAnswerIndex = followUpPrompt.indexOf("Assistant: {\"final\":\"First final answer.\"}");
+        int followUpIndex = followUpPrompt.indexOf("User: please apply the plan now");
+        assertTrue(finalAnswerIndex >= 0);
+        assertTrue(followUpIndex > finalAnswerIndex);
+    }
+
+    @Test
     void updateToolSpecsReissuesProtocolInstructionsOnNextTurn() {
         FakeProvider provider = new FakeProvider(
                 "{\"tool_calls\":[{\"name\":\"add_element\",\"arguments\":{\"type\":\"ConstantTimer\"}}]}",

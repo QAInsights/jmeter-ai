@@ -77,6 +77,29 @@ class ClaudeChatModelTest {
     }
 
     @Test
+    void followUp_appendsAUserMessageAfterTheFinalAssistantTurn() {
+        Deque<Message> responses = new ArrayDeque<>();
+        responses.add(textMessage("First final answer."));
+        responses.add(textMessage("Follow-up answer."));
+        var mapper = com.anthropic.core.ObjectMappers.jsonMapper();
+        List<com.fasterxml.jackson.databind.JsonNode> captured = new ArrayList<>();
+        ClaudeChatModel model = new ClaudeChatModel(params -> {
+            captured.add(mapper.valueToTree(params._body()));
+            return responses.removeFirst();
+        }, new ClaudeToolAdapter(), Collections.<ToolSpec>emptyList(), "system", "claude", 1024);
+
+        model.start("initial request");
+        AssistantTurn turn = model.followUp("please apply the plan now");
+
+        assertEquals("Follow-up answer.", turn.getText());
+        var request = captured.get(1);
+        assertEquals(3, request.path("messages").size());
+        assertEquals("assistant", request.at("/messages/1/role").asText());
+        assertEquals("user", request.at("/messages/2/role").asText());
+        assertTrue(request.at("/messages/2/content").toString().contains("please apply the plan now"));
+    }
+
+    @Test
     void next_appendsToolResultsAndGrowsHistory() {
         Deque<Message> responses = new ArrayDeque<>();
         responses.add(toolMessage("tu_1", "get_tree_state"));

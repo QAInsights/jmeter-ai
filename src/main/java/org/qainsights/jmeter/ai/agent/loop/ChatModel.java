@@ -18,6 +18,11 @@ public interface ChatModel {
     /** Sends the initial user message and returns the model's first turn. */
     AssistantTurn start(String userMessage);
 
+    /** Sends a follow-up user message after a final (tool-free) turn; null when unsupported. */
+    default AssistantTurn followUp(String userMessage) {
+        return null;
+    }
+
     /** Sends the outcomes of the previous turn's tool calls and returns the next turn. */
     AssistantTurn next(List<ToolOutcome> toolOutcomes);
 

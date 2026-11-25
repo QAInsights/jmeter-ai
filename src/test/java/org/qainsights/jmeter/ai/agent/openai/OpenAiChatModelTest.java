@@ -100,6 +100,28 @@ class OpenAiChatModelTest {
     }
 
     @Test
+    void followUp_appendsAUserMessageAfterTheFinalAssistantTurn() {
+        Deque<ChatCompletion> responses = new ArrayDeque<>();
+        responses.add(textCompletion("First final answer."));
+        responses.add(textCompletion("Follow-up answer."));
+        List<ChatCompletionCreateParams> captured = new ArrayList<>();
+        OpenAiChatModel chat = model(params -> {
+            captured.add(params);
+            return responses.removeFirst();
+        });
+
+        chat.start("initial request");
+        AssistantTurn turn = chat.followUp("please apply the plan now");
+
+        assertEquals("Follow-up answer.", turn.getText());
+        var request = com.openai.core.ObjectMappers.jsonMapper().valueToTree(captured.get(1)._body());
+        assertEquals(4, request.path("messages").size());
+        assertEquals("assistant", request.at("/messages/2/role").asText());
+        assertEquals("user", request.at("/messages/3/role").asText());
+        assertEquals("please apply the plan now", request.at("/messages/3/content").asText());
+    }
+
+    @Test
     void next_appendsToolResultsAndGrowsHistory() {
         Deque<ChatCompletion> responses = new ArrayDeque<>();
         responses.add(toolCompletion("call_1", "get_tree_state"));
