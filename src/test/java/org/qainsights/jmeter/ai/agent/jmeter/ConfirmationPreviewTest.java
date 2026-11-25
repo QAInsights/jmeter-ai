@@ -22,6 +22,53 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ConfirmationPreviewTest {
 
+    @Test
+    void parameterizationPreviewNamesCsvAndWarnsAboutDiskChanges() {
+        Preview result = preview.describe("parameterize_values", Map.of("element_id", "Test Plan/Users",
+                "filename", "data/users.csv", "values", List.of(Map.of("value", "alice", "variableName", "user"))), null);
+        assertTrue(result.rows().stream().anyMatch(row -> "CSV file".equals(row.label())
+                && "data/users.csv".equals(row.value())));
+        assertTrue(result.note().contains("overwrites or appends"));
+        assertTrue(result.note().contains("Ctrl+Z does not undo disk changes"));
+        assertEquals(ConfirmationPreview.Level.WARN, result.level());
+    }
+
+    @Test
+    void parameterizationPreviewResolvesScopeAndDescribesCreateOverwriteAndAppend() throws Exception {
+        org.apache.jmeter.threads.ThreadGroup tg = new org.apache.jmeter.threads.ThreadGroup();
+        tg.setName("CSV users");
+        JMeterTreeNode group = new JMeterTreeNode(tg, null);
+        wrapperRoot.add(group);
+        JMeterTreeNode scope = node("CSV login");
+        group.add(scope);
+        String id = new ElementIdResolver().idOf(scope);
+        Path file = tempDir.resolve("users.csv");
+        Map<String, Object> args = Map.of("element_id", id, "filename", file.toString(),
+                "values", List.of(Map.of("value", "alice", "variableName", "user")));
+        Preview create = preview.describe("parameterize_values", args, wrapperRoot);
+        assertTrue(create.rows().stream().anyMatch(row -> row.label().equals("Scope")
+                && row.value().contains("CSV login")));
+        assertTrue(create.rows().contains(new ConfirmationPreview.Row("Write mode", "Create")));
+        assertTrue(create.rows().contains(new ConfirmationPreview.Row("Variables", "alice → user")));
+        Files.writeString(file, "id\n1234\n");
+        assertTrue(preview.describe("parameterize_values", args, wrapperRoot).rows()
+                .contains(new ConfirmationPreview.Row("Write mode", "Overwrite")));
+        org.apache.jmeter.config.CSVDataSet csv = new org.apache.jmeter.config.CSVDataSet();
+        csv.setProperty("filename", file.toString());
+        group.add(new JMeterTreeNode(csv, null));
+        assertTrue(preview.describe("parameterize_values", args, wrapperRoot).rows()
+                .contains(new ConfirmationPreview.Row("Write mode", "Append columns")));
+    }
+
+    @Test
+    void parameterizationPreviewHandlesMissingAndMalformedArguments() {
+        Preview missing = preview.describe("parameterize_values", Map.of(), null);
+        assertTrue(missing.note().contains("Scope not found"));
+        assertTrue(missing.rows().contains(new ConfirmationPreview.Row("Variables", "none")));
+        assertDoesNotThrow(() -> preview.describe("parameterize_values",
+                Map.of("filename", "\u0000", "values", List.of("invalid")), null));
+    }
+
     @TempDir
     Path tempDir;
 

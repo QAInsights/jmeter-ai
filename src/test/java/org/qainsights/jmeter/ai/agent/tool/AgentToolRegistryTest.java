@@ -49,6 +49,7 @@ class AgentToolRegistryTest {
         assertTrue(registry.isRegistered(OpenPlanHandler.OPEN_PLAN));
         assertTrue(registry.isRegistered(FindCorrelationCandidatesHandler.FIND_CORRELATION_CANDIDATES));
         assertTrue(registry.isRegistered(ApplyCorrelationHandler.APPLY_CORRELATION));
-        assertTrue(registry.size() >= 21);
+        assertTrue(registry.isRegistered("parameterize_values"));
+        assertEquals(22, registry.size());
     }
 }

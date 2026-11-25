@@ -21,6 +21,39 @@ class McpServerProtocolTest {
     private final McpServerProtocol protocol = new McpServerProtocol(tools.registry,
             Set.of("delete_element"), (name, args) -> allow, "9.9.9");
 
+    @Test
+    void defaultRegistryExposesParameterizationWithSchemaAndSafetyHint() throws Exception {
+        McpServerProtocol liveRegistry = new McpServerProtocol(
+                org.qainsights.jmeter.ai.agent.tool.AgentToolRegistry.createDefault(),
+                org.qainsights.jmeter.ai.agent.JMeterAgent.destructiveTools(), (name, args) -> false, "test");
+        JsonNode list = liveRegistry.handle(json.readTree(
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}")).path("result").path("tools");
+        assertEquals(22, list.size());
+        JsonNode parameterize = null;
+        for (JsonNode tool : list) {
+            if ("parameterize_values".equals(tool.path("name").asText())) {
+                parameterize = tool;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(parameterize);
+        assertTrue(parameterize.path("annotations").path("destructiveHint").asBoolean());
+        assertFalse(parameterize.path("annotations").path("readOnlyHint").asBoolean(true));
+        JsonNode schema = parameterize.path("inputSchema");
+        assertEquals("element_id", schema.path("required").get(0).asText());
+        assertEquals(1, schema.path("required").size());
+        assertEquals("array", schema.path("properties").path("values").path("type").asText());
+        assertEquals("object", schema.path("properties").path("values").path("items").path("type").asText());
+        assertTrue(schema.path("properties").has("filename"));
+        assertTrue(schema.path("properties").has("stopThread"));
+        JsonNode declined = liveRegistry.handle(json.readTree("{\"jsonrpc\":\"2.0\",\"id\":2,"
+                + "\"method\":\"tools/call\",\"params\":{\"name\":\"parameterize_values\",\"arguments\":{"
+                + "\"element_id\":\"Test Plan/Users\",\"filename\":\"data.csv\","
+                + "\"values\":[{\"value\":\"alice\",\"variableName\":\"user\"}]}}}"));
+        assertTrue(declined.path("result").path("isError").asBoolean());
+        assertTrue(declined.path("result").path("content").get(0).path("text").asText()
+                .startsWith("declined_by_user"));
+    }
+
     private JsonNode send(String message) throws Exception {
         return protocol.handle(json.readTree(message));
     }

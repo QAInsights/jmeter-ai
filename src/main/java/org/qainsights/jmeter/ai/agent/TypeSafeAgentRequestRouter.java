@@ -110,7 +110,7 @@ public final class TypeSafeAgentRequestRouter implements AgentRequestRouter {
         values.put(Route.RUN_DIAGNOSE.name(),
                 "Run or stop a test and inspect its resulting pass, failure, or timing information.");
         values.put(Route.CORRELATE.name(),
-                "Find dynamic values reused by later requests or apply correlation extractors.");
+                "Find dynamic values reused by later requests, apply correlation extractors, or parameterize hard-coded values into CSV variables.");
         values.put(Route.PLAN_FILES.name(), "Open an existing JMX plan or save the current test plan.");
         values.put(Route.COMPLEX_OR_UNCLEAR.name(),
                 "The request spans multiple families, requires a multi-stage workflow, needs no JMeter tool, "

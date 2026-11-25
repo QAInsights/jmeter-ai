@@ -10,6 +10,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.FindCorrelationCandidatesHan
 import org.qainsights.jmeter.ai.agent.tool.handlers.GetTestResultsHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ParameterizeValuesHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
 import org.qainsights.jmeter.ai.agent.tool.handlers.RenameElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReorderElementHandler;
@@ -68,6 +69,7 @@ public final class AgentToolRegistry {
         registry.register(new OpenPlanHandler().tool());
         registry.register(new FindCorrelationCandidatesHandler().tool());
         registry.register(new ApplyCorrelationHandler().tool());
+        registry.register(new ParameterizeValuesHandler().tool());
         return registry;
     }
 }
