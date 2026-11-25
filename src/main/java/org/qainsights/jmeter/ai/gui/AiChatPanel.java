@@ -401,7 +401,7 @@ public class AiChatPanel
                 estimated = false;
             } else {
                 List<String> history = resolveAttachmentMarkers(conversationTracker.historyCopy());
-                if (isCliSubscriptionModel(model)) {
+                if (!isAgentModeSelected() && isCliSubscriptionModel(model)) {
                     history = CliSubscriptionAiService.historyForPrompt(history);
                 }
                 contextTokens = ContextEstimator.estimateTokens(history);
