@@ -177,6 +177,18 @@ class ImportPlanContentHandlerTest {
     }
 
     @Test
+    void loaderRuntimeExceptionReturnsImportFailedAndDeletesTemporaryFile() {
+        loader.runtimeFailure = new IllegalStateException("GUI configuration failed");
+
+        ToolResult result = execute(VALID_JMX);
+
+        assertEquals(ImportPlanContentHandler.ERR_IMPORT_FAILED, result.getErrorCode());
+        assertTrue(result.getMessage().contains("GUI configuration failed"));
+        assertNotNull(loader.path);
+        assertFalse(Files.exists(loader.path));
+    }
+
+    @Test
     void unavailableGuiReturnsImportFailedAndDeletesTemporaryFile() {
         loader.result = false;
 
@@ -232,6 +244,7 @@ class ImportPlanContentHandlerTest {
         private String content;
         private IOException ioFailure;
         private IllegalUserActionException actionFailure;
+        private RuntimeException runtimeFailure;
 
         @Override
         public boolean load(File file) throws IOException, IllegalUserActionException {
@@ -241,6 +254,9 @@ class ImportPlanContentHandlerTest {
             }
             if (actionFailure != null) {
                 throw actionFailure;
+            }
+            if (runtimeFailure != null) {
+                throw runtimeFailure;
             }
             content = Files.readString(path);
             return result;

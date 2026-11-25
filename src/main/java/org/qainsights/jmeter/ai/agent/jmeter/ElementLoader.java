@@ -14,6 +14,7 @@ import org.apache.jmeter.gui.action.Load;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jmeter.services.FileServer;
 import org.apache.jorphan.collections.HashTree;
+import org.slf4j.LoggerFactory;
 
 /**
  * Seam over "load a .jmx file, replacing the current test plan" - the same
@@ -93,19 +94,35 @@ public interface ElementLoader {
                     try {
                         HashTree tree = SaveService.loadTree(file);
                         HttpDefaultsSupport.validateTree(tree);
-                        if (!untitled) {
-                            FileServer.getFileServer().setBaseForScript(file);
-                        }
-                        boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
                         if (untitled) {
-                            gui.setTestPlanFile(null);
-                            ActionRouter.getInstance().actionPerformed(new ActionEvent(
-                                    new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
-                            gui.setDirty(true);
-                        } else if (isTestPlan) {
-                            gui.setTestPlanFile(file.getAbsolutePath());
-                            gui.setDirty(false);
+                            gui.updateCurrentNode();
+                            HashTree previousTree = gui.getTreeModel().getTestPlan();
+                            String previousFile = gui.getTestPlanFile();
+                            boolean previousDirty = gui.isDirty();
+                            try {
+                                Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                                gui.setTestPlanFile(null);
+                                ActionRouter.getInstance().actionPerformed(new ActionEvent(
+                                        new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
+                                gui.setDirty(true);
+                            } catch (IllegalUserActionException e) {
+                                restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                actionError.set(e);
+                                return;
+                            } catch (RuntimeException e) {
+                                restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                String message = e.getMessage();
+                                actionError.set(new IllegalUserActionException(
+                                        message == null || message.isBlank() ? e.getClass().getSimpleName() : message,
+                                        e));
+                                return;
+                            }
                         } else {
+                            FileServer.getFileServer().setBaseForScript(file);
+                            boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                            if (isTestPlan) {
+                                gui.setTestPlanFile(file.getAbsolutePath());
+                            }
                             gui.setDirty(false);
                         }
                         loaded.set(true);
@@ -126,5 +143,35 @@ public interface ElementLoader {
                 return loaded.get();
             }
         };
+    }
+
+    private static void restoreUntitledState(
+            GuiPackage gui, HashTree previousTree, String previousFile, boolean previousDirty, Throwable importFailure) {
+        try {
+            Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, previousTree, false);
+            if (previousDirty) {
+                ActionRouter.getInstance().actionPerformed(new ActionEvent(
+                        new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
+            }
+        } catch (IllegalUserActionException | RuntimeException restoreFailure) {
+            logRestoreFailure(importFailure, restoreFailure);
+        }
+        try {
+            gui.setTestPlanFile(previousFile);
+        } catch (RuntimeException restoreFailure) {
+            logRestoreFailure(importFailure, restoreFailure);
+        }
+        try {
+            gui.setDirty(previousDirty);
+        } catch (RuntimeException restoreFailure) {
+            logRestoreFailure(importFailure, restoreFailure);
+        }
+    }
+
+    private static void logRestoreFailure(Throwable importFailure, Throwable restoreFailure) {
+        LoggerFactory.getLogger(ElementLoader.class).error(
+                "Could not fully restore the previous plan after an import failure (original error: "
+                        + importFailure + ")",
+                restoreFailure);
     }
 }

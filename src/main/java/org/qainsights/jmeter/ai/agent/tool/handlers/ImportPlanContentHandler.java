@@ -140,6 +140,8 @@ public final class ImportPlanContentHandler {
                     + "Call get_tree_state to see the new tree.");
         } catch (IOException | IllegalUserActionException e) {
             return ToolResult.error(ERR_IMPORT_FAILED, "Failed to import the provided JMX: " + e.getMessage());
+        } catch (RuntimeException e) {
+            return ToolResult.error(ERR_IMPORT_FAILED, "Failed to import the provided JMX: " + e.getMessage());
         } finally {
             if (temp != null) {
                 try {
