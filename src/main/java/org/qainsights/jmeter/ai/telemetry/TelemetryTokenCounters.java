@@ -5,15 +5,17 @@ package org.qainsights.jmeter.ai.telemetry;
  * snapshot that was sent preserves usage recorded while the send was in flight.
  */
 public class TelemetryTokenCounters {
+    private static final long MAX_PENDING_TOKENS = 1_000_000_000L;
+
     private long inputTokens;
     private long outputTokens;
 
     public synchronized void add(long input, long output) {
         if (input > 0) {
-            inputTokens += Math.min(input, Long.MAX_VALUE - inputTokens);
+            inputTokens += Math.min(input, MAX_PENDING_TOKENS - inputTokens);
         }
         if (output > 0) {
-            outputTokens += Math.min(output, Long.MAX_VALUE - outputTokens);
+            outputTokens += Math.min(output, MAX_PENDING_TOKENS - outputTokens);
         }
     }
 

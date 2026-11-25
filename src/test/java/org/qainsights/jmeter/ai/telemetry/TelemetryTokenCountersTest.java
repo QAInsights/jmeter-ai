@@ -28,4 +28,14 @@ class TelemetryTokenCountersTest {
         assertEquals(0, counters.snapshot().inputTokens());
         assertEquals(0, counters.snapshot().outputTokens());
     }
+
+    @Test
+    void capsPendingTotalsAtTheWorkerLimit() {
+        TelemetryTokenCounters counters = new TelemetryTokenCounters();
+        counters.add(999_999_999, 999_999_999);
+        counters.add(2, 2);
+
+        assertEquals(1_000_000_000, counters.snapshot().inputTokens());
+        assertEquals(1_000_000_000, counters.snapshot().outputTokens());
+    }
 }
