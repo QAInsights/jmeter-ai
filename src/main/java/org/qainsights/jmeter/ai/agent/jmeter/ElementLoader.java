@@ -8,6 +8,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.action.ActionRouter;
 import org.apache.jmeter.gui.action.Load;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jmeter.services.FileServer;
@@ -97,6 +99,8 @@ public interface ElementLoader {
                         boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
                         if (untitled) {
                             gui.setTestPlanFile(null);
+                            ActionRouter.getInstance().actionPerformed(new ActionEvent(
+                                    new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
                             gui.setDirty(true);
                         } else if (isTestPlan) {
                             gui.setTestPlanFile(file.getAbsolutePath());
