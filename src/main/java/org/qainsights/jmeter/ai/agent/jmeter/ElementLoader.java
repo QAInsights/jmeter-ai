@@ -6,22 +6,27 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.swing.SwingUtilities;
+
 import org.apache.jmeter.exceptions.IllegalUserActionException;
 import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.action.ActionRouter;
 import org.apache.jmeter.gui.action.Load;
 import org.apache.jmeter.save.SaveService;
 import org.apache.jmeter.services.FileServer;
 import org.apache.jorphan.collections.HashTree;
+import org.slf4j.LoggerFactory;
 
 /**
  * Seam over "load a .jmx file, replacing the current test plan" - the same
  * {@link SaveService#loadTree} plus {@link Load#insertLoadedTree} that
  * JMeter's own Open action uses under the hood (minus the
  * {@code JFileChooser} dialog and the "save first?" prompt, since the agent
- * supplies the path directly and unsaved-changes handling is the
- * {@code open_plan} tool's own {@code force} guard). Kept behind an
- * interface so the {@code open_plan} tool logic can be unit-tested without a
- * running JMeter GUI.
+ * supplies the path directly and unsaved-changes handling is guarded by the
+ * {@code open_plan}/{@code import_plan_content} tools' {@code force} flag). Kept behind an
+ * interface so the {@code open_plan} and {@code import_plan_content} tool logic
+ * can be unit-tested without a running JMeter GUI.
  */
 @FunctionalInterface
 public interface ElementLoader {
@@ -39,6 +44,13 @@ public interface ElementLoader {
     boolean load(File file) throws IOException, IllegalUserActionException;
 
     /**
+     * Loads {@code file} without associating it with the live test plan.
+     */
+    default boolean loadUntitled(File file) throws IOException, IllegalUserActionException {
+        return load(file);
+    }
+
+    /**
      * Checks that the file can be configured by JMeter before a caller replaces
      * the live plan. Test loaders may keep the default no-op implementation.
      */
@@ -51,7 +63,8 @@ public interface ElementLoader {
      * directly - not through the GUI action's file-chooser layer) to clear
      * and replace the current tree, exactly as JMeter's own Open menu item
      * does - performed on the EDT, since it mutates live Swing tree-model
-     * state.
+     * state. Untitled imports do not associate the temporary file with the
+     * plan and leave it dirty.
      */
     static ElementLoader live() {
         EdtExecutor edt = EdtExecutor.swing();
@@ -63,6 +76,15 @@ public interface ElementLoader {
 
             @Override
             public boolean load(File file) throws IOException, IllegalUserActionException {
+                return load(file, false);
+            }
+
+            @Override
+            public boolean loadUntitled(File file) throws IOException, IllegalUserActionException {
+                return load(file, true);
+            }
+
+            private boolean load(File file, boolean untitled) throws IOException, IllegalUserActionException {
                 GuiPackage gui = GuiPackage.getInstance();
                 if (gui == null) {
                     return false;
@@ -70,16 +92,44 @@ public interface ElementLoader {
                 AtomicReference<IOException> ioError = new AtomicReference<>();
                 AtomicReference<IllegalUserActionException> actionError = new AtomicReference<>();
                 AtomicBoolean loaded = new AtomicBoolean(false);
+                AtomicReference<Boolean> dirtyAfterDispatch = new AtomicReference<>();
                 edt.run(() -> {
                     try {
                         HashTree tree = SaveService.loadTree(file);
                         HttpDefaultsSupport.validateTree(tree);
-                        FileServer.getFileServer().setBaseForScript(file);
-                        boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
-                        if (isTestPlan) {
-                            gui.setTestPlanFile(file.getAbsolutePath());
+                        if (untitled) {
+                            gui.updateCurrentNode();
+                            HashTree previousTree = gui.getTreeModel().getTestPlan();
+                            String previousFile = gui.getTestPlanFile();
+                            boolean previousDirty = gui.isDirty();
+                            try {
+                                Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                                gui.setTestPlanFile(null);
+                                ActionRouter.getInstance().actionPerformed(new ActionEvent(
+                                        new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
+                                dirtyAfterDispatch.set(true);
+                            } catch (IllegalUserActionException e) {
+                                restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                dirtyAfterDispatch.set(previousDirty);
+                                actionError.set(e);
+                                return;
+                            } catch (RuntimeException e) {
+                                restoreUntitledState(gui, previousTree, previousFile, previousDirty, e);
+                                dirtyAfterDispatch.set(previousDirty);
+                                String message = e.getMessage();
+                                actionError.set(new IllegalUserActionException(
+                                        message == null || message.isBlank() ? e.getClass().getSimpleName() : message,
+                                        e));
+                                return;
+                            }
+                        } else {
+                            FileServer.getFileServer().setBaseForScript(file);
+                            boolean isTestPlan = Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, tree, false);
+                            if (isTestPlan) {
+                                gui.setTestPlanFile(file.getAbsolutePath());
+                            }
+                            gui.setDirty(false);
                         }
-                        gui.setDirty(false);
                         loaded.set(true);
                     } catch (IOException e) {
                         ioError.set(e);
@@ -87,6 +137,14 @@ public interface ElementLoader {
                         actionError.set(e);
                     }
                 });
+                Boolean dirty = dirtyAfterDispatch.get();
+                if (dirty != null) {
+                    if (SwingUtilities.isEventDispatchThread()) {
+                        SwingUtilities.invokeLater(() -> gui.setDirty(dirty));
+                    } else {
+                        edt.run(() -> gui.setDirty(dirty));
+                    }
+                }
                 IOException ioFailure = ioError.get();
                 if (ioFailure != null) {
                     throw ioFailure;
@@ -98,5 +156,30 @@ public interface ElementLoader {
                 return loaded.get();
             }
         };
+    }
+
+    private static void restoreUntitledState(
+            GuiPackage gui, HashTree previousTree, String previousFile, boolean previousDirty, Throwable importFailure) {
+        try {
+            Load.insertLoadedTree(ActionEvent.ACTION_PERFORMED, previousTree, false);
+            if (previousDirty) {
+                ActionRouter.getInstance().actionPerformed(new ActionEvent(
+                        new HashTree(), ActionEvent.ACTION_PERFORMED, ActionNames.SUB_TREE_SAVED));
+            }
+        } catch (IllegalUserActionException | RuntimeException restoreFailure) {
+            logRestoreFailure(importFailure, restoreFailure);
+        }
+        try {
+            gui.setTestPlanFile(previousFile);
+        } catch (RuntimeException restoreFailure) {
+            logRestoreFailure(importFailure, restoreFailure);
+        }
+    }
+
+    private static void logRestoreFailure(Throwable importFailure, Throwable restoreFailure) {
+        LoggerFactory.getLogger(ElementLoader.class).error(
+                "Could not fully restore the previous plan after an import failure (original error: "
+                        + importFailure + ")",
+                restoreFailure);
     }
 }

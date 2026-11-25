@@ -60,7 +60,7 @@ class AgentRequestRouterTest {
         AgentRequestRouter.Notice notice = AgentRequestRouter.Notice.expansion(
                 AgentRequestRouter.Decision.focused(
                         AgentRequestRouter.Route.RUN_DIAGNOSE, Map.of(), 0.9),
-                List.of("get_tree_state", "run_test"), 21,
+                List.of("get_tree_state", "run_test"), 22,
                 new ArrayList<>(List.of("run_test", "stop_test")));
 
         assertTrue(notice.isExpansion());
@@ -72,7 +72,7 @@ class AgentRequestRouterTest {
     @Test
     void plainNoticeIsNotAnExpansion() {
         AgentRequestRouter.Notice notice = new AgentRequestRouter.Notice(
-                AgentRequestRouter.Decision.unavailable(), List.of("get_tree_state"), 21);
+                AgentRequestRouter.Decision.unavailable(), List.of("get_tree_state"), 22);
 
         assertFalse(notice.isExpansion());
         assertEquals(List.of(), notice.addedToolNames());

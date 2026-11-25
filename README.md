@@ -73,7 +73,7 @@
 | 📈 **Workload Designer** | Describe sample or message rates, iterations, users and generator hosts. Preview the sampler mix and closed-model load shape, apply JMeter properties and copy a ready CLI command without an AI call. |
 | 🔔 **Audio Chime** | Optional sound notification when AI finishes responding. |
 | 🐾 **Companion Pet** | A draggable animated pet that reacts to your test runs: cheers on success, frowns on failures. Pick from quill, glim, peacock, or monkey. |
-| 🤖 **Agent Mode** | AI autonomously edits your test plan through 21 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex, Claude Code, and OpenCode CLI providers. |
+| 🤖 **Agent Mode** | AI autonomously edits your test plan through 22 tools with API-backed Claude, OpenAI, Gemini, DeepSeek, Grok, OpenRouter, Meta Muse, or the ChatGPT/Codex, Claude Code, and OpenCode CLI providers. |
 | 🛠️ **Make it pass** | Run a plan once with one user, let a restricted Agent repair failures, and verify each round with a real JMeter run. |
 | **Jev Smart Routing** | Optional TypeSafe Jev (or OpenAI Decisions, OpenRouter Decisions with Microsoft-Decision-1, or local EmbeddingGemma through Ollama) intent routing gives Agent Mode a focused tool pack, with a visible route/confidence card and automatic full-tool fallback. |
 | 🔧 **Searchable Model Picker** | Search by model or provider, inspect context/cost/capabilities, pin favorites, reuse recent models, and hide non-chat clutter. |
@@ -461,7 +461,7 @@ curl -sS https://llm-gateway.corp.example.com/v1/chat/completions \
 
 #### Token quotas and 429 errors
 
-Agent Mode is token-hungry by design: every reason/act turn re-sends the system prompt (including the JMeter element hierarchy), all 21 tool definitions and the full conversation so far, and even a trivial request takes 2-4 turns (the agent reads the tree first). That fixed overhead is several thousand tokens per turn, so a gateway tier with a small budget (for example 10K tokens per 5 minutes) is exhausted on the first or second turn, whatever the prompt says. Some gateways also count `max_tokens` against the quota before the request runs.
+Agent Mode is token-hungry by design: every reason/act turn re-sends the system prompt (including the JMeter element hierarchy), all 22 tool definitions and the full conversation so far, and even a trivial request takes 2-4 turns (the agent reads the tree first). That fixed overhead is several thousand tokens per turn, so a gateway tier with a small budget (for example 10K tokens per 5 minutes) is exhausted on the first or second turn, whatever the prompt says. Some gateways also count `max_tokens` against the quota before the request runs.
 
 What helps, roughly in order of impact:
 
@@ -961,7 +961,7 @@ Feather Wand already talks to more providers than Agent Mode currently supports;
 
 ### Available Tools
 
-The agent has 21 tools at its disposal. Jev Smart Routing can advertise a focused subset for one request, but all tools remain available through the standard fallback:
+The agent has 22 tools at its disposal. Jev Smart Routing can advertise a focused subset for one request, but all tools remain available through the standard fallback:
 
 **Read**
 
@@ -1008,6 +1008,7 @@ The agent has 21 tools at its disposal. Jev Smart Routing can advertise a focuse
 |------|--------------|
 | `save_plan` | Saves the test plan to a `.jmx` file. |
 | `open_plan` | Opens a `.jmx` file, replacing the current plan. **Confirmation gated.** |
+| `import_plan_content` | Replaces the current plan with complete JMX text (max 1 MiB, no DOCTYPE); the result is unsaved until `save_plan`. **Confirmation gated.** |
 
 ### How It Works
 
@@ -1022,7 +1023,7 @@ Each tool call and result is streamed to the chat in real time, so you can follo
 
 ### Safety
 
-- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `apply_correlation`) show an **Allow/Deny confirmation dialog** before executing - with an impact preview, not just a tool name: deletes list the subtree (child count + names, force flag), moves show from → to, `open_plan` shows the file and warns about unsaved changes, and correlation lists how many candidates it will touch. Disable with `jmeter.ai.agent.confirm.destructive=false`.
+- **Destructive operations** (`delete_element`, `move_element`, `open_plan`, `import_plan_content`, `apply_correlation`) show an **Allow/Deny confirmation dialog** before executing - with an impact preview, not just a tool name: deletes list the subtree (child count + names, force flag), moves show from → to, `open_plan` shows the file and warns about unsaved changes, `import_plan_content` shows the content size, and correlation lists how many candidates it will touch. Disable with `jmeter.ai.agent.confirm.destructive=false`.
 - **Bounded iterations**: The agent stops after `jmeter.ai.agent.max.iterations` (default 500) even if the task isn't complete.
 - **Graceful degradation**: If the agent loop fails (API error, malformed response, etc.), it falls back to a plain-text answer describing what it attempted.
 - **Undo**: All agent mutations fire the same JMeter tree-model events as GUI actions, so they're undoable with Ctrl+Z when `undo.history.size > 0`.
@@ -1054,7 +1055,7 @@ For isolated manual testing, Feather Wand adds dev menu items under **Run → AI
 
 ## 🔌 Feather Wand as an MCP Server
 
-Feather Wand can run a [Model Context Protocol](https://modelcontextprotocol.io) server inside JMeter, so Claude Code, Cursor, Codex or any other MCP client can read, edit, run and analyze the test plan open in your JMeter GUI. The client gets the same 21 tools as [Agent Mode](#available-tools), with the same names and parameters, and every change shows up in the JMeter tree as it happens. No AI provider key is needed in Feather Wand for this: the client brings its own model.
+Feather Wand can run a [Model Context Protocol](https://modelcontextprotocol.io) server inside JMeter, so Claude Code, Cursor, Codex or any other MCP client can read, edit, run and analyze the test plan open in your JMeter GUI. The client gets the same 22 tools as [Agent Mode](#available-tools), with the same names and parameters, and every change shows up in the JMeter tree as it happens. No AI provider key is needed in Feather Wand for this: the client brings its own model.
 
 ### Starting the server
 
@@ -1107,7 +1108,7 @@ Then ask the client something like *"Open checkout.jmx in JMeter, add a Response
 - **Loopback only.** The server binds `127.0.0.1`, so other machines on your network cannot reach it.
 - **Token required.** Every request needs `Authorization: Bearer <token>`. The token is a random 256-bit value stored in `~/.jmeter-ai/mcp-token` (readable only by you on macOS and Linux). Click **New token** to replace it; clients set up with the old one stop working.
 - **No browser access.** Requests carrying a non-local `Origin` header are refused, so a web page cannot talk to the server even through DNS rebinding.
-- **Same confirmations as Agent Mode.** `delete_element`, `move_element`, `open_plan` and `apply_correlation` wait for you to click **Allow** in JMeter, unless `jmeter.ai.agent.confirm.destructive=false`. Tool annotations tell the client which tools are read-only and which are destructive.
+- **Same confirmations as Agent Mode.** `delete_element`, `move_element`, `open_plan`, `import_plan_content` and `apply_correlation` wait for you to click **Allow** in JMeter, unless `jmeter.ai.agent.confirm.destructive=false`. Tool annotations tell the client which tools are read-only and which are destructive.
 - **Nothing is saved behind your back.** Edits stay in the open plan until the client calls `save_plan` or you save in JMeter.
 
 ### Limits

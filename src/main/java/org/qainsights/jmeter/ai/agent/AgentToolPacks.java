@@ -13,6 +13,7 @@ import org.qainsights.jmeter.ai.agent.tool.handlers.DeleteElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.DuplicateElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.FindCorrelationCandidatesHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.GetTestResultsHandler;
+import org.qainsights.jmeter.ai.agent.tool.handlers.ImportPlanContentHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.MoveElementHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.OpenPlanHandler;
 import org.qainsights.jmeter.ai.agent.tool.handlers.ReadToolHandlers;
@@ -70,14 +71,16 @@ public final class AgentToolPacks {
                 MoveElementHandler.MOVE_ELEMENT,
                 DuplicateElementHandler.DUPLICATE_ELEMENT,
                 RenameElementHandler.RENAME_ELEMENT,
-                ReorderElementHandler.REORDER_ELEMENT));
+                ReorderElementHandler.REORDER_ELEMENT,
+                ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
         values.put(AgentRequestRouter.Route.RUN_DIAGNOSE, withRead(
                 RunTestHandler.RUN_TEST, StopTestHandler.STOP_TEST, GetTestResultsHandler.GET_TEST_RESULTS));
         values.put(AgentRequestRouter.Route.CORRELATE, withRead(
                 FindCorrelationCandidatesHandler.FIND_CORRELATION_CANDIDATES,
                 ApplyCorrelationHandler.APPLY_CORRELATION));
         values.put(AgentRequestRouter.Route.PLAN_FILES, withRead(
-                SavePlanHandler.SAVE_PLAN, OpenPlanHandler.OPEN_PLAN));
+                SavePlanHandler.SAVE_PLAN, OpenPlanHandler.OPEN_PLAN,
+                ImportPlanContentHandler.IMPORT_PLAN_CONTENT));
         return Collections.unmodifiableMap(values);
     }
 

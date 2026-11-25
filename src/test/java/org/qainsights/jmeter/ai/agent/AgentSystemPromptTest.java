@@ -24,6 +24,7 @@ class AgentSystemPromptTest {
         String prompt = AgentSystemPrompt.build(new SchemaGrounding());
 
         assertTrue(prompt.contains("Never reply with raw JMX/XML"));
+        assertTrue(prompt.contains("import_plan_content"));
         assertTrue(prompt.contains("call get_tree_state and confirm"));
         assertTrue(prompt.contains("call get_element_config on each element"));
         assertTrue(prompt.contains("call save_plan last"));

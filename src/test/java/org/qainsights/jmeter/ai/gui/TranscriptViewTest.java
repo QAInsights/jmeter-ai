@@ -91,7 +91,7 @@ class TranscriptViewTest {
         AgentRequestRouter.Notice notice = new AgentRequestRouter.Notice(
                 AgentRequestRouter.Decision.focused(
                         AgentRequestRouter.Route.RUN_DIAGNOSE, java.util.Map.of(), 0.9),
-                java.util.List.of("get_tree_state", "run_test"), 21);
+                java.util.List.of("get_tree_state", "run_test"), 22);
 
         view.addJevRoute(notice, "google:gemini");
 
