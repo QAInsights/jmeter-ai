@@ -158,14 +158,16 @@ class JMeterElementManagerAddElementTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"simplecontroller", "onceonlycontroller"})
-    void controllerGuiCreatesItsModelElement(String key) throws ReflectiveOperationException {
+    @ValueSource(strings = {"simplecontroller", "onceonlycontroller", "interleavecontroller", "randomcontroller",
+            "randomordercontroller", "throughputcontroller", "switchcontroller", "includecontroller",
+            "criticalsectioncontroller", "recordingcontroller"})
+    void correctedControllerGuisCreateTheirMappedModel(String key) throws ReflectiveOperationException {
         JMeterElementManager.ElementClassInfo info = JMeterElementManager.getElementClassMap().get(key);
         Class<?> modelClass = Class.forName(info.modelClassName);
         Class<?> guiClass = Class.forName(info.guiClassName);
         JMeterGUIComponent gui = (JMeterGUIComponent) guiClass.getDeclaredConstructor().newInstance();
 
-        assertInstanceOf(modelClass, gui.createTestElement());
+        assertEquals(modelClass, gui.createTestElement().getClass());
     }
 
     @ParameterizedTest(name = "{0}")
