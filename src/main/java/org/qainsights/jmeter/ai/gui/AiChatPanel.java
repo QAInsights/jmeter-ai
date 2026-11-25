@@ -377,6 +377,9 @@ public class AiChatPanel
         openRouterService.setUsageStats(usageStats);
         metaMuseService.setUsageStats(usageStats);
         bedrockService.setUsageStats(usageStats);
+        codexService.setUsageStats(usageStats);
+        claudeCodeService.setUsageStats(usageStats);
+        openCodeService.setUsageStats(usageStats);
         if (googleService != null) {
             googleService.setUsageStats(usageStats);
         }
