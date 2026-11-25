@@ -25,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImportPlanContentHandlerTest {
 
-    private static final String VALID_JMX = "<jmeterTestPlan><hashTree/></jmeterTestPlan>";
+    private static final String VALID_JMX =
+            "<jmeterTestPlan><hashTree><TestPlan/><hashTree/></hashTree></jmeterTestPlan>";
 
     private boolean dirty;
     private FakeController controller;
@@ -83,6 +84,18 @@ class ImportPlanContentHandlerTest {
 
         assertEquals(ImportPlanContentHandler.ERR_INVALID_JMX, result.getErrorCode());
         assertTrue(result.getMessage().contains("<foo>"));
+        assertEquals(0, loader.untitledCalls);
+    }
+
+    @Test
+    void threadGroupOnlyExportReturnsInvalidJmxWithoutLoading() {
+        String jmx = "<jmeterTestPlan><hashTree><ThreadGroup/><hashTree/></hashTree></jmeterTestPlan>";
+
+        ToolResult result = execute(jmx);
+
+        assertEquals(ImportPlanContentHandler.ERR_INVALID_JMX, result.getErrorCode());
+        assertTrue(result.getMessage().contains("Expected a complete test plan:"));
+        assertTrue(result.getMessage().contains("selection/fragment exports are not supported"));
         assertEquals(0, loader.untitledCalls);
     }
 

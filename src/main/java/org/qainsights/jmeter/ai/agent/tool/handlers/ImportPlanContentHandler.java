@@ -31,6 +31,7 @@ import org.qainsights.jmeter.ai.utils.PlanReplacementGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -178,10 +179,19 @@ public final class ImportPlanContentHandler {
                 }
             });
             Document document = builder.parse(new InputSource(new StringReader(content)));
-            String rootName = document.getDocumentElement().getTagName();
-            return "jmeterTestPlan".equals(rootName)
-                    ? null
-                    : "Expected root element <jmeterTestPlan>, found <" + rootName + ">.";
+            Element root = document.getDocumentElement();
+            String rootName = root.getTagName();
+            if (!"jmeterTestPlan".equals(rootName)) {
+                return "Expected root element <jmeterTestPlan>, found <" + rootName + ">.";
+            }
+            Element hashTree = root.getFirstElementChild();
+            Element firstElement = hashTree == null ? null : hashTree.getFirstElementChild();
+            if (hashTree == null || !"hashTree".equals(hashTree.getTagName())
+                    || firstElement == null || !"TestPlan".equals(firstElement.getTagName())) {
+                return "Expected a complete test plan: the first element under <jmeterTestPlan><hashTree> "
+                        + "must be <TestPlan> (selection/fragment exports are not supported).";
+            }
+            return null;
         } catch (ParserConfigurationException | SAXException | IOException | RuntimeException e) {
             String message = e.getMessage();
             return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
