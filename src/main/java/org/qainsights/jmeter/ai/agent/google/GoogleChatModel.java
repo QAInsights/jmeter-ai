@@ -123,6 +123,11 @@ public final class GoogleChatModel implements ChatModel {
     }
 
     @Override
+    public AssistantTurn followUp(String userMessage) {
+        return start(userMessage);
+    }
+
+    @Override
     public void updateToolSpecs(List<ToolSpec> specs) {
         this.specs = new ArrayList<>(specs);
     }

@@ -23,10 +23,14 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Unit tests for {@link AgentLoop} using a scripted {@link ChatModel} and a fake tool. */
 class AgentLoopTest {
 
+    private static final String RAW_JMX = "<jmeterTestPlan version=\"1.2\"/>";
+
     /** Replays a queue of scripted assistant turns regardless of input. */
     private static final class ScriptedModel implements ChatModel {
         final Deque<AssistantTurn> turns = new ArrayDeque<>();
         final List<List<ToolOutcome>> received = new ArrayList<>();
+        final List<String> followUps = new ArrayList<>();
+        boolean followUpSupported = true;
         Runnable afterStart = () -> { };
 
         @Override
@@ -41,30 +45,46 @@ class AgentLoopTest {
             received.add(toolOutcomes);
             return turns.removeFirst();
         }
+
+        @Override
+        public AssistantTurn followUp(String userMessage) {
+            followUps.add(userMessage);
+            return followUpSupported ? turns.removeFirst() : null;
+        }
     }
 
     private final List<Map<String, Object>> echoCalls = new ArrayList<>();
 
     private ToolExecutor executorWithEcho() {
-        ToolRegistry registry = new ToolRegistry();
-        registry.register(new Tool() {
-            @Override
-            public ToolSpec getSpec() {
-                return ToolSpec.builder("echo").description("echo").build();
-            }
+        return executorWithEcho("echo");
+    }
 
-            @Override
-            public ToolResult execute(Map<String, Object> arguments) {
-                echoCalls.add(arguments);
-                return ToolResult.ok("echoed");
-            }
-        });
+    private ToolExecutor executorWithEcho(String... names) {
+        ToolRegistry registry = new ToolRegistry();
+        for (String name : names) {
+            registry.register(new Tool() {
+                @Override
+                public ToolSpec getSpec() {
+                    return ToolSpec.builder(name).description("echo").build();
+                }
+
+                @Override
+                public ToolResult execute(Map<String, Object> arguments) {
+                    echoCalls.add(arguments);
+                    return ToolResult.ok("echoed");
+                }
+            });
+        }
         return new ToolExecutor(registry);
     }
 
     private static AssistantTurn toolTurn(String callId) {
+        return toolTurn(callId, "echo");
+    }
+
+    private static AssistantTurn toolTurn(String callId, String toolName) {
         return new AssistantTurn("", Collections.singletonList(
-                new AssistantTurn.ToolCall(callId, "echo", Collections.singletonMap("k", "v"))));
+                new AssistantTurn.ToolCall(callId, toolName, Collections.singletonMap("k", "v"))));
     }
 
     @Test
@@ -78,6 +98,119 @@ class AgentLoopTest {
         assertEquals("Hello, nothing to do.", result.getFinalText());
         assertEquals(1, result.getIterations());
         assertTrue(echoCalls.isEmpty());
+    }
+
+    @Test
+    void run_rawJmxFinalTurnFollowsUpAndExecutesImportTool() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+        model.turns.add(toolTurn("import-1", "import_plan_content"));
+        model.turns.add(new AssistantTurn("Plan imported.", Collections.emptyList()));
+        List<String> progress = new ArrayList<>();
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho("import_plan_content"), 5)
+                .run("build a plan", progress::add);
+
+        assertTrue(result.isCompleted());
+        assertEquals("Plan imported.", result.getFinalText());
+        assertEquals(List.of(AgentLoop.RAW_JMX_NUDGE), model.followUps);
+        assertEquals(1, echoCalls.size());
+        assertTrue(progress.contains("\u21bb Reply contained raw JMX without changing the plan; asking the Agent to apply it with tools."));
+    }
+
+    @Test
+    void run_rawJmxAfterNudgeDoesNotNudgeTwice() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+        model.turns.add(new AssistantTurn("<jmeterTestPlan>second plan</jmeterTestPlan>", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5).run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("<jmeterTestPlan>second plan</jmeterTestPlan>", result.getFinalText());
+        assertEquals(1, model.followUps.size());
+    }
+
+    @Test
+    void run_successfulWriteToolPreventsRawJmxNudge() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("add-1", "add_element"));
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho("add_element"), 5)
+                .run("add a timer", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(RAW_JMX, result.getFinalText());
+        assertTrue(model.followUps.isEmpty());
+    }
+
+    @Test
+    void run_successfulReadToolDoesNotPreventRawJmxNudge() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("tree-1", ReadToolHandlers.GET_TREE_STATE));
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+        model.turns.add(new AssistantTurn("Plan applied.", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model,
+                executorWithEcho(ReadToolHandlers.GET_TREE_STATE), 5).run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("Plan applied.", result.getFinalText());
+        assertEquals(List.of(AgentLoop.RAW_JMX_NUDGE), model.followUps);
+    }
+
+    @Test
+    void run_failedWriteToolDoesNotPreventRawJmxNudge() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(toolTurn("add-1", "add_element"));
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+        model.turns.add(new AssistantTurn("Plan applied.", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5)
+                .run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("Plan applied.", result.getFinalText());
+        assertEquals(List.of(AgentLoop.RAW_JMX_NUDGE), model.followUps);
+        assertTrue(model.received.get(0).get(0).isError());
+    }
+
+    @Test
+    void run_unsupportedFollowUpCompletesWithOriginalJmxText() {
+        ScriptedModel model = new ScriptedModel();
+        model.followUpSupported = false;
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5).run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(RAW_JMX, result.getFinalText());
+        assertEquals(List.of(AgentLoop.RAW_JMX_NUDGE), model.followUps);
+    }
+
+    @Test
+    void run_iterationCapPreventsRawJmxFollowUp() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn(RAW_JMX, Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 1).run("build a plan", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals(RAW_JMX, result.getFinalText());
+        assertTrue(model.followUps.isEmpty());
+    }
+
+    @Test
+    void run_plainTextDoesNotTriggerRawJmxFollowUp() {
+        ScriptedModel model = new ScriptedModel();
+        model.turns.add(new AssistantTurn("Here is how to build a test plan.", Collections.emptyList()));
+
+        AgentLoop.AgentResult result = new AgentLoop(model, executorWithEcho(), 5).run("explain", null);
+
+        assertTrue(result.isCompleted());
+        assertEquals("Here is how to build a test plan.", result.getFinalText());
+        assertTrue(model.followUps.isEmpty());
     }
 
     @Test

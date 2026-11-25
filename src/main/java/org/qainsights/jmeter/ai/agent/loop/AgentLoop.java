@@ -24,6 +24,10 @@ public final class AgentLoop {
 
     private static final Logger log = LoggerFactory.getLogger(AgentLoop.class);
     private static final int MIN_REPEATABLE_TREE_CHARS = 2048;
+    static final String RAW_JMX_NUDGE = "Your reply contains a raw JMX test plan, but nothing in the live JMeter test plan "
+            + "was changed. If the user asked you to build or change the plan, load it now with import_plan_content "
+            + "(pass the complete JMX document as jmx_content) or build it with the element tools, then verify it as "
+            + "usual before replying. If the user only wanted to see the JMX text, repeat your previous answer unchanged.";
 
     /** Outcome of a full run. */
     public static final class AgentResult {
@@ -139,6 +143,8 @@ public final class AgentLoop {
         Consumer<AssistantTurn.ToolCall> toolSink = onToolCallStarted == null ? c -> { } : onToolCallStarted;
         Consumer<String> reasoningSink = reasoning == null ? s -> { } : reasoning;
         String latestTreeSnapshot = null;
+        boolean planChanged = false;
+        boolean nudged = false;
 
         AssistantTurn turn = model.start(userMessage);
         forwardReasoning(reasoningSink);
@@ -146,6 +152,18 @@ public final class AgentLoop {
 
         while (true) {
             if (!turn.hasToolCalls()) {
+                if (!nudged && !planChanged && turn.getText().contains("<jmeterTestPlan")
+                        && !stopped() && iterations < maxIterations) {
+                    AssistantTurn followUp = model.followUp(RAW_JMX_NUDGE);
+                    if (followUp != null) {
+                        nudged = true;
+                        sink.accept("\u21bb Reply contained raw JMX without changing the plan; asking the Agent to apply it with tools.");
+                        forwardReasoning(reasoningSink);
+                        iterations++;
+                        turn = followUp;
+                        continue;
+                    }
+                }
                 return AgentResult.completed(turn.getText(), iterations);
             }
             if (stopped()) {
@@ -171,6 +189,9 @@ public final class AgentLoop {
                 ToolOutcome outcome = ToolOutcome.from(call, result);
                 sink.accept("\u2190 " + (outcome.isError() ? outcome.getContent()
                         : truncate(outcome.getContent())));
+                if (!outcome.isError() && !isReadOnlyTool(outcome.getName())) {
+                    planChanged = true;
+                }
                 if (!outcome.isError() && ReadToolHandlers.GET_TREE_STATE.equals(outcome.getName())) {
                     String snapshot = outcome.getContent();
                     if (snapshot.length() >= MIN_REPEATABLE_TREE_CHARS && snapshot.equals(latestTreeSnapshot)) {
@@ -191,6 +212,13 @@ public final class AgentLoop {
             forwardReasoning(reasoningSink);
             iterations++;
         }
+    }
+
+    private static boolean isReadOnlyTool(String name) {
+        return ReadToolHandlers.GET_TREE_STATE.equals(name)
+                || ReadToolHandlers.GET_ELEMENT_CONFIG.equals(name)
+                || ReadToolHandlers.GET_ELEMENT_CHILDREN.equals(name)
+                || ReadToolHandlers.GET_ELEMENT_SCHEMA.equals(name);
     }
 
     private boolean stopped() {

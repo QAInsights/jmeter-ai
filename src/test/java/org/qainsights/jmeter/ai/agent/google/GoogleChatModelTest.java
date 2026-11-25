@@ -78,6 +78,29 @@ class GoogleChatModelTest {
     }
 
     @Test
+    void followUp_appendsAUserMessageAfterTheFinalAssistantTurn() {
+        Deque<GenerateContentResponse> responses = new ArrayDeque<>();
+        responses.add(textResponse("First final answer."));
+        responses.add(textResponse("Follow-up answer."));
+        List<List<Content>> captured = new ArrayList<>();
+        GoogleChatModel model = new GoogleChatModel((modelName, contents, config) -> {
+            captured.add(contents);
+            return responses.removeFirst();
+        }, new GoogleToolAdapter(), Collections.<ToolSpec>emptyList(), "system", "gemini-2.5-flash", 1024);
+
+        model.start("initial request");
+        AssistantTurn turn = model.followUp("please apply the plan now");
+
+        assertEquals("Follow-up answer.", turn.getText());
+        List<Content> history = captured.get(1);
+        assertEquals(3, history.size());
+        assertEquals("model", history.get(1).role().orElseThrow());
+        assertEquals("user", history.get(2).role().orElseThrow());
+        assertEquals("please apply the plan now",
+                history.get(2).parts().orElseThrow().get(0).text().orElseThrow());
+    }
+
+    @Test
     void next_appendsToolResultsAndGrowsHistory() {
         Deque<GenerateContentResponse> responses = new ArrayDeque<>();
         responses.add(toolResponse("get_tree_state"));

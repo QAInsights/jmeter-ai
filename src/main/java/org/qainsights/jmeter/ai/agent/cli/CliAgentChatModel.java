@@ -80,6 +80,11 @@ public final class CliAgentChatModel implements ChatModel {
     }
 
     @Override
+    public AssistantTurn followUp(String userMessage) {
+        return start(userMessage);
+    }
+
+    @Override
     public AssistantTurn next(List<ToolOutcome> toolOutcomes) {
         StringBuilder results = new StringBuilder("Tool results:");
         for (ToolOutcome outcome : toolOutcomes) {
