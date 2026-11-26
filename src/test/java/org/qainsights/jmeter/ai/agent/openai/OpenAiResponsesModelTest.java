@@ -137,6 +137,33 @@ class OpenAiResponsesModelTest {
     }
 
     @Test
+    void followUp_appendsUserMessageAfterFinalAssistantTurn() {
+        Deque<Response> responses = new ArrayDeque<>();
+        responses.add(response(List.of(messageItem("First final answer."))));
+        responses.add(response(List.of(messageItem("Follow-up answer."))));
+        List<ResponseCreateParams> captured = new ArrayList<>();
+        OpenAiResponsesModel.ResponseService service = params -> {
+            captured.add(params);
+            return responses.removeFirst();
+        };
+
+        OpenAiResponsesModel chat = model(service);
+        AssistantTurn first = chat.start("initial request");
+        AssistantTurn second = chat.followUp("nudge");
+
+        assertEquals("First final answer.", first.getText());
+        assertEquals("Follow-up answer.", second.getText());
+        JsonNode input = body(captured.get(1)).path("input");
+        assertEquals(3, input.size());
+        assertEquals("user", input.get(0).path("role").asText());
+        assertEquals("initial request", input.get(0).path("content").asText());
+        assertEquals("assistant", input.get(1).path("role").asText());
+        assertTrue(input.get(1).toString().contains("First final answer."));
+        assertEquals("user", input.get(2).path("role").asText());
+        assertEquals("nudge", input.get(2).path("content").asText());
+    }
+
+    @Test
     void next_replaysFunctionCallAndAddsFunctionCallOutput() {
         Deque<Response> responses = new ArrayDeque<>();
         responses.add(response(List.of(reasoningItem(),
