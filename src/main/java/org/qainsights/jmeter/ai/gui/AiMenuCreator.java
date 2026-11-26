@@ -22,11 +22,18 @@ import java.util.List;
 
 public class AiMenuCreator implements MenuCreator {
     private static final Logger log = LoggerFactory.getLogger(AiMenuCreator.class);
+    private final boolean dependenciesAvailable;
 
     /** Property that shows the AI Dev tool-exercise menu items under Run. Default false. */
     public static final String DEV_MENU_PROPERTY = "jmeter.ai.dev.menu";
 
     public AiMenuCreator() {
+        dependenciesAvailable = dependenciesAvailable(getClass().getClassLoader());
+        if (!dependenciesAvailable) {
+            log.error("Feather Wand dependencies are missing. Install zzz-jmeter-agent-deps-<version>.jar "
+                    + "into JMeter lib/ (or install via Plugins Manager). Alternatively use the -all.jar in lib/ext/.");
+            return;
+        }
         try {
             PetBootstrap.initialize();
         } catch (Throwable e) {
@@ -44,6 +51,17 @@ public class AiMenuCreator implements MenuCreator {
         }
     }
 
+    static boolean dependenciesAvailable(ClassLoader loader) {
+        try {
+            Class.forName("com.openai.client.OpenAIClient", false, loader);
+            Class.forName("com.anthropic.client.AnthropicClient", false, loader);
+            Class.forName("software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient", false, loader);
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+    }
+
     /**
      * True when the AI Dev menu items should appear under Run.
      * Default is off so the Run menu stays clean for most users.
@@ -54,6 +72,9 @@ public class AiMenuCreator implements MenuCreator {
 
     @Override
     public JMenuItem[] getMenuItemsAtLocation(MENU_LOCATION location) {
+        if (!dependenciesAvailable) {
+            return new JMenuItem[0];
+        }
         if (location == MENU_LOCATION.RUN) {
             try {
                 // Create a temporary parent component to pass to AiMenuItem

@@ -60,6 +60,7 @@ public final class ShadedJarSmoke {
     }
 
     public static void main(String[] args) throws Exception {
+        verifyPackaging();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", ShadedJarSmoke::handle);
         server.start();
@@ -85,6 +86,48 @@ public final class ShadedJarSmoke {
         } finally {
             server.stop(0);
         }
+    }
+
+    private static void verifyPackaging() throws Exception {
+        Path thin = Path.of(System.getProperty("feather.thin.jar"));
+        Path deps = Path.of(System.getProperty("feather.deps.jar"));
+        try (var jar = new java.util.jar.JarFile(thin.toFile())) {
+            require(jar.stream().filter(e -> e.getName().endsWith(".class"))
+                    .allMatch(e -> e.getName().startsWith("org/qainsights/")
+                            && !e.getName().startsWith("org/qainsights/jmeter/ai/shaded/")),
+                    "thin jar contains only plugin classes");
+            require(jar.stream().noneMatch(e -> e.getName().startsWith("META-INF/services/")),
+                    "service descriptors belong in deps");
+        }
+        for (String name : List.of("org.qainsights.jmeter.ai.gui.AiMenuCreator",
+                "com.openai.client.OpenAIClient", "com.anthropic.client.AnthropicClient",
+                "org.qainsights.jmeter.ai.shaded.io.netty.channel.Channel",
+                "software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient")) {
+            Class.forName(name);
+        }
+        require(java.util.ServiceLoader.load(software.amazon.awssdk.http.async.SdkAsyncHttpService.class)
+                .findFirst().isPresent(), "AWS async service lookup");
+        require(java.util.ServiceLoader.load(com.fasterxml.jackson.databind.Module.class)
+                .stream().count() >= 3, "Jackson service lookup");
+        var urls = new java.util.ArrayList<java.net.URL>();
+        urls.add(thin.toUri().toURL());
+        try (var paths = Files.list(Path.of(System.getenv("JMETER_HOME"), "lib"))) {
+            paths.filter(p -> p.toString().endsWith(".jar")).sorted().forEach(p -> {
+                try { urls.add(p.toUri().toURL()); } catch (Exception e) { throw new RuntimeException(e); }
+            });
+        }
+        urls.add(Path.of(System.getenv("JMETER_HOME"), "lib/ext/ApacheJMeter_core.jar").toUri().toURL());
+        try (var loader = new java.net.URLClassLoader(urls.toArray(java.net.URL[]::new),
+                ClassLoader.getPlatformClassLoader())) {
+            Object menu = loader.loadClass("org.qainsights.jmeter.ai.gui.AiMenuCreator")
+                    .getConstructor().newInstance();
+            Class<?> location = loader.loadClass("org.apache.jmeter.gui.plugin.MenuCreator$MENU_LOCATION");
+            Object run = location.getField("RUN").get(null);
+            Object[] items = (Object[]) menu.getClass().getMethod("getMenuItemsAtLocation", location).invoke(menu, run);
+            require(items.length == 0, "missing dependencies disable menus gracefully");
+        }
+        require(Files.size(deps) > 0, "deps artifact exists");
+        System.out.println("PASS split packaging, relocated classes, services and missing-dependency guard");
     }
 
     private static void configure() {

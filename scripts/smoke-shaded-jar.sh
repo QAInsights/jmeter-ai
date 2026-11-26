@@ -9,7 +9,7 @@ candidate_jars=()
 for candidate in "$ROOT"/target/jmeter-agent-*.jar; do
     [ -f "$candidate" ] || continue
     case "$(basename "$candidate")" in
-        *-sources.jar|*-javadoc.jar|original-*|*-original-*.jar) continue ;;
+        *-sources.jar|*-javadoc.jar|*-all.jar|original-*|*-original-*.jar) continue ;;
     esac
     candidate_jars[${#candidate_jars[@]}]="$candidate"
 done
@@ -24,6 +24,9 @@ if (( ${#candidate_jars[@]} > 1 )); then
     exit 1
 fi
 JAR="${candidate_jars[0]}"
+VERSION="${JAR##*/jmeter-agent-}"
+DEPS="$(dirname "$JAR")/zzz-jmeter-agent-deps-$VERSION"
+test -f "$DEPS"
 
 MAVEN_LOCAL_REPOSITORY="$(
     cd "$ROOT"
@@ -39,14 +42,21 @@ if [ ! -d "$JMETER_HOME/lib" ] || [ ! -d "$JMETER_HOME/lib/ext" ]; then
     exit 1
 fi
 
-classpath="$ROOT/target/test-classes:$JAR"
+classpath="$ROOT/target/test-classes"
 while IFS= read -r -d '' dependency; do
     case "$(basename "$dependency")" in
         jmeter-agent*.jar) continue ;;
     esac
     classpath="$classpath:$dependency"
-done < <(find "$JMETER_HOME/lib" "$JMETER_HOME/lib/ext" -type f -name '*.jar' -print0)
+done < <(find "$JMETER_HOME/lib" -maxdepth 1 -type f -name '*.jar' -print0 | sort -z)
+classpath="$classpath:$DEPS"
+while IFS= read -r -d '' dependency; do
+    case "$(basename "$dependency")" in jmeter-agent*.jar) continue ;; esac
+    classpath="$classpath:$dependency"
+done < <(find "$JMETER_HOME/lib/ext" -maxdepth 1 -type f -name '*.jar' -print0 | sort -z)
+classpath="$classpath:$JAR"
 
 java --add-modules jdk.httpserver -Djava.awt.headless=true \
     -Dmaven.repo.local="$MAVEN_LOCAL_REPOSITORY" -cp "$classpath" \
+    -Dfeather.thin.jar="$JAR" -Dfeather.deps.jar="$DEPS" \
     org.qainsights.jmeter.ai.service.ShadedJarSmoke
