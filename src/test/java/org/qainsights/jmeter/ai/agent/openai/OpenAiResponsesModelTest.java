@@ -9,11 +9,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.qainsights.jmeter.ai.agent.JMeterAgent;
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
 import org.qainsights.jmeter.ai.agent.loop.ToolOutcome;
 import org.qainsights.jmeter.ai.agent.tool.ToolSpec;
 import org.qainsights.jmeter.ai.service.reasoning.ReasoningSettings;
+import org.qainsights.jmeter.ai.utils.AiConfig;
+import org.qainsights.jmeter.ai.utils.GatewayConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.openai.core.JsonValue;
@@ -22,6 +25,7 @@ import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseCreateParams;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mockStatic;
 
 /** Unit tests for {@link OpenAiResponsesModel}. */
 class OpenAiResponsesModelTest {
@@ -98,8 +102,9 @@ class OpenAiResponsesModelTest {
     void applies_onlyForNonNoneReasoningEffort() {
         assertTrue(OpenAiResponsesModel.applies("gpt-6.1-terra", new ReasoningSettings(true, "high")));
         assertTrue(OpenAiResponsesModel.applies("gpt-5.6-terra", new ReasoningSettings(true, "high")));
-        assertFalse(OpenAiResponsesModel.applies("gpt-6.1-terra", new ReasoningSettings(false, "high")));
+        assertTrue(OpenAiResponsesModel.applies("gpt-6.1-terra", new ReasoningSettings(false, "high")));
         assertFalse(OpenAiResponsesModel.applies("gpt-4o", new ReasoningSettings(true, "high")));
+        assertFalse(OpenAiResponsesModel.applies("gpt-4o", new ReasoningSettings(false, "high")));
     }
 
     @Test
@@ -111,6 +116,23 @@ class OpenAiResponsesModelTest {
 
         assertInstanceOf(OpenAiResponsesModel.class,
                 factory.create(Collections.emptyList(), "system", Collections.emptyList()));
+    }
+
+    @Test
+    void openAiFactory_selectsResponsesTransportForTerraWithoutThinking() {
+        try (MockedStatic<AiConfig> config = mockStatic(AiConfig.class)) {
+            config.when(() -> AiConfig.getProperty("openai.base.url", GatewayConfig.OPENAI_DEFAULT_BASE_URL))
+                    .thenReturn(GatewayConfig.OPENAI_DEFAULT_BASE_URL);
+            assertFalse(GatewayConfig.isOpenAiGateway());
+
+            var factory = JMeterAgent.openAiFactory(params -> {
+                throw new AssertionError("Chat Completions must not be used for Terra without thinking");
+            }, params -> response(List.of(messageItem("done"))), "gpt-6.1-terra", 1024,
+                    new ReasoningSettings(false, "high"));
+
+            assertInstanceOf(OpenAiResponsesModel.class,
+                    factory.create(Collections.emptyList(), "system", Collections.emptyList()));
+        }
     }
 
     @Test

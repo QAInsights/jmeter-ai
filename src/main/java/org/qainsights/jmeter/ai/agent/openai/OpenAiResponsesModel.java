@@ -2,6 +2,7 @@ package org.qainsights.jmeter.ai.agent.openai;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import org.qainsights.jmeter.ai.agent.loop.AssistantTurn;
@@ -187,7 +188,15 @@ public final class OpenAiResponsesModel implements ChatModel {
     /** True when this model should be used instead of Chat Completions. */
     public static boolean applies(String model,
                                   ReasoningSettings reasoningSettings) {
+        if (requiresResponsesForTools(model)) {
+            return true;
+        }
         Optional<ReasoningEffort> effort = OpenAiReasoning.effortFor(reasoningSettings, model);
         return effort.isPresent() && effort.get() != ReasoningEffort.NONE;
+    }
+
+    /** GPT-6 models reject function tools on Chat Completions unless reasoning is explicitly off. */
+    private static boolean requiresResponsesForTools(String model) {
+        return model != null && model.trim().toLowerCase(Locale.ROOT).startsWith("gpt-6");
     }
 }
