@@ -550,10 +550,11 @@ public class OpenAiService implements AiService {
         return "OpenAI";
     }
 
-    /** Reasoning models (o1, o3, o4, gpt-5...) only accept the default temperature and need room to think. */
+    /** Reasoning models (o1, o3, o4, gpt-5, gpt-6...) only accept the default temperature and need room to think. */
     static boolean isReasoningModel(String modelId) {
         String id = normalizedModelId(modelId);
-        return id.startsWith("o1") || id.startsWith("o3") || id.startsWith("o4") || id.startsWith("gpt-5");
+        return id.startsWith("o1") || id.startsWith("o3") || id.startsWith("o4")
+                || id.startsWith("gpt-5") || id.startsWith("gpt-6");
     }
 
     /** False for reasoning models and the {@code chat-latest} aliases, which reject a custom temperature. */

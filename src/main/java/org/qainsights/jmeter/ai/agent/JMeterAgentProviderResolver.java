@@ -39,8 +39,9 @@ final class JMeterAgentProviderResolver {
         long maxTokens = maxTokens();
         OpenAIClient client = openAi.getClient();
         OpenAiChatModel.CompletionService service = params -> client.chat().completions().create(params);
-        return new JMeterAgent(JMeterAgent.openAiFactory(service, openAi.getCurrentModel(), maxTokens,
-                openAi.getReasoningSettings()), JMeterAgent.maxIterations(), destructiveGate());
+        return new JMeterAgent(JMeterAgent.openAiFactory(service, params -> client.responses().create(params),
+                openAi.getCurrentModel(), maxTokens, openAi.getReasoningSettings()),
+                JMeterAgent.maxIterations(), destructiveGate());
     }
 
     static JMeterAgent forDeepseek(DeepseekAiService deepseek) {
@@ -122,7 +123,8 @@ final class JMeterAgentProviderResolver {
             OpenAiService openAi = (OpenAiService) service;
             OpenAIClient client = openAi.getClient();
             return JMeterAgent.openAiFactory(params -> client.chat().completions().create(params),
-                    openAi.getCurrentModel(), maxTokens, openAi.getReasoningSettings());
+                    params -> client.responses().create(params), openAi.getCurrentModel(), maxTokens,
+                    openAi.getReasoningSettings());
         }
         if (service instanceof GoogleAiService) {
             GoogleAiService google = (GoogleAiService) service;

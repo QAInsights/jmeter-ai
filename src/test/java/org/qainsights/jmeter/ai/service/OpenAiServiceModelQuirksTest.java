@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class OpenAiServiceModelQuirksTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"o1", "o3-mini", "o4-mini", "gpt-5", "gpt-5.5", "O3", "GPT-5-mini",
+    @ValueSource(strings = {"o1", "o3-mini", "o4-mini", "gpt-5", "gpt-5.5", "gpt-6.1-terra", "O3", "GPT-5-mini",
             "chat-latest", "CHAT-LATEST", " chat-latest ", "gpt-5-chat-latest", "corp-chat-latest"})
     void fixedTemperatureModelsOmitTemperature(String id) {
         assertFalse(OpenAiService.supportsCustomTemperature(id), id);
@@ -27,7 +27,7 @@ class OpenAiServiceModelQuirksTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"o1", "O3-mini", "o4-mini", "gpt-5", "GPT-5.5"})
+    @ValueSource(strings = {"o1", "O3-mini", "o4-mini", "gpt-5", "GPT-5.5", "gpt-6.1-terra", "GPT-6-LUNA"})
     void reasoningModelsAreDetectedCaseInsensitively(String id) {
         assertTrue(OpenAiService.isReasoningModel(id), id);
     }

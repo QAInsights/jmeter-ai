@@ -106,6 +106,7 @@ class OpenAiReasoningTest {
         assertEquals(ReasoningEffort.MEDIUM, OpenAiReasoning.toEffort("medium"));
         assertEquals(ReasoningEffort.HIGH, OpenAiReasoning.toEffort("high"));
         assertEquals(ReasoningEffort.XHIGH, OpenAiReasoning.toEffort("xhigh"));
+        assertEquals(ReasoningEffort.MAX, OpenAiReasoning.toEffort("max"));
         assertEquals(ReasoningEffort.MEDIUM, OpenAiReasoning.toEffort("bogus"));
         assertEquals(ReasoningEffort.MEDIUM, OpenAiReasoning.toEffort(null));
     }

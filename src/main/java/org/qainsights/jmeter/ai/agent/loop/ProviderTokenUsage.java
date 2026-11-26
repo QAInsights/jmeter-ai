@@ -28,6 +28,15 @@ public final class ProviderTokenUsage {
                 number(usage.path("completion_tokens_details"), "reasoning_tokens"));
     }
 
+    public static Counts openAiResponses(JsonNode usage) {
+        JsonNode inputDetails = usage.path("input_tokens_details");
+        Long read = number(inputDetails, "cached_tokens");
+        Long write = number(inputDetails, "cache_write_tokens");
+        Long fresh = subtract(number(usage, "input_tokens"), read, write);
+        return new Counts(fresh, read, write, number(usage, "output_tokens"),
+                number(usage.path("output_tokens_details"), "reasoning_tokens"));
+    }
+
     public static Counts gemini(JsonNode usage) {
         Long read = number(usage, "cachedContentTokenCount");
         Long fresh = subtract(number(usage, "promptTokenCount"), read, null);
