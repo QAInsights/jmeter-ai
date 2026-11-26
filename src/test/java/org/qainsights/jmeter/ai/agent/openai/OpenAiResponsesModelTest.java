@@ -67,6 +67,19 @@ class OpenAiResponsesModelTest {
         return item;
     }
 
+    private static Map<String, Object> refusalMessageItem(String refusal) {
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("type", "refusal");
+        content.put("refusal", refusal);
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", "msg_1");
+        item.put("type", "message");
+        item.put("role", "assistant");
+        item.put("status", "completed");
+        item.put("content", List.of(content));
+        return item;
+    }
+
     private static Map<String, Object> reasoningItem() {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", "rs_1");
@@ -156,6 +169,16 @@ class OpenAiResponsesModelTest {
         assertFalse(body.has("reasoning_effort"), "Responses API must not use the Chat Completions field");
         assertFalse(body.has("temperature"));
         assertEquals("inspect the plan", body.at("/input/0/content").asText());
+    }
+
+    @Test
+    void start_returnsResponseRefusalText() {
+        OpenAiResponsesModel.ResponseService service = params ->
+                response(List.of(refusalMessageItem("I can't help with that.")));
+
+        AssistantTurn turn = model(service).start("make a request");
+
+        assertEquals("I can't help with that.", turn.getText());
     }
 
     @Test

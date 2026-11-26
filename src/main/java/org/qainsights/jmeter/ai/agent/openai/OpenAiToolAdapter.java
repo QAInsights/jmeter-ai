@@ -89,6 +89,7 @@ public final class OpenAiToolAdapter {
         StringBuilder text = new StringBuilder();
         for (ResponseOutputMessage.Content content : message.content()) {
             content.outputText().ifPresent(part -> text.append(part.text()));
+            content.refusal().ifPresent(refusal -> text.append(refusal.refusal()));
         }
         return text.toString();
     }
