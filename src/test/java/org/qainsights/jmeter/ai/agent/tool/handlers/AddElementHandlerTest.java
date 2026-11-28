@@ -89,6 +89,14 @@ class AddElementHandlerTest {
     }
 
     @Test
+    void add_regularExpressionUserParametersDisplayName_delegatesWithAlias() {
+        ToolResult r = tool.execute(args("Regular Expression User Parameters", "Test Plan/Thread Group", null));
+
+        assertTrue(r.isSuccess());
+        assertEquals("regexuserparameters", adder.lastAlias);
+    }
+
+    @Test
     void add_withoutName_passesNullNameToAdder() {
         ToolResult r = tool.execute(args("ConstantTimer", "Test Plan/Thread Group", null));
         assertTrue(r.isSuccess());

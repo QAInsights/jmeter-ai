@@ -41,6 +41,7 @@ public final class SetStructuredPropertyListHandler {
     public static final String ERR_ELEMENT_NOT_FOUND = "element_not_found";
     public static final String ERR_INVALID_PROPERTY = "invalid_property";
     public static final String ERR_UNSUPPORTED_PROPERTY = "unsupported_property";
+    public static final String ERR_INVALID_ENTRIES = "invalid_entries";
     public static final String ERR_UPDATE_FAILED = "update_failed";
 
     private final Supplier<JMeterTreeNode> rootSupplier;
@@ -123,7 +124,13 @@ public final class SetStructuredPropertyListHandler {
         }
 
         String resolvedProperty = canonical.get();
-        List<Map<String, String>> entries = objectList(args.get("entries"));
+        if (!(args.get("entries") instanceof List<?> rawEntries)) {
+            return ToolResult.error(ERR_INVALID_ENTRIES, "'entries' must be an array of objects; use [] to clear the list.");
+        }
+        List<Map<String, String>> entries = objectList(rawEntries);
+        if (!rawEntries.isEmpty() && entries.isEmpty()) {
+            return ToolResult.error(ERR_INVALID_ENTRIES, "'entries' contains no objects; use [] to clear the list.");
+        }
 
         if (!updater.update(node, resolvedProperty, entries)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
@@ -203,16 +210,12 @@ public final class SetStructuredPropertyListHandler {
         return value == null ? "" : String.valueOf(value);
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, String>> objectList(Object value) {
+    private static List<Map<String, String>> objectList(List<?> values) {
         List<Map<String, String>> result = new ArrayList<>();
-        if (!(value instanceof List)) {
-            return result;
-        }
-        for (Object item : (List<Object>) value) {
-            if (item instanceof Map) {
+        for (Object item : values) {
+            if (item instanceof Map<?, ?> entryValues) {
                 Map<String, String> entry = new LinkedHashMap<>();
-                for (Map.Entry<?, ?> e : ((Map<?, ?>) item).entrySet()) {
+                for (Map.Entry<?, ?> e : entryValues.entrySet()) {
                     entry.put(String.valueOf(e.getKey()), e.getValue() == null ? "" : String.valueOf(e.getValue()));
                 }
                 result.add(entry);

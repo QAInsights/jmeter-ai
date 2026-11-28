@@ -268,10 +268,16 @@ class ElementPropertyCatalogTest {
                 ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "Asserion.test_strings")
                         .orElseThrow());
         assertEquals("Asserion.test_strings",
+                ElementPropertyCatalog.resolveFlatStringListProperty("rEsPoNsEaSsErTiOn", "aSsErIoN.TeSt_StRiNgS")
+                        .orElseThrow());
+        assertEquals("Asserion.test_strings",
                 ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "Assertion.test_strings")
                         .orElseThrow());
         assertEquals("Asserion.test_strings",
                 ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "test_strings")
+                        .orElseThrow());
+        assertEquals("Asserion.test_strings",
+                ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "patterns")
                         .orElseThrow());
         assertTrue(ElementPropertyCatalog.resolveFlatStringListProperty("HeaderManager", "HeaderManager.headers")
                 .isEmpty());

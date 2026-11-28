@@ -115,4 +115,11 @@ class SchemaGroundingTest {
         assertSame(schema.get("ThreadGroup"), schema.get("Thread Group"));
         assertSame(schema.get("CSVDataSet"), schema.get("CSV Data Set Config"));
     }
+
+    @Test
+    void schemaFor_resolvesRegularExpressionUserParametersDisplayName() {
+        String detail = schema.schemaFor("Regular Expression User Parameters");
+        assertNotNull(detail);
+        assertTrue(detail.contains("Element type: RegExUserParameters"));
+    }
 }

@@ -39,6 +39,7 @@ public final class SetPropertyListHandler {
     public static final String ERR_ELEMENT_NOT_FOUND = "element_not_found";
     public static final String ERR_INVALID_PROPERTY = "invalid_property";
     public static final String ERR_UNSUPPORTED_PROPERTY = "unsupported_property";
+    public static final String ERR_INVALID_VALUES = "invalid_values";
     public static final String ERR_UPDATE_FAILED = "update_failed";
 
     private final Supplier<JMeterTreeNode> rootSupplier;
@@ -115,7 +116,10 @@ public final class SetPropertyListHandler {
         }
 
         String resolvedProperty = canonical.get();
-        List<String> values = stringList(args.get("values"));
+        if (!(args.get("values") instanceof List<?> rawValues)) {
+            return ToolResult.error(ERR_INVALID_VALUES, "'values' must be an array; use [] to clear the list.");
+        }
+        List<String> values = stringList(rawValues);
 
         if (!updater.update(node, resolvedProperty, values)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
@@ -194,13 +198,9 @@ public final class SetPropertyListHandler {
         return value == null ? "" : String.valueOf(value);
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<String> stringList(Object value) {
-        if (!(value instanceof List)) {
-            return new ArrayList<>();
-        }
+    private static List<String> stringList(List<?> values) {
         List<String> result = new ArrayList<>();
-        for (Object item : (List<Object>) value) {
+        for (Object item : values) {
             result.add(item == null ? "" : String.valueOf(item));
         }
         return result;

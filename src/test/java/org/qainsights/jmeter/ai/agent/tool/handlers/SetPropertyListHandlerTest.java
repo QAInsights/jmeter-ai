@@ -150,6 +150,16 @@ class SetPropertyListHandlerTest {
     }
 
     @Test
+    void update_nonArrayValues_rejectedWithoutCallingUpdater() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/Response Assertion", "Assertion.test_strings", "200"));
+
+        assertFalse(r.isSuccess());
+        assertEquals("invalid_values", r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
     void update_structuredListElement_redirectsToSetStructuredPropertyList() {
         HeaderManager hm = new HeaderManager();
         hm.setName("HTTP Header Manager");

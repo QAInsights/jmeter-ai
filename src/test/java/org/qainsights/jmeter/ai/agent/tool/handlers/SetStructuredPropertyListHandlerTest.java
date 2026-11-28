@@ -181,6 +181,26 @@ class SetStructuredPropertyListHandlerTest {
     }
 
     @Test
+    void update_nonArrayEntries_rejectedWithoutCallingUpdater() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "HEADERMANAGER.HEADERS", nameValue("Accept", "*/*")));
+
+        assertFalse(r.isSuccess());
+        assertEquals("invalid_entries", r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
+    void update_nonEmptyEntriesWithoutObjects_rejectedWithoutCallingUpdater() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "HeaderManager.headers", List.of("not-an-object")));
+
+        assertFalse(r.isSuccess());
+        assertEquals("invalid_entries", r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
     void update_scalarPropertyOnStructuredListElement_redirectsToUpdateElementProperty() {
         JMeterTreeNode sampler = new JMeterTreeNode(new HTTPSamplerProxy(), null);
         sampler.setName("HTTP Request");

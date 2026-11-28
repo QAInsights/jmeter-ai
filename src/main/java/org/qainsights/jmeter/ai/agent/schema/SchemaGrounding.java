@@ -335,6 +335,7 @@ public final class SchemaGrounding {
         alias("CSVDataSet", "CSV Data Set Config");
         alias("JSONPostProcessor", "JSON Extractor");
         alias("RegexExtractor", "Regular Expression Extractor");
+        alias("RegExUserParameters", "Regular Expression User Parameters");
         alias("HtmlExtractor", "CSS Selector Extractor");
         alias("JSONPathAssertion", "JSON Assertion");
         alias("ResponseAssertion", "Response Assertion");
