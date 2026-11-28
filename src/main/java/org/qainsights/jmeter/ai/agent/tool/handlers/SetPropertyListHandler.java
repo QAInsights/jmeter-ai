@@ -126,13 +126,17 @@ public final class SetPropertyListHandler {
     }
 
     private static ToolResult unsupportedPropertyError(String type, String property) {
-        List<String> structured = ElementPropertyCatalog.structuredListPropertiesFor(type);
-        if (ElementPropertyCatalog.resolveStructuredListProperty(type, property).isPresent()
-                || !structured.isEmpty()) {
+        Optional<String> structured = ElementPropertyCatalog.resolveStructuredListProperty(type, property);
+        if (structured.isPresent()) {
             return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
                     "'" + property + "' is not a flat string-list property for " + type
-                            + ". Use set_structured_property_list instead (supported on " + type + ": "
-                            + String.join(", ", structured) + ").");
+                            + ". Use set_structured_property_list with '" + structured.get() + "' instead.");
+        }
+        Optional<String> scalar = ElementPropertyCatalog.resolveScalarProperty(type, property);
+        if (scalar.isPresent()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is a scalar property for " + type
+                            + ". Use update_element_property with '" + scalar.get() + "' instead.");
         }
         List<String> supported = ElementPropertyCatalog.flatStringListPropertiesFor(type);
         if (!supported.isEmpty()) {

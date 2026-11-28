@@ -9,6 +9,7 @@ import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
@@ -161,5 +162,20 @@ class SetPropertyListHandlerTest {
         assertEquals(SetPropertyListHandler.ERR_UNSUPPORTED_PROPERTY, r.getErrorCode());
         assertTrue(r.getMessage().contains("set_structured_property_list"), r.getMessage());
         assertTrue(r.getMessage().contains("HeaderManager.headers"), r.getMessage());
+    }
+
+    @Test
+    void update_scalarPropertyOnStructuredListElement_redirectsToUpdateElementProperty() {
+        JMeterTreeNode sampler = new JMeterTreeNode(new HTTPSamplerProxy(), null);
+        sampler.setName("HTTP Request");
+        ((JMeterTreeNode) root.getChildAt(0)).add(sampler);
+
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Request", "HTTPSampler.domain", Arrays.asList("example.com")));
+        assertFalse(r.isSuccess());
+        assertEquals(SetPropertyListHandler.ERR_UNSUPPORTED_PROPERTY, r.getErrorCode());
+        assertTrue(r.getMessage().contains("Use update_element_property"), r.getMessage());
+        assertFalse(r.getMessage().contains("set_structured_property_list"), r.getMessage());
+        assertNull(updater.lastNode);
     }
 }

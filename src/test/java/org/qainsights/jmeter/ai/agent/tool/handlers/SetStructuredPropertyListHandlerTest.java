@@ -11,6 +11,7 @@ import java.util.Map;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
@@ -177,5 +178,20 @@ class SetStructuredPropertyListHandlerTest {
                 "Test Plan/Thread Group/HTTP Header Manager", "headermanager.headers", entries));
         assertTrue(r.isSuccess());
         assertEquals("HeaderManager.headers", updater.lastProperty);
+    }
+
+    @Test
+    void update_scalarPropertyOnStructuredListElement_redirectsToUpdateElementProperty() {
+        JMeterTreeNode sampler = new JMeterTreeNode(new HTTPSamplerProxy(), null);
+        sampler.setName("HTTP Request");
+        ((JMeterTreeNode) root.getChildAt(0)).add(sampler);
+
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Request", " HTTPSAMPLER.DOMAIN ", Collections.emptyList()));
+        assertFalse(r.isSuccess());
+        assertEquals(SetStructuredPropertyListHandler.ERR_UNSUPPORTED_PROPERTY, r.getErrorCode());
+        assertTrue(r.getMessage().contains("Use update_element_property"), r.getMessage());
+        assertTrue(r.getMessage().contains("'HTTPSampler.domain'"), r.getMessage());
+        assertNull(updater.lastNode);
     }
 }

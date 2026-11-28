@@ -88,6 +88,18 @@ public final class ElementPropertyCatalog {
         return BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
     }
 
+    public static Optional<String> resolveScalarProperty(String type, String key) {
+        if (key == null) {
+            return Optional.empty();
+        }
+        String requested = key.trim();
+        return propertiesFor(type).stream()
+                .filter(property -> !property.getType().startsWith("list<"))
+                .map(Property::getKey)
+                .filter(canonical -> canonical.equalsIgnoreCase(requested))
+                .findFirst();
+    }
+
     /** Curated property keys whose final segment matches {@code suffix}, in catalog order. */
     public static List<String> keysWithSuffix(String suffix) {
         if (suffix == null || suffix.trim().isEmpty()) {
