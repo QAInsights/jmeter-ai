@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.GuiPackage;
@@ -40,6 +41,7 @@ public final class SetStructuredPropertyListHandler {
     public static final String ERR_ELEMENT_NOT_FOUND = "element_not_found";
     public static final String ERR_INVALID_PROPERTY = "invalid_property";
     public static final String ERR_UNSUPPORTED_PROPERTY = "unsupported_property";
+    public static final String ERR_INVALID_ENTRIES = "invalid_entries";
     public static final String ERR_UPDATE_FAILED = "update_failed";
 
     private final Supplier<JMeterTreeNode> rootSupplier;
@@ -116,22 +118,53 @@ public final class SetStructuredPropertyListHandler {
         }
 
         String type = node.getTestElement() == null ? null : node.getTestElement().getClass().getSimpleName();
-        if (!ElementPropertyCatalog.isStructuredListProperty(type, property)) {
-            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
-                    "'" + property + "' is not a supported structured list property for " + type
-                            + ". Check get_element_schema for the properties set_structured_property_list "
-                            + "supports on that type.");
+        Optional<String> canonical = ElementPropertyCatalog.resolveStructuredListProperty(type, property);
+        if (!canonical.isPresent()) {
+            return unsupportedPropertyError(type, property);
         }
 
-        List<Map<String, String>> entries = objectList(args.get("entries"));
+        String resolvedProperty = canonical.get();
+        if (!(args.get("entries") instanceof List<?> rawEntries)) {
+            return ToolResult.error(ERR_INVALID_ENTRIES, "'entries' must be an array of objects; use [] to clear the list.");
+        }
+        Optional<List<Map<String, String>>> parsedEntries = objectList(rawEntries);
+        if (parsedEntries.isEmpty()) {
+            return ToolResult.error(ERR_INVALID_ENTRIES, "Each item in 'entries' must be an object.");
+        }
+        List<Map<String, String>> entries = parsedEntries.get();
 
-        if (!updater.update(node, property, entries)) {
+        if (!updater.update(node, resolvedProperty, entries)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
-                    "Could not set '" + property + "' on '" + elementId + "'. Check that each entry has the "
+                    "Could not set '" + resolvedProperty + "' on '" + elementId + "'. Check that each entry has the "
                             + "fields described in get_element_schema for " + type + ".");
         }
 
-        return ToolResult.ok("Set '" + property + "' on '" + elementId + "' with " + entries.size() + " entrie(s).");
+        return ToolResult.ok("Set '" + resolvedProperty + "' on '" + elementId + "' with " + entries.size() + " entrie(s).");
+    }
+
+    private static ToolResult unsupportedPropertyError(String type, String property) {
+        if (ElementPropertyCatalog.resolveFlatStringListProperty(type, property).isPresent()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is a flat string-list property for " + type
+                            + ". Use set_property_list instead.");
+        }
+        Optional<String> scalar = ElementPropertyCatalog.resolveScalarProperty(type, property);
+        if (scalar.isPresent()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is a scalar property for " + type
+                            + ". Use update_element_property with '" + scalar.get() + "' instead.");
+        }
+        List<String> supported = ElementPropertyCatalog.structuredListPropertiesFor(type);
+        if (!supported.isEmpty()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is not a supported structured list property for " + type
+                            + ". Supported structured list properties for " + type + ": "
+                            + String.join(", ", supported) + ".");
+        }
+        return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                "'" + property + "' is not a supported structured list property for " + type
+                        + ". Check get_element_schema for the properties set_structured_property_list "
+                        + "supports on that type.");
     }
 
     /** Live updater that keeps the open editor panel in sync (mirrors {@code SetPropertyListHandler}). */
@@ -178,21 +211,18 @@ public final class SetStructuredPropertyListHandler {
         return value == null ? "" : String.valueOf(value);
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, String>> objectList(Object value) {
+    private static Optional<List<Map<String, String>>> objectList(List<?> values) {
         List<Map<String, String>> result = new ArrayList<>();
-        if (!(value instanceof List)) {
-            return result;
-        }
-        for (Object item : (List<Object>) value) {
-            if (item instanceof Map) {
-                Map<String, String> entry = new LinkedHashMap<>();
-                for (Map.Entry<?, ?> e : ((Map<?, ?>) item).entrySet()) {
-                    entry.put(String.valueOf(e.getKey()), e.getValue() == null ? "" : String.valueOf(e.getValue()));
-                }
-                result.add(entry);
+        for (Object item : values) {
+            if (!(item instanceof Map<?, ?> entryValues)) {
+                return Optional.empty();
             }
+            Map<String, String> entry = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : entryValues.entrySet()) {
+                entry.put(String.valueOf(e.getKey()), e.getValue() == null ? "" : String.valueOf(e.getValue()));
+            }
+            result.add(entry);
         }
-        return result;
+        return Optional.of(result);
     }
 }

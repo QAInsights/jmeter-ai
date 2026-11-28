@@ -88,6 +88,18 @@ public final class ElementPropertyCatalog {
         return BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
     }
 
+    public static Optional<String> resolveScalarProperty(String type, String key) {
+        if (key == null) {
+            return Optional.empty();
+        }
+        String requested = key.trim();
+        return propertiesFor(type).stream()
+                .filter(property -> !property.getType().startsWith("list<"))
+                .map(Property::getKey)
+                .filter(canonical -> canonical.equalsIgnoreCase(requested))
+                .findFirst();
+    }
+
     /** Curated property keys whose final segment matches {@code suffix}, in catalog order. */
     public static List<String> keysWithSuffix(String suffix) {
         if (suffix == null || suffix.trim().isEmpty()) {
@@ -132,6 +144,7 @@ public final class ElementPropertyCatalog {
     }
 
     private static final Map<String, List<String>> LIST_PROPERTIES_BY_TYPE = buildListProperties();
+    private static final Map<String, Map<String, String>> LIST_PROPERTY_ALIASES = buildListPropertyAliases();
 
     /**
      * True when {@code property} is a curated flat string-list property for
@@ -149,9 +162,53 @@ public final class ElementPropertyCatalog {
                 .contains(property);
     }
 
+    /**
+     * Resolves {@code property} to the canonical curated flat string-list key
+     * for {@code type}, accepting case-insensitive matches and common aliases
+     * (such as {@code Assertion.test_strings} for JMeter's {@code Asserion.test_strings}).
+     */
+    public static Optional<String> resolveFlatStringListProperty(String type, String property) {
+        if (type == null || property == null) {
+            return Optional.empty();
+        }
+        String typeKey = type.toLowerCase(Locale.ROOT);
+        String trimmed = property.trim();
+        for (String canonical : LIST_PROPERTIES_BY_TYPE.getOrDefault(typeKey, Collections.emptyList())) {
+            if (canonical.equalsIgnoreCase(trimmed)) {
+                return Optional.of(canonical);
+            }
+        }
+        Map<String, String> aliases = LIST_PROPERTY_ALIASES.get(typeKey);
+        if (aliases != null) {
+            String resolved = aliases.get(trimmed.toLowerCase(Locale.ROOT));
+            if (resolved != null) {
+                return Optional.of(resolved);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Canonical flat string-list property keys supported for {@code type}. */
+    public static List<String> flatStringListPropertiesFor(String type) {
+        if (type == null) {
+            return Collections.emptyList();
+        }
+        return LIST_PROPERTIES_BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
+    }
+
     private static Map<String, List<String>> buildListProperties() {
         Map<String, List<String>> map = new LinkedHashMap<>();
         map.put("responseassertion", Collections.singletonList("Asserion.test_strings"));
+        return Collections.unmodifiableMap(map);
+    }
+
+    private static Map<String, Map<String, String>> buildListPropertyAliases() {
+        Map<String, String> responseAssertionAliases = new LinkedHashMap<>();
+        responseAssertionAliases.put("assertion.test_strings", "Asserion.test_strings");
+        responseAssertionAliases.put("test_strings", "Asserion.test_strings");
+        responseAssertionAliases.put("patterns", "Asserion.test_strings");
+        Map<String, Map<String, String>> map = new LinkedHashMap<>();
+        map.put("responseassertion", Collections.unmodifiableMap(responseAssertionAliases));
         return Collections.unmodifiableMap(map);
     }
 
@@ -171,6 +228,33 @@ public final class ElementPropertyCatalog {
         return STRUCTURED_LIST_PROPERTIES_BY_TYPE
                 .getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList())
                 .contains(property);
+    }
+
+    /**
+     * Resolves {@code property} to the canonical curated structured-list key
+     * for {@code type}, accepting case-insensitive matches (e.g.
+     * {@code HTTPSampler.Arguments} -> {@code HTTPsampler.Arguments}).
+     */
+    public static Optional<String> resolveStructuredListProperty(String type, String property) {
+        if (type == null || property == null) {
+            return Optional.empty();
+        }
+        String typeKey = type.toLowerCase(Locale.ROOT);
+        String trimmed = property.trim();
+        for (String canonical : STRUCTURED_LIST_PROPERTIES_BY_TYPE.getOrDefault(typeKey, Collections.emptyList())) {
+            if (canonical.equalsIgnoreCase(trimmed)) {
+                return Optional.of(canonical);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Canonical structured-list property keys supported for {@code type}. */
+    public static List<String> structuredListPropertiesFor(String type) {
+        if (type == null) {
+            return Collections.emptyList();
+        }
+        return STRUCTURED_LIST_PROPERTIES_BY_TYPE.getOrDefault(type.toLowerCase(Locale.ROOT), Collections.emptyList());
     }
 
     private static Map<String, List<String>> buildStructuredListProperties() {

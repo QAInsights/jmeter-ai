@@ -9,6 +9,7 @@ import org.apache.jmeter.gui.tree.JMeterTreeListener;
 import org.apache.jmeter.gui.tree.JMeterTreeModel;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.gui.HttpTestSampleGui;
+import org.apache.jmeter.protocol.http.modifier.RegExUserParameters;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.apache.jmeter.testelement.TestElement;
 import org.apache.jmeter.testelement.TestPlan;
@@ -491,6 +492,22 @@ class JMeterElementManagerAddElementTest {
             assertFalse(JMeterElementManager.addElement("threadgroup", "Users"));
             assertFalse(JMeterElementManager.addElement("httpsampler", "Nested"));
             verify(g.treeModel, never()).addComponent(any(), any());
+        }
+    }
+
+    @Test
+    void addElementAddsRegexUserParametersAliasUnderHttpSampler() throws Exception {
+        JMeterTreeNode sampler = samplerNode();
+        Gui g = new Gui(sampler);
+        try (MockedStatic<GuiPackage> gui = mockStatic(GuiPackage.class)) {
+            gui.when(GuiPackage::getInstance).thenReturn(g.guiPackage);
+
+            String alias = new SchemaGrounding().get("Regular Expression User Parameters").getAddAlias();
+            assertTrue(JMeterElementManager.addElement(alias, "Extract user"));
+
+            RegExUserParameters processor = assertInstanceOf(RegExUserParameters.class, g.addedElement());
+            assertEquals("Extract user", processor.getName());
+            verify(g.treeModel).addComponent(processor, sampler);
         }
     }
 

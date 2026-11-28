@@ -11,6 +11,7 @@ import java.util.Map;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
 import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.sampler.HTTPSamplerProxy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
@@ -157,7 +158,7 @@ class SetStructuredPropertyListHandlerTest {
     }
 
     @Test
-    void update_nonMapEntriesAreDropped() {
+    void update_mixedEntries_rejectsEntireArrayWithoutCallingUpdater() {
         List<Object> entries = new ArrayList<>();
         entries.add(nameValue("A", "1"));
         entries.add("not-a-map");
@@ -165,8 +166,52 @@ class SetStructuredPropertyListHandlerTest {
         ToolResult r = tool.execute(args(
                 "Test Plan/Thread Group/HTTP Header Manager", "HeaderManager.headers", entries));
 
+        assertFalse(r.isSuccess());
+        assertEquals(SetStructuredPropertyListHandler.ERR_INVALID_ENTRIES, r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
+    void update_caseInsensitivePropertyKey_normalizesToCanonicalKey() {
+        List<Map<String, String>> entries = Collections.singletonList(nameValue("Accept", "application/json"));
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "headermanager.headers", entries));
         assertTrue(r.isSuccess());
-        assertEquals(1, updater.lastEntries.size());
-        assertEquals("A", updater.lastEntries.get(0).get("name"));
+        assertEquals("HeaderManager.headers", updater.lastProperty);
+    }
+
+    @Test
+    void update_nonArrayEntries_rejectedWithoutCallingUpdater() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "HEADERMANAGER.HEADERS", nameValue("Accept", "*/*")));
+
+        assertFalse(r.isSuccess());
+        assertEquals("invalid_entries", r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
+    void update_nonEmptyEntriesWithoutObjects_rejectedWithoutCallingUpdater() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "HeaderManager.headers", List.of("not-an-object")));
+
+        assertFalse(r.isSuccess());
+        assertEquals("invalid_entries", r.getErrorCode());
+        assertNull(updater.lastNode);
+    }
+
+    @Test
+    void update_scalarPropertyOnStructuredListElement_redirectsToUpdateElementProperty() {
+        JMeterTreeNode sampler = new JMeterTreeNode(new HTTPSamplerProxy(), null);
+        sampler.setName("HTTP Request");
+        ((JMeterTreeNode) root.getChildAt(0)).add(sampler);
+
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Request", " HTTPSAMPLER.DOMAIN ", Collections.emptyList()));
+        assertFalse(r.isSuccess());
+        assertEquals(SetStructuredPropertyListHandler.ERR_UNSUPPORTED_PROPERTY, r.getErrorCode());
+        assertTrue(r.getMessage().contains("Use update_element_property"), r.getMessage());
+        assertTrue(r.getMessage().contains("'HTTPSampler.domain'"), r.getMessage());
+        assertNull(updater.lastNode);
     }
 }
