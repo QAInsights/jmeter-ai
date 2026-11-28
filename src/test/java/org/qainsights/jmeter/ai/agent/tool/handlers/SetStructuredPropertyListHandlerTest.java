@@ -169,4 +169,13 @@ class SetStructuredPropertyListHandlerTest {
         assertEquals(1, updater.lastEntries.size());
         assertEquals("A", updater.lastEntries.get(0).get("name"));
     }
+
+    @Test
+    void update_caseInsensitivePropertyKey_normalizesToCanonicalKey() {
+        List<Map<String, String>> entries = Collections.singletonList(nameValue("Accept", "application/json"));
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "headermanager.headers", entries));
+        assertTrue(r.isSuccess());
+        assertEquals("HeaderManager.headers", updater.lastProperty);
+    }
 }

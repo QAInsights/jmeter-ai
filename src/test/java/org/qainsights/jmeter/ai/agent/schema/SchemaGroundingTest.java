@@ -103,4 +103,16 @@ class SchemaGroundingTest {
         assertNotNull(detail);
         assertTrue(detail.contains("get_element_config"));
     }
+
+    @Test
+    void get_resolvesDisplayNamesAddAliasesAndSpacingVariants() {
+        assertSame(schema.get("HTTPSamplerProxy"), schema.get("HTTP Request"));
+        assertSame(schema.get("HTTPSamplerProxy"), schema.get("http_request"));
+        assertSame(schema.get("HTTPSamplerProxy"), schema.get("httpsampler"));
+        assertSame(schema.get("HeaderManager"), schema.get("HTTP Header Manager"));
+        assertSame(schema.get("JSONPostProcessor"), schema.get("JSON Extractor"));
+        assertSame(schema.get("ResponseAssertion"), schema.get("Response Assertion"));
+        assertSame(schema.get("ThreadGroup"), schema.get("Thread Group"));
+        assertSame(schema.get("CSVDataSet"), schema.get("CSV Data Set Config"));
+    }
 }

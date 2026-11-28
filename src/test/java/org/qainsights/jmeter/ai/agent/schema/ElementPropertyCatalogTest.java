@@ -261,4 +261,29 @@ class ElementPropertyCatalogTest {
                 .orElseThrow();
         assertTrue(hint.contains("1, 2, 3, 4, 5, 6"), hint);
     }
+
+    @Test
+    void resolveFlatStringListProperty_acceptsCanonicalCaseInsensitiveAndAliases() {
+        assertEquals("Asserion.test_strings",
+                ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "Asserion.test_strings")
+                        .orElseThrow());
+        assertEquals("Asserion.test_strings",
+                ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "Assertion.test_strings")
+                        .orElseThrow());
+        assertEquals("Asserion.test_strings",
+                ElementPropertyCatalog.resolveFlatStringListProperty("ResponseAssertion", "test_strings")
+                        .orElseThrow());
+        assertTrue(ElementPropertyCatalog.resolveFlatStringListProperty("HeaderManager", "HeaderManager.headers")
+                .isEmpty());
+    }
+
+    @Test
+    void resolveStructuredListProperty_normalizesCaseMismatch() {
+        assertEquals("HTTPsampler.Arguments",
+                ElementPropertyCatalog.resolveStructuredListProperty("HTTPSamplerProxy", "HTTPSampler.Arguments")
+                        .orElseThrow());
+        assertEquals("HeaderManager.headers",
+                ElementPropertyCatalog.resolveStructuredListProperty("HeaderManager", "headermanager.headers")
+                        .orElseThrow());
+    }
 }

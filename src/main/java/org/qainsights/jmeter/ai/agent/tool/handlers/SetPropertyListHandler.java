@@ -3,6 +3,7 @@ package org.qainsights.jmeter.ai.agent.tool.handlers;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.GuiPackage;
@@ -58,8 +59,10 @@ public final class SetPropertyListHandler {
 
     public Tool tool() {
         ToolSpec spec = ToolSpec.builder(SET_PROPERTY_LIST)
-                .description("Replaces a flat string-list property (e.g. a Response Assertion's patterns) "
-                        + "with the given values, in full.")
+                .description("Replaces a flat string-list property (currently ResponseAssertion's "
+                        + "Asserion.test_strings patterns) with the given values, in full. For structured lists "
+                        + "(HeaderManager.headers, Arguments.arguments, HTTPsampler.Arguments, AuthManager.auth_list), "
+                        + "use set_structured_property_list instead.")
                 .addParameter(ToolParameter.builder("element_id", ParamType.STRING)
                         .description("Tree-path id of the element, e.g. 'Test Plan/Thread Group/HTTP Request/Response Assertion'.")
                         .required(true).build())
@@ -106,20 +109,41 @@ public final class SetPropertyListHandler {
         }
 
         String type = node.getTestElement() == null ? null : node.getTestElement().getClass().getSimpleName();
-        if (!ElementPropertyCatalog.isFlatStringListProperty(type, property)) {
-            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
-                    "'" + property + "' is not a supported flat string-list property for " + type
-                            + ". Check get_element_schema for the properties set_property_list supports on that type.");
+        Optional<String> canonical = ElementPropertyCatalog.resolveFlatStringListProperty(type, property);
+        if (!canonical.isPresent()) {
+            return unsupportedPropertyError(type, property);
         }
 
+        String resolvedProperty = canonical.get();
         List<String> values = stringList(args.get("values"));
 
-        if (!updater.update(node, property, values)) {
+        if (!updater.update(node, resolvedProperty, values)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
-                    "Could not set '" + property + "' on '" + elementId + "'.");
+                    "Could not set '" + resolvedProperty + "' on '" + elementId + "'.");
         }
 
-        return ToolResult.ok("Set '" + property + "' = " + values + " on '" + elementId + "'.");
+        return ToolResult.ok("Set '" + resolvedProperty + "' = " + values + " on '" + elementId + "'.");
+    }
+
+    private static ToolResult unsupportedPropertyError(String type, String property) {
+        List<String> structured = ElementPropertyCatalog.structuredListPropertiesFor(type);
+        if (ElementPropertyCatalog.resolveStructuredListProperty(type, property).isPresent()
+                || !structured.isEmpty()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is not a flat string-list property for " + type
+                            + ". Use set_structured_property_list instead (supported on " + type + ": "
+                            + String.join(", ", structured) + ").");
+        }
+        List<String> supported = ElementPropertyCatalog.flatStringListPropertiesFor(type);
+        if (!supported.isEmpty()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is not a supported flat string-list property for " + type
+                            + ". Supported flat string-list properties for " + type + ": "
+                            + String.join(", ", supported) + ".");
+        }
+        return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                "'" + property + "' is not a supported flat string-list property for " + type
+                        + ". Use update_element_property for scalar properties, or check get_element_schema.");
     }
 
     /** Live updater that keeps the open editor panel in sync (mirrors {@code UpdateElementPropertyHandler}). */

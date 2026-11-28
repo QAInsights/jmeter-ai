@@ -84,15 +84,30 @@ public final class SchemaGrounding {
     private static final Map<Category, List<String>> DEFAULT_PARENTS = defaultParents();
 
     private final Map<String, ElementType> byName = new LinkedHashMap<>();
+    private final Map<String, ElementType> byAlias = new LinkedHashMap<>();
     private final Map<Category, List<ElementType>> byCategory = new EnumMap<>(Category.class);
 
     public SchemaGrounding() {
         buildCatalog();
     }
 
-    /** Case-insensitive lookup by logical type name; {@code null} if unknown. */
+    /**
+     * Case-insensitive lookup by logical type name, add alias, or common JMeter
+     * display name (ignoring spaces, underscores, and hyphens); {@code null} if unknown.
+     */
     public ElementType get(String type) {
-        return type == null ? null : byName.get(type.toLowerCase(Locale.ROOT));
+        if (type == null) {
+            return null;
+        }
+        String trimmed = type.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        ElementType exact = byName.get(trimmed.toLowerCase(Locale.ROOT));
+        if (exact != null) {
+            return exact;
+        }
+        return byAlias.get(normalizeKey(trimmed));
     }
 
     public boolean isKnown(String type) {
@@ -184,7 +199,30 @@ public final class SchemaGrounding {
     private void add(Category category, String type, String addAlias, String description, List<String> parents) {
         ElementType et = new ElementType(type, category, addAlias, description, parents);
         byName.put(type.toLowerCase(Locale.ROOT), et);
+        byAlias.put(normalizeKey(type), et);
+        byAlias.put(normalizeKey(addAlias), et);
         byCategory.computeIfAbsent(category, k -> new ArrayList<>()).add(et);
+    }
+
+    private void alias(String canonicalType, String... aliases) {
+        ElementType et = byName.get(canonicalType.toLowerCase(Locale.ROOT));
+        if (et == null) {
+            return;
+        }
+        for (String a : aliases) {
+            byAlias.put(normalizeKey(a), et);
+        }
+    }
+
+    private static String normalizeKey(String value) {
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                sb.append(Character.toLowerCase(c));
+            }
+        }
+        return sb.toString();
     }
 
     private static Map<Category, List<String>> defaultParents() {
@@ -282,5 +320,28 @@ public final class SchemaGrounding {
                 "Runs a JSR223 script after the sampler.");
         add(Category.POST_PROCESSOR, "DebugPostProcessor", "debugpostprocessor",
                 "Adds debugging variables to the sample result.");
+
+        registerCommonAliases();
+    }
+
+    private void registerCommonAliases() {
+        alias("HTTPSamplerProxy", "HTTP Request", "HTTPSampler");
+        alias("HeaderManager", "HTTP Header Manager");
+        alias("CookieManager", "HTTP Cookie Manager");
+        alias("CacheManager", "HTTP Cache Manager");
+        alias("ConfigTestElement", "HTTP Request Defaults");
+        alias("Arguments", "User Defined Variables");
+        alias("AuthManager", "HTTP Authorization Manager");
+        alias("CSVDataSet", "CSV Data Set Config");
+        alias("JSONPostProcessor", "JSON Extractor");
+        alias("RegexExtractor", "Regular Expression Extractor");
+        alias("HtmlExtractor", "CSS Selector Extractor");
+        alias("JSONPathAssertion", "JSON Assertion");
+        alias("ResponseAssertion", "Response Assertion");
+        alias("GenericController", "Simple Controller");
+        alias("RunTime", "Runtime Controller");
+        alias("InterleaveControl", "Interleave Controller");
+        alias("CounterConfig", "Counter");
+        alias("RandomVariableConfig", "Random Variable");
     }
 }

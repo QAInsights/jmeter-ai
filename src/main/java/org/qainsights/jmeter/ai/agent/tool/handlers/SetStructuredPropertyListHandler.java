@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.apache.jmeter.gui.GuiPackage;
@@ -116,22 +117,40 @@ public final class SetStructuredPropertyListHandler {
         }
 
         String type = node.getTestElement() == null ? null : node.getTestElement().getClass().getSimpleName();
-        if (!ElementPropertyCatalog.isStructuredListProperty(type, property)) {
-            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
-                    "'" + property + "' is not a supported structured list property for " + type
-                            + ". Check get_element_schema for the properties set_structured_property_list "
-                            + "supports on that type.");
+        Optional<String> canonical = ElementPropertyCatalog.resolveStructuredListProperty(type, property);
+        if (!canonical.isPresent()) {
+            return unsupportedPropertyError(type, property);
         }
 
+        String resolvedProperty = canonical.get();
         List<Map<String, String>> entries = objectList(args.get("entries"));
 
-        if (!updater.update(node, property, entries)) {
+        if (!updater.update(node, resolvedProperty, entries)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
-                    "Could not set '" + property + "' on '" + elementId + "'. Check that each entry has the "
+                    "Could not set '" + resolvedProperty + "' on '" + elementId + "'. Check that each entry has the "
                             + "fields described in get_element_schema for " + type + ".");
         }
 
-        return ToolResult.ok("Set '" + property + "' on '" + elementId + "' with " + entries.size() + " entrie(s).");
+        return ToolResult.ok("Set '" + resolvedProperty + "' on '" + elementId + "' with " + entries.size() + " entrie(s).");
+    }
+
+    private static ToolResult unsupportedPropertyError(String type, String property) {
+        if (ElementPropertyCatalog.resolveFlatStringListProperty(type, property).isPresent()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is a flat string-list property for " + type
+                            + ". Use set_property_list instead.");
+        }
+        List<String> supported = ElementPropertyCatalog.structuredListPropertiesFor(type);
+        if (!supported.isEmpty()) {
+            return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                    "'" + property + "' is not a supported structured list property for " + type
+                            + ". Supported structured list properties for " + type + ": "
+                            + String.join(", ", supported) + ".");
+        }
+        return ToolResult.error(ERR_UNSUPPORTED_PROPERTY,
+                "'" + property + "' is not a supported structured list property for " + type
+                        + ". Check get_element_schema for the properties set_structured_property_list "
+                        + "supports on that type.");
     }
 
     /** Live updater that keeps the open editor panel in sync (mirrors {@code SetPropertyListHandler}). */

@@ -8,6 +8,7 @@ import java.util.Map;
 import org.apache.jmeter.assertions.ResponseAssertion;
 import org.apache.jmeter.config.ConfigTestElement;
 import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.protocol.http.control.HeaderManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.qainsights.jmeter.ai.agent.jmeter.ElementIdResolver;
@@ -136,5 +137,29 @@ class SetPropertyListHandlerTest {
                 "Test Plan/Thread Group/Response Assertion", "Asserion.test_strings", Arrays.asList()));
         assertTrue(r.isSuccess());
         assertTrue(updater.lastValues.isEmpty());
+    }
+
+    @Test
+    void update_assertionTestStringsTypoAlias_normalizesToCanonicalKey() {
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/Response Assertion", "Assertion.test_strings", Arrays.asList("200")));
+        assertTrue(r.isSuccess());
+        assertEquals("Asserion.test_strings", updater.lastProperty);
+        assertEquals(Arrays.asList("200"), updater.lastValues);
+    }
+
+    @Test
+    void update_structuredListElement_redirectsToSetStructuredPropertyList() {
+        HeaderManager hm = new HeaderManager();
+        hm.setName("HTTP Header Manager");
+        JMeterTreeNode hmNode = new JMeterTreeNode(hm, null);
+        ((JMeterTreeNode) root.getChildAt(0)).add(hmNode);
+
+        ToolResult r = tool.execute(args(
+                "Test Plan/Thread Group/HTTP Header Manager", "HeaderManager.headers", Arrays.asList("Accept: */*")));
+        assertFalse(r.isSuccess());
+        assertEquals(SetPropertyListHandler.ERR_UNSUPPORTED_PROPERTY, r.getErrorCode());
+        assertTrue(r.getMessage().contains("set_structured_property_list"), r.getMessage());
+        assertTrue(r.getMessage().contains("HeaderManager.headers"), r.getMessage());
     }
 }
