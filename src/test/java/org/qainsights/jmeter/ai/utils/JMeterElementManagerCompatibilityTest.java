@@ -147,6 +147,25 @@ class JMeterElementManagerCompatibilityTest {
         assertTrue(JMeterElementManager.isNodeCompatible(samplerNode(), elementType));
     }
 
+    @ParameterizedTest(name = "sampler accepts model behind {0}")
+    @ValueSource(strings = {"regexuserparameters", "userparameters", "anchormodifier", "urlrewritingmodifier",
+            "sampletimeout", "resultaction", "httpdefaults", "ftprequestdefaults",
+            "jdbcdatasource", "randomvariable", "arguments", "summariser", "resultsaver",
+            "simpledatawriter", "saveresponsestoafile", "generatesummaryresults", "compareassert", "jmespathassert"})
+    void samplerAcceptsChildrenWhoseAliasesDoNotNameTheirCategory(String elementType) {
+        assertTrue(JMeterElementManager.isNodeCompatible(samplerNode(), elementType));
+    }
+
+    @Test
+    void samplerRejectsRegisteredNonTestElement() {
+        assertFalse(JMeterElementManager.isNodeCompatible(samplerNode(), "sampleresultsaveconfiguration"));
+    }
+
+    @Test
+    void samplerRejectsGraphqlHttpSampler() {
+        assertFalse(JMeterElementManager.isNodeCompatible(samplerNode(), "graphqlhttprequest"));
+    }
+
     @Test
     void samplerRejectsSamplersControllersThreadGroupsAndTestPlan() {
         assertFalse(JMeterElementManager.isNodeCompatible(samplerNode(), "httpsampler"));

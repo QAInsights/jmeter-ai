@@ -8,7 +8,9 @@ import org.apache.jmeter.control.IncludeController;
 import org.apache.jmeter.control.TestFragmentController;
 import org.apache.jmeter.protocol.http.sampler.HTTPSamplerBase;
 import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.testelement.NonTestElement;
 import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.TestPlan;
 import org.apache.jmeter.threads.AbstractThreadGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -838,29 +840,8 @@ public class JMeterElementManager {
                 isTestPlan, isThreadGroup, isController, isSampler, isTimer, isPreProcessor, isPostProcessor,
                 isConfigElement, isListener, isAssertion);
 
-        // Determine the category of the element being added
         boolean isAddingTestPlan = normalizedType.equals("testplan");
         boolean isAddingThreadGroup = normalizedType.equals("threadgroup");
-        boolean isAddingController = normalizedType.contains("controller");
-        boolean isAddingSampler = normalizedType.contains("sampler") || normalizedType.contains("request");
-        boolean isAddingTimer = normalizedType.contains("timer");
-        boolean isAddingPreProcessor = normalizedType.contains("preprocessor");
-        boolean isAddingPostProcessor = normalizedType.contains("postprocessor")
-                || normalizedType.contains("extractor");
-        boolean isAddingConfigElement = normalizedType.contains("config") || normalizedType.contains("manager")
-                || normalizedType.contains("dataset");
-        boolean isAddingListener = normalizedType.contains("listener") || normalizedType.contains("visualizer")
-                || normalizedType.contains("report") || normalizedType.contains("tree")
-                || normalizedType.contains("table")
-                || normalizedType.contains("graph") || normalizedType.contains("assertion")
-                || normalizedType.contains("assertion");
-        boolean isAddingAssertion = normalizedType.contains("assertion") || normalizedType.equals("responseassert");
-
-        log.info(
-                "Element categories: TestPlan={}, ThreadGroup={}, Controller={}, Sampler={}, Timer={}, PreProcessor={}, PostProcessor={}, ConfigElement={}, Listener={}, Assertion={}",
-                isAddingTestPlan, isAddingThreadGroup, isAddingController, isAddingSampler, isAddingTimer,
-                isAddingPreProcessor, isAddingPostProcessor, isAddingConfigElement, isAddingListener,
-                isAddingAssertion);
 
         // Apply JMeter hierarchy rules
         if (isTestPlan) {
@@ -874,10 +855,7 @@ public class JMeterElementManager {
             }
             return !isAddingTestPlan;
         } else if (isSampler) {
-            // Samplers can have only assertions, timer, Pre and post processors, config
-            // element, listener
-            return isAddingAssertion || isAddingTimer || isAddingPreProcessor || isAddingPostProcessor
-                    || isAddingConfigElement || isAddingListener;
+            return canAddToSampler(normalizedType);
         } else if (currentNode.getTestElement() instanceof IncludeController) {
             return false;
         } else if (isController) {
@@ -894,6 +872,24 @@ public class JMeterElementManager {
         // conservative and return false
         log.info("Could not determine compatibility for node type: {} and element type: {}", nodeType, normalizedType);
         return false;
+    }
+
+    private static boolean canAddToSampler(String normalizedType) {
+        ElementClassInfo classInfo = ELEMENT_CLASS_MAP.get(normalizedType);
+        if (classInfo == null) {
+            return false;
+        }
+        try {
+            Class<?> modelClass = Class.forName(classInfo.modelClassName, false,
+                    JMeterElementManager.class.getClassLoader());
+            return TestElement.class.isAssignableFrom(modelClass)
+                    && !TestPlan.class.isAssignableFrom(modelClass)
+                    && !Sampler.class.isAssignableFrom(modelClass)
+                    && !Controller.class.isAssignableFrom(modelClass)
+                    && !NonTestElement.class.isAssignableFrom(modelClass);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
     }
 
     private static boolean canAddToTestPlan(String normalizedType) {
