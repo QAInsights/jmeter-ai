@@ -127,10 +127,11 @@ public final class SetStructuredPropertyListHandler {
         if (!(args.get("entries") instanceof List<?> rawEntries)) {
             return ToolResult.error(ERR_INVALID_ENTRIES, "'entries' must be an array of objects; use [] to clear the list.");
         }
-        List<Map<String, String>> entries = objectList(rawEntries);
-        if (!rawEntries.isEmpty() && entries.isEmpty()) {
-            return ToolResult.error(ERR_INVALID_ENTRIES, "'entries' contains no objects; use [] to clear the list.");
+        Optional<List<Map<String, String>>> parsedEntries = objectList(rawEntries);
+        if (parsedEntries.isEmpty()) {
+            return ToolResult.error(ERR_INVALID_ENTRIES, "Each item in 'entries' must be an object.");
         }
+        List<Map<String, String>> entries = parsedEntries.get();
 
         if (!updater.update(node, resolvedProperty, entries)) {
             return ToolResult.error(ERR_UPDATE_FAILED,
@@ -210,17 +211,18 @@ public final class SetStructuredPropertyListHandler {
         return value == null ? "" : String.valueOf(value);
     }
 
-    private static List<Map<String, String>> objectList(List<?> values) {
+    private static Optional<List<Map<String, String>>> objectList(List<?> values) {
         List<Map<String, String>> result = new ArrayList<>();
         for (Object item : values) {
-            if (item instanceof Map<?, ?> entryValues) {
-                Map<String, String> entry = new LinkedHashMap<>();
-                for (Map.Entry<?, ?> e : entryValues.entrySet()) {
-                    entry.put(String.valueOf(e.getKey()), e.getValue() == null ? "" : String.valueOf(e.getValue()));
-                }
-                result.add(entry);
+            if (!(item instanceof Map<?, ?> entryValues)) {
+                return Optional.empty();
             }
+            Map<String, String> entry = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : entryValues.entrySet()) {
+                entry.put(String.valueOf(e.getKey()), e.getValue() == null ? "" : String.valueOf(e.getValue()));
+            }
+            result.add(entry);
         }
-        return result;
+        return Optional.of(result);
     }
 }

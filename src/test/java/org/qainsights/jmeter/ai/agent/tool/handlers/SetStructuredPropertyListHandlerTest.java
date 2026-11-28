@@ -158,7 +158,7 @@ class SetStructuredPropertyListHandlerTest {
     }
 
     @Test
-    void update_nonMapEntriesAreDropped() {
+    void update_mixedEntries_rejectsEntireArrayWithoutCallingUpdater() {
         List<Object> entries = new ArrayList<>();
         entries.add(nameValue("A", "1"));
         entries.add("not-a-map");
@@ -166,9 +166,9 @@ class SetStructuredPropertyListHandlerTest {
         ToolResult r = tool.execute(args(
                 "Test Plan/Thread Group/HTTP Header Manager", "HeaderManager.headers", entries));
 
-        assertTrue(r.isSuccess());
-        assertEquals(1, updater.lastEntries.size());
-        assertEquals("A", updater.lastEntries.get(0).get("name"));
+        assertFalse(r.isSuccess());
+        assertEquals(SetStructuredPropertyListHandler.ERR_INVALID_ENTRIES, r.getErrorCode());
+        assertNull(updater.lastNode);
     }
 
     @Test
